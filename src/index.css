@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --nav-height: 64px;
+  --status-height: 44px;
+  --topbar-height: 52px;
+  --dateindicator-height: 28px;
+  --filterbar-height: 44px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: #0c0b0b;
+  color: #f0ece3;
+  font-family: 'Space Grotesk', sans-serif;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #0c0b0b;
+}
+
+/* hide scrollbars globally but keep scroll */
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+.scroll-momentum {
+  -webkit-overflow-scrolling: touch;
+}
