@@ -73,7 +73,7 @@ export function Wall() {
   }, [])
 
   const handleSwipe = (dir: 'right' | 'left') => {
-    setTheme(dir === 'right' ? 'day' : 'night')
+    if (dir === 'right') toggle()
   }
 
   return (
