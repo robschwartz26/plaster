@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Wall } from './components/Wall'
+import { Admin } from './pages/Admin'
 
 function Placeholder({ label }: { label: string }) {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/map" element={<Placeholder label="Map" />} />
         <Route path="/venues" element={<Placeholder label="Venues" />} />
         <Route path="/you" element={<Placeholder label="You" />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </BrowserRouter>
   )
