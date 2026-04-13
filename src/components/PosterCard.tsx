@@ -114,12 +114,12 @@ function InfoBar({ event, cols }: { event: WallEvent; cols: number }) {
         )}
       </div>
 
-      {/* Right — eye + view count */}
+      {/* Right — heart (1-col only) + eye + view count */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 3,
+          gap: 8,
           flexShrink: 0,
           color: 'var(--fg-25)',
           fontFamily: '"Space Grotesk", sans-serif',
@@ -128,6 +128,11 @@ function InfoBar({ event, cols }: { event: WallEvent; cols: number }) {
           lineHeight: 1,
         }}
       >
+        {cols === 1 && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            ♥ {event.like_count}
+          </span>
+        )}
         {/* Eye icon — inline SVG, sized to text */}
         <svg
           width={metaSize + 1}
@@ -252,7 +257,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: gradient }} />
           )}
-          <HeartPill count={event.like_count} />
+          {/* No heart overlay at 1-col — it lives in the info bar instead */}
         </div>
 
         <InfoBar event={event} cols={1} />
@@ -291,7 +296,8 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         ) : (
           <div style={{ position: 'absolute', inset: 0, background: gradient }} />
         )}
-        <HeartPill count={event.like_count} />
+        {/* Heart overlay only at 2-3 col; hidden at 4-5 col (too small) */}
+        {cols <= 3 && <HeartPill count={event.like_count} />}
       </div>
 
       <InfoBar event={event} cols={cols} />
