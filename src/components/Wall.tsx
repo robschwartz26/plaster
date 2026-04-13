@@ -52,7 +52,7 @@ export function Wall() {
   const [activeFilter, setActiveFilter] = useState('All')
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
-  const { setTheme } = useTheme()
+  const { toggle } = useTheme()
 
   useEffect(() => {
     async function fetchEvents() {

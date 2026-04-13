@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabase as supabaseAdmin } from '@/lib/supabase'
 
 // ── Constants ────────────────────────────────────────────────
 
