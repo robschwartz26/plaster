@@ -61,7 +61,7 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
   return (
     <div
       className="flex items-center gap-2 px-4 bg-[#0c0b0b]"
-      style={{ height: 'var(--dateindicator-height)' }}
+      style={{ height: 'var(--dateindicator-height)', marginBottom: 8 }}
     >
       <AnimatePresence mode="wait">
         <motion.div
