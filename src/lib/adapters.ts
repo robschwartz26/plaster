@@ -26,6 +26,8 @@ export function mockEventToWallEvent(e: MockEvent): WallEvent {
     poster_url: null,
     color1: e.color1,
     color2: e.color2,
+    view_count: 0,
+    like_count: 0,
   }
 }
 
@@ -41,5 +43,7 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     poster_url: e.poster_url,
     color1: c1,
     color2: c2,
+    view_count: e.view_count,
+    like_count: 0,
   }
 }

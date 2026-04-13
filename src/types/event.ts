@@ -10,4 +10,6 @@ export interface WallEvent {
   // Gradient fallback shown when no poster_url
   color1: string
   color2: string
+  view_count: number
+  like_count: number // no DB column yet — always 0 until likes table exists
 }

@@ -23,6 +23,130 @@ function matchesFilter(event: WallEvent, filter: string, today: string): boolean
   return event.category === filter
 }
 
+// ── Heart pill — absolute top-right on the image ─────────────
+function HeartPill({ count }: { count: number }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        background: 'rgba(0,0,0,0.52)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        borderRadius: 20,
+        padding: '3px 7px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 3,
+        color: 'rgba(255,255,255,0.88)',
+        fontFamily: '"Space Grotesk", sans-serif',
+        fontSize: 11,
+        fontWeight: 500,
+        lineHeight: 1,
+        userSelect: 'none',
+        pointerEvents: 'none',
+      }}
+    >
+      ♥ {count}
+    </div>
+  )
+}
+
+// ── Info bar — below the image, against app bg ────────────────
+function InfoBar({ event, cols }: { event: WallEvent; cols: number }) {
+  const titleSize = cols === 1 ? 13 : cols === 2 ? 11 : cols === 3 ? 10 : 9
+  const metaSize  = cols === 1 ? 11 : cols === 2 ? 9  : cols === 3 ? 8  : 8
+  const padV      = cols === 1 ? 7  : 5
+  const padH      = cols === 1 ? 10 : 7
+
+  const showVenue = cols <= 3
+  const showTime  = cols <= 2
+
+  const metaParts = [
+    showVenue ? event.venue_name : null,
+    showTime  ? formatTime(event.starts_at) : null,
+  ].filter(Boolean)
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 6,
+        padding: `${padV}px ${padH}px`,
+        background: 'var(--bg)',
+        flexShrink: 0,
+      }}
+    >
+      {/* Left — title + meta */}
+      <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+        <div
+          style={{
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: titleSize,
+            fontWeight: 600,
+            color: 'var(--fg-80)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            lineHeight: 1.25,
+          }}
+        >
+          {event.title}
+        </div>
+        {metaParts.length > 0 && (
+          <div
+            style={{
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: metaSize,
+              color: 'var(--fg-30)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              lineHeight: 1.3,
+              marginTop: 1,
+            }}
+          >
+            {metaParts.join(' · ')}
+          </div>
+        )}
+      </div>
+
+      {/* Right — eye + view count */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 3,
+          flexShrink: 0,
+          color: 'var(--fg-25)',
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: metaSize,
+          fontWeight: 500,
+          lineHeight: 1,
+        }}
+      >
+        {/* Eye icon — inline SVG, sized to text */}
+        <svg
+          width={metaSize + 1}
+          height={metaSize + 1}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          style={{ flexShrink: 0 }}
+        >
+          <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />
+          <circle cx="8" cy="8" r="2" />
+        </svg>
+        {event.view_count}
+      </div>
+    </div>
+  )
+}
+
 export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   const today = new Date().toISOString().slice(0, 10)
   const matches = matchesFilter(event, activeFilter, today)
@@ -37,14 +161,14 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
 
   // Refs for peek zoom (1-col only) — DOM mutation, no re-renders
   const cardRef = useRef<HTMLDivElement>(null)
-  const imgRef = useRef<HTMLImageElement>(null)
-  const peekActive = useRef(false)
+  const imgRef  = useRef<HTMLImageElement>(null)
+  const peekActive   = useRef(false)
   const peekStartDist = useRef(0)
 
   useEffect(() => {
     if (cols !== 1) return
     const card = cardRef.current
-    const img = imgRef.current
+    const img  = imgRef.current
     if (!card || !img) return
 
     const onTouchStart = (e: TouchEvent) => {
@@ -56,7 +180,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
       const rect = img.getBoundingClientRect()
       const midX = (t0.clientX + t1.clientX) / 2
       const midY = (t0.clientY + t1.clientY) / 2
-      img.style.transformOrigin = `${((midX - rect.left) / rect.width) * 100}% ${((midY - rect.top) / rect.height) * 100}%`
+      img.style.transformOrigin = `${((midX - rect.left)  / rect.width)  * 100}% ${((midY - rect.top) / rect.height) * 100}%`
       img.style.transition = 'none'
     }
     const onTouchMove = (e: TouchEvent) => {
@@ -74,13 +198,13 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
     }
 
     card.addEventListener('touchstart', onTouchStart, { passive: false })
-    card.addEventListener('touchmove', onTouchMove, { passive: false })
-    card.addEventListener('touchend', onRelease)
+    card.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    card.addEventListener('touchend',   onRelease)
     card.addEventListener('touchcancel', onRelease)
     return () => {
       card.removeEventListener('touchstart', onTouchStart)
-      card.removeEventListener('touchmove', onTouchMove)
-      card.removeEventListener('touchend', onRelease)
+      card.removeEventListener('touchmove',  onTouchMove)
+      card.removeEventListener('touchend',   onRelease)
       card.removeEventListener('touchcancel', onRelease)
       img.style.transform = ''
       img.style.transition = ''
@@ -89,29 +213,71 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   }, [cols])
 
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
-  const dimmed = activeFilter !== 'All' && !matches
+  const dimmed   = activeFilter !== 'All' && !matches
 
-  // ── 1-col: full-height letterboxed card, snaps to viewport ─────────
+  // ── 1-col: snap card fills viewport height, image takes flex-1 ───────
   if (cols === 1) {
     return (
       <div
         ref={cardRef}
         onClick={handleTap}
-        className="relative overflow-hidden cursor-pointer select-none"
         style={{
-          // Direct child of scroll container → height: 100% = container's clientHeight
           height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
           background: 'var(--bg)',
           scrollSnapAlign: 'start',
           opacity: dimmed ? 0.18 : 1,
           filter: dimmed ? 'grayscale(0.5)' : 'none',
           transition: 'opacity 0.25s ease, filter 0.25s ease',
+          cursor: 'pointer',
+          userSelect: 'none',
         }}
       >
-        {/* Poster image — contain keeps full artwork visible, letterbox = #0c0b0b bg */}
+        {/* Image — fills remaining height, contain for full artwork */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+          {event.poster_url ? (
+            <img
+              ref={imgRef}
+              src={event.poster_url}
+              alt={event.title}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+              }}
+            />
+          ) : (
+            <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+          )}
+          <HeartPill count={event.like_count} />
+        </div>
+
+        <InfoBar event={event} cols={1} />
+      </div>
+    )
+  }
+
+  // ── 2-5 col: 2:3 image + info bar below ──────────────────────────────
+  return (
+    <div
+      onClick={handleTap}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        opacity: dimmed ? 0.18 : 1,
+        filter: dimmed ? 'grayscale(0.5)' : 'none',
+        transition: 'opacity 0.25s ease, filter 0.25s ease',
+        cursor: 'pointer',
+        userSelect: 'none',
+      }}
+    >
+      {/* Image — fixed 2:3 aspect ratio, no text overlay */}
+      <div style={{ aspectRatio: '2/3', position: 'relative', overflow: 'hidden' }}>
         {event.poster_url ? (
           <img
-            ref={imgRef}
             src={event.poster_url}
             alt={event.title}
             style={{
@@ -119,106 +285,16 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
               inset: 0,
               width: '100%',
               height: '100%',
-              objectFit: 'contain',
+              objectFit: 'cover',
             }}
           />
         ) : (
           <div style={{ position: 'absolute', inset: 0, background: gradient }} />
         )}
-        {/* No text overlays in 1-col — artwork shown clean, info lives in the date bar */}
+        <HeartPill count={event.like_count} />
       </div>
-    )
-  }
 
-  // ── 2-5 col: fixed 2:3 grid cell ────────────────────────────────────
-  const titleSize = cols === 2 ? 13 : cols === 3 ? 10 : cols === 4 ? 8 : 0
-  const showMeta = cols === 2
-  const showTitle = cols <= 4
-
-  return (
-    <div
-      onClick={handleTap}
-      className="relative overflow-hidden cursor-pointer select-none"
-      style={{
-        aspectRatio: '2/3',
-        opacity: dimmed ? 0.18 : 1,
-        filter: dimmed ? 'grayscale(0.5)' : 'none',
-        transition: 'opacity 0.25s ease, filter 0.25s ease',
-      }}
-    >
-      {event.poster_url ? (
-        <img
-          src={event.poster_url}
-          alt={event.title}
-          className="absolute inset-0 w-full h-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0" style={{ background: gradient }} />
-      )}
-
-      {/* Centered watermark — cols 3–4 */}
-      {showTitle && cols >= 3 && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center px-1 gap-0.5">
-          <span
-            className="font-body font-medium text-center uppercase"
-            style={{ fontSize: 7, letterSpacing: '0.1em', color: 'rgba(240,236,227,0.45)' }}
-          >
-            {event.venue_name}
-          </span>
-          <div className="w-6 border-t border-white/20 my-0.5" />
-          <span
-            className="font-display font-bold text-center leading-tight"
-            style={{ fontSize: titleSize, color: 'rgba(240,236,227,0.85)' }}
-          >
-            {event.title}
-          </span>
-        </div>
-      )}
-
-      {/* Bottom scrim + meta — col 2 only */}
-      {showMeta && (
-        <>
-          <div
-            className="absolute inset-x-0 bottom-0"
-            style={{
-              height: '60%',
-              background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)',
-            }}
-          />
-          <div className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-1">
-            <span
-              className="font-body font-medium uppercase text-center"
-              style={{ fontSize: 8, letterSpacing: '0.12em', color: 'rgba(240,236,227,0.4)' }}
-            >
-              {event.venue_name}
-            </span>
-            <div className="border-t border-white/20" style={{ width: 28 }} />
-            <span
-              className="font-display font-bold text-center leading-tight"
-              style={{ fontSize: titleSize, color: 'rgba(240,236,227,0.9)' }}
-            >
-              {event.title}
-            </span>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
-            <div
-              className="font-body font-medium truncate"
-              style={{ fontSize: 8, letterSpacing: '0.04em', color: 'rgba(240,236,227,0.55)' }}
-            >
-              {event.venue_name}
-            </div>
-            <div
-              className="font-display font-bold leading-tight truncate"
-              style={{ fontSize: 13, color: '#f0ece3' }}
-            >
-              {event.title}
-            </div>
-            <div className="font-body" style={{ fontSize: 9, color: 'rgba(240,236,227,0.6)' }}>
-              {formatTime(event.starts_at)}
-            </div>
-          </div>
-        </>
-      )}
+      <InfoBar event={event} cols={cols} />
     </div>
   )
 }
