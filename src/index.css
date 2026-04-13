@@ -2,13 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme tokens ─────────────────────────────────────────── */
 :root {
+  /* Layout */
   --nav-height: 64px;
   --topbar-height: 52px;
   --dateindicator-height: 28px;
   --filterbar-height: 44px;
+
+  /* Night mode (default) */
+  --bg: #0c0b0b;
+  --fg: #f0ece3;
+
+  /* fg opacity variants */
+  --fg-80: rgba(240,236,227,0.80);
+  --fg-65: rgba(240,236,227,0.65);
+  --fg-55: rgba(240,236,227,0.55);
+  --fg-40: rgba(240,236,227,0.40);
+  --fg-30: rgba(240,236,227,0.30);
+  --fg-25: rgba(240,236,227,0.25);
+  --fg-18: rgba(240,236,227,0.18);
+  --fg-15: rgba(240,236,227,0.15);
+  --fg-08: rgba(240,236,227,0.08);
+
+  /* bg opacity variants */
+  --bg-50: rgba(12,11,11,0.50);
 }
 
+[data-theme="day"] {
+  --bg: #f0ece3;
+  --fg: #0c0b0b;
+
+  --fg-80: rgba(12,11,11,0.80);
+  --fg-65: rgba(12,11,11,0.65);
+  --fg-55: rgba(12,11,11,0.55);
+  --fg-40: rgba(12,11,11,0.40);
+  --fg-30: rgba(12,11,11,0.30);
+  --fg-25: rgba(12,11,11,0.25);
+  --fg-18: rgba(12,11,11,0.18);
+  --fg-15: rgba(12,11,11,0.15);
+  --fg-08: rgba(12,11,11,0.08);
+
+  --bg-50: rgba(240,236,227,0.50);
+}
+
+/* ── Global reset ─────────────────────────────────────────── */
 * {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
@@ -18,8 +56,8 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: #0c0b0b;
-  color: #f0ece3;
+  background: var(--bg);
+  color: var(--fg);
   font-family: 'Space Grotesk', sans-serif;
   overscroll-behavior: none;
   -webkit-font-smoothing: antialiased;
@@ -30,10 +68,20 @@ html, body {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #0c0b0b;
+  background: var(--bg);
 }
 
-/* hide scrollbars globally but keep scroll */
+/* ── Theme transition ─────────────────────────────────────── */
+/* Applied broadly — inline transitions on specific elements
+   (opacity, filter, transform) still win via higher specificity. */
+*, *::before, *::after {
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    border-color 150ms ease;
+}
+
+/* ── Scrollbars ───────────────────────────────────────────── */
 ::-webkit-scrollbar { display: none; }
 * { scrollbar-width: none; }
 

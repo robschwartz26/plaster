@@ -101,7 +101,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         style={{
           // Direct child of scroll container → height: 100% = container's clientHeight
           height: '100%',
-          background: '#0c0b0b',
+          background: 'var(--bg)',
           scrollSnapAlign: 'start',
           opacity: dimmed ? 0.18 : 1,
           filter: dimmed ? 'grayscale(0.5)' : 'none',

@@ -165,7 +165,7 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
   return (
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Date indicator — sticky above scroll area */}
-      <div className="shrink-0 z-10" style={{ background: '#0c0b0b' }}>
+      <div className="shrink-0 z-10" style={{ background: 'var(--bg)' }}>
         <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} />
       </div>
 

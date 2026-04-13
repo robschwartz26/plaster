@@ -51,10 +51,11 @@ export function BottomNav() {
 
   return (
     <nav
-      className="shrink-0 flex items-center justify-around border-t border-white/5"
+      className="shrink-0 flex items-center justify-around"
       style={{
         height: 'var(--nav-height)',
-        background: '#0c0b0b',
+        background: 'var(--bg)',
+        borderTop: '1px solid var(--fg-08)',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
@@ -64,8 +65,11 @@ export function BottomNav() {
           <button
             key={path}
             onClick={() => navigate(path)}
-            className="flex flex-col items-center gap-1 transition-opacity duration-150"
-            style={{ opacity: active ? 1 : 0.3 }}
+            className="flex flex-col items-center gap-1"
+            style={{
+              opacity: active ? 1 : 0.3,
+              color: 'var(--fg)',
+            }}
           >
             {icon}
             <span

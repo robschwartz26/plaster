@@ -60,8 +60,8 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
 
   return (
     <div
-      className="flex items-center gap-2 px-4 bg-[#0c0b0b]"
-      style={{ height: 'var(--dateindicator-height)', marginBottom: 8 }}
+      className="flex items-center gap-2 px-4"
+      style={{ height: 'var(--dateindicator-height)', marginBottom: 8, background: 'var(--bg)' }}
     >
       <AnimatePresence mode="wait">
         <motion.div
@@ -75,24 +75,18 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
           {eventInfo ? (
             // ── Event info mode (1-col) ──────────────────────────────
             <>
-              {/* Block 1 — solid white — event title */}
-              <span style={{ ...BLOCK_BASE, background: '#f0ece3', color: '#0c0b0b' }}>
+              {/* Block 1 — solid fg bg — event title */}
+              <span style={{ ...BLOCK_BASE, background: 'var(--fg)', color: 'var(--bg)' }}>
                 {eventInfo.title}
               </span>
 
               {/* Block 2 — outline — venue */}
-              <span
-                style={{
-                  ...BLOCK_BASE,
-                  border: '1px solid rgba(240,236,227,0.25)',
-                  color: 'rgba(240,236,227,0.8)',
-                }}
-              >
+              <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-25)', color: 'var(--fg-80)' }}>
                 {eventInfo.venue}
               </span>
 
               {/* Block 3 — ghost — time */}
-              <span style={{ ...BLOCK_BASE, color: 'rgba(240,236,227,0.3)' }}>
+              <span style={{ ...BLOCK_BASE, color: 'var(--fg-30)' }}>
                 {formatTime(eventInfo.startsAt)}
               </span>
             </>
