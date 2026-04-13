@@ -3,7 +3,7 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 
 // ── Constants ────────────────────────────────────────────────
 
-const ADMIN_PASSWORD = 'plaster-admin'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD as string
 const SESSION_KEY = 'plaster_admin_unlocked'
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 
