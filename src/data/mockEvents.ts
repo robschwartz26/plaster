@@ -212,20 +212,3 @@ export const mockEvents: Event[] = [
   },
 ]
 
-// Group events by calendar date string "YYYY-MM-DD"
-export function groupByDay(events: Event[]): Map<string, Event[]> {
-  const map = new Map<string, Event[]>()
-  for (const event of events) {
-    const day = event.starts_at.slice(0, 10)
-    const list = map.get(day) ?? []
-    list.push(event)
-    map.set(day, list)
-  }
-  return map
-}
-
-// All unique days in order
-export function uniqueDays(events: Event[]): string[] {
-  const days = new Set(events.map((e) => e.starts_at.slice(0, 10)))
-  return [...days].sort()
-}

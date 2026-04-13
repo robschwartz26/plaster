@@ -1,11 +1,11 @@
 import { useRef } from 'react'
-import { type Event } from '@/data/mockEvents'
+import { type WallEvent } from '@/types/event'
 
 interface Props {
-  event: Event
+  event: WallEvent
   cols: number
   activeFilter: string
-  onDoubleTap: (event: Event) => void
+  onDoubleTap: (event: WallEvent) => void
 }
 
 function formatTime(iso: string) {
@@ -17,7 +17,7 @@ function formatTime(iso: string) {
   return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`
 }
 
-function matchesFilter(event: Event, filter: string, today: string): boolean {
+function matchesFilter(event: WallEvent, filter: string, today: string): boolean {
   if (filter === 'All') return true
   if (filter === 'Tonight') return event.starts_at.slice(0, 10) === today
   return event.category === filter
@@ -27,7 +27,6 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   const today = new Date().toISOString().slice(0, 10)
   const matches = matchesFilter(event, activeFilter, today)
 
-  // Title sizing by column count
   const titleSize =
     cols === 1 ? 20 :
     cols === 2 ? 13 :
@@ -37,15 +36,16 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   const showMeta = cols <= 2
   const showTitle = cols <= 4
 
-  // Double-tap detection
   const lastTap = useRef(0)
   const handleTap = () => {
     const now = Date.now()
-    if (now - lastTap.current < 300) {
-      onDoubleTap(event)
-    }
+    if (now - lastTap.current < 300) onDoubleTap(event)
     lastTap.current = now
   }
+
+  const background = event.poster_url
+    ? undefined
+    : `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
 
   return (
     <div
@@ -58,41 +58,37 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         transition: 'opacity 0.25s ease, filter 0.25s ease',
       }}
     >
-      {/* Gradient background / poster art area */}
-      <div
-        className="absolute inset-0"
-        style={{
-          background: `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`,
-        }}
-      />
+      {/* Background: poster image or gradient */}
+      {event.poster_url ? (
+        <img
+          src={event.poster_url}
+          alt={event.title}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0" style={{ background }} />
+      )}
 
-      {/* Centered venue + title watermark (art area) */}
+      {/* Centered watermark — cols 3–4 */}
       {showTitle && cols >= 3 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center px-1 gap-0.5">
           <span
             className="font-body font-medium text-center uppercase"
-            style={{
-              fontSize: 7,
-              letterSpacing: '0.1em',
-              color: 'rgba(240,236,227,0.45)',
-            }}
+            style={{ fontSize: 7, letterSpacing: '0.1em', color: 'rgba(240,236,227,0.45)' }}
           >
             {event.venue_name}
           </span>
           <div className="w-6 border-t border-white/20 my-0.5" />
           <span
             className="font-display font-bold text-center leading-tight"
-            style={{
-              fontSize: titleSize,
-              color: 'rgba(240,236,227,0.85)',
-            }}
+            style={{ fontSize: titleSize, color: 'rgba(240,236,227,0.85)' }}
           >
             {event.title}
           </span>
         </div>
       )}
 
-      {/* Bottom gradient overlay */}
+      {/* Bottom gradient overlay — cols 1–2 */}
       {showMeta && (
         <div
           className="absolute inset-x-0 bottom-0"
@@ -103,7 +99,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         />
       )}
 
-      {/* 1–2 col: full art-area watermark in center */}
+      {/* Centered watermark — cols 1–2 */}
       {showTitle && cols <= 2 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-1">
           <span
@@ -116,32 +112,22 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
           >
             {event.venue_name}
           </span>
-          <div
-            className="border-t border-white/20"
-            style={{ width: cols === 1 ? 48 : 28 }}
-          />
+          <div className="border-t border-white/20" style={{ width: cols === 1 ? 48 : 28 }} />
           <span
             className="font-display font-bold text-center leading-tight"
-            style={{
-              fontSize: titleSize,
-              color: 'rgba(240,236,227,0.9)',
-            }}
+            style={{ fontSize: titleSize, color: 'rgba(240,236,227,0.9)' }}
           >
             {event.title}
           </span>
         </div>
       )}
 
-      {/* Meta bottom-left */}
+      {/* Meta text — bottom left, cols 1–2 */}
       {showMeta && (
         <div className="absolute bottom-0 left-0 right-0 px-2 pb-2">
           <div
             className="font-body font-medium truncate"
-            style={{
-              fontSize: cols === 1 ? 10 : 8,
-              letterSpacing: '0.04em',
-              color: 'rgba(240,236,227,0.55)',
-            }}
+            style={{ fontSize: cols === 1 ? 10 : 8, letterSpacing: '0.04em', color: 'rgba(240,236,227,0.55)' }}
           >
             {event.venue_name}
           </div>
@@ -153,10 +139,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
           </div>
           <div
             className="font-body"
-            style={{
-              fontSize: cols === 1 ? 12 : 9,
-              color: 'rgba(240,236,227,0.6)',
-            }}
+            style={{ fontSize: cols === 1 ? 12 : 9, color: 'rgba(240,236,227,0.6)' }}
           >
             {formatTime(event.starts_at)}
           </div>
