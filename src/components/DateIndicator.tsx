@@ -80,13 +80,16 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
             <>
               {/* Left — title · venue · time pills */}
               <div className="flex items-center gap-1.5 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
+                {/* Block 1 — solid: --fg bg, --bg text — fully inverts per theme */}
                 <span style={{ ...BLOCK_BASE, background: 'var(--fg)', color: 'var(--bg)' }}>
                   {eventInfo.title}
                 </span>
-                <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-25)', color: 'var(--fg-80)' }}>
+                {/* Block 2 — outline: stronger border so it reads in day mode */}
+                <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-40)', color: 'var(--fg-80)' }}>
                   {eventInfo.venue}
                 </span>
-                <span style={{ ...BLOCK_BASE, color: 'var(--fg-30)' }}>
+                {/* Block 3 — ghost: 65% so it clears 60% opacity in day mode */}
+                <span style={{ ...BLOCK_BASE, color: 'var(--fg-65)' }}>
                   {formatTime(eventInfo.startsAt)}
                 </span>
               </div>
@@ -105,7 +108,7 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
                 }}
               >
                 <span style={{ color: 'var(--fg-55)' }}>♥ {eventInfo.likeCount}</span>
-                <span style={{ color: 'var(--fg-30)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ color: 'var(--fg-55)', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />
                     <circle cx="8" cy="8" r="2" />
@@ -120,33 +123,33 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
               const d = formatDateBlocks(activeDay, today)
               return (
                 <>
-                  {/* Block 1 — solid white — day label */}
+                  {/* Block 1 — solid: fully inverts per theme */}
                   <span
                     style={{
                       ...BLOCK_BASE,
-                      background: d.isFuture ? 'rgba(240,236,227,0.25)' : '#f0ece3',
-                      color: d.isFuture ? 'rgba(12,11,11,0.5)' : '#0c0b0b',
+                      background: d.isFuture ? 'var(--fg-18)' : 'var(--fg)',
+                      color:      d.isFuture ? 'var(--fg-40)' : 'var(--bg)',
                     }}
                   >
                     {d.label}
                   </span>
 
-                  {/* Block 2 — ghost border — short day */}
+                  {/* Block 2 — outline: CSS vars so border/text read in both modes */}
                   <span
                     style={{
                       ...BLOCK_BASE,
-                      border: `1px solid rgba(240,236,227,${d.isFuture ? 0.15 : 0.25})`,
-                      color: d.isFuture ? 'rgba(240,236,227,0.3)' : 'rgba(240,236,227,0.8)',
+                      border: `1px solid ${d.isFuture ? 'var(--fg-15)' : 'var(--fg-40)'}`,
+                      color:  d.isFuture ? 'var(--fg-30)' : 'var(--fg-80)',
                     }}
                   >
                     {d.shortDay}
                   </span>
 
-                  {/* Block 3 — ghost — date */}
+                  {/* Block 3 — ghost: CSS vars, readable at both themes */}
                   <span
                     style={{
                       ...BLOCK_BASE,
-                      color: d.isFuture ? 'rgba(240,236,227,0.18)' : 'rgba(240,236,227,0.3)',
+                      color: d.isFuture ? 'var(--fg-18)' : 'var(--fg-65)',
                     }}
                   >
                     {d.dateLabel}
