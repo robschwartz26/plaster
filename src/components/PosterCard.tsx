@@ -123,39 +123,9 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
             }}
           />
         ) : (
-          // Gradient placeholder fills the full card
           <div style={{ position: 'absolute', inset: 0, background: gradient }} />
         )}
-
-        {/* Bottom scrim + meta */}
-        <div
-          className="absolute inset-x-0 bottom-0"
-          style={{
-            height: '45%',
-            background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
-            pointerEvents: 'none',
-          }}
-        />
-        <div className="absolute bottom-0 left-0 right-0 px-4 pb-5">
-          <div
-            className="font-body font-medium truncate"
-            style={{ fontSize: 11, letterSpacing: '0.04em', color: 'rgba(240,236,227,0.55)' }}
-          >
-            {event.venue_name}
-          </div>
-          <div
-            className="font-display font-bold leading-tight truncate"
-            style={{ fontSize: 22, color: '#f0ece3' }}
-          >
-            {event.title}
-          </div>
-          <div
-            className="font-body"
-            style={{ fontSize: 13, color: 'rgba(240,236,227,0.6)' }}
-          >
-            {formatTime(event.starts_at)}
-          </div>
-        </div>
+        {/* No text overlays in 1-col — artwork shown clean, info lives in the date bar */}
       </div>
     )
   }

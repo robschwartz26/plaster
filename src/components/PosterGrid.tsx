@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
-import { DateIndicator } from './DateIndicator'
+import { DateIndicator, type EventInfo } from './DateIndicator'
 
 const IS_DEV = import.meta.env.DEV
 const GAP = 2 // px — only used in 2-5 col grid
@@ -35,6 +35,7 @@ function clamp(v: number, min: number, max: number) {
 export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
+  const [activeEventIdx, setActiveEventIdx] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const pinchRef = useRef({ active: false, startDist: 0, startCols: 2 })
 
@@ -114,8 +115,8 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     let centerIndex: number
 
     if (cols === 1) {
-      // In snap mode each card is exactly clientHeight tall
       centerIndex = clamp(Math.round(scrollTop / clientHeight), 0, allEvents.length - 1)
+      setActiveEventIdx(centerIndex)
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
@@ -143,6 +144,17 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     console.log('double-tap:', event.title)
   }
 
+  // In 1-col snap mode, show the current poster's details in the date bar
+  const eventInfo: EventInfo | null =
+    cols === 1 && allEvents[activeEventIdx]
+      ? {
+          id: allEvents[activeEventIdx].id,
+          title: allEvents[activeEventIdx].title,
+          venue: allEvents[activeEventIdx].venue_name,
+          startsAt: allEvents[activeEventIdx].starts_at,
+        }
+      : null
+
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -154,7 +166,7 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Date indicator — sticky above scroll area */}
       <div className="shrink-0 z-10" style={{ background: '#0c0b0b' }}>
-        <DateIndicator activeDay={activeDay} today={today} />
+        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} />
       </div>
 
       {IS_DEV && (
