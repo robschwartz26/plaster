@@ -118,7 +118,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
       )}
-      <HeartPill count={event.like_count} />
+      {cols <= 3 && <HeartPill count={event.like_count} />}
     </div>
   )
 }
