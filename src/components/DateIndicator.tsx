@@ -43,10 +43,10 @@ function formatTime(iso: string) {
 const BLOCK_BASE: React.CSSProperties = {
   fontFamily: '"Barlow Condensed", sans-serif',
   fontWeight: 700,
-  fontSize: 9,
+  fontSize: 13,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
-  padding: '1px 5px',
+  padding: '3px 10px',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
   textOverflow: 'ellipsis',

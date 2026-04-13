@@ -37,9 +37,9 @@ export function FilterBar({ active, onChange }: Props) {
             onClick={() => onChange(chip)}
             className="shrink-0 font-body font-medium whitespace-nowrap transition-all duration-150"
             style={{
-              fontSize: 12,
+              fontSize: 9,
               letterSpacing: '0.02em',
-              padding: '4px 10px',
+              padding: '3px 8px',
               borderRadius: 4,
               border: `1px solid rgba(240,236,227,${isActive ? 0.55 : 0.15})`,
               background: isActive ? 'rgba(240,236,227,0.08)' : 'transparent',
