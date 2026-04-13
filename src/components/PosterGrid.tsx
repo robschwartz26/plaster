@@ -38,6 +38,7 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   const pinchRef = useRef({ active: false, startDist: 0, startCols: 2 })
+  const pendingScrollIdx = useRef<number | null>(null)
 
   const days = useMemo(() => uniqueDays(events), [events])
   const grouped = useMemo(() => groupByDay(events), [events])
@@ -140,8 +141,26 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     return () => el.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
+  // ── Scroll to pending index once cols===1 layout has settled ──────────
+  useEffect(() => {
+    if (cols !== 1 || pendingScrollIdx.current === null) return
+    const idx = pendingScrollIdx.current
+    pendingScrollIdx.current = null
+    // rAF lets the browser paint the 1-col layout before we set scrollTop
+    requestAnimationFrame(() => {
+      const el = containerRef.current
+      if (!el) return
+      el.scrollTop = idx * el.clientHeight
+    })
+  }, [cols])
+
+  // ── Double-tap: jump to 1-col centered on the tapped event ────────────
   const handleDoubleTap = (event: WallEvent) => {
-    console.log('double-tap:', event.title)
+    const idx = allEvents.findIndex((e) => e.id === event.id)
+    if (idx === -1) return
+    pendingScrollIdx.current = idx
+    setActiveEventIdx(idx)
+    setCols(1)
   }
 
   // In 1-col snap mode, show the current poster's details in the date bar
