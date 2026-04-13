@@ -257,10 +257,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
           ) : (
             <div style={{ position: 'absolute', inset: 0, background: gradient }} />
           )}
-          {/* No heart overlay at 1-col — it lives in the info bar instead */}
         </div>
-
-        <InfoBar event={event} cols={1} />
       </div>
     )
   }

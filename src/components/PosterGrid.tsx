@@ -152,6 +152,8 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
           title: allEvents[activeEventIdx].title,
           venue: allEvents[activeEventIdx].venue_name,
           startsAt: allEvents[activeEventIdx].starts_at,
+          likeCount: allEvents[activeEventIdx].like_count,
+          viewCount: allEvents[activeEventIdx].view_count,
         }
       : null
 

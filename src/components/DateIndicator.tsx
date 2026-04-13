@@ -5,6 +5,8 @@ export interface EventInfo {
   title: string
   venue: string
   startsAt: string // ISO datetime
+  likeCount: number
+  viewCount: number
 }
 
 interface Props {
@@ -67,6 +69,7 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
         <motion.div
           key={contentKey}
           className="flex items-center gap-1.5"
+          style={eventInfo ? { width: '100%' } : undefined}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -75,20 +78,41 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
           {eventInfo ? (
             // ── Event info mode (1-col) ──────────────────────────────
             <>
-              {/* Block 1 — solid fg bg — event title */}
-              <span style={{ ...BLOCK_BASE, background: 'var(--fg)', color: 'var(--bg)' }}>
-                {eventInfo.title}
-              </span>
+              {/* Left — title · venue · time pills */}
+              <div className="flex items-center gap-1.5 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ ...BLOCK_BASE, background: 'var(--fg)', color: 'var(--bg)' }}>
+                  {eventInfo.title}
+                </span>
+                <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-25)', color: 'var(--fg-80)' }}>
+                  {eventInfo.venue}
+                </span>
+                <span style={{ ...BLOCK_BASE, color: 'var(--fg-30)' }}>
+                  {formatTime(eventInfo.startsAt)}
+                </span>
+              </div>
 
-              {/* Block 2 — outline — venue */}
-              <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-25)', color: 'var(--fg-80)' }}>
-                {eventInfo.venue}
-              </span>
-
-              {/* Block 3 — ghost — time */}
-              <span style={{ ...BLOCK_BASE, color: 'var(--fg-30)' }}>
-                {formatTime(eventInfo.startsAt)}
-              </span>
+              {/* Right — ♥ count  👁 count */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  flexShrink: 0,
+                  fontFamily: '"Barlow Condensed", sans-serif',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  letterSpacing: '0.06em',
+                }}
+              >
+                <span style={{ color: 'var(--fg-55)' }}>♥ {eventInfo.likeCount}</span>
+                <span style={{ color: 'var(--fg-30)', display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                    <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />
+                    <circle cx="8" cy="8" r="2" />
+                  </svg>
+                  {eventInfo.viewCount}
+                </span>
+              </div>
             </>
           ) : activeDay ? (
             // ── Date mode (2-5 col) ──────────────────────────────────
