@@ -39,7 +39,7 @@ function HeartPill({ count }: { count: number }) {
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        color: 'rgba(255,255,255,0.88)',
+        color: 'var(--fg)',
         fontFamily: '"Space Grotesk", sans-serif',
         fontSize: 11,
         fontWeight: 500,
@@ -129,7 +129,7 @@ function InfoBar({ event, cols }: { event: WallEvent; cols: number }) {
         }}
       >
         {cols === 1 && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--fg-55)' }}>
             ♥ {event.like_count}
           </span>
         )}
