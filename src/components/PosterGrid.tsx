@@ -65,6 +65,9 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length === 2) {
+        // In 1-col mode, PosterCard owns the 2-finger gesture (peek zoom).
+        // Don't intercept it here — just let it bubble through.
+        if (cols === 1) return
         e.preventDefault()
         const dx = e.touches[0].clientX - e.touches[1].clientX
         const dy = e.touches[0].clientY - e.touches[1].clientY
