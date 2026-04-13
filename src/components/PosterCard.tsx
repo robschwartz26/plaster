@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { useRef } from 'react'
 import { type WallEvent } from '@/types/event'
 
 interface Props {
@@ -56,58 +56,8 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
     lastTap.current = now
   }
 
-  // Refs for peek zoom (1-col only) — DOM mutation, no re-renders
-  const cardRef = useRef<HTMLDivElement>(null)
-  const imgRef  = useRef<HTMLImageElement>(null)
-  const peekActive    = useRef(false)
-  const peekStartDist = useRef(0)
-
-  useEffect(() => {
-    if (cols !== 1) return
-    const card = cardRef.current
-    const img  = imgRef.current
-    if (!card || !img) return
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 2) return
-      e.preventDefault()
-      const t0 = e.touches[0], t1 = e.touches[1]
-      peekStartDist.current = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
-      peekActive.current = true
-      const rect = img.getBoundingClientRect()
-      const midX = (t0.clientX + t1.clientX) / 2
-      const midY = (t0.clientY + t1.clientY) / 2
-      img.style.transformOrigin = `${((midX - rect.left) / rect.width) * 100}% ${((midY - rect.top) / rect.height) * 100}%`
-      img.style.transition = 'none'
-    }
-    const onTouchMove = (e: TouchEvent) => {
-      if (!peekActive.current || e.touches.length < 2) return
-      e.preventDefault()
-      const t0 = e.touches[0], t1 = e.touches[1]
-      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
-      img.style.transform = `scale(${Math.min(3, Math.max(1, dist / peekStartDist.current))})`
-    }
-    const onRelease = () => {
-      if (!peekActive.current) return
-      peekActive.current = false
-      img.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)'
-      img.style.transform = 'scale(1)'
-    }
-
-    card.addEventListener('touchstart', onTouchStart, { passive: false })
-    card.addEventListener('touchmove',  onTouchMove,  { passive: false })
-    card.addEventListener('touchend',   onRelease)
-    card.addEventListener('touchcancel', onRelease)
-    return () => {
-      card.removeEventListener('touchstart', onTouchStart)
-      card.removeEventListener('touchmove',  onTouchMove)
-      card.removeEventListener('touchend',   onRelease)
-      card.removeEventListener('touchcancel', onRelease)
-      img.style.transform = ''
-      img.style.transition = ''
-      img.style.transformOrigin = ''
-    }
-  }, [cols])
+  // Peek zoom is handled by PosterGrid's pinch handler, which queries
+  // the img element directly. No listeners needed here.
 
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
   const dimmed   = activeFilter !== 'All' && !matches
@@ -116,7 +66,6 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   if (cols === 1) {
     return (
       <div
-        ref={cardRef}
         onClick={handleTap}
         style={{
           height: '100%',
@@ -133,7 +82,6 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
       >
         {event.poster_url ? (
           <img
-            ref={imgRef}
             src={event.poster_url}
             alt={event.title}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}

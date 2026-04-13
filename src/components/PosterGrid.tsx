@@ -37,7 +37,15 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
-  const pinchRef = useRef({ active: false, startDist: 0, startCols: 2 })
+  const colsRef = useRef(cols)
+  colsRef.current = cols // always current — no stale closure on the listener
+  const pinchRef = useRef<{
+    active: boolean
+    startDist: number
+    startCols: number
+    peekImg: HTMLImageElement | null
+    peeking: boolean
+  }>({ active: false, startDist: 0, startCols: 2, peekImg: null, peeking: false })
   const pendingScrollIdx = useRef<number | null>(null)
 
   const days = useMemo(() => uniqueDays(events), [events])
@@ -56,43 +64,89 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     return m
   }, [days, grouped])
 
-  // ── Pinch → column count (2-5 col only; 1-col cards own the gesture) ──
+  // ── Pinch → column count at all col counts + peek zoom at 1-col ───────
+  // Registered once ([] deps). colsRef.current always reflects latest cols.
+  // Spreading (ratio < 1) → fewer cols or peek zoom if already at 1.
+  // Pinching in (ratio > 1) → more cols; cancels any active peek zoom.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 2) return
-      if (cols === 1) return // PosterCard handles peek zoom in 1-col
       e.preventDefault()
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      pinchRef.current = {
-        active: true,
-        startDist: Math.sqrt(dx * dx + dy * dy),
-        startCols: cols,
+      const t0 = e.touches[0], t1 = e.touches[1]
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
+      const currentCols = colsRef.current
+
+      // In 1-col mode, grab the visible card's img for potential peek zoom
+      let peekImg: HTMLImageElement | null = null
+      if (currentCols === 1) {
+        const idx = Math.round(el.scrollTop / el.clientHeight)
+        const card = el.children[idx] as HTMLElement | undefined
+        peekImg = card?.querySelector('img') ?? null
+        if (peekImg) {
+          const rect = peekImg.getBoundingClientRect()
+          const midX = (t0.clientX + t1.clientX) / 2
+          const midY = (t0.clientY + t1.clientY) / 2
+          peekImg.style.transformOrigin =
+            `${((midX - rect.left) / rect.width) * 100}% ${((midY - rect.top) / rect.height) * 100}%`
+          peekImg.style.transition = 'none'
+        }
+      }
+
+      pinchRef.current = { active: true, startDist: dist, startCols: currentCols, peekImg, peeking: false }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      const p = pinchRef.current
+      if (!p.active || e.touches.length < 2) return
+      e.preventDefault()
+      const t0 = e.touches[0], t1 = e.touches[1]
+      const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
+      // ratio > 1: pinching in (more cols). ratio < 1: spreading (fewer cols / peek)
+      const ratio = p.startDist / dist
+      const newCols = clamp(Math.round(p.startCols * ratio), 1, 5)
+
+      if (newCols !== p.startCols) {
+        // Col change — cancel peek zoom and drop the stale img ref
+        if (p.peekImg) {
+          if (p.peeking) {
+            p.peekImg.style.transition = 'transform 0.2s ease'
+            p.peekImg.style.transform = 'scale(1)'
+          }
+          p.peekImg = null
+          p.peeking = false
+        }
+        setCols(newCols)
+      } else if (p.startCols === 1 && p.peekImg) {
+        // Still at 1-col — peek zoom on the active poster
+        const scale = Math.min(3, Math.max(1, dist / p.startDist))
+        p.peekImg.style.transform = `scale(${scale})`
+        p.peeking = scale > 1
       }
     }
-    const onTouchMove = (e: TouchEvent) => {
-      if (!pinchRef.current.active || e.touches.length < 2) return
-      e.preventDefault()
-      const dx = e.touches[0].clientX - e.touches[1].clientX
-      const dy = e.touches[0].clientY - e.touches[1].clientY
-      const dist = Math.sqrt(dx * dx + dy * dy)
-      const ratio = pinchRef.current.startDist / dist
-      setCols(clamp(Math.round(pinchRef.current.startCols * ratio), 1, 5))
+
+    const onTouchEnd = () => {
+      const p = pinchRef.current
+      if (p.peekImg && p.peeking) {
+        p.peekImg.style.transition = 'transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        p.peekImg.style.transform = 'scale(1)'
+      }
+      pinchRef.current = { ...pinchRef.current, active: false, peeking: false, peekImg: null }
     }
-    const onTouchEnd = () => { pinchRef.current.active = false }
 
     el.addEventListener('touchstart', onTouchStart, { passive: false })
-    el.addEventListener('touchmove', onTouchMove, { passive: false })
-    el.addEventListener('touchend', onTouchEnd)
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+    el.addEventListener('touchend',   onTouchEnd)
+    el.addEventListener('touchcancel', onTouchEnd)
     return () => {
       el.removeEventListener('touchstart', onTouchStart)
-      el.removeEventListener('touchmove', onTouchMove)
-      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchmove',  onTouchMove)
+      el.removeEventListener('touchend',   onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchEnd)
     }
-  }, [cols])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Ctrl+scroll simulates pinch on desktop ─────────────────────────
   useEffect(() => {
