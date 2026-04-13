@@ -8,22 +8,13 @@ interface Props {
   onDoubleTap: (event: WallEvent) => void
 }
 
-function formatTime(iso: string) {
-  const d = new Date(iso)
-  const h = d.getHours()
-  const m = d.getMinutes()
-  const ampm = h >= 12 ? 'pm' : 'am'
-  const hour = h % 12 || 12
-  return m === 0 ? `${hour}${ampm}` : `${hour}:${String(m).padStart(2, '0')}${ampm}`
-}
-
 function matchesFilter(event: WallEvent, filter: string, today: string): boolean {
   if (filter === 'All') return true
   if (filter === 'Tonight') return event.starts_at.slice(0, 10) === today
   return event.category === filter
 }
 
-// ── Heart pill — absolute top-right on the image ─────────────
+// ── Heart pill — top-right overlay on the image ───────────────
 function HeartPill({ count }: { count: number }) {
   return (
     <div
@@ -53,110 +44,11 @@ function HeartPill({ count }: { count: number }) {
   )
 }
 
-// ── Info bar — below the image, against app bg ────────────────
-function InfoBar({ event, cols }: { event: WallEvent; cols: number }) {
-  const titleSize = cols === 1 ? 13 : cols === 2 ? 11 : cols === 3 ? 10 : 9
-  const metaSize  = cols === 1 ? 11 : cols === 2 ? 9  : cols === 3 ? 8  : 8
-  const padV      = cols === 1 ? 7  : 5
-  const padH      = cols === 1 ? 10 : 7
-
-  const showVenue = cols <= 3
-  const showTime  = cols <= 2
-
-  const metaParts = [
-    showVenue ? event.venue_name : null,
-    showTime  ? formatTime(event.starts_at) : null,
-  ].filter(Boolean)
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 6,
-        padding: `${padV}px ${padH}px`,
-        background: 'var(--bg)',
-        flexShrink: 0,
-      }}
-    >
-      {/* Left — title + meta */}
-      <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
-        <div
-          style={{
-            fontFamily: '"Space Grotesk", sans-serif',
-            fontSize: titleSize,
-            fontWeight: 600,
-            color: 'var(--fg-80)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            lineHeight: 1.25,
-          }}
-        >
-          {event.title}
-        </div>
-        {metaParts.length > 0 && (
-          <div
-            style={{
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: metaSize,
-              color: 'var(--fg-30)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              lineHeight: 1.3,
-              marginTop: 1,
-            }}
-          >
-            {metaParts.join(' · ')}
-          </div>
-        )}
-      </div>
-
-      {/* Right — heart (1-col only) + eye + view count */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexShrink: 0,
-          color: 'var(--fg-25)',
-          fontFamily: '"Space Grotesk", sans-serif',
-          fontSize: metaSize,
-          fontWeight: 500,
-          lineHeight: 1,
-        }}
-      >
-        {cols === 1 && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3, color: 'var(--fg-55)' }}>
-            ♥ {event.like_count}
-          </span>
-        )}
-        {/* Eye icon — inline SVG, sized to text */}
-        <svg
-          width={metaSize + 1}
-          height={metaSize + 1}
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          style={{ flexShrink: 0 }}
-        >
-          <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />
-          <circle cx="8" cy="8" r="2" />
-        </svg>
-        {event.view_count}
-      </div>
-    </div>
-  )
-}
-
 export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   const today = new Date().toISOString().slice(0, 10)
   const matches = matchesFilter(event, activeFilter, today)
 
-  // Double-tap
+  // Double-tap detection
   const lastTap = useRef(0)
   const handleTap = () => {
     const now = Date.now()
@@ -167,7 +59,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   // Refs for peek zoom (1-col only) — DOM mutation, no re-renders
   const cardRef = useRef<HTMLDivElement>(null)
   const imgRef  = useRef<HTMLImageElement>(null)
-  const peekActive   = useRef(false)
+  const peekActive    = useRef(false)
   const peekStartDist = useRef(0)
 
   useEffect(() => {
@@ -185,7 +77,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
       const rect = img.getBoundingClientRect()
       const midX = (t0.clientX + t1.clientX) / 2
       const midY = (t0.clientY + t1.clientY) / 2
-      img.style.transformOrigin = `${((midX - rect.left)  / rect.width)  * 100}% ${((midY - rect.top) / rect.height) * 100}%`
+      img.style.transformOrigin = `${((midX - rect.left) / rect.width) * 100}% ${((midY - rect.top) / rect.height) * 100}%`
       img.style.transition = 'none'
     }
     const onTouchMove = (e: TouchEvent) => {
@@ -220,7 +112,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
   const dimmed   = activeFilter !== 'All' && !matches
 
-  // ── 1-col: snap card fills viewport height, image takes flex-1 ───────
+  // ── 1-col: full-height snap card, completely clean ────────────
   if (cols === 1) {
     return (
       <div
@@ -228,8 +120,6 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         onClick={handleTap}
         style={{
           height: '100%',
-          display: 'flex',
-          flexDirection: 'column',
           background: 'var(--bg)',
           scrollSnapAlign: 'start',
           opacity: dimmed ? 0.18 : 1,
@@ -237,38 +127,33 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
           transition: 'opacity 0.25s ease, filter 0.25s ease',
           cursor: 'pointer',
           userSelect: 'none',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {/* Image — fills remaining height, contain for full artwork */}
-        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-          {event.poster_url ? (
-            <img
-              ref={imgRef}
-              src={event.poster_url}
-              alt={event.title}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-              }}
-            />
-          ) : (
-            <div style={{ position: 'absolute', inset: 0, background: gradient }} />
-          )}
-        </div>
+        {event.poster_url ? (
+          <img
+            ref={imgRef}
+            src={event.poster_url}
+            alt={event.title}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+        )}
+        {/* No overlays — poster speaks for itself */}
       </div>
     )
   }
 
-  // ── 2-5 col: 2:3 image + info bar below ──────────────────────────────
+  // ── 2-5 col: 2:3 image, heart pill only ──────────────────────
   return (
     <div
       onClick={handleTap}
       style={{
-        display: 'flex',
-        flexDirection: 'column',
+        aspectRatio: '2/3',
+        position: 'relative',
+        overflow: 'hidden',
         opacity: dimmed ? 0.18 : 1,
         filter: dimmed ? 'grayscale(0.5)' : 'none',
         transition: 'opacity 0.25s ease, filter 0.25s ease',
@@ -276,28 +161,16 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
         userSelect: 'none',
       }}
     >
-      {/* Image — fixed 2:3 aspect ratio, no text overlay */}
-      <div style={{ aspectRatio: '2/3', position: 'relative', overflow: 'hidden' }}>
-        {event.poster_url ? (
-          <img
-            src={event.poster_url}
-            alt={event.title}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-          />
-        ) : (
-          <div style={{ position: 'absolute', inset: 0, background: gradient }} />
-        )}
-        {/* Heart overlay only at 2-3 col; hidden at 4-5 col (too small) */}
-        {cols <= 3 && <HeartPill count={event.like_count} />}
-      </div>
-
-      <InfoBar event={event} cols={cols} />
+      {event.poster_url ? (
+        <img
+          src={event.poster_url}
+          alt={event.title}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+        />
+      ) : (
+        <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+      )}
+      <HeartPill count={event.like_count} />
     </div>
   )
 }
