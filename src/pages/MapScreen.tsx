@@ -595,6 +595,9 @@ export function MapScreen() {
         <div className="shrink-0 w-2" />
       </div>
 
+      {/* ── Date indicator blocks ── */}
+      <DateIndicator activeDay={selectedDate} today={today} />
+
       {/* ── Map area ── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
         <Map
@@ -851,13 +854,11 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ── Date indicator blocks ── */}
-      <DateIndicator activeDay={selectedDate} today={today} />
-
-      {/* ── Day wheel picker — dark bar, always ── */}
+      {/* ── Day wheel picker ── */}
       <div style={{
         display: 'flex', justifyContent: 'center', alignItems: 'center',
-        background: '#0a0908', padding: '10px 0 14px',
+        background: theme === 'night' ? '#0a0908' : '#f0ece3',
+        padding: '8px 0',
       }}>
         <div style={{ width: 'clamp(160px, 33vw, 240px)' }}>
           <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} dark={theme === 'night'} />
