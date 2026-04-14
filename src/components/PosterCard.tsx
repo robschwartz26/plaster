@@ -93,48 +93,35 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
   )
 }
 
-// ── Sample edge colors from a poster image ────────────────────────────────
-
+// DO NOT REMOVE — sampled backdrop is core design feature
 function usePosterBackdrop(posterUrl: string | null) {
   const [backdrop, setBackdrop] = useState<string | null>(null)
-
   useEffect(() => {
     if (!posterUrl) return
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
       try {
-        const SIZE = 40 // sample at 40x40
+        const SIZE = 40
         const canvas = document.createElement('canvas')
         canvas.width = SIZE; canvas.height = SIZE
         const ctx = canvas.getContext('2d')!
         ctx.drawImage(img, 0, 0, SIZE, SIZE)
         const d = ctx.getImageData(0, 0, SIZE, SIZE).data
-
-        // Sample 4 corners + center
         function px(x: number, y: number) {
           const i = (y * SIZE + x) * 4
           return `${d[i]},${d[i+1]},${d[i+2]}`
         }
-
         const tl = px(2, 2)
         const tr = px(SIZE-3, 2)
         const bl = px(2, SIZE-3)
         const br = px(SIZE-3, SIZE-3)
-        const mid = px(SIZE>>1, SIZE>>1)
-
-        // Build a radial-ish gradient using corner samples
-        setBackdrop(
-          `conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`
-        )
-      } catch {
-        setBackdrop(null)
-      }
+        setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
+      } catch { setBackdrop(null) }
     }
     img.onerror = () => setBackdrop(null)
     img.src = posterUrl
   }, [posterUrl])
-
   return backdrop
 }
 
@@ -484,14 +471,14 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             background: sampledBackdrop ?? gradient,
             transition: 'background 0.3s ease',
           }} />
-          {/* Centered poster — full image, no cropping */}
+          {/* Centered poster — contain by default, cover when fill_frame is set */}
           <img
             src={event.poster_url}
             alt={event.title}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
-              objectFit: 'contain',
+              objectFit: event.fill_frame ? 'cover' : 'contain',
               pointerEvents: 'none',
               userSelect: 'none',
             }}

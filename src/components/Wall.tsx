@@ -23,8 +23,15 @@ export function Wall() {
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
-  const isAdmin = sessionStorage.getItem('plaster_admin_unlocked') === '1'
+  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('plaster_admin_unlocked') === '1')
   const [isAdminMode, setIsAdminMode] = useState(false)
+
+  // Re-check admin flag when tab regains focus (e.g. after visiting /admin)
+  useEffect(() => {
+    const check = () => setIsAdmin(sessionStorage.getItem('plaster_admin_unlocked') === '1')
+    window.addEventListener('focus', check)
+    return () => window.removeEventListener('focus', check)
+  }, [])
 
   const { user } = useAuth()
   const navigate = useNavigate()

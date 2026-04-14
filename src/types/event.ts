@@ -13,4 +13,5 @@ export interface WallEvent {
   color2: string
   view_count: number
   like_count: number
+  fill_frame?: boolean
 }
