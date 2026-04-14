@@ -1,9 +1,9 @@
 # PLASTER — Full Project Brief
-Paste this at the start of every new Claude session
+Paste this at the start of every new Claude session.
 
 ---
 
-## What Is Plaster — The One Sentence Version
+## What Is Plaster
 Plaster is a living Portland event poster wall — a beautiful, scrollable city of flyers that treats event art with the respect it deserves, connects people to their city's culture, and builds genuine community around the venues and nights that make Portland worth living in.
 
 ---
@@ -11,7 +11,7 @@ Plaster is a living Portland event poster wall — a beautiful, scrollable city 
 ## Live URLs & Repos
 - **Live:** https://the-plaster-wall.vercel.app
 - **GitHub:** robschwartz26/plaster
-- **Local dev:** localhost:8081
+- **Local dev:** localhost:8081 (`npm run dev` from ~/plaster)
 - **Admin:** /admin (password: Plast3r!PDX#26 stored as VITE_ADMIN_PASSWORD env var)
 - **Supabase project:** lhetwgdlpulgnjetuope (us-west-1)
 
@@ -33,10 +33,10 @@ Set in .env.local and Vercel production:
 ```
 VITE_SUPABASE_URL=https://lhetwgdlpulgnjetuope.supabase.co
 VITE_SUPABASE_ANON_KEY=(set)
-VITE_SUPABASE_SERVICE_KEY=(set — quoted to handle # character)
+VITE_SUPABASE_SERVICE_KEY=(set)
 VITE_MAPBOX_TOKEN=(set)
 VITE_ADMIN_PASSWORD=Plast3r!PDX#26
-VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY for edge function)
+VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY)
 ```
 
 ---
@@ -45,8 +45,8 @@ VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY fo
 
 ### Tables
 - **profiles** — id, username, avatar_url, bio, is_public, interests[], created_at
-- **venues** — id, name, neighborhood, address, location_lat, location_lng, website, instagram, cover_url, description, created_at
-- **events** — id, venue_id, title, category, poster_url, starts_at, view_count, like_count, neighborhood, address, description, is_recurring, recurrence_rule, created_at
+- **venues** — id, name, neighborhood, address, location_lat, location_lng, website, instagram, cover_url, description, hours, created_at
+- **events** — id, venue_id, title, category, poster_url, starts_at, view_count, like_count, neighborhood, address, description, is_recurring, recurrence_rule, fill_frame (boolean default false), created_at
 - **attendees** — id, event_id, user_id, created_at
 - **event_likes** — id, event_id, user_id, created_at
 - **event_wall_posts** — id, event_id, user_id, content, like_count, created_at
@@ -58,10 +58,13 @@ VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY fo
 - add_like_count(p_event_id, delta)
 - add_post_like_count(p_post_id, delta)
 
-### Real Data
-- One real event: Jimi Hendrix Experience at Holocene
-- Venue ID: 4afea641-c25e-4693-9aca-6f03e8e22b0f
-- Event date needs to be kept current (update starts_at to avoid 6-hour lookback filter)
+### RLS Notes
+- Events UPDATE: "Admin can update events" policy already applied — `USING (true) WITH CHECK (true)` — allows crop saves from browser
+- fill_frame and hours columns: run these if not yet applied:
+```sql
+ALTER TABLE events ADD COLUMN IF NOT EXISTS fill_frame boolean DEFAULT false;
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS hours text;
+```
 
 ---
 
@@ -70,7 +73,8 @@ VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY fo
 ### Colors
 - Night mode (default): background #0c0b0b, text #f0ece3
 - Day mode: background #f0ece3, text #0c0b0b
-- Theme toggle: Swipe "plaster" wordmark RIGHT — follows finger, spring bounce snap-back. Persisted in localStorage.
+- Theme toggle: Swipe "plaster" wordmark RIGHT. Persisted in localStorage.
+- CSS vars: --bg, --fg, --fg-08, --fg-15, --fg-18, --fg-25, --fg-30, --fg-40, --fg-55, --fg-65, --fg-80
 
 ### Typography
 - Playfair Display 900 — wordmark + headings
@@ -79,232 +83,221 @@ VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY fo
 
 ### Hearts
 - Unicode ♥ only — NEVER emoji ❤️ (renders red on iOS)
-- Night mode: white heart / Day mode: black heart / Never red
 
 ---
 
 ## Navigation (5 Tabs — LOCKED IN)
 Tonight · Map · Wall · Venues · You
 
-- **Tonight** (far left) — friend activity, RSVPs, social pulse of the night
-- **Map** — geographic venue/event view with knurl wheel day scrubber
-- **Wall** (CENTER, larger icon) — the heart of the app, main poster grid
-- **Venues** — browse Portland venues, tap to venue profile page
-- **You** (far right) — profile, poster collection, superlatives, friends
-
 ---
 
 ## Wall Screen
 
-### Grid
-- Pinch zoom changes columns 1–5 (ctrl+scroll on desktop)
-- 2px gap between cards, edge to edge
-- At 4-5 columns: pure art, nothing on posters
-- At 2-3 columns: small ♥ count pill top-right of poster only
-- At 1 column: full letterboxed poster, no overlays at all
+### Poster Cards — Sampled Color Backdrop (DO NOT REMOVE — EVER)
+Core design feature. Every edit to PosterCard.tsx must preserve this hook.
 
-### Poster Cards — Blurred Backdrop (IMPORTANT)
-Each poster card in 2-5 col view uses a **sampled color backdrop** — NOT objectFit cover cropping.
-- The poster's 4 corner colors are sampled via canvas at load time
-- A conic-gradient is built from those colors and used as the card background
-- The poster itself uses objectFit: contain — always shows fully, never cropped
-- This gives a natural color-matched backdrop at ALL column counts with consistent brightness
-- Falls back to the event's category gradient while image loads
-- This was built in Session 6 — do not revert to objectFit cover
+```typescript
+// DO NOT REMOVE — sampled backdrop is core design feature
+function usePosterBackdrop(posterUrl: string | null) {
+  const [backdrop, setBackdrop] = useState<string | null>(null)
+  useEffect(() => {
+    if (!posterUrl) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const SIZE = 40
+        const canvas = document.createElement('canvas')
+        canvas.width = SIZE; canvas.height = SIZE
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, SIZE, SIZE)
+        const d = ctx.getImageData(0, 0, SIZE, SIZE).data
+        function px(x: number, y: number) {
+          const i = (y * SIZE + x) * 4
+          return `${d[i]},${d[i+1]},${d[i+2]}`
+        }
+        const tl = px(2, 2); const tr = px(SIZE-3, 2)
+        const bl = px(2, SIZE-3); const br = px(SIZE-3, SIZE-3)
+        setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
+      } catch { setBackdrop(null) }
+    }
+    img.onerror = () => setBackdrop(null)
+    img.src = posterUrl
+  }, [posterUrl])
+  return backdrop
+}
+```
 
-### Date Indicator (Ransom-note blocks)
-- Three Barlow Condensed blocks: solid "TONIGHT" + outline "TUE" + ghost "APR 14"
-- Updates via scroll center position, cross-fades between days
-- In 1-column mode: shows event title · venue · time on left, ♥ count + 👁 views on right
+In 2-5 col grid card render — must use this pattern:
+```tsx
+{event.poster_url ? (
+  <>
+    <div style={{ position: 'absolute', inset: 0, background: sampledBackdrop ?? gradient, transition: 'background 0.3s ease' }} />
+    <img src={event.poster_url} alt={event.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: event.fill_frame ? 'cover' : 'contain', pointerEvents: 'none', userSelect: 'none' }} />
+  </>
+) : (
+  <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+)}
+```
 
-### Filter Chips
-All · ♥ · Music · Drag · Dance · Art · Film · Literary · Trivia · Other
+### fill_frame
+- true → objectFit: cover (fills card, crops poster edges)
+- false (default) → objectFit: contain (full poster visible, sampled backdrop fills sides)
 
 ### 1-Column Mode
-- Double tap any poster at 2-5 columns → jumps to 1-column centered on that poster
-- Swipe RIGHT → info panel, swipe RIGHT again → post wall, swipe RIGHT again → back to poster (full loop)
-- LEFT swipe to go back one panel
-- 60° angle threshold to prevent accidental vertical scroll triggering horizontal swipe
-- Poster is completely clean — no overlays
-- Pinch to peek zoom up to 3x, springs back on release
+- Double tap any poster → jumps to 1-col
+- Swipe RIGHT → info panel → post wall → back to poster (full loop)
+- 60° angle threshold
+- Pinch peek zoom up to 3x
 
 ---
 
-## AI Poster Ingestion (Session 6 — BUILT)
+## Admin Mode (on the Wall)
 
-### Import Poster section in /admin
-- Drag-drop zone for poster images (or click to browse)
-- Calls Supabase Edge Function `extract-poster` (NOT Anthropic API directly — CORS workaround)
-- Edge function URL: https://lhetwgdlpulgnjetuope.supabase.co/functions/v1/extract-poster
-- Claude Vision reads the image and extracts: title, venue_name, date, time, address, description, category, confidence, uncertain_fields, crop (fractional bounding box of poster art)
-- Poster isolation: if image contains Instagram UI, white borders, or other noise, AI returns crop coordinates and browser crops before upload
-- Review form pre-fills with extracted data — yellow ⚠ on uncertain fields
-- Image optimization: resized to max 1200px longest side, converted to JPEG 85% quality
-- Venue matching: tries to match extracted venue name to existing venues in DB; creates new venue if no match
-- On confirm: uploads optimized/cropped image to Supabase storage, creates event record, appears on wall immediately
-- DEV button (localhost only) for testing without real images
-- Works without API key (form fills manually) — warning banner shown if key missing
+### Unlocking
+1. Go to /admin, enter password → sets `sessionStorage.plaster_admin_unlocked = '1'`
+2. Navigate to Wall via bottom nav on /admin (stays unlocked)
+3. "Edit" pill appears in Wall top bar
+4. Tap Edit → isAdminMode = true → ✏️ button on every poster
 
-### Edge Function
-- Location: ~/plaster/supabase/functions/extract-poster/index.ts
-- Deployed to Supabase (project: lhetwgdlpulgnjetuope)
-- ANTHROPIC_API_KEY set as Supabase secret (not in .env.local for this function)
-- Deploy command: npx supabase functions deploy extract-poster --project-ref lhetwgdlpulgnjetuope
+### ✏️ Edit Button
+- 1-col: absolutely positioned bottom-right floating pill outside carousel strip (zIndex 20)
+- 2-5 col: bottom-left of grid card
+- Opens AdminEditModal for that event
 
-### NOT YET BUILT (Session 8)
-- Preview button at ingest review stage (shows poster in simulated grid card before posting)
-- Crop adjustment sliders (top/bottom/left/right) at ingest review stage
-- Admin crop editor on the wall — edit icon on each poster when logged in as admin, sliders to adjust crop, re-uploads cropped image replacing original in Supabase
-- Duplicate detection — when dropping a second poster for same event, offer to merge/update instead of creating new record
+### AdminEditModal (src/components/AdminEditModal.tsx)
+Full-screen overlay. Two modes: crop tool and details editor.
 
----
+**Crop Tool:**
+- Full poster with dark mask outside crop rectangle
+- 8 drag handles (20×20 touch targets) — corners + edge midpoints
+- Overlay positioned relative to actual image element (getBoundingClientRect) — NOT modal container
+- Live preview canvas (72×108px, 2:3) updates on every drag with cropped image + sampled backdrop
+- Smart snap: detects solid borders only (near-white avg > 220 OR near-black avg < 30 with low variance). Animates rect. No-border → toast.
+- CORS note: img.crossOrigin = 'anonymous' required. Supabase CDN may block getImageData — smart snap silently fails if so.
 
-## Map Screen
-- Mapbox GL JS, centered on Portland (lat: 45.5051, lng: -122.6750, zoom: 12)
-- Night mode: mapbox://styles/mapbox/dark-v11 / Day mode: mapbox://styles/mapbox/light-v11
-- Venue pins for venues with events on selected day
-- Knurl Wheel Day Scrubber — machined metal rotary encoder aesthetic, 7 days, momentum drag
-- Radius filter top right
-- List mode toggle — bottom sheet with events for selected day
-- Category filter chips same as Wall screen
+**Save Crop flow:**
+1. optimizeImage(imageFile, editCrop) → cropped JPEG blob
+2. Upload to posters bucket → new filename with timestamp
+3. supabase.from('events').update({ poster_url: newUrl }).eq('id', event.id)
+4. onCropSaved(newUrl) → Wall adds ?t=timestamp cache-bust → PosterCard resamples backdrop
 
----
+**Undo:**
+- previousUrlRef captures URL before save
+- Undo available 30s after save
+- Wall.handleUndoCrop restores old URL to DB + state
+- 1-col: Confirm ✓ / Undo ↩ pills at bottom of poster panel
 
-## Auth & Profiles
-- Supabase email/password signup/login
-- After sign in: check if username exists → skip onboarding if yes
-- Onboarding: username → avatar (optional) → interests (optional)
-- Profile: avatar, @username, bio, public/private toggle, liked events grid, superlatives, follows
-
-### Known Bugs
-- Avatar not displaying on profile — upload works, avatar_url not rendering in YouScreen
-- Onboarding shown every login — needs to check if username already exists before showing
-- Map theme — map.setStyle() fix may still be needed
+### cropUtils.ts (src/lib/cropUtils.ts)
+- CropRect — { x, y, width, height } fractional 0–1
+- applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds
 
 ---
 
-## Venues Tab & Venue Profile
-- Alphabetical list of all venues as cards
-- Venue profile: hero image, follow button, address, website, Instagram, upcoming events row, post wall
+## AI Poster Ingestion (/admin — Import Poster section)
 
----
+### Flow
+1. Drop poster image → Supabase Edge Function extract-poster called
+2. Claude Vision extracts: title, venue_name, date, time, address, description, category, confidence, uncertain_fields, crop coordinates
+3. Venue enrichment: DB lookup → Mapbox → AI fallback
+4. Review form pre-fills (⚠ on uncertain fields)
+5. Visual crop tool with smart snap
+6. Preview button — shows simulated 2:3 grid card
+7. Duplicate detection — same title/venue/date → offer to update existing
+8. fill_frame toggle
+9. On confirm: optimizeImage → upload → event record created/updated
 
-## Tonight Tab
-- Events user has RSVPed to for tonight
-- Friend activity (public profiles only)
-- Superlative holders attending shown
-- Login prompt if not authenticated
+### Edge Function (supabase/functions/extract-poster/index.ts)
+Required Supabase secrets: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, MAPBOX_TOKEN
+Deploy: `npx supabase functions deploy extract-poster --project-ref lhetwgdlpulgnjetuope`
+
+### Venue Enrichment
+1. DB lookup (case-insensitive name match) — uses stored address/hours/website/instagram
+2. Mapbox geocoding fallback (relevance > 0.5)
+3. AI fallback for address, hours, website, instagram (flagged uncertain)
+Returns address_source: 'db' | 'mapbox' | 'ai' | 'none'
+
+### Auto-neighborhood
+NE→Northeast, SE→Southeast, NW→Northwest, SW→Southwest, N→North
 
 ---
 
 ## Admin Page (/admin)
-
-### Section 1 — Add Venue
-Name, neighborhood (dropdown), address (Mapbox auto-geocoded), website, Instagram
-
-### Section 2 — Add Event
-Venue selector, poster image upload, title, category, date picker, start time, description, recurring toggle
-
-### Section 3 — Import Poster (NEW — Session 6)
-See "AI Poster Ingestion" section above
+- Password gate → sessionStorage 'plaster_admin_unlocked' = '1'
+- Bottom nav (same as main app) — Wall tab highlighted — navigate to wall while staying in admin mode
+- Section 1: Add Venue (name, neighborhood, address/geocoding, website, instagram, hours)
+- Section 2: Add Event (venue, poster upload, title, category, date/time, description, recurring)
+- Section 3: Import Poster (full AI ingestion)
 
 ---
 
-## Superlatives System (PLANNED — Session 7)
-- Earned by repeatedly attending a venue
-- Named by venue admin: "King of Holocene", "Trivia Terror of Breakside"
-- Shows on user profile and event post wall when user RSVPs
-- Foursquare Mayorship inspiration but more personal and creative
+## Map Screen
+- Mapbox GL JS, Portland centered (45.5051, -122.6750, zoom 12)
+- Night: dark-v11 / Day: light-v11
+- Knurl wheel day scrubber (machined metal aesthetic, 7 days, momentum drag, snap)
+- Venue pins, radius filter, list mode bottom sheet, category chips
 
 ---
 
-## Dev Preview Mode
-Every new feature flow must include a DEV button that is:
-- Only visible on localhost (hidden in production)
-- Steps through multi-step flows with mock data
-- This is a hard rule. Every new flow, every session. No exceptions.
+## Known Bugs
+- Avatar not displaying on profile — upload works, avatar_url not rendering
+- Onboarding shown every login — should check if username already exists
+- Smart snap CORS — Supabase CDN may block canvas getImageData; configure Storage CORS headers
+- Diagnostic console.logs in AdminEditModal should be removed once stable
+- Crop tool in Admin.tsx import flow not as polished as AdminEditModal
 
 ---
 
 ## Completed Sessions
-- **Session 1:** Wall UI — PosterGrid, PosterCard, DateIndicator, FilterBar, BottomNav, 20 mock events
+- **Session 1:** Wall UI — PosterGrid, PosterCard, DateIndicator, FilterBar, BottomNav
 - **Session 2:** Supabase backend integration
-- **Session 3:** Admin page at /admin (password gated), PWA setup
-- **Session 4:** 5-tab nav, auth, profiles, follows, Tonight tab, Venues tab, heart filter chip, event_likes
-- **Session 5:** FlyerCarousel (1-column native carousel), carousel panel swipe fixes
-- **Map Sessions:** Mapbox map, venue pins, knurl wheel scrubber, day/night theme, radius filter, list mode
-- **Session 6:** AI poster ingestion — Import Poster section in admin, Supabase Edge Function for Claude Vision, poster isolation/cropping, image optimization, blurred backdrop replaced with sampled color gradient on grid cards
+- **Session 3:** Admin page, PWA setup
+- **Session 4:** 5-tab nav, auth, profiles, follows, Tonight tab, Venues tab, event_likes
+- **Session 5:** FlyerCarousel 1-col carousel, swipe fixes
+- **Map Sessions:** Mapbox, venue pins, knurl wheel scrubber, radius filter, list mode
+- **Session 6:** AI poster ingestion, Supabase Edge Function, poster isolation, image optimization, sampled color backdrop
+- **Sessions 7-8:** Admin edit mode on wall (AdminEditModal, crop tool, smart snap, live preview, undo, fill_frame, cropUtils.ts, duplicate detection, venue enrichment, AdminBottomNav)
 
 ---
 
-## Session Roadmap Going Forward
+## Session Roadmap
 
-### Session 7 — Superlatives
-- Database schema for superlatives
-- Venue admin superlative naming UI
-- Superlative display on profiles, post wall, Tonight tab
+### Next Session — Clean Up + Bulk Ingest
+- Remove diagnostic console.logs from AdminEditModal
+- Clean up dead/duplicate code from crop iterations
+- Fix CORS on Supabase Storage for smart snap
+- Polish import crop tool to match AdminEditModal quality
+- **Rob drops 50+ real Portland posters to populate the wall**
 
-### Session 8 — Admin Crop Editor + Ingest Preview
-- Preview button at ingest review stage (simulated grid card view before posting)
-- Crop adjustment sliders (top/bottom/left/right) at ingest review stage
-- Admin crop editor on the wall — edit icon on each poster when logged in as admin
-- Sliders to adjust crop → re-uploads cropped image replacing original in Supabase
-- Duplicate detection at ingest — offer to merge when same event dropped twice
-
-### Session 9 — Tonight Tab
-- Full friend activity feed
-- RSVPs displaying correctly
-- Superlative holder attendance
-- Real-time feel
-
-### Session 10 — Venue Owner Accounts
-- Claim venue page flow
-- Venue-scoped dashboard
-- Analytics placeholder
+### Session 9 — Superlatives
+### Session 10 — Tonight Tab fully fleshed
+### Session 11 — Venue Owner Accounts
 
 ### Future
-- Map venue pins with event poster thumbnails
-- Post wall likes fully functional
-- Foursquare-style check-in mechanics
-- Email branding (currently shows "Supabase Auth")
-- Outpainting for poster backgrounds (fal.ai or similar) — deferred, not urgent
+- Outpainting for poster backgrounds (fal.ai) — deferred
+- Capacitor wrapper for iOS App Store (native haptics)
+- Email branding (currently "Supabase Auth")
+
+---
+
+## Dev Preview Mode
+Every new feature flow must include a DEV button visible only on localhost. Hard rule. No exceptions.
 
 ---
 
 ## Founder Context
-Rob Schwartz — first-time founder, Portland OR. Building Plaster and Swapper simultaneously. No prior coding background, using Claude Code in Warp terminal.
+Rob Schwartz — Portland OR. Plaster + Swapper. No prior coding background, Claude Code in Warp.
+Swapper: robschwartz26/cosmic-swaps, cosmic-swaps.vercel.app, Supabase fiyoectikcqwpoqacdmm
 
-**Swapper** (other app) — community item trading platform. Repo: robschwartz26/cosmic-swaps. Deployed at cosmic-swaps.vercel.app. Supabase project: fiyoectikcqwpoqacdmm (us-west-2).
-
-**Working style:**
-- Action-first — prefers direct instructions over theory
-- Learns by doing
-- Wants progress acknowledged
-- Two test accounts for testing social features simultaneously (main + "letshavesometea")
-- All credentials in a locked Apple Note
-- DEV button must be in every new flow
-- When asked to cat a file, paste the full raw output — never summarize
-
-**Beta launch plan:** Portland book community first → expand by category → expand by city
+**Working style:** Action-first. When asked to cat a file — paste RAW OUTPUT, never summarize. Two test accounts: main + "letshavesometea". All credentials in locked Apple Note. DEV button in every new flow. Beta launch: Portland book community first.
 
 ---
 
-## How to Start a New Claude Code Session
+## How to Start a New Session
 ```bash
-cd ~/plaster
-# Paste PLASTER.md contents at start of conversation
-npm run dev
-# App runs on localhost:8081
-# Live: the-plaster-wall.vercel.app
-# Admin: localhost:8081/admin (password: Plast3r!PDX#26)
+cd ~/plaster && npm run dev
+# localhost:8081 | the-plaster-wall.vercel.app
+# Admin: /admin password Plast3r!PDX#26
 ```
 
----
-
-## Ad Philosophy
-Tasteful local advertising between forum posts and on swap/RSVP completion screen. NEVER on the wall itself, exchange screen, chat, or any core browsing screen.
-
----
-
-*Last updated: April 14, 2026 — end of Session 6 (AI ingestion + sampled color backdrop)*
-*This document should be updated at the end of every major session*
+*Last updated: April 14, 2026 — Sessions 6-8 complete*
