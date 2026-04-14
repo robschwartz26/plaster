@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds } from '@/lib/cropUtils'
@@ -1037,6 +1038,38 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+// ── Admin bottom nav (mirrors BottomNav exactly, Wall always active) ─────────
+
+const ADMIN_NAV = [
+  { label: 'Tonight', path: '/tonight', center: false, icon: (s: number) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg> },
+  { label: 'Map',     path: '/map',     center: false, icon: (s: number) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /><circle cx="12" cy="9" r="2.5" /></svg> },
+  { label: 'Wall',    path: '/',        center: true,  icon: (s: number) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></svg> },
+  { label: 'Venues',  path: '/venues',  center: false, icon: (s: number) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg> },
+  { label: 'You',     path: '/you',     center: false, icon: (s: number) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg> },
+]
+
+function AdminBottomNav() {
+  const navigate = useNavigate()
+  return (
+    <nav
+      className="shrink-0 flex items-center justify-around"
+      style={{ height: 'var(--nav-height)', background: 'var(--bg)', borderTop: '1px solid var(--fg-08)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
+      {ADMIN_NAV.map(({ label, path, center, icon }) => (
+        <button
+          key={path}
+          onClick={() => navigate(path)}
+          className="flex flex-col items-center gap-1"
+          style={{ opacity: label === 'Wall' ? 1 : 0.3, color: 'var(--fg)', minWidth: center ? 56 : 44 }}
+        >
+          {icon(center ? 26 : 20)}
+          <span className="font-body font-medium uppercase" style={{ fontSize: 9, letterSpacing: '0.08em' }}>{label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
 // ── Main admin dashboard ─────────────────────────────────────
 
 function AdminDashboard() {
@@ -1050,23 +1083,26 @@ function AdminDashboard() {
   useEffect(() => { fetchVenues() }, [])
 
   return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <PlasterHeader />
-      <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 80px', width: '100%' }}>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 32px', width: '100%' }}>
 
-        <Section title="Add a Venue">
-          <VenueForm onVenueAdded={fetchVenues} />
-        </Section>
+          <Section title="Add a Venue">
+            <VenueForm onVenueAdded={fetchVenues} />
+          </Section>
 
-        <Section title="Add an Event">
-          <EventForm venues={venues} />
-        </Section>
+          <Section title="Add an Event">
+            <EventForm venues={venues} />
+          </Section>
 
-        <Section title="Import Poster">
-          <ImportForm venues={venues} />
-        </Section>
+          <Section title="Import Poster">
+            <ImportForm venues={venues} />
+          </Section>
 
+        </div>
       </div>
+      <AdminBottomNav />
     </div>
   )
 }
