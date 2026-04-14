@@ -15,6 +15,7 @@ interface Props {
   onDoubleTap?: (event: WallEvent) => void
   onLike: (eventId: string) => void
   isAdminMode?: boolean
+  onEventSaved?: () => void
 }
 
 interface EventDetail {
@@ -128,7 +129,7 @@ function usePosterBackdrop(posterUrl: string | null) {
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode }: Props) {
+export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved }: Props) {
   const { user } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed = activeFilter !== 'All' && !matches
@@ -426,6 +427,24 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                 <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
               </div>
             )}
+            {isAdminMode && (
+              <button
+                onClick={e => { e.stopPropagation(); setShowEdit(true) }}
+                style={{
+                  position: 'absolute', top: 'max(10px, env(safe-area-inset-top))', right: 10,
+                  width: 32, height: 32,
+                  background: 'rgba(0,0,0,0.58)',
+                  backdropFilter: 'blur(6px)',
+                  WebkitBackdropFilter: 'blur(6px)',
+                  border: '1px solid rgba(168,85,247,0.55)',
+                  borderRadius: 6,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 15, cursor: 'pointer', zIndex: 20,
+                }}
+              >
+                ✏️
+              </button>
+            )}
           </div>
 
           {/* Panel 2: Info */}
@@ -443,6 +462,14 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             {renderPosterContent()}
           </div>
         </div>
+
+        {showEdit && (
+          <AdminEditModal
+            event={event}
+            onClose={() => setShowEdit(false)}
+            onSaved={() => { setShowEdit(false); onEventSaved?.() }}
+          />
+        )}
       </div>
     )
   }
@@ -516,7 +543,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         <AdminEditModal
           event={event}
           onClose={() => setShowEdit(false)}
-          onSaved={() => setShowEdit(false)}
+          onSaved={() => { setShowEdit(false); onEventSaved?.() }}
         />
       )}
     </div>

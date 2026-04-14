@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
@@ -38,28 +38,27 @@ export function Wall() {
 
   // Fetch events — real DB events first, mock events fill the rest.
   // Mock events always show so the wall is never empty.
-  useEffect(() => {
-    async function fetchEvents() {
-      // Show events from up to 6 hours ago so late-night shows
-      // that started before midnight don't vanish off the wall.
-      const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+  const fetchEvents = useCallback(async () => {
+    // Show events from up to 6 hours ago so late-night shows
+    // that started before midnight don't vanish off the wall.
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
 
-      const { data } = await supabase
-        .from('events')
-        .select('*, venues(name)')
-        .gte('starts_at', cutoff)
-        .order('starts_at', { ascending: true })
-        .limit(200)
+    const { data } = await supabase
+      .from('events')
+      .select('*, venues(name)')
+      .gte('starts_at', cutoff)
+      .order('starts_at', { ascending: true })
+      .limit(200)
 
-      const realEvents = (data ?? []).map(dbEventToWallEvent)
+    const realEvents = (data ?? []).map(dbEventToWallEvent)
 
-      const merged = [...realEvents, ...MOCK_WALL_EVENTS]
-        .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    const merged = [...realEvents, ...MOCK_WALL_EVENTS]
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
 
-      setEvents(merged)
-    }
-    fetchEvents()
+    setEvents(merged)
   }, [])
+
+  useEffect(() => { fetchEvents() }, [fetchEvents])
 
   // Fetch liked event IDs for the current user
   useEffect(() => {
@@ -141,6 +140,7 @@ export function Wall() {
         onLike={handleLike}
         onVenueTap={handleVenueTap}
         isAdminMode={isAdminMode}
+        onEventSaved={fetchEvents}
       />
 
       <BottomNav />

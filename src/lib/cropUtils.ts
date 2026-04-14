@@ -68,45 +68,64 @@ export async function sampleCornerColors(url: string): Promise<string[]> {
   })
 }
 
-// Scans from each edge inward; stops when average row/col color
-// diverges from the border reference by more than THRESH.
+// Scans from each edge inward at natural image size.
+// Compares 10-pixel row/col samples against the top-left corner color.
+// Applies a 2px inset after detection to avoid capturing the border pixel.
 export async function detectContentBounds(src: string): Promise<CropRect> {
   return new Promise(resolve => {
     const img = new Image()
+    img.crossOrigin = 'anonymous'
     img.onload = () => {
       const W = img.naturalWidth, H = img.naturalHeight
       if (!W || !H) { resolve({ x: 0, y: 0, width: 1, height: 1 }); return }
-      const SW = Math.min(W, 320), SH = Math.min(H, 480)
+
       const canvas = document.createElement('canvas')
-      canvas.width = SW; canvas.height = SH
+      canvas.width = W; canvas.height = H
       const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, SW, SH)
-      const data = ctx.getImageData(0, 0, SW, SH).data
+      ctx.drawImage(img, 0, 0)
+      const data = ctx.getImageData(0, 0, W, H).data
+
       const THRESH = 20
-      function rowAvg(y: number): [number, number, number] {
+      const SAMPLES = 10
+      const INSET = 2
+
+      // Reference: top-left corner pixel
+      const refR = data[0], refG = data[1], refB = data[2]
+
+      function rowSample(y: number): [number, number, number] {
         let r = 0, g = 0, b = 0
-        for (let x = 0; x < SW; x++) { const i = (y * SW + x) * 4; r += data[i]; g += data[i+1]; b += data[i+2] }
-        return [r / SW, g / SW, b / SW]
+        for (let s = 0; s < SAMPLES; s++) {
+          const x = Math.floor(s * (W - 1) / (SAMPLES - 1))
+          const i = (y * W + x) * 4
+          r += data[i]; g += data[i + 1]; b += data[i + 2]
+        }
+        return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
       }
-      function colAvg(x: number): [number, number, number] {
+
+      function colSample(x: number): [number, number, number] {
         let r = 0, g = 0, b = 0
-        for (let y = 0; y < SH; y++) { const i = (y * SW + x) * 4; r += data[i]; g += data[i+1]; b += data[i+2] }
-        return [r / SH, g / SH, b / SH]
+        for (let s = 0; s < SAMPLES; s++) {
+          const y = Math.floor(s * (H - 1) / (SAMPLES - 1))
+          const i = (y * W + x) * 4
+          r += data[i]; g += data[i + 1]; b += data[i + 2]
+        }
+        return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
       }
-      function diff(a: [number,number,number], b: [number,number,number]) {
-        return (Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]) + Math.abs(a[2]-b[2])) / 3
+
+      function diff([r, g, b]: [number, number, number]): number {
+        return (Math.abs(r - refR) + Math.abs(g - refG) + Math.abs(b - refB)) / 3
       }
-      let top = 0, bottom = SH - 1, left = 0, right = SW - 1
-      const refTop = rowAvg(0)
-      for (let y = 1; y < SH; y++) { if (diff(rowAvg(y), refTop) > THRESH) { top = y; break } }
-      const refBot = rowAvg(SH - 1)
-      for (let y = SH - 2; y > top; y--) { if (diff(rowAvg(y), refBot) > THRESH) { bottom = y; break } }
-      const refLeft = colAvg(0)
-      for (let x = 1; x < SW; x++) { if (diff(colAvg(x), refLeft) > THRESH) { left = x; break } }
-      const refRight = colAvg(SW - 1)
-      for (let x = SW - 2; x > left; x--) { if (diff(colAvg(x), refRight) > THRESH) { right = x; break } }
-      const fx = left / SW, fy = top / SH
-      const fw = (right - left) / SW, fh = (bottom - top) / SH
+
+      let top = 0, bottom = H - 1, left = 0, right = W - 1
+
+      for (let y = 0; y < H; y++)     { if (diff(rowSample(y)) > THRESH) { top    = Math.min(y + INSET, H - 1); break } }
+      for (let y = H - 1; y > top; y--)  { if (diff(rowSample(y)) > THRESH) { bottom = Math.max(y - INSET, 0);   break } }
+      for (let x = 0; x < W; x++)     { if (diff(colSample(x)) > THRESH) { left   = Math.min(x + INSET, W - 1); break } }
+      for (let x = W - 1; x > left; x--) { if (diff(colSample(x)) > THRESH) { right  = Math.max(x - INSET, 0);   break } }
+
+      const fx = left / W, fy = top / H
+      const fw = (right - left) / W, fh = (bottom - top) / H
+
       if (fx < 0.02 && fy < 0.02 && fw > 0.96 && fh > 0.96) {
         resolve({ x: 0, y: 0, width: 1, height: 1 })
       } else {
