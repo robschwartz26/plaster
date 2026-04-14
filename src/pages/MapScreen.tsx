@@ -74,7 +74,7 @@ function formatDayFull(idx: number, today: string): string {
 }
 
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
-const WHEEL_H      = 26   // drum canvas height in CSS px  (housing is 36px)
+const WHEEL_H      = 20   // drum canvas height in CSS px  (housing is 28px)
 const WHEEL_ITEM_W = 72   // px per day slot
 const WHEEL_COMP   = 0.70 // scroll→pattern compression
 const WHEEL_PITCH  = 8    // fine diamond knurl pitch in CSS px
@@ -288,7 +288,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
       ref={containerRef}
       style={{
         flexShrink: 0,
-        height: 36,
+        height: 28,
         background: dark ? '#0e0c0a' : '#e8e4df',
         borderTop: `1px solid ${dark ? 'rgba(0,0,0,0.7)' : 'rgba(180,172,162,0.6)'}`,
         position: 'relative',
@@ -305,7 +305,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
       <canvas
         ref={canvasRef}
         style={{
-          position: 'absolute', top: 5, left: 0,
+          position: 'absolute', top: 4, left: 0,
           width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
         }}
       />
@@ -859,7 +859,14 @@ export function MapScreen() {
       </div>
 
       {/* ── Day wheel picker ── */}
-      <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} dark={theme === 'night'} />
+      <div style={{
+        display: 'flex', justifyContent: 'center', alignItems: 'center',
+        background: 'var(--bg)', padding: '5px 0',
+      }}>
+        <div style={{ width: 'clamp(160px, 33vw, 240px)' }}>
+          <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} dark={theme === 'night'} />
+        </div>
+      </div>
 
       <BottomNav />
     </div>
