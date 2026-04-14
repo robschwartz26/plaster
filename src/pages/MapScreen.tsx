@@ -89,8 +89,8 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
 
   // ── Palette ──────────────────────────────────────────────────────────────
   const [base, ulFace, lrFace, urFace, llFace] = dark
-    ? ['#1e1c18', 'rgba(195,188,175,0.75)', 'rgba(6,4,2,0.95)',    'rgba(110,104,92,0.65)', 'rgba(55,50,42,0.7)']
-    : ['#6a6560', 'rgba(255,255,255,0.9)',   'rgba(20,16,12,0.85)', 'rgba(180,175,165,0.65)', 'rgba(70,64,56,0.72)']
+    ? ['#1e1c18', 'rgba(195,188,175,0.75)', 'rgba(6,4,2,0.95)',     'rgba(110,104,92,0.65)', 'rgba(55,50,42,0.7)']
+    : ['#b8b4ae', 'rgba(255,255,255,0.95)', 'rgba(80,75,68,0.85)',  'rgba(190,185,178,0.75)', 'rgba(160,155,148,0.8)']
 
   // ── 1. Base fill ─────────────────────────────────────────────────────────
   ctx.fillStyle = base
@@ -154,7 +154,7 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
 
   const spec = ctx.createLinearGradient(0, CH * 0.35, 0, CH * 0.65)
   spec.addColorStop(0, 'rgba(255,255,255,0)')
-  spec.addColorStop(0.5, 'rgba(255,255,255,0.26)')
+  spec.addColorStop(0.5, dark ? 'rgba(255,255,255,0.26)' : 'rgba(255,255,255,0.45)')
   spec.addColorStop(1, 'rgba(255,255,255,0)')
   ctx.fillStyle = spec; ctx.fillRect(0, CH * 0.35, CW, CH * 0.30)
 
@@ -167,21 +167,25 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
   ctx.fillStyle = rShad; ctx.fillRect(CW * 0.86, 0, CW * 0.14, CH)
 
   // ── 5. Bevels ─────────────────────────────────────────────────────────────
-  ctx.fillStyle = 'rgba(230,225,212,1)';    ctx.fillRect(0, 0, CW, 0.75)
-  ctx.fillStyle = 'rgba(120,116,106,0.8)';  ctx.fillRect(0, CH - 0.75, CW, 0.75)
+  ctx.fillStyle = dark ? 'rgba(230,225,212,1)' : 'rgba(255,255,255,0.9)'
+  ctx.fillRect(0, 0, CW, 0.75)
+  ctx.fillStyle = dark ? 'rgba(120,116,106,0.8)' : 'rgba(140,136,128,0.5)'
+  ctx.fillRect(0, CH - 0.75, CW, 0.75)
 
-  // ── 6. Side fades (blend into dark housing) ───────────────────────────────
+  // ── 6. Side fades (blend into housing) ───────────────────────────────────
+  const [fr, fg, fb] = dark ? [3, 2, 2] : [196, 192, 186]  // #0e0c0a vs #c4c0ba
   const fadeW = 24
   const lf = ctx.createLinearGradient(0, 0, fadeW, 0)
-  lf.addColorStop(0, 'rgba(3,2,2,0.98)'); lf.addColorStop(1, 'rgba(3,2,2,0)')
+  lf.addColorStop(0, `rgba(${fr},${fg},${fb},0.98)`); lf.addColorStop(1, `rgba(${fr},${fg},${fb},0)`)
   ctx.fillStyle = lf; ctx.fillRect(0, 0, fadeW, CH)
   const rf = ctx.createLinearGradient(CW - fadeW, 0, CW, 0)
-  rf.addColorStop(0, 'rgba(3,2,2,0)'); rf.addColorStop(1, 'rgba(3,2,2,0.98)')
+  rf.addColorStop(0, `rgba(${fr},${fg},${fb},0)`); rf.addColorStop(1, `rgba(${fr},${fg},${fb},0.98)`)
   ctx.fillStyle = rf; ctx.fillRect(CW - fadeW, 0, fadeW, CH)
 
   // ── 7. Selector lines — 0.5px, 40px wide centre window ───────────────────
   const cx = CW / 2
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.5
+  ctx.strokeStyle = dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.22)'
+  ctx.lineWidth = 0.5
   ctx.beginPath(); ctx.moveTo(cx - 20, 1); ctx.lineTo(cx - 20, CH - 1); ctx.stroke()
   ctx.beginPath(); ctx.moveTo(cx + 20, 1); ctx.lineTo(cx + 20, CH - 1); ctx.stroke()
 }
@@ -303,23 +307,25 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
       style={{
         width: '100%',
         height: WHEEL_HOUSING_H,
-        background: '#0e0c0a',
+        background: dark ? '#0e0c0a' : '#c4c0ba',
         borderRadius: 6,
-        border: '0.5px solid rgba(255,255,255,0.06)',
+        border: dark ? '0.5px solid rgba(255,255,255,0.06)' : '0.5px solid rgba(0,0,0,0.10)',
         position: 'relative',
         touchAction: 'none', userSelect: 'none',
         overflow: 'hidden', cursor: 'grab',
-        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.90), inset 0 -2px 8px rgba(0,0,0,0.85)',
+        boxShadow: dark
+          ? 'inset 0 2px 8px rgba(0,0,0,0.90), inset 0 -2px 8px rgba(0,0,0,0.85)'
+          : 'inset 0 2px 5px rgba(0,0,0,0.22), inset 0 -2px 5px rgba(0,0,0,0.14)',
       }}
       onPointerDown={onDown} onPointerMove={onMove}
       onPointerUp={onUp}     onPointerCancel={onUp}
     >
-      {/* White indicator dot — centred in top gap */}
+      {/* Indicator dot — centred in top gap */}
       <div style={{
         position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)',
         width: 4, height: 4, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.85)',
-        boxShadow: '0 0 4px rgba(255,255,255,0.40)',
+        background: dark ? 'rgba(255,255,255,0.85)' : 'rgba(40,36,30,0.55)',
+        boxShadow: dark ? '0 0 4px rgba(255,255,255,0.40)' : 'none',
         pointerEvents: 'none',
       }} />
 
@@ -839,7 +845,7 @@ export function MapScreen() {
       {/* ── Control bar ── */}
       <div style={{
         width: '100%', height: 52, flexShrink: 0,
-        background: theme === 'night' ? '#0a0908' : '#1e1c18',
+        background: theme === 'night' ? '#0a0908' : '#d8d4ce',
         borderTop: '0.5px solid rgba(255,255,255,0.08)',
         position: 'relative',
         display: 'flex', flexDirection: 'column',
@@ -858,7 +864,9 @@ export function MapScreen() {
               width:  i === dayIdx ? 5 : 3,
               height: i === dayIdx ? 5 : 3,
               borderRadius: '50%',
-              background: i === dayIdx ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.10)',
+              background: i === dayIdx
+                ? (theme === 'night' ? 'rgba(255,255,255,0.85)' : '#1a1814')
+                : (theme === 'night' ? 'rgba(255,255,255,0.10)' : 'rgba(26,24,20,0.20)'),
               transition: 'all 150ms ease',
             }} />
           ))}
@@ -870,7 +878,7 @@ export function MapScreen() {
           fontFamily: '"Barlow Condensed", sans-serif',
           fontWeight: 700, fontSize: 8,
           letterSpacing: '0.12em',
-          color: 'rgba(255,255,255,0.08)',
+          color: theme === 'night' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.10)',
           userSelect: 'none', pointerEvents: 'none',
         }}>
           PLR
