@@ -264,13 +264,14 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
           // Cards are direct children of the scroll container.
           // height: 100% = the container's clientHeight exactly.
           // No grid wrapper — avoids the auto-height problem.
-          allEvents.map((event) => (
+          allEvents.map((event, idx) => (
             <PosterCard
               key={event.id}
               event={event}
               cols={1}
               activeFilter={activeFilter}
               isLiked={likedIds.has(event.id)}
+              isActive={idx === activeEventIdx}
               onDoubleTap={handleDoubleTap}
               onLike={onLike}
             />
