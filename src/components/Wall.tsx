@@ -142,7 +142,7 @@ export function Wall() {
         isAdminMode={isAdminMode}
         onEventSaved={(eventId, newPosterUrl) => {
           if (newPosterUrl) {
-            setEvents(prev => prev.map(e => e.id === eventId ? { ...e, poster_url: newPosterUrl } : e))
+            setEvents(prev => prev.map(e => e.id === eventId ? { ...e, poster_url: newPosterUrl + '?t=' + Date.now() } : e))
           }
           fetchEvents()
         }}
