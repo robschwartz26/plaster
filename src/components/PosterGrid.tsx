@@ -197,6 +197,29 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return () => el.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
+  // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
+  const pendingScrollIdxRef = useRef<number | null>(null)
+
+  function handleDoubleTap(event: WallEvent) {
+    const idx = allEvents.findIndex((e) => e.id === event.id)
+    if (idx === -1) return
+    pendingScrollIdxRef.current = idx
+    setCols(1)
+  }
+
+  // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
+  // rAF ensures the 1-col card heights are painted before we set scrollTop.
+  useEffect(() => {
+    if (cols !== 1 || pendingScrollIdxRef.current === null) return
+    const idx = pendingScrollIdxRef.current
+    pendingScrollIdxRef.current = null
+    const container = containerRef.current
+    if (!container) return
+    requestAnimationFrame(() => {
+      container.scrollTop = idx * container.clientHeight
+    })
+  }, [cols])
+
   // In 1-col snap mode, show the current poster's details in the date bar
   const eventInfo: EventInfo | null =
     cols === 1 && allEvents[activeEventIdx]
@@ -279,6 +302,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
                 cols={cols}
                 activeFilter={activeFilter}
                 isLiked={likedIds.has(event.id)}
+                onDoubleTap={handleDoubleTap}
                 onLike={onLike}
               />
             ))}

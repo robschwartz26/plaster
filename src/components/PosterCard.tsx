@@ -11,6 +11,7 @@ interface Props {
   activeFilter: string
   isLiked: boolean
   isActive?: boolean        // 1-col only: true when this card is the snapped-to card
+  onDoubleTap?: (event: WallEvent) => void  // 2-5 col only: zoom to 1-col on this card
   onLike: (eventId: string) => void
 }
 
@@ -111,11 +112,19 @@ const PANEL_PCT = [-20, -40, -60] as const // translateX% for Poster, Info, Post
 // tan(60°) ≈ 1.732 → horizontal when |dy| ≤ |dx| × TAN60
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onLike }: Props) {
+export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike }: Props) {
   const { user } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed   = activeFilter !== 'All' && !matches
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
+
+  // ── 2-5 col: double-tap → zoom to 1-col ───────────────────────────────
+  const lastTap = useRef(0)
+  function handleTap() {
+    const now = Date.now()
+    if (now - lastTap.current < 300) onDoubleTap?.(event)
+    lastTap.current = now
+  }
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
   const stripRef     = useRef<HTMLDivElement>(null)
@@ -467,6 +476,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onLik
   // ── 2-5 col: standard grid card ────────────────────────────────────────
   return (
     <div
+      onClick={handleTap}
       style={{
         aspectRatio: '2/3',
         position: 'relative',
@@ -474,6 +484,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onLik
         opacity: dimmed ? 0.18 : 1,
         filter: dimmed ? 'grayscale(0.5)' : 'none',
         transition: 'opacity 0.25s ease, filter 0.25s ease',
+        cursor: 'pointer',
         userSelect: 'none',
       }}
     >
