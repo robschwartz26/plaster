@@ -50,8 +50,10 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const imgWrapRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null) // ref on the actual <img> for precise drag coords
   // Cached loaded image — avoids re-fetching on every drag for the preview canvas
   const imgCacheRef = useRef<HTMLImageElement | null>(null)
+  const [imgCacheReady, setImgCacheReady] = useState(false) // flips when cache loads → triggers preview
   const previewCanvasRef = useRef<HTMLCanvasElement>(null)
   const [previewBackdrop, setPreviewBackdrop] = useState<string | null>(null)
   const draggingRef = useRef<{ handle: CropHandle; startX: number; startY: number; startCrop: CropRect } | null>(null)
@@ -106,9 +108,10 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   // Cache a loaded HTMLImageElement for the live preview canvas (avoids re-fetching on every drag)
   useEffect(() => {
     if (!event.poster_url) return
+    setImgCacheReady(false)
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => { imgCacheRef.current = img }
+    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true) }
     img.src = event.poster_url
   }, [event.poster_url])
 
@@ -154,17 +157,18 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
       const tl = px(2, 2), tr = px(SIZE-3, 2), bl = px(2, SIZE-3), br = px(SIZE-3, SIZE-3)
       setPreviewBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
     } catch { /* CORS taint — no backdrop */ }
-  }, [cropMode, editCrop])
+  }, [cropMode, editCrop, imgCacheReady])
 
   // ── Global drag tracking (passive:false so we can preventDefault on touch) ──
   useEffect(() => {
     const onMove = (e: MouseEvent | TouchEvent) => {
       const d = draggingRef.current
-      if (!d || !imgWrapRef.current) return
+      if (!d || !imgRef.current) return
       if ('touches' in e) e.preventDefault() // prevent page scroll while dragging
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-      const rect = imgWrapRef.current.getBoundingClientRect()
+      // Use the actual rendered <img> rect — matches image pixels exactly (no letterbox offset)
+      const rect = imgRef.current.getBoundingClientRect()
       setEditCrop(applyHandleDrag(d.startCrop, d.handle, (clientX - d.startX) / rect.width, (clientY - d.startY) / rect.height))
     }
     const onUp = () => { draggingRef.current = null }
@@ -349,16 +353,27 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           <>
             {/* Image with drag handles */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
-              {/* Image wrap — crop overlay is positioned relative to this */}
+              {/* Outer flex cell — gives the imgWrap room to size itself */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'flex-start' }}>
+              {/* imgWrap — inline-block so it shrinks to match the exact rendered image size */}
               <div
                 ref={imgWrapRef}
-                style={{ flex: 1, position: 'relative', lineHeight: 0, maxWidth: '100%', overflow: 'visible' }}
+                style={{ position: 'relative', lineHeight: 0, display: 'inline-block', maxWidth: '100%' }}
               >
                 <img
+                  ref={imgRef}
                   src={event.poster_url}
                   alt={event.title}
                   draggable={false}
-                  style={{ display: 'block', width: '100%', maxHeight: '42vh', objectFit: 'contain', userSelect: 'none', pointerEvents: 'none' }}
+                  style={{
+                    display: 'block',
+                    width: 'auto',
+                    height: 'auto',
+                    maxWidth: '100%',
+                    maxHeight: '42vh',
+                    userSelect: 'none',
+                    pointerEvents: 'none',
+                  }}
                 />
 
                 {cropMode && (
@@ -416,6 +431,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                   </>
                 )}
               </div>
+              </div> {/* end outer flex cell */}
 
               {/* Live preview card */}
               {cropMode && (
