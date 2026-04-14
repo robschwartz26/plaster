@@ -36,7 +36,7 @@ function HeartPill({
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        color: isLiked ? '#ec4899' : 'var(--fg)',
+        color: 'var(--fg)',
         fontFamily: '"Space Grotesk", sans-serif',
         fontSize: 11,
         fontWeight: 500,

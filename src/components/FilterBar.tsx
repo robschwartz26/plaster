@@ -38,7 +38,7 @@ export function FilterBar({ active, onChange }: Props) {
               borderRadius: 4,
               border: `1px solid ${isActive ? 'var(--fg-55)' : 'var(--fg-15)'}`,
               background: isActive ? 'var(--fg-08)' : 'transparent',
-              color: isActive ? (chip === '♥' ? '#ec4899' : 'var(--fg)') : 'var(--fg-40)',
+              color: isActive ? 'var(--fg)' : 'var(--fg-40)',
               lineHeight: 1.6,
             }}
           >
