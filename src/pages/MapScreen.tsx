@@ -70,10 +70,11 @@ function formatDayFull(idx: number, today: string): string {
 }
 
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
-const WHEEL_H      = 20   // drum canvas height in CSS px  (housing is 28px)
-const WHEEL_ITEM_W = 72   // px per day slot
-const WHEEL_COMP   = 0.70 // scroll→pattern compression
-const WHEEL_PITCH  = 8    // fine diamond knurl pitch in CSS px
+const WHEEL_H        = 28   // canvas surface height (CSS px)
+const WHEEL_HOUSING_H = 56  // total housing height (CSS px)
+const WHEEL_ITEM_W   = 72   // px per day slot
+const WHEEL_COMP     = 0.70 // scroll→pattern compression
+const WHEEL_P        = 5    // diamond pitch (CSS px)
 
 function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): void {
   const ctx = canvas.getContext('2d')
@@ -83,92 +84,106 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
   const CH = canvas.height / dpr
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  // Palette
-  const [edge0, edge1, mid0, mid1, lineCol, hlCol, lipEdge] = dark
-    ? ['#0a0908','#181614','#2a2825','#322e2a', 'rgba(8,6,4,1)',        'rgba(210,202,188,1)',    'rgba(160,152,140,0.70)']
-    : ['#5e5a56','#747068','#8a8680','#908c88', 'rgba(60,56,50,0.7)',   'rgba(255,255,255,0.95)', 'rgba(220,215,210,0.70)']
-  // fadeRgb matches the housing: night → #0a0908, day → #b8b4ae slot recess
-  const fadeRgb = dark ? '10,9,8' : '184,180,174'
+  const P = WHEEL_P
+  const half = P / 2
 
-  // 1 ── Cylinder body
-  const body = ctx.createLinearGradient(0, 0, 0, CH)
-  body.addColorStop(0,    edge0)
-  body.addColorStop(0.15, edge1)
-  body.addColorStop(0.40, mid0)
-  body.addColorStop(0.50, mid1)
-  body.addColorStop(0.60, mid0)
-  body.addColorStop(0.85, edge1)
-  body.addColorStop(1,    edge0)
-  ctx.fillStyle = body; ctx.fillRect(0, 0, CW, CH)
+  // ── Palette ──────────────────────────────────────────────────────────────
+  const [base, ulFace, lrFace, urFace, llFace] = dark
+    ? ['#1e1c18', 'rgba(195,188,175,0.75)', 'rgba(6,4,2,0.95)',    'rgba(110,104,92,0.65)', 'rgba(55,50,42,0.7)']
+    : ['#6a6560', 'rgba(255,255,255,0.9)',   'rgba(20,16,12,0.85)', 'rgba(180,175,165,0.65)', 'rgba(70,64,56,0.72)']
 
-  // 2 ── Specular band
-  const spec = ctx.createLinearGradient(0, 0, 0, CH)
-  const sw = dark ? 0.09 : 0.26
-  spec.addColorStop(0,    'rgba(255,255,255,0)')
-  spec.addColorStop(0.44, 'rgba(255,255,255,0)')
-  spec.addColorStop(0.50, `rgba(255,255,255,${sw})`)
-  spec.addColorStop(0.56, 'rgba(255,255,255,0)')
-  spec.addColorStop(1,    'rgba(255,255,255,0)')
-  ctx.fillStyle = spec; ctx.fillRect(0, 0, CW, CH)
+  // ── 1. Base fill ─────────────────────────────────────────────────────────
+  ctx.fillStyle = base
+  ctx.fillRect(0, 0, CW, CH)
 
-  // 3 ── Knurl lines (fine diamond)
-  const P = WHEEL_PITCH
-  const s = ((scrollPx % P) + P * 1000) % P
-  ctx.strokeStyle = lineCol; ctx.lineWidth = 0.5
-  for (let a = s - P * (Math.ceil(CH / P) + 2); a < CW + CH; a += P) {
-    ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a + CH, CH); ctx.stroke()
-  }
-  for (let b = s - P * 2; b < CW + CH + P; b += P) {
-    ctx.beginPath(); ctx.moveTo(b, 0); ctx.lineTo(b - CH, CH); ctx.stroke()
-  }
+  // ── 2. Diamond faces ──────────────────────────────────────────────────────
+  // Grid: row r at y = r*(P/2). Even rows x = sP + c*P, odd rows x = sP + P/2 + c*P.
+  // Groove x-intercepts at y=0: sP - P/2 + n*P — verified to pass through all diamond vertices.
+  const sP = ((scrollPx % P) + P) % P
+  const rowMax = Math.ceil(CH / half) + 4
+  const colMax = Math.ceil(CW / P) + 4
 
-  // 4 ── Pyramid highlights
-  const halfP = P / 2
-  const maxDiff = Math.ceil(CH / halfP) + 1
-  const sumMin  = Math.floor((-2 - s) / halfP) - 2
-  const sumMax  = Math.ceil((CW + 2 - s) / halfP) + 2
-  ctx.fillStyle = hlCol
-  for (let diff = 0; diff <= maxDiff; diff++) {
-    const iy = diff * halfP; if (iy > CH + 1) break
-    for (let sum = sumMin; sum <= sumMax; sum++) {
-      if ((sum + diff) % 2 !== 0) continue
-      const ix = s + sum * halfP
-      if (ix < -1 || ix > CW + 1) continue
-      ctx.beginPath(); ctx.arc(ix - 0.5, iy - 0.5, 1.1, 0, Math.PI * 2); ctx.fill()
+  for (let r = -2; r < rowMax; r++) {
+    const cy = r * half
+    const xBase = (((r % 2) + 2) % 2 === 0) ? sP : sP + half
+    for (let c = -2; c < colMax; c++) {
+      const cx = xBase + c * P
+      const tx = cx,       ty = cy - half   // top
+      const rx = cx + half, ry = cy          // right
+      const bx = cx,       by = cy + half   // bottom
+      const lx = cx - half, ly = cy          // left
+
+      // UL face — bright (catches upper-left light)
+      ctx.fillStyle = ulFace
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(cx, cy); ctx.lineTo(lx, ly)
+      ctx.closePath(); ctx.fill()
+      // UR face
+      ctx.fillStyle = urFace
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(rx, ry); ctx.lineTo(cx, cy)
+      ctx.closePath(); ctx.fill()
+      // LL face
+      ctx.fillStyle = llFace
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(cx, cy); ctx.lineTo(lx, ly)
+      ctx.closePath(); ctx.fill()
+      // LR face — near black shadow
+      ctx.fillStyle = lrFace
+      ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(rx, ry); ctx.lineTo(cx, cy)
+      ctx.closePath(); ctx.fill()
     }
   }
 
-  // 5 ── Thin bevel lips (3px)
-  const topLip = ctx.createLinearGradient(0, 0, 0, 3)
-  topLip.addColorStop(0, lipEdge); topLip.addColorStop(1, 'rgba(128,120,112,0)')
-  ctx.fillStyle = topLip; ctx.fillRect(0, 0, CW, 3)
-  const botLip = ctx.createLinearGradient(0, CH - 3, 0, CH)
-  botLip.addColorStop(0, 'rgba(128,120,112,0)'); botLip.addColorStop(1, lipEdge)
-  ctx.fillStyle = botLip; ctx.fillRect(0, CH - 3, CW, 3)
-  // Bright edge lines
-  ctx.fillStyle = dark ? 'rgba(180,172,160,0.60)' : 'rgba(255,255,255,0.90)'
-  ctx.fillRect(0, 0, CW, 0.5); ctx.fillRect(0, CH - 0.5, CW, 0.5)
+  // ── 3. Hairline grooves ───────────────────────────────────────────────────
+  ctx.strokeStyle = 'rgba(0,0,0,0.9)'
+  ctx.lineWidth = 0.5
+  const gMin = -Math.ceil((CW + CH) / P) - 2
+  const gMax =  Math.ceil((CW + CH) / P) + 2
+  for (let n = gMin; n < gMax; n++) {
+    const x0 = sP - half + n * P
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 - CH, CH); ctx.stroke() // slope -1
+    ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + CH, CH); ctx.stroke() // slope +1
+  }
 
-  // 6 ── Side fades
-  const fadeW = 36
+  // ── 4. Cylindrical shading ────────────────────────────────────────────────
+  const topShad = ctx.createLinearGradient(0, 0, 0, CH * 0.42)
+  topShad.addColorStop(0, 'rgba(0,0,0,0.88)'); topShad.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = topShad; ctx.fillRect(0, 0, CW, CH * 0.42)
+
+  const botShad = ctx.createLinearGradient(0, CH * 0.58, 0, CH)
+  botShad.addColorStop(0, 'rgba(0,0,0,0)'); botShad.addColorStop(1, 'rgba(0,0,0,0.82)')
+  ctx.fillStyle = botShad; ctx.fillRect(0, CH * 0.58, CW, CH * 0.42)
+
+  const spec = ctx.createLinearGradient(0, CH * 0.35, 0, CH * 0.65)
+  spec.addColorStop(0, 'rgba(255,255,255,0)')
+  spec.addColorStop(0.5, 'rgba(255,255,255,0.26)')
+  spec.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = spec; ctx.fillRect(0, CH * 0.35, CW, CH * 0.30)
+
+  const lShad = ctx.createLinearGradient(0, 0, CW * 0.14, 0)
+  lShad.addColorStop(0, 'rgba(0,0,0,0.65)'); lShad.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = lShad; ctx.fillRect(0, 0, CW * 0.14, CH)
+
+  const rShad = ctx.createLinearGradient(CW * 0.86, 0, CW, 0)
+  rShad.addColorStop(0, 'rgba(0,0,0,0)'); rShad.addColorStop(1, 'rgba(0,0,0,0.42)')
+  ctx.fillStyle = rShad; ctx.fillRect(CW * 0.86, 0, CW * 0.14, CH)
+
+  // ── 5. Bevels ─────────────────────────────────────────────────────────────
+  ctx.fillStyle = 'rgba(230,225,212,1)';    ctx.fillRect(0, 0, CW, 0.75)
+  ctx.fillStyle = 'rgba(120,116,106,0.8)';  ctx.fillRect(0, CH - 0.75, CW, 0.75)
+
+  // ── 6. Side fades (blend into dark housing) ───────────────────────────────
+  const fadeW = 24
   const lf = ctx.createLinearGradient(0, 0, fadeW, 0)
-  lf.addColorStop(0, `rgba(${fadeRgb},0.95)`); lf.addColorStop(1, `rgba(${fadeRgb},0)`)
+  lf.addColorStop(0, 'rgba(3,2,2,0.98)'); lf.addColorStop(1, 'rgba(3,2,2,0)')
   ctx.fillStyle = lf; ctx.fillRect(0, 0, fadeW, CH)
   const rf = ctx.createLinearGradient(CW - fadeW, 0, CW, 0)
-  rf.addColorStop(0, `rgba(${fadeRgb},0)`); rf.addColorStop(1, `rgba(${fadeRgb},0.95)`)
+  rf.addColorStop(0, 'rgba(3,2,2,0)'); rf.addColorStop(1, 'rgba(3,2,2,0.98)')
   ctx.fillStyle = rf; ctx.fillRect(CW - fadeW, 0, fadeW, CH)
 
-  // 7 ── Centre selector lines (0.5px, very fine)
-  const cx = CW / 2, hw = WHEEL_ITEM_W / 2
-  ctx.strokeStyle = dark ? 'rgba(255,255,255,0.40)' : 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.5
-  ctx.beginPath(); ctx.moveTo(cx - hw, 3); ctx.lineTo(cx - hw, CH - 3); ctx.stroke()
-  ctx.beginPath(); ctx.moveTo(cx + hw, 3); ctx.lineTo(cx + hw, CH - 3); ctx.stroke()
-
-  // 8 ── White indicator dot (2.5px, top-centre) — white in both modes
-  ctx.fillStyle = 'rgba(255,255,255,0.92)'
-  ctx.beginPath(); ctx.arc(cx, 2.5, 2.5, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = 'rgba(255,255,255,0.40)'
-  ctx.beginPath(); ctx.arc(cx - 0.6, 1.7, 1.0, 0, Math.PI * 2); ctx.fill()
+  // ── 7. Selector lines — 0.5px, 40px wide centre window ───────────────────
+  const cx = CW / 2
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 0.5
+  ctx.beginPath(); ctx.moveTo(cx - 20, 1); ctx.lineTo(cx - 20, CH - 1); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(cx + 20, 1); ctx.lineTo(cx + 20, CH - 1); ctx.stroke()
 }
 
 interface KnurlWheelProps {
@@ -280,43 +295,56 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     dragging.current = false; startMomentum()
   }
 
+  const canvasTop = (WHEEL_HOUSING_H - WHEEL_H) / 2  // = 14px
+
   return (
     <div
       ref={containerRef}
       style={{
         flexShrink: 0,
-        height: 28,
-        background: dark ? '#0a0908' : '#b8b4ae',
-        borderTop: `1px solid ${dark ? 'rgba(0,0,0,0.75)' : 'rgba(80,76,70,0.45)'}`,
+        height: WHEEL_HOUSING_H,
+        background: '#0a0908',
+        borderRadius: 12,
+        border: '0.5px solid rgba(255,255,255,0.05)',
         position: 'relative',
         touchAction: 'none', userSelect: 'none',
         overflow: 'hidden', cursor: 'grab',
-        boxShadow: dark
-          ? 'inset 0 2px 8px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.85)'
-          : 'inset 0 2px 5px rgba(40,36,30,0.40), inset 0 -2px 5px rgba(40,36,30,0.28)',
+        boxShadow: 'inset 0 4px 14px rgba(0,0,0,0.92), inset 0 -4px 14px rgba(0,0,0,0.88)',
       }}
       onPointerDown={onDown} onPointerMove={onMove}
       onPointerUp={onUp}     onPointerCancel={onUp}
     >
+      {/* White indicator dot — top centre of slot */}
+      <div style={{
+        position: 'absolute',
+        top: Math.round(canvasTop / 2) - 2,
+        left: '50%', transform: 'translateX(-50%)',
+        width: 5, height: 5, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.90)',
+        boxShadow: '0 0 5px rgba(255,255,255,0.45)',
+        pointerEvents: 'none',
+      }} />
+
       {/* Canvas: knurl texture */}
       <canvas
         ref={canvasRef}
         style={{
-          position: 'absolute', top: 4, left: 0,
+          position: 'absolute', top: canvasTop, left: 0,
           width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
         }}
       />
 
-      {/* Pip indicators */}
-      <div style={{ position: 'absolute', bottom: 3, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 4, pointerEvents: 'none' }}>
+      {/* Pip row — 7 dots below wheel */}
+      <div style={{
+        position: 'absolute', bottom: 6, left: 0, right: 0,
+        display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none',
+      }}>
         {Array.from({ length: DAY_COUNT }, (_, i) => (
           <div key={i} style={{
-            width:  i === activeIdx ? 4 : 2.5,
-            height: i === activeIdx ? 4 : 2.5,
+            width:  i === activeIdx ? 5 : 3,
+            height: i === activeIdx ? 5 : 3,
             borderRadius: '50%',
-            background: i === activeIdx
-              ? (dark ? 'rgba(255,255,255,0.88)' : 'rgba(50,46,42,0.80)')
-              : (dark ? 'rgba(255,255,255,0.18)' : 'rgba(50,46,42,0.22)'),
+            background: i === activeIdx ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.10)',
             transition: 'all 150ms ease',
           }} />
         ))}
@@ -566,9 +594,6 @@ export function MapScreen() {
         })}
         <div className="shrink-0 w-2" />
       </div>
-
-      {/* ── Date indicator blocks ── */}
-      <DateIndicator activeDay={selectedDate} today={today} />
 
       {/* ── Map area ── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>
@@ -826,19 +851,15 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ── Day wheel picker ── */}
+      {/* ── Date indicator blocks ── */}
+      <DateIndicator activeDay={selectedDate} today={today} />
+
+      {/* ── Day wheel picker — dark bar, always ── */}
       <div style={{
         display: 'flex', justifyContent: 'center', alignItems: 'center',
-        background: 'var(--bg)', paddingBottom: 6,
+        background: '#0a0908', padding: '10px 0 14px',
       }}>
-        <div style={{
-          width: 'clamp(160px, 33vw, 240px)',
-          ...(theme === 'day' ? {
-            background: '#d8d4ce',
-            borderRadius: 5,
-            padding: '5px 8px',
-          } : {}),
-        }}>
+        <div style={{ width: 'clamp(160px, 33vw, 240px)' }}>
           <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} dark={theme === 'night'} />
         </div>
       </div>
