@@ -446,8 +446,7 @@ function CropPreviewModal({
   // Detect content bounds in background on mount
   useEffect(() => {
     detectContentBounds(imageSrc).then(detected => {
-      smartCropRef.current = detected
-      setSmartCrop(detected)
+      if (detected) { smartCropRef.current = detected; setSmartCrop(detected) }
     })
   }, []) // eslint-disable-line
 

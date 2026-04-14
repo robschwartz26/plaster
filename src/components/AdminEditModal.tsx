@@ -25,6 +25,7 @@ const labelSt: React.CSSProperties = {
   letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.4)', marginBottom: 6,
 }
 
+// 8 handles: [key, leftPercent, topPercent, cursor]
 const HANDLES: [CropHandle, number, number, string][] = [
   ['tl', 0, 0, 'nw-resize'], ['tc', 50, 0, 'n-resize'], ['tr', 100, 0, 'ne-resize'],
   ['ml', 0, 50, 'w-resize'],                              ['mr', 100, 50, 'e-resize'],
@@ -38,8 +39,14 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const [smartSnap, setSmartSnap] = useState(true)
   const [smartCrop, setSmartCrop] = useState<CropRect | null>(null)
   const smartCropRef = useRef<CropRect | null>(null)
+  const [isSnapAnimating, setIsSnapAnimating] = useState(false)
+  const [snapToast, setSnapToast] = useState<string | null>(null)
+
   const imgWrapRef = useRef<HTMLDivElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
+  // Cached loaded image — avoids re-fetching on every drag for the preview canvas
+  const imgCacheRef = useRef<HTMLImageElement | null>(null)
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+  const [previewBackdrop, setPreviewBackdrop] = useState<string | null>(null)
   const draggingRef = useRef<{ handle: CropHandle; startX: number; startY: number; startCrop: CropRect } | null>(null)
 
   // ── Image fetch (needed for Save Crop upload) ──────────────
@@ -61,7 +68,7 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [saveError, setSaveError] = useState('')
 
-  // ── On mount: fetch full event details, venues, poster image, smart bounds ─
+  // ── On mount: fetch event details + venues + poster blob + cached img + smart bounds ─
   useEffect(() => {
     supabase.from('events').select('description, venue_id').eq('id', event.id).single()
       .then(({ data }) => {
@@ -86,44 +93,65 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
       .catch(() => { /* save crop will be disabled */ })
   }, [event.poster_url])
 
+  // Cache a loaded HTMLImageElement for the live preview canvas (avoids re-fetching on every drag)
+  useEffect(() => {
+    if (!event.poster_url) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => { imgCacheRef.current = img }
+    img.src = event.poster_url
+  }, [event.poster_url])
+
+  // Detect solid borders on mount; store result for smart snap
   useEffect(() => {
     if (!event.poster_url) return
     console.log('[SmartSnap] Mount: calling detectContentBounds for', event.poster_url)
     detectContentBounds(event.poster_url).then(detected => {
+      if (!detected) { console.log('[SmartSnap] Mount: no solid borders detected'); return }
       console.log('[SmartSnap] Mount: detected bounds:', detected)
       smartCropRef.current = detected
       setSmartCrop(detected)
     })
   }, [event.poster_url])
 
-  // ── Live canvas preview while in crop mode ─────────────────
+  // ── Live preview canvas: redraws on every editCrop change using cached image ──
   useEffect(() => {
-    if (!cropMode || !event.poster_url) return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      const ctx = canvas.getContext('2d')!
-      const cw = canvas.width, ch = canvas.height
-      const sx = editCrop.x * img.naturalWidth
-      const sy = editCrop.y * img.naturalHeight
-      const sw = Math.max(1, editCrop.width * img.naturalWidth)
-      const sh = Math.max(1, editCrop.height * img.naturalHeight)
-      const scale = Math.min(cw / sw, ch / sh)
-      const dw = sw * scale, dh = sh * scale
-      ctx.fillStyle = '#111'
-      ctx.fillRect(0, 0, cw, ch)
-      ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
-    }
-    img.src = event.poster_url
-  }, [cropMode, editCrop, event.poster_url])
+    if (!cropMode) return
+    const canvas = previewCanvasRef.current
+    const img = imgCacheRef.current
+    if (!canvas || !img) return
 
-  // ── Global drag tracking ───────────────────────────────────
+    const ctx = canvas.getContext('2d')!
+    const cw = canvas.width, ch = canvas.height
+    const sx = editCrop.x * img.naturalWidth
+    const sy = editCrop.y * img.naturalHeight
+    const sw = Math.max(1, editCrop.width * img.naturalWidth)
+    const sh = Math.max(1, editCrop.height * img.naturalHeight)
+    const scale = Math.min(cw / sw, ch / sh)
+    const dw = sw * scale, dh = sh * scale
+    ctx.clearRect(0, 0, cw, ch)
+    ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+
+    // Sample the 4 corners of the cropped region to generate a live backdrop
+    try {
+      const SIZE = 40
+      const sc = document.createElement('canvas')
+      sc.width = SIZE; sc.height = SIZE
+      const sctx = sc.getContext('2d')!
+      sctx.drawImage(img, sx, sy, sw, sh, 0, 0, SIZE, SIZE)
+      const d = sctx.getImageData(0, 0, SIZE, SIZE).data
+      const px = (x: number, y: number) => { const i = (y * SIZE + x) * 4; return `${d[i]},${d[i+1]},${d[i+2]}` }
+      const tl = px(2, 2), tr = px(SIZE-3, 2), bl = px(2, SIZE-3), br = px(SIZE-3, SIZE-3)
+      setPreviewBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
+    } catch { /* CORS taint — no backdrop */ }
+  }, [cropMode, editCrop])
+
+  // ── Global drag tracking (passive:false so we can preventDefault on touch) ──
   useEffect(() => {
     const onMove = (e: MouseEvent | TouchEvent) => {
       const d = draggingRef.current
       if (!d || !imgWrapRef.current) return
+      if ('touches' in e) e.preventDefault() // prevent page scroll while dragging
       const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
       const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
       const rect = imgWrapRef.current.getBoundingClientRect()
@@ -132,7 +160,7 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
     const onUp = () => { draggingRef.current = null }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
-    window.addEventListener('touchmove', onMove as EventListener, { passive: true })
+    window.addEventListener('touchmove', onMove as EventListener, { passive: false })
     window.addEventListener('touchend', onUp)
     return () => {
       window.removeEventListener('mousemove', onMove)
@@ -157,21 +185,33 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
     setCropMode(true)
   }
 
+  const applySnap = (bounds: CropRect) => {
+    setIsSnapAnimating(true)
+    setEditCrop(bounds)
+    setTimeout(() => setIsSnapAnimating(false), 250)
+  }
+
   const handleSmartSnapToggle = () => {
     const turningOn = !smartSnap
     console.log('[SmartSnap] Toggle clicked, calling detectContentBounds. Turning ON:', turningOn)
     setSmartSnap(turningOn)
     if (turningOn) {
-      // Apply cached bounds immediately if available; otherwise re-detect
       if (smartCropRef.current) {
         console.log('[SmartSnap] Applying cached bounds:', smartCropRef.current)
-        setEditCrop(smartCropRef.current)
+        applySnap(smartCropRef.current)
       } else if (event.poster_url) {
         detectContentBounds(event.poster_url).then(detected => {
+          if (!detected) {
+            console.log('[SmartSnap] No borders detected')
+            setSnapToast('No borders detected')
+            setTimeout(() => setSnapToast(null), 2500)
+            setSmartSnap(false)
+            return
+          }
           console.log('[SmartSnap] Re-detected bounds:', detected)
           smartCropRef.current = detected
           setSmartCrop(detected)
-          setEditCrop(detected)
+          applySnap(detected)
         })
       }
     }
@@ -181,7 +221,6 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const handleSaveCrop = async () => {
     if (!imageFile) { console.warn('[SaveCrop] No imageFile — aborting'); return }
     setSaving('crop'); setSaveError('')
-    // Note: using anon client (same as Admin.tsx — no service role client exists in browser)
     console.log('[SaveCrop] Starting. Event ID:', event.id, '| imageFile size:', imageFile.size, '| crop:', editCrop)
     try {
       const optimized = await optimizeImage(imageFile, editCrop)
@@ -253,6 +292,9 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
     }
   }
 
+  // ── CSS transition string for animated snap ────────────────
+  const snapTransition = isSnapAnimating ? 'all 0.2s ease' : 'none'
+
   // ── Render ─────────────────────────────────────────────────
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9990, background: '#0a0a0a', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -291,7 +333,11 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
           <>
             {/* Image with drag handles */}
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
-              <div ref={imgWrapRef} style={{ flex: 1, position: 'relative', display: 'inline-block', lineHeight: 0, maxWidth: '100%', overflow: 'hidden' }}>
+              {/* Image wrap — crop overlay is positioned relative to this */}
+              <div
+                ref={imgWrapRef}
+                style={{ flex: 1, position: 'relative', lineHeight: 0, maxWidth: '100%', overflow: 'visible' }}
+              >
                 <img
                   src={event.poster_url}
                   alt={event.title}
@@ -301,66 +347,115 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
 
                 {cropMode && (
                   <>
-                    {/* Dark masks outside crop rect */}
+                    {/* Full-image dark overlay — 4 rects surrounding the crop window */}
                     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${editCrop.y * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
-                      <div style={{ position: 'absolute', top: `${(editCrop.y + editCrop.height) * 100}%`, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.62)' }} />
-                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: 0, width: `${editCrop.x * 100}%`, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
-                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: `${(editCrop.x + editCrop.width) * 100}%`, right: 0, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
+                      {/* top strip */}
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${editCrop.y * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      {/* bottom strip */}
+                      <div style={{ position: 'absolute', top: `${(editCrop.y + editCrop.height) * 100}%`, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      {/* left strip */}
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: 0, width: `${editCrop.x * 100}%`, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      {/* right strip */}
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: `${(editCrop.x + editCrop.width) * 100}%`, right: 0, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
                     </div>
 
-                    {/* Crop rect + handles */}
-                    <div style={{ position: 'absolute', left: `${editCrop.x * 100}%`, top: `${editCrop.y * 100}%`, width: `${editCrop.width * 100}%`, height: `${editCrop.height * 100}%`, border: '1.5px solid rgba(255,255,255,0.85)', boxSizing: 'border-box' }}>
+                    {/* Crop rect border + 8 handles */}
+                    <div style={{
+                      position: 'absolute',
+                      left: `${editCrop.x * 100}%`,
+                      top: `${editCrop.y * 100}%`,
+                      width: `${editCrop.width * 100}%`,
+                      height: `${editCrop.height * 100}%`,
+                      border: '1.5px solid rgba(255,255,255,0.9)',
+                      boxSizing: 'border-box',
+                      transition: snapTransition,
+                    }}>
                       {HANDLES.map(([h, lp, tp, cur]) => (
+                        // Outer div = 20×20 touch target (invisible)
+                        // Inner div = 12×12 visible white square
                         <div
                           key={h}
                           onMouseDown={e => startDrag(h, e)}
                           onTouchStart={e => startDrag(h, e)}
-                          style={{ position: 'absolute', width: 12, height: 12, background: '#fff', border: '1.5px solid rgba(0,0,0,0.4)', borderRadius: 2, cursor: cur, left: `${lp}%`, top: `${tp}%`, transform: 'translate(-50%,-50%)', touchAction: 'none' }}
-                        />
+                          style={{
+                            position: 'absolute',
+                            width: 20, height: 20,
+                            left: `${lp}%`, top: `${tp}%`,
+                            transform: 'translate(-50%, -50%)',
+                            touchAction: 'none',
+                            cursor: cur,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}
+                        >
+                          <div style={{
+                            width: 12, height: 12,
+                            background: '#fff',
+                            border: '1.5px solid rgba(0,0,0,0.45)',
+                            borderRadius: 2,
+                            pointerEvents: 'none',
+                          }} />
+                        </div>
                       ))}
                     </div>
                   </>
                 )}
               </div>
 
+              {/* Live preview card */}
               {cropMode && (
                 <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>Preview</span>
-                  <canvas ref={canvasRef} width={80} height={120} style={{ borderRadius: 4, display: 'block', background: '#111' }} />
+                  {/* Backdrop behind canvas */}
+                  <div style={{ position: 'relative', width: 72, height: 108, borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
+                    <div style={{ position: 'absolute', inset: 0, background: previewBackdrop ?? '#111' }} />
+                    <canvas
+                      ref={previewCanvasRef}
+                      width={72}
+                      height={108}
+                      style={{ position: 'relative', display: 'block', width: 72, height: 108 }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
 
             {/* Crop controls */}
             {cropMode ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-                <button
-                  onClick={handleSmartSnapToggle}
-                  style={{ padding: '5px 11px', background: smartSnap ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${smartSnap ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 5, color: smartSnap ? '#c084fc' : 'rgba(255,255,255,0.3)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
-                >
-                  Smart snap: {smartSnap ? 'ON' : 'OFF'}
-                </button>
-                <button
-                  onClick={() => setEditCrop(smartSnap && smartCrop ? smartCrop : { x: 0, y: 0, width: 1, height: 1 })}
-                  style={{ padding: '5px 11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.45)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
-                >
-                  Reset
-                </button>
-                <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                {/* Toast */}
+                {snapToast && (
+                  <div style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)' }}>
+                    {snapToast}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <button
-                    onClick={() => { setCropMode(false); setEditCrop({ x: 0, y: 0, width: 1, height: 1 }) }}
-                    style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}
+                    onClick={handleSmartSnapToggle}
+                    style={{ padding: '5px 11px', background: smartSnap ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${smartSnap ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 5, color: smartSnap ? '#c084fc' : 'rgba(255,255,255,0.3)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
                   >
-                    Cancel
+                    Smart snap: {smartSnap ? 'ON' : 'OFF'}
                   </button>
                   <button
-                    onClick={handleSaveCrop}
-                    disabled={saving === 'crop' || !imageFile}
-                    style={{ padding: '5px 16px', background: '#A855F7', border: 'none', borderRadius: 5, color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: saving === 'crop' || !imageFile ? 'default' : 'pointer', opacity: saving === 'crop' || !imageFile ? 0.6 : 1 }}
+                    onClick={() => setEditCrop(smartSnap && smartCrop ? smartCrop : { x: 0, y: 0, width: 1, height: 1 })}
+                    style={{ padding: '5px 11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.45)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
                   >
-                    {saving === 'crop' ? 'Saving…' : 'Save Crop'}
+                    Reset
                   </button>
+                  <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                    <button
+                      onClick={() => { setCropMode(false); setEditCrop({ x: 0, y: 0, width: 1, height: 1 }) }}
+                      style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveCrop}
+                      disabled={saving === 'crop' || !imageFile}
+                      style={{ padding: '5px 16px', background: '#A855F7', border: 'none', borderRadius: 5, color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: saving === 'crop' || !imageFile ? 'default' : 'pointer', opacity: saving === 'crop' || !imageFile ? 0.6 : 1 }}
+                    >
+                      {saving === 'crop' ? 'Saving…' : 'Save Crop'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
