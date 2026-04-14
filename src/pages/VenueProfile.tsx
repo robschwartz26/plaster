@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 interface VenueEvent {
   id: string
@@ -72,6 +73,24 @@ export function VenueProfile() {
 
   return (
     <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <PlasterHeader actions={
+        <button
+          onClick={() => navigate(-1)}
+          style={{
+            width: 32, height: 32, borderRadius: 4,
+            border: '1px solid var(--fg-18)',
+            background: 'transparent',
+            color: 'var(--fg-65)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
+        </button>
+      } />
+
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
 
@@ -83,31 +102,6 @@ export function VenueProfile() {
             <div style={{ width: '100%', height: '100%', background: 'linear-gradient(160deg, #1a0533 0%, #3b0764 100%)' }} />
           )}
 
-          {/* Back button */}
-          <button
-            onClick={() => navigate(-1)}
-            style={{
-              position: 'absolute',
-              top: 'max(12px, env(safe-area-inset-top))',
-              left: 12,
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              background: 'rgba(0,0,0,0.5)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              border: 'none',
-              color: '#fff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 5l-7 7 7 7" />
-            </svg>
-          </button>
         </div>
 
         {/* Identity row */}

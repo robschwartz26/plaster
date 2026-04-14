@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -617,36 +618,12 @@ function AdminDashboard() {
       style={{
         minHeight: '100dvh',
         background: 'var(--bg)',
-        padding: '48px 24px 80px',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
-      <div style={{ maxWidth: 520, margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: 40 }}>
-          <p
-            style={{
-              fontFamily: '"Playfair Display", serif',
-              fontSize: 32,
-              fontWeight: 700,
-              color: 'var(--fg)',
-              margin: '0 0 6px 0',
-            }}
-          >
-            plaster
-          </p>
-          <p
-            style={{
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 12,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--fg-30)',
-              margin: 0,
-            }}
-          >
-            Admin — Upload
-          </p>
-        </div>
+      <PlasterHeader />
+      <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 80px', width: '100%' }}>
 
         <Section title="Add a Venue">
           <VenueForm onVenueAdded={fetchVenues} />

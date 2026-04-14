@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
@@ -102,26 +103,17 @@ export function OnboardingScreen() {
         background: 'var(--bg)',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '0 28px',
       }}
     >
-      <span
-        style={{
-          fontFamily: '"Space Grotesk", sans-serif',
-          fontSize: 26,
-          fontWeight: 900,
-          color: 'var(--fg)',
-          letterSpacing: '-0.02em',
-          marginBottom: 8,
-        }}
-      >
-        plaster
-      </span>
-      <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif' }}>
+      <PlasterHeader actions={<span />} />
+
+      {/* Step counter */}
+      <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
         step {step === 'username' ? 1 : step === 'avatar' ? 2 : 3} of 3
       </p>
+
+      {/* Centered content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px', marginTop: -60 }}>
 
       {step === 'username' && (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -208,6 +200,7 @@ export function OnboardingScreen() {
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }

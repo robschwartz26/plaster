@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 interface AttendedEvent {
   event_id: string
@@ -146,8 +147,10 @@ export function YouScreen() {
         background: 'var(--bg)',
       }}
     >
+      <PlasterHeader />
+
       {/* Scrollable body */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 20px 0' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 0' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>

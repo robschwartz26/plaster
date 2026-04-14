@@ -2,15 +2,15 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Map, { Marker } from 'react-map-gl/mapbox'
-import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import circle from '@turf/circle'
 import difference from '@turf/difference'
 import { featureCollection } from '@turf/helpers'
-import { Search, SlidersHorizontal, List, X } from 'lucide-react'
+import { List, Search, SlidersHorizontal, X } from 'lucide-react'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { useTheme } from '@/hooks/useTheme'
 import { BottomNav } from '@/components/BottomNav'
+import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 const MAP_STYLE = 'mapbox://styles/mapbox/dark-v11'
@@ -83,33 +83,9 @@ interface VenueEvent {
   venue_id: string
 }
 
-// ── Wordmark with swipe-to-toggle theme ───────────────────────────────────────
-function Wordmark({ onSwipe }: { onSwipe: (dir: 'right' | 'left') => void }) {
-  const x = useMotionValue(0)
-  return (
-    <motion.span
-      style={{
-        x, fontSize: 26, fontWeight: 900, color: 'var(--fg)',
-        letterSpacing: '-0.02em', lineHeight: 1, userSelect: 'none',
-        touchAction: 'none', cursor: 'default', display: 'inline-block',
-        fontFamily: '"Space Grotesk", sans-serif',
-      }}
-      drag="x"
-      dragMomentum={false}
-      onDragEnd={(_, info) => {
-        if (Math.abs(info.offset.x) >= 40) onSwipe(info.offset.x > 0 ? 'right' : 'left')
-        animate(x, 0, { type: 'spring', stiffness: 500, damping: 22 })
-      }}
-    >
-      plaster
-    </motion.span>
-  )
-}
-
 // ── Component ─────────────────────────────────────────────────────────────────
 export function MapScreen() {
   const { user } = useAuth()
-  const { toggle: toggleTheme } = useTheme()
   const navigate = useNavigate()
   const mapRef = useRef<any>(null)
   const mapLoadedRef = useRef(false)
@@ -318,40 +294,15 @@ export function MapScreen() {
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       {/* ── Header ── */}
-      <div
-        className="shrink-0 flex items-center justify-between px-4"
-        style={{ paddingTop: 'max(12px, env(safe-area-inset-top))', paddingBottom: 10, background: 'var(--bg)' }}
-      >
-        <Wordmark onSwipe={(dir) => { if (dir === 'right') toggleTheme() }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* List/Map toggle */}
-          <button
-            onClick={() => setListOpen((o) => !o)}
-            style={{
-              width: 32, height: 32, borderRadius: 4,
-              border: `1px solid ${listOpen ? 'var(--fg-55)' : 'var(--fg-18)'}`,
-              background: listOpen ? 'var(--fg-08)' : 'transparent',
-              color: listOpen ? 'var(--fg)' : 'var(--fg-65)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            }}
-          >
-            <List size={16} />
-          </button>
-          {[<Search key="s" size={16} />, <SlidersHorizontal key="f" size={16} />].map((icon, i) => (
-            <button
-              key={i}
-              style={{
-                width: 32, height: 32, borderRadius: 4,
-                border: '1px solid var(--fg-18)',
-                background: 'transparent', color: 'var(--fg-65)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              }}
-            >
-              {icon}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PlasterHeader
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setListOpen((o) => !o)} style={headerIconBtn(listOpen)}><List size={16} /></button>
+            <button style={headerIconBtn()}><Search size={16} /></button>
+            <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
+          </div>
+        }
+      />
 
       {/* ── Filter chips ── */}
       <div

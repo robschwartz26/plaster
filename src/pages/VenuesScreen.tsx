@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { type DbVenue } from '@/lib/supabase'
 import { BottomNav } from '@/components/BottomNav'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 export function VenuesScreen() {
   const [venues, setVenues] = useState<DbVenue[]>([])
@@ -29,30 +30,7 @@ export function VenuesScreen() {
         background: 'var(--bg)',
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingBottom: 12,
-          paddingLeft: 20,
-          paddingRight: 20,
-          flexShrink: 0,
-          borderBottom: '1px solid var(--fg-08)',
-        }}
-      >
-        <h1
-          style={{
-            margin: 0,
-            fontFamily: '"Space Grotesk", sans-serif',
-            fontSize: 22,
-            fontWeight: 800,
-            color: 'var(--fg)',
-            letterSpacing: '-0.01em',
-          }}
-        >
-          Venues
-        </h1>
-      </div>
+      <PlasterHeader />
 
       {/* List */}
       <div style={{ flex: 1, overflowY: 'auto' }}>

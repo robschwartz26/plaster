@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 interface TonightEvent {
   id: string
@@ -102,24 +103,7 @@ export function TonightScreen() {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
-      {/* Header */}
-      <div
-        style={{
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-          paddingBottom: 12,
-          paddingLeft: 20,
-          paddingRight: 20,
-          flexShrink: 0,
-          borderBottom: '1px solid var(--fg-08)',
-        }}
-      >
-        <h1 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 22, fontWeight: 800, color: 'var(--fg)', letterSpacing: '-0.01em' }}>
-          Tonight
-        </h1>
-        <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
-      </div>
+      <PlasterHeader />
 
       {/* Body */}
       <div style={{ flex: 1, overflowY: 'auto' }}>

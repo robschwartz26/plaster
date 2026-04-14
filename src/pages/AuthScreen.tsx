@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 type Tab = 'signin' | 'signup'
 
@@ -40,25 +41,12 @@ export function AuthScreen() {
         background: 'var(--bg)',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '0 28px',
       }}
     >
-      {/* Wordmark */}
-      <span
-        style={{
-          fontFamily: '"Space Grotesk", sans-serif',
-          fontSize: 38,
-          fontWeight: 900,
-          color: 'var(--fg)',
-          letterSpacing: '-0.02em',
-          marginBottom: 48,
-          lineHeight: 1,
-        }}
-      >
-        plaster
-      </span>
+      <PlasterHeader actions={<span />} />
+
+      {/* Centered content */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
 
       {/* Tab toggle */}
       <div
@@ -152,6 +140,7 @@ export function AuthScreen() {
           {busy ? '…' : tab === 'signin' ? 'Sign in' : 'Create account'}
         </button>
       </form>
+      </div>
     </div>
   )
 }
