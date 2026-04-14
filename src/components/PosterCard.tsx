@@ -10,10 +10,9 @@ interface Props {
   onLike: (eventId: string) => void
 }
 
-function matchesFilter(event: WallEvent, filter: string, today: string, isLiked: boolean): boolean {
+function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
   if (filter === 'All') return true
   if (filter === '♥') return isLiked
-  if (filter === 'Tonight') return event.starts_at.slice(0, 10) === today
   return event.category === filter
 }
 
@@ -64,8 +63,7 @@ function HeartPill({
 }
 
 export function PosterCard({ event, cols, activeFilter, isLiked, onDoubleTap, onLike }: Props) {
-  const today = new Date().toISOString().slice(0, 10)
-  const matches = matchesFilter(event, activeFilter, today, isLiked)
+  const matches = matchesFilter(event, activeFilter, isLiked)
 
   // Double-tap detection
   const lastTap = useRef(0)
@@ -105,7 +103,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, onDoubleTap, on
         ) : (
           <div style={{ position: 'absolute', inset: 0, background: gradient }} />
         )}
-        {/* No overlays — poster speaks for itself */}
       </div>
     )
   }

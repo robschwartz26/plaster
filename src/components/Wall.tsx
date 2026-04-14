@@ -12,7 +12,8 @@ import { type WallEvent } from '@/types/event'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
 
-const today = new Date().toISOString().slice(0, 10)
+// Stable at module level — mock event dates are relative to app-load day,
+// which is the same reference point used by today below.
 const MOCK_WALL_EVENTS: WallEvent[] = mockEvents.map(mockEventToWallEvent)
 
 // Hidden swipe-to-toggle wordmark — no visual indicator, pure easter egg
@@ -50,6 +51,7 @@ function Wordmark({ onSwipe }: { onSwipe: (dir: 'right' | 'left') => void }) {
 }
 
 export function Wall() {
+  const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
