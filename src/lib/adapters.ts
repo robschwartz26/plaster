@@ -2,19 +2,20 @@ import { type Event as MockEvent } from '@/data/mockEvents'
 import { type DbEvent } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 
-// Default gradients per category for DB events that have no poster yet
+// Default gradients per category for DB events that have no poster yet.
+// Both colors are vivid — no near-black, no gray.
 const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
-  Music:    ['#1a0533', '#7c3aed'],
-  Drag:     ['#3b0764', '#ec4899'],
-  Dance:    ['#431407', '#f97316'],
-  Comedy:   ['#0f172a', '#0ea5e9'],
-  Literary: ['#1e1b4b', '#6366f1'],
-  Art:      ['#0a0a0a', '#525252'],
-  Film:     ['#1a1a1a', '#737373'],
-  Trivia:   ['#1c1917', '#78716c'],
-  Other:    ['#0f0520', '#8b5cf6'],
+  Music:    ['#4c1d95', '#7c3aed'],
+  Drag:     ['#831843', '#ec4899'],
+  Dance:    ['#7c2d12', '#f97316'],
+  Comedy:   ['#1e3a5f', '#38bdf8'],
+  Literary: ['#3730a3', '#818cf8'],
+  Art:      ['#365314', '#a3e635'],
+  Film:     ['#0c4a6e', '#38bdf8'],
+  Trivia:   ['#7c2d12', '#fb923c'],
+  Other:    ['#2e1065', '#a855f7'],
 }
-const DEFAULT_GRADIENT: [string, string] = ['#111', '#333']
+const DEFAULT_GRADIENT: [string, string] = ['#2e1065', '#7c3aed']
 
 export function mockEventToWallEvent(e: MockEvent): WallEvent {
   return {
