@@ -845,7 +845,7 @@ export function MapScreen() {
       {/* ── Control bar ── */}
       <div style={{
         width: '100%', height: 52, flexShrink: 0,
-        background: theme === 'night' ? '#0a0908' : '#d8d4ce',
+        background: theme === 'night' ? '#0a0908' : 'var(--bg)',
         borderTop: '0.5px solid rgba(255,255,255,0.08)',
         position: 'relative',
         display: 'flex', flexDirection: 'column',
