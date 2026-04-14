@@ -74,12 +74,12 @@ function formatDayFull(idx: number, today: string): string {
 }
 
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
-const WHEEL_H = 88           // drum height in CSS px
-const WHEEL_ITEM_W = 80      // px per day slot
-const WHEEL_COMP = 0.70      // scroll→pattern compression (cylinder effect)
-const WHEEL_PITCH = 12       // diamond knurl pitch in CSS px
+const WHEEL_H      = 26   // drum canvas height in CSS px  (housing is 36px)
+const WHEEL_ITEM_W = 72   // px per day slot
+const WHEEL_COMP   = 0.70 // scroll→pattern compression
+const WHEEL_PITCH  = 8    // fine diamond knurl pitch in CSS px
 
-function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number): void {
+function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): void {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   const dpr = window.devicePixelRatio || 1
@@ -87,113 +87,105 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number): void {
   const CH = canvas.height / dpr
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  // 1 ── Cylinder body (dark edges, aluminium centre)
+  // Palette
+  const [edge0, edge1, mid0, mid1, lineCol, hlCol, lipEdge, fadeRgb] = dark
+    ? ['#040303','#181614','#282420','#302c28', 'rgba(255,244,216,0.10)', 'rgba(255,248,214,0.45)', 'rgba(160,152,140,0.70)', '14,12,10']
+    : ['#9e9a95','#c4c0ba','#d4d0ca','#dedad4', 'rgba(60,56,50,0.12)',   'rgba(80,70,60,0.30)',    'rgba(255,255,255,0.80)',  '232,228,223']
+
+  // 1 ── Cylinder body
   const body = ctx.createLinearGradient(0, 0, 0, CH)
-  body.addColorStop(0,    '#050403')
-  body.addColorStop(0.07, '#1c1a16')
-  body.addColorStop(0.22, '#342f2a')
-  body.addColorStop(0.42, '#464038')
-  body.addColorStop(0.50, '#504a42')
-  body.addColorStop(0.58, '#464038')
-  body.addColorStop(0.78, '#342f2a')
-  body.addColorStop(0.93, '#1c1a16')
-  body.addColorStop(1,    '#050403')
+  body.addColorStop(0,    edge0)
+  body.addColorStop(0.15, edge1)
+  body.addColorStop(0.40, mid0)
+  body.addColorStop(0.50, mid1)
+  body.addColorStop(0.60, mid0)
+  body.addColorStop(0.85, edge1)
+  body.addColorStop(1,    edge0)
   ctx.fillStyle = body; ctx.fillRect(0, 0, CW, CH)
 
-  // 2 ── Specular highlight band
+  // 2 ── Specular band
   const spec = ctx.createLinearGradient(0, 0, 0, CH)
+  const sw = dark ? 0.09 : 0.18
   spec.addColorStop(0,    'rgba(255,255,255,0)')
-  spec.addColorStop(0.42, 'rgba(255,255,255,0)')
-  spec.addColorStop(0.48, 'rgba(255,255,255,0.06)')
-  spec.addColorStop(0.50, 'rgba(255,255,255,0.11)')
-  spec.addColorStop(0.52, 'rgba(255,255,255,0.06)')
-  spec.addColorStop(0.58, 'rgba(255,255,255,0)')
+  spec.addColorStop(0.44, 'rgba(255,255,255,0)')
+  spec.addColorStop(0.50, `rgba(255,255,255,${sw})`)
+  spec.addColorStop(0.56, 'rgba(255,255,255,0)')
   spec.addColorStop(1,    'rgba(255,255,255,0)')
   ctx.fillStyle = spec; ctx.fillRect(0, 0, CW, CH)
 
-  // 3 ── Diamond knurl lines
+  // 3 ── Knurl lines (fine diamond)
   const P = WHEEL_PITCH
-  const s = ((scrollPx % P) + P * 1000) % P   // normalised 0..P
-  ctx.strokeStyle = 'rgba(255,244,216,0.13)'; ctx.lineWidth = 0.65
-  // Set A: slope +1
+  const s = ((scrollPx % P) + P * 1000) % P
+  ctx.strokeStyle = lineCol; ctx.lineWidth = 0.5
   for (let a = s - P * (Math.ceil(CH / P) + 2); a < CW + CH; a += P) {
     ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a + CH, CH); ctx.stroke()
   }
-  // Set B: slope -1
   for (let b = s - P * 2; b < CW + CH + P; b += P) {
     ctx.beginPath(); ctx.moveTo(b, 0); ctx.lineTo(b - CH, CH); ctx.stroke()
   }
 
-  // 4 ── Pyramid highlights at each intersection
-  //   A_i  :  y = x − (s + i·P)
-  //   B_j  :  y = −x + (s + j·P)
-  //   Meet at ix = s + (i+j)·P/2,  iy = (j−i)·P/2
-  //   Valid iff sum = i+j and diff = j−i have the same parity
+  // 4 ── Pyramid highlights
   const halfP = P / 2
   const maxDiff = Math.ceil(CH / halfP) + 1
-  const sumMin = Math.floor((-2 - s) / halfP) - 2
-  const sumMax = Math.ceil((CW + 2 - s) / halfP) + 2
-  ctx.fillStyle = 'rgba(255,248,214,0.52)'
+  const sumMin  = Math.floor((-2 - s) / halfP) - 2
+  const sumMax  = Math.ceil((CW + 2 - s) / halfP) + 2
+  ctx.fillStyle = hlCol
   for (let diff = 0; diff <= maxDiff; diff++) {
-    const iy = diff * halfP
-    if (iy > CH + 1) break
+    const iy = diff * halfP; if (iy > CH + 1) break
     for (let sum = sumMin; sum <= sumMax; sum++) {
-      if ((sum + diff) % 2 !== 0) continue   // parity guard
+      if ((sum + diff) % 2 !== 0) continue
       const ix = s + sum * halfP
       if (ix < -1 || ix > CW + 1) continue
-      // Offset upper-left to simulate light from that direction
-      ctx.beginPath(); ctx.arc(ix - 0.6, iy - 0.6, 1.4, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.arc(ix - 0.5, iy - 0.5, 1.1, 0, Math.PI * 2); ctx.fill()
     }
   }
 
-  // 5 ── Machined bevel lips
-  const topLip = ctx.createLinearGradient(0, 0, 0, 7)
-  topLip.addColorStop(0, 'rgba(172,163,148,0.90)')
-  topLip.addColorStop(0.5, 'rgba(118,112,100,0.60)')
-  topLip.addColorStop(1, 'rgba(68,64,56,0)')
-  ctx.fillStyle = topLip; ctx.fillRect(0, 0, CW, 7)
-  const botLip = ctx.createLinearGradient(0, CH - 7, 0, CH)
-  botLip.addColorStop(0, 'rgba(68,64,56,0)')
-  botLip.addColorStop(0.5, 'rgba(118,112,100,0.60)')
-  botLip.addColorStop(1, 'rgba(172,163,148,0.90)')
-  ctx.fillStyle = botLip; ctx.fillRect(0, CH - 7, CW, 7)
+  // 5 ── Thin bevel lips (3px)
+  const topLip = ctx.createLinearGradient(0, 0, 0, 3)
+  topLip.addColorStop(0, lipEdge); topLip.addColorStop(1, 'rgba(128,120,112,0)')
+  ctx.fillStyle = topLip; ctx.fillRect(0, 0, CW, 3)
+  const botLip = ctx.createLinearGradient(0, CH - 3, 0, CH)
+  botLip.addColorStop(0, 'rgba(128,120,112,0)'); botLip.addColorStop(1, lipEdge)
+  ctx.fillStyle = botLip; ctx.fillRect(0, CH - 3, CW, 3)
   // Bright edge lines
-  ctx.fillStyle = 'rgba(196,188,174,0.75)'
-  ctx.fillRect(0, 0, CW, 1); ctx.fillRect(0, CH - 1, CW, 1)
+  ctx.fillStyle = dark ? 'rgba(180,172,160,0.60)' : 'rgba(255,255,255,0.90)'
+  ctx.fillRect(0, 0, CW, 0.5); ctx.fillRect(0, CH - 0.5, CW, 0.5)
 
-  // 6 ── Side fades into housing
-  const fadeW = 50
+  // 6 ── Side fades
+  const fadeW = 36
   const lf = ctx.createLinearGradient(0, 0, fadeW, 0)
-  lf.addColorStop(0, 'rgba(14,12,10,0.94)'); lf.addColorStop(1, 'rgba(14,12,10,0)')
+  lf.addColorStop(0, `rgba(${fadeRgb},0.95)`); lf.addColorStop(1, `rgba(${fadeRgb},0)`)
   ctx.fillStyle = lf; ctx.fillRect(0, 0, fadeW, CH)
   const rf = ctx.createLinearGradient(CW - fadeW, 0, CW, 0)
-  rf.addColorStop(0, 'rgba(14,12,10,0)'); rf.addColorStop(1, 'rgba(14,12,10,0.94)')
+  rf.addColorStop(0, `rgba(${fadeRgb},0)`); rf.addColorStop(1, `rgba(${fadeRgb},0.95)`)
   ctx.fillStyle = rf; ctx.fillRect(CW - fadeW, 0, fadeW, CH)
 
-  // 7 ── Centre selector lines (white verticals)
-  const cx = CW / 2
-  const hw = WHEEL_ITEM_W / 2
-  ctx.strokeStyle = 'rgba(255,255,255,0.52)'; ctx.lineWidth = 1
-  ctx.beginPath(); ctx.moveTo(cx - hw, 10); ctx.lineTo(cx - hw, CH - 10); ctx.stroke()
-  ctx.beginPath(); ctx.moveTo(cx + hw, 10); ctx.lineTo(cx + hw, CH - 10); ctx.stroke()
+  // 7 ── Centre selector lines (0.5px, very fine)
+  const cx = CW / 2, hw = WHEEL_ITEM_W / 2
+  ctx.strokeStyle = dark ? 'rgba(255,255,255,0.40)' : 'rgba(0,0,0,0.25)'; ctx.lineWidth = 0.5
+  ctx.beginPath(); ctx.moveTo(cx - hw, 3); ctx.lineTo(cx - hw, CH - 3); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(cx + hw, 3); ctx.lineTo(cx + hw, CH - 3); ctx.stroke()
 
-  // 8 ── Red top indicator dot
+  // 8 ── Red indicator dot (2.5px, top-centre)
   ctx.fillStyle = '#c42000'
-  ctx.beginPath(); ctx.arc(cx, 5, 3.5, 0, Math.PI * 2); ctx.fill()
-  ctx.fillStyle = 'rgba(255,105,85,0.45)'
-  ctx.beginPath(); ctx.arc(cx - 1.0, 4.0, 1.6, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.arc(cx, 2.5, 2.5, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = 'rgba(255,100,80,0.40)'
+  ctx.beginPath(); ctx.arc(cx - 0.7, 1.8, 1.1, 0, Math.PI * 2); ctx.fill()
 }
 
 interface KnurlWheelProps {
   dayIdx: number
   setDayIdx: (i: number) => void
   today: string
+  dark: boolean
 }
 
-function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
+function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasReady  = useRef(false)
+  const darkRef      = useRef(dark)
+  darkRef.current = dark
 
   const offsetRef  = useRef(-dayIdx * WHEEL_ITEM_W)
   const [offset, setOffset] = useState(-dayIdx * WHEEL_ITEM_W)
@@ -218,7 +210,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
       canvas!.width  = w * dpr
       canvas!.height = WHEEL_H * dpr
       canvasReady.current = true
-      drawKnurl(canvas!, offsetRef.current * WHEEL_COMP)
+      drawKnurl(canvas!, offsetRef.current * WHEEL_COMP, darkRef.current)
     }
     resize()
     const ro = new ResizeObserver(resize)
@@ -229,8 +221,14 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
   // Redraw whenever offset changes
   useEffect(() => {
     if (!canvasReady.current || !canvasRef.current) return
-    drawKnurl(canvasRef.current, offset * WHEEL_COMP)
+    drawKnurl(canvasRef.current, offset * WHEEL_COMP, darkRef.current)
   }, [offset])
+
+  // Redraw whenever theme changes
+  useEffect(() => {
+    if (!canvasReady.current || !canvasRef.current) return
+    drawKnurl(canvasRef.current, offsetRef.current * WHEEL_COMP, dark)
+  }, [dark])
 
   const activeIdx = Math.round(Math.max(0, Math.min(DAY_COUNT - 1, -offset / WHEEL_ITEM_W)))
 
@@ -290,13 +288,15 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
       ref={containerRef}
       style={{
         flexShrink: 0,
-        height: WHEEL_H + 18,
-        background: '#0e0c0a',
-        borderTop: '1px solid rgba(0,0,0,0.7)',
+        height: 36,
+        background: dark ? '#0e0c0a' : '#e8e4df',
+        borderTop: `1px solid ${dark ? 'rgba(0,0,0,0.7)' : 'rgba(180,172,162,0.6)'}`,
         position: 'relative',
         touchAction: 'none', userSelect: 'none',
         overflow: 'hidden', cursor: 'grab',
-        boxShadow: 'inset 0 3px 12px rgba(0,0,0,0.85), inset 0 -3px 12px rgba(0,0,0,0.85)',
+        boxShadow: dark
+          ? 'inset 0 2px 8px rgba(0,0,0,0.80), inset 0 -2px 8px rgba(0,0,0,0.80)'
+          : 'inset 0 2px 6px rgba(0,0,0,0.12), inset 0 -2px 6px rgba(0,0,0,0.10)',
       }}
       onPointerDown={onDown} onPointerMove={onMove}
       onPointerUp={onUp}     onPointerCancel={onUp}
@@ -305,18 +305,19 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
       <canvas
         ref={canvasRef}
         style={{
-          position: 'absolute', top: 9, left: 0,
+          position: 'absolute', top: 5, left: 0,
           width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
         }}
       />
 
       {/* Day label overlay */}
-      <div style={{ position: 'absolute', top: 9, left: 0, right: 0, height: WHEEL_H, overflow: 'hidden', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', top: 5, left: 0, right: 0, height: WHEEL_H, overflow: 'hidden', pointerEvents: 'none' }}>
         {Array.from({ length: DAY_COUNT }, (_, i) => {
           const pos  = offset + i * WHEEL_ITEM_W
           const dist = Math.abs(pos)
           const op   = Math.max(0.07, 1 - dist / (WHEEL_ITEM_W * 2.1))
           const act  = i === activeIdx
+          const textCol = dark ? '#f0ece3' : '#1a1814'
           return (
             <div key={i} style={{
               position: 'absolute',
@@ -329,9 +330,11 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
                 fontFamily: '"Space Grotesk", sans-serif',
                 fontSize: act ? 13 : 11,
                 fontWeight: act ? 700 : 400,
-                color: '#f0ece3',
+                color: textCol,
                 letterSpacing: act ? 0 : '0.04em',
-                textShadow: act ? '0 1px 5px rgba(0,0,0,0.95)' : 'none',
+                textShadow: act
+                  ? (dark ? '0 1px 5px rgba(0,0,0,0.95)' : '0 1px 3px rgba(255,255,255,0.8)')
+                  : 'none',
                 pointerEvents: 'none',
               }}>
                 {dayShortLabel(i, today)}
@@ -341,14 +344,14 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
         })}
       </div>
 
-      {/* Red pip indicators */}
-      <div style={{ position: 'absolute', bottom: 4, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none' }}>
+      {/* Pip indicators */}
+      <div style={{ position: 'absolute', bottom: 3, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 4, pointerEvents: 'none' }}>
         {Array.from({ length: DAY_COUNT }, (_, i) => (
           <div key={i} style={{
-            width:  i === activeIdx ? 5 : 3,
-            height: i === activeIdx ? 5 : 3,
+            width:  i === activeIdx ? 4 : 2.5,
+            height: i === activeIdx ? 4 : 2.5,
             borderRadius: '50%',
-            background: i === activeIdx ? '#c42000' : 'rgba(240,236,227,0.18)',
+            background: i === activeIdx ? '#c42000' : (dark ? 'rgba(240,236,227,0.18)' : 'rgba(26,24,20,0.18)'),
             transition: 'all 150ms ease',
           }} />
         ))}
@@ -387,14 +390,18 @@ export function MapScreen() {
   const [listOpen, setListOpen] = useState(false)
 
   // Radius
+  const RADIUS_PRESETS = [1, 2, 5, 10, 25, 100]
   const [sliderPos, setSliderPos] = useState(() => milesToSlider(5))
   const radiusMi = sliderToMiles(sliderPos)
+  function cycleRadius() {
+    const next = RADIUS_PRESETS.find((p) => p > radiusMi + 0.1) ?? RADIUS_PRESETS[0]
+    setSliderPos(milesToSlider(next))
+  }
 
   // Locations
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null)
-  const [radiusCenter, setRadiusCenter] = useState<{ lat: number; lng: number } | null>(null)
-  const centerLat = radiusCenter?.lat ?? userLoc?.lat ?? PORTLAND.latitude
-  const centerLng = radiusCenter?.lng ?? userLoc?.lng ?? PORTLAND.longitude
+  const centerLat = userLoc?.lat ?? PORTLAND.latitude
+  const centerLng = userLoc?.lng ?? PORTLAND.longitude
 
   // Map view
   const [viewState, setViewState] = useState({ longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 12 })
@@ -667,36 +674,33 @@ export function MapScreen() {
           })}
         </Map>
 
-        {/* ── Radius slider — right ── */}
-        <div style={{
-          position: 'absolute', right: 12, bottom: 16, zIndex: 10,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-          background: 'rgba(12,11,11,0.9)', backdropFilter: 'blur(12px)',
-          borderRadius: 16, padding: '12px 10px',
-          border: '1px solid rgba(240,236,227,0.12)',
-        }}>
-          <button
-            onClick={() => { setRadiusCenter(null); flyToUser() }}
-            style={{
-              width: 28, height: 28, borderRadius: 8, border: '1px solid rgba(240,236,227,0.15)',
-              background: 'rgba(240,236,227,0.06)', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,236,227,0.5)',
-            }}
-          >
-            <svg width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-            </svg>
-          </button>
-          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, color: '#f0ece3', whiteSpace: 'nowrap' }}>
+        {/* ── Radius pill — top right ── */}
+        <button
+          onClick={cycleRadius}
+          style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 10,
+            height: 30, padding: '0 11px',
+            borderRadius: 15,
+            background: theme === 'night' ? 'rgba(12,11,11,0.88)' : 'rgba(232,228,223,0.92)',
+            backdropFilter: 'blur(14px)',
+            border: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.14)' : 'rgba(26,24,20,0.13)'}`,
+            display: 'flex', alignItems: 'center', gap: 5,
+            cursor: 'pointer',
+          }}
+        >
+          <svg width={9} height={9} viewBox="0 0 24 24" fill="none"
+            stroke={theme === 'night' ? 'rgba(240,236,227,0.55)' : 'rgba(26,24,20,0.45)'}
+            strokeWidth={2.5}>
+            <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
+          </svg>
+          <span style={{
+            fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700,
+            color: theme === 'night' ? 'rgba(240,236,227,0.80)' : 'rgba(26,24,20,0.72)',
+            whiteSpace: 'nowrap',
+          }}>
             {formatRadiusLabel(radiusMi)}
           </span>
-          <input
-            type="range" min={0} max={1} step={0.001} value={sliderPos}
-            onChange={(e) => setSliderPos(Number(e.target.value))}
-            style={{ writingMode: 'vertical-lr' as const, direction: 'rtl' as const, height: 100, width: 16, cursor: 'pointer', accentColor: '#f0ece3' }}
-          />
-          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'rgba(240,236,227,0.3)' }}>1</span>
-        </div>
+        </button>
 
         {/* ── Locate button — left ── */}
         <button
@@ -855,7 +859,7 @@ export function MapScreen() {
       </div>
 
       {/* ── Day wheel picker ── */}
-      <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} />
+      <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} dark={theme === 'night'} />
 
       <BottomNav />
     </div>
