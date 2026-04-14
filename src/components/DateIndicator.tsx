@@ -4,6 +4,7 @@ export interface EventInfo {
   id: string
   title: string
   venue: string
+  venue_id: string | null
   startsAt: string // ISO datetime
   likeCount: number
   viewCount: number
@@ -13,6 +14,7 @@ interface Props {
   activeDay: string | null // "YYYY-MM-DD"
   today: string
   eventInfo?: EventInfo | null // when set, show event details instead of date
+  onVenueTap?: (venueId: string) => void
 }
 
 function formatDateBlocks(dateStr: string, today: string) {
@@ -56,7 +58,7 @@ const BLOCK_BASE: React.CSSProperties = {
   display: 'inline-block',
 }
 
-export function DateIndicator({ activeDay, today, eventInfo }: Props) {
+export function DateIndicator({ activeDay, today, eventInfo, onVenueTap }: Props) {
   // Determine which content key to use — drives the cross-fade
   const contentKey = eventInfo ? `ev:${eventInfo.id}` : activeDay ?? 'none'
 
@@ -80,15 +82,23 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
             <>
               {/* Left — title · venue · time pills */}
               <div className="flex items-center gap-1.5 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
-                {/* Block 1 — solid: --fg bg, --bg text — fully inverts per theme */}
+                {/* Block 1 — solid: --fg bg, --bg text */}
                 <span style={{ ...BLOCK_BASE, background: 'var(--fg)', color: 'var(--bg)' }}>
                   {eventInfo.title}
                 </span>
-                {/* Block 2 — outline: stronger border so it reads in day mode */}
-                <span style={{ ...BLOCK_BASE, border: '1px solid var(--fg-40)', color: 'var(--fg-80)' }}>
+                {/* Block 2 — outline: tappable venue name */}
+                <span
+                  onClick={() => eventInfo.venue_id && onVenueTap?.(eventInfo.venue_id)}
+                  style={{
+                    ...BLOCK_BASE,
+                    border: '1px solid var(--fg-40)',
+                    color: 'var(--fg-80)',
+                    cursor: eventInfo.venue_id ? 'pointer' : 'default',
+                  }}
+                >
                   {eventInfo.venue}
                 </span>
-                {/* Block 3 — ghost: 65% so it clears 60% opacity in day mode */}
+                {/* Block 3 — ghost */}
                 <span style={{ ...BLOCK_BASE, color: 'var(--fg-65)' }}>
                   {formatTime(eventInfo.startsAt)}
                 </span>
@@ -123,7 +133,6 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
               const d = formatDateBlocks(activeDay, today)
               return (
                 <>
-                  {/* Block 1 — solid: fully inverts per theme */}
                   <span
                     style={{
                       ...BLOCK_BASE,
@@ -134,7 +143,6 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
                     {d.label}
                   </span>
 
-                  {/* Block 2 — outline: CSS vars so border/text read in both modes */}
                   <span
                     style={{
                       ...BLOCK_BASE,
@@ -145,7 +153,6 @@ export function DateIndicator({ activeDay, today, eventInfo }: Props) {
                     {d.shortDay}
                   </span>
 
-                  {/* Block 3 — ghost: CSS vars, readable at both themes */}
                   <span
                     style={{
                       ...BLOCK_BASE,

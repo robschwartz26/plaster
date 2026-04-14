@@ -1,10 +1,10 @@
 import { useRef } from 'react'
-import { type Category } from '@/data/mockEvents'
 
-const CHIPS: (Category | 'All')[] = [
-  'All', 'Tonight', 'Music', 'Drag', 'Comedy', 'Dance',
+// ♥ replaces 'Tonight' (Tonight is now a dedicated tab)
+const CHIPS = [
+  'All', '♥', 'Music', 'Drag', 'Dance',
   'Art', 'Film', 'Literary', 'Trivia', 'Other',
-] as (Category | 'All')[]
+] as const
 
 interface Props {
   active: string
@@ -32,13 +32,14 @@ export function FilterBar({ active, onChange }: Props) {
             onClick={() => onChange(chip)}
             className="shrink-0 font-body font-medium whitespace-nowrap"
             style={{
-              fontSize: 9,
-              letterSpacing: '0.02em',
+              fontSize: chip === '♥' ? 12 : 9,
+              letterSpacing: chip === '♥' ? 0 : '0.02em',
               padding: '3px 8px',
               borderRadius: 4,
               border: `1px solid ${isActive ? 'var(--fg-55)' : 'var(--fg-15)'}`,
               background: isActive ? 'var(--fg-08)' : 'transparent',
-              color: isActive ? 'var(--fg)' : 'var(--fg-40)',
+              color: isActive ? (chip === '♥' ? '#ec4899' : 'var(--fg)') : 'var(--fg-40)',
+              lineHeight: 1.6,
             }}
           >
             {chip}

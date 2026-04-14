@@ -25,14 +25,17 @@ interface Props {
   events: WallEvent[]
   activeFilter: string
   today: string
+  likedIds: Set<string>
   onDayChange: (day: string) => void
+  onLike: (eventId: string) => void
+  onVenueTap?: (venueId: string) => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -224,6 +227,7 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
           id: allEvents[activeEventIdx].id,
           title: allEvents[activeEventIdx].title,
           venue: allEvents[activeEventIdx].venue_name,
+          venue_id: allEvents[activeEventIdx].venue_id,
           startsAt: allEvents[activeEventIdx].starts_at,
           likeCount: allEvents[activeEventIdx].like_count,
           viewCount: allEvents[activeEventIdx].view_count,
@@ -241,7 +245,7 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Date indicator — sticky above scroll area */}
       <div className="shrink-0 z-10" style={{ background: 'var(--bg)' }}>
-        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} />
+        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} onVenueTap={onVenueTap} />
       </div>
 
       {IS_DEV && (
@@ -283,7 +287,9 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
               event={event}
               cols={1}
               activeFilter={activeFilter}
+              isLiked={likedIds.has(event.id)}
               onDoubleTap={handleDoubleTap}
+              onLike={onLike}
             />
           ))
         ) : (
@@ -295,7 +301,9 @@ export function PosterGrid({ events, activeFilter, today, onDayChange }: Props) 
                 event={event}
                 cols={cols}
                 activeFilter={activeFilter}
+                isLiked={likedIds.has(event.id)}
                 onDoubleTap={handleDoubleTap}
+                onLike={onLike}
               />
             ))}
             <div style={{ gridColumn: '1 / -1', height: 'var(--nav-height)' }} />

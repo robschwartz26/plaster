@@ -23,6 +23,23 @@ export interface DbEvent {
   location_lat: number | null
   location_lng: number | null
   view_count: number
+  like_count: number
   created_at: string
   venues?: { name: string } | null
+}
+
+export interface DbVenue {
+  id: string
+  name: string
+  description: string | null
+  neighborhood: string | null
+  address: string | null
+  location_lat: number | null
+  location_lng: number | null
+  website: string | null
+  instagram: string | null
+  avatar_url: string | null
+  cover_url: string | null
+  is_verified: boolean
+  created_at: string
 }

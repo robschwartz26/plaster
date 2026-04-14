@@ -5,19 +5,25 @@ interface Props {
   event: WallEvent
   cols: number
   activeFilter: string
+  isLiked: boolean
   onDoubleTap: (event: WallEvent) => void
+  onLike: (eventId: string) => void
 }
 
-function matchesFilter(event: WallEvent, filter: string, today: string): boolean {
+function matchesFilter(event: WallEvent, filter: string, today: string, isLiked: boolean): boolean {
   if (filter === 'All') return true
+  if (filter === '♥') return isLiked
   if (filter === 'Tonight') return event.starts_at.slice(0, 10) === today
   return event.category === filter
 }
 
 // ── Heart pill — top-right overlay on the image ───────────────
-function HeartPill({ count }: { count: number }) {
+function HeartPill({
+  count, isLiked, onLike,
+}: { count: number; isLiked: boolean; onLike: () => void }) {
   return (
     <div
+      onClick={(e) => { e.stopPropagation(); onLike() }}
       style={{
         position: 'absolute',
         top: 6,
@@ -30,23 +36,24 @@ function HeartPill({ count }: { count: number }) {
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        color: 'var(--fg)',
+        color: isLiked ? '#ec4899' : 'var(--fg)',
         fontFamily: '"Space Grotesk", sans-serif',
         fontSize: 11,
         fontWeight: 500,
         lineHeight: 1,
         userSelect: 'none',
-        pointerEvents: 'none',
+        cursor: 'pointer',
+        transition: 'color 150ms ease',
       }}
     >
-      ♥ {count}
+      {isLiked ? '♥' : '♡'} {count}
     </div>
   )
 }
 
-export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
+export function PosterCard({ event, cols, activeFilter, isLiked, onDoubleTap, onLike }: Props) {
   const today = new Date().toISOString().slice(0, 10)
-  const matches = matchesFilter(event, activeFilter, today)
+  const matches = matchesFilter(event, activeFilter, today, isLiked)
 
   // Double-tap detection
   const lastTap = useRef(0)
@@ -55,9 +62,6 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
     if (now - lastTap.current < 300) onDoubleTap(event)
     lastTap.current = now
   }
-
-  // Peek zoom is handled by PosterGrid's pinch handler, which queries
-  // the img element directly. No listeners needed here.
 
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
   const dimmed   = activeFilter !== 'All' && !matches
@@ -94,7 +98,7 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
     )
   }
 
-  // ── 2-5 col: 2:3 image, heart pill only ──────────────────────
+  // ── 2-5 col: 2:3 image, heart pill at 2-3 col ────────────────
   return (
     <div
       onClick={handleTap}
@@ -118,7 +122,13 @@ export function PosterCard({ event, cols, activeFilter, onDoubleTap }: Props) {
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
       )}
-      {cols <= 3 && <HeartPill count={event.like_count} />}
+      {cols <= 3 && (
+        <HeartPill
+          count={event.like_count}
+          isLiked={isLiked}
+          onLike={() => onLike(event.id)}
+        />
+      )}
     </div>
   )
 }

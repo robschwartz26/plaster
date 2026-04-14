@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useMotionValue, animate } from 'framer-motion'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
@@ -9,6 +10,7 @@ import { mockEvents } from '@/data/mockEvents'
 import { dbEventToWallEvent, mockEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useTheme } from '@/hooks/useTheme'
+import { useAuth } from '@/contexts/AuthContext'
 
 const today = new Date().toISOString().slice(0, 10)
 const MOCK_WALL_EVENTS: WallEvent[] = mockEvents.map(mockEventToWallEvent)
@@ -39,7 +41,6 @@ function Wordmark({ onSwipe }: { onSwipe: (dir: 'right' | 'left') => void }) {
         if (Math.abs(offset) >= 40) {
           onSwipe(offset > 0 ? 'right' : 'left')
         }
-        // Spring snap-back with slight overshoot (underdamped: ratio ≈ 0.49)
         animate(x, 0, { type: 'spring', stiffness: 500, damping: 22 })
       }}
     >
@@ -52,8 +53,12 @@ export function Wall() {
   const [activeFilter, setActiveFilter] = useState('All')
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
   const { toggle } = useTheme()
+  const { user } = useAuth()
+  const navigate = useNavigate()
 
+  // Fetch events
   useEffect(() => {
     async function fetchEvents() {
       const { data, error } = await supabase
@@ -71,6 +76,43 @@ export function Wall() {
     }
     fetchEvents()
   }, [])
+
+  // Fetch liked event IDs for the current user
+  useEffect(() => {
+    if (!user) { setLikedIds(new Set()); return }
+    supabase
+      .from('event_likes')
+      .select('event_id')
+      .eq('user_id', user.id)
+      .then(({ data }) => {
+        setLikedIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)))
+      })
+  }, [user])
+
+  async function handleLike(eventId: string) {
+    if (!user) return
+    if (likedIds.has(eventId)) {
+      // Unlike
+      await supabase.from('event_likes').delete().eq('event_id', eventId).eq('user_id', user.id)
+      await supabase.rpc('add_like_count', { p_event_id: eventId, delta: -1 })
+      setLikedIds((prev) => { const next = new Set(prev); next.delete(eventId); return next })
+      setEvents((prev) =>
+        prev.map((e) => e.id === eventId ? { ...e, like_count: Math.max(0, e.like_count - 1) } : e)
+      )
+    } else {
+      // Like
+      await supabase.from('event_likes').insert({ event_id: eventId, user_id: user.id })
+      await supabase.rpc('add_like_count', { p_event_id: eventId, delta: 1 })
+      setLikedIds((prev) => new Set([...prev, eventId]))
+      setEvents((prev) =>
+        prev.map((e) => e.id === eventId ? { ...e, like_count: e.like_count + 1 } : e)
+      )
+    }
+  }
+
+  function handleVenueTap(venueId: string) {
+    navigate(`/venue/${venueId}`)
+  }
 
   const handleSwipe = (dir: 'right' | 'left') => {
     if (dir === 'right') toggle()
@@ -118,7 +160,10 @@ export function Wall() {
         events={events}
         activeFilter={activeFilter}
         today={today}
+        likedIds={likedIds}
         onDayChange={setActiveDay}
+        onLike={handleLike}
+        onVenueTap={handleVenueTap}
       />
 
       <BottomNav />

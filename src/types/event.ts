@@ -3,6 +3,7 @@
 export interface WallEvent {
   id: string
   title: string
+  venue_id: string | null
   venue_name: string
   starts_at: string
   category: string
@@ -11,5 +12,5 @@ export interface WallEvent {
   color1: string
   color2: string
   view_count: number
-  like_count: number // no DB column yet — always 0 until likes table exists
+  like_count: number
 }

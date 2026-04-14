@@ -20,6 +20,7 @@ export function mockEventToWallEvent(e: MockEvent): WallEvent {
   return {
     id: e.id,
     title: e.title,
+    venue_id: null,
     venue_name: e.venue_name,
     starts_at: e.starts_at,
     category: e.category,
@@ -37,6 +38,7 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
   return {
     id: e.id,
     title: e.title,
+    venue_id: e.venue_id,
     venue_name: e.venues?.name ?? 'Unknown venue',
     starts_at: e.starts_at,
     category: cat,
@@ -44,6 +46,6 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     color1: c1,
     color2: c2,
     view_count: e.view_count,
-    like_count: 0,
+    like_count: e.like_count ?? 0,
   }
 }

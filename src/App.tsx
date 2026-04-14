@@ -5,33 +5,9 @@ import { Admin } from './pages/Admin'
 import { AuthScreen } from './pages/AuthScreen'
 import { OnboardingScreen } from './pages/OnboardingScreen'
 import { YouScreen } from './pages/YouScreen'
-
-function Placeholder({ label }: { label: string }) {
-  return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        background: 'var(--bg)',
-      }}
-    >
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--fg-30)',
-          fontFamily: '"Space Grotesk", sans-serif',
-          fontSize: 14,
-        }}
-      >
-        {label} — coming soon
-      </div>
-    </div>
-  )
-}
+import { VenuesScreen } from './pages/VenuesScreen'
+import { VenueProfile } from './pages/VenueProfile'
+import { TonightScreen } from './pages/TonightScreen'
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -53,7 +29,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   if (loading) return null
 
   if (user) {
-    // If they haven't set a username yet, send to onboarding
     if (!profile?.username) return <Navigate to="/onboarding" replace />
     return <Navigate to="/" replace />
   }
@@ -67,23 +42,37 @@ function AppRoutes() {
       <Route path="/auth" element={<AuthRoute><AuthScreen /></AuthRoute>} />
       <Route path="/admin" element={<Admin />} />
 
-      {/* Post-signup onboarding (requires auth) */}
-      <Route
-        path="/onboarding"
-        element={
-          <ProtectedRoute><OnboardingScreen /></ProtectedRoute>
-        }
-      />
+      {/* Post-signup onboarding */}
+      <Route path="/onboarding" element={<ProtectedRoute><OnboardingScreen /></ProtectedRoute>} />
 
       {/* Protected app routes */}
-      <Route path="/" element={<ProtectedRoute><Wall /></ProtectedRoute>} />
-      <Route path="/map" element={<ProtectedRoute><Placeholder label="Map" /></ProtectedRoute>} />
-      <Route path="/venues" element={<ProtectedRoute><Placeholder label="Venues" /></ProtectedRoute>} />
-      <Route path="/you" element={<ProtectedRoute><YouScreen /></ProtectedRoute>} />
+      <Route path="/"        element={<ProtectedRoute><Wall /></ProtectedRoute>} />
+      <Route path="/tonight" element={<ProtectedRoute><TonightScreen /></ProtectedRoute>} />
+      <Route path="/map"     element={<ProtectedRoute><MapPlaceholder /></ProtectedRoute>} />
+      <Route path="/venues"  element={<ProtectedRoute><VenuesScreen /></ProtectedRoute>} />
+      <Route path="/venue/:id" element={<ProtectedRoute><VenueProfile /></ProtectedRoute>} />
+      <Route path="/you"     element={<ProtectedRoute><YouScreen /></ProtectedRoute>} />
 
       {/* Catch-all */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+  )
+}
+
+function MapPlaceholder() {
+  return (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg)',
+      color: 'var(--fg-30)',
+      fontFamily: '"Space Grotesk", sans-serif',
+      fontSize: 14,
+    }}>
+      Map — coming soon
+    </div>
   )
 }
 
