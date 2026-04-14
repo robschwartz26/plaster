@@ -64,17 +64,19 @@ export function Wall() {
   // Mock events always show so the wall is never empty.
   useEffect(() => {
     async function fetchEvents() {
+      // Show events from up to 6 hours ago so late-night shows
+      // that started before midnight don't vanish off the wall.
+      const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+
       const { data } = await supabase
         .from('events')
         .select('*, venues(name)')
-        .gte('starts_at', new Date().toISOString().slice(0, 10))
+        .gte('starts_at', cutoff)
         .order('starts_at', { ascending: true })
         .limit(200)
 
       const realEvents = (data ?? []).map(dbEventToWallEvent)
 
-      // Merge: real events + mock events, sorted chronologically.
-      // Real events come first when same day since their IDs are UUIDs vs mock-*.
       const merged = [...realEvents, ...MOCK_WALL_EVENTS]
         .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
 
