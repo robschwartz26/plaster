@@ -18,6 +18,7 @@ function matchesFilter(event: WallEvent, filter: string, today: string, isLiked:
 }
 
 // ── Heart pill — top-right overlay on the image ───────────────
+// Uses SVG to avoid iOS emoji coercion of ♥ (U+2665) to red ❤️
 function HeartPill({
   count, isLiked, onLike,
 }: { count: number; isLiked: boolean; onLike: () => void }) {
@@ -36,17 +37,28 @@ function HeartPill({
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        color: 'var(--fg)',
+        color: '#f0ece3', // always white — pill sits on dark blur overlay
         fontFamily: '"Space Grotesk", sans-serif',
         fontSize: 11,
         fontWeight: 500,
         lineHeight: 1,
         userSelect: 'none',
         cursor: 'pointer',
-        transition: 'color 150ms ease',
       }}
     >
-      {isLiked ? '♥' : '♡'} {count}
+      <svg
+        width="11"
+        height="10"
+        viewBox="0 0 24 22"
+        fill={isLiked ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
+      </svg>
+      {count}
     </div>
   )
 }

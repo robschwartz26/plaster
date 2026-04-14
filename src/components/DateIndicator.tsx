@@ -117,7 +117,8 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap }: Props
                   letterSpacing: '0.06em',
                 }}
               >
-                <span style={{ color: 'var(--fg-55)' }}>♥ {eventInfo.likeCount}</span>
+                {/* \uFE0E forces text presentation — prevents iOS from rendering ♥ as red emoji */}
+                <span style={{ color: 'var(--fg-55)' }}>{'♥\uFE0E'} {eventInfo.likeCount}</span>
                 <span style={{ color: 'var(--fg-55)', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />

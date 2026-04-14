@@ -42,7 +42,7 @@ export function FilterBar({ active, onChange }: Props) {
               lineHeight: 1.6,
             }}
           >
-            {chip}
+            {chip === '♥' ? '♥\uFE0E' : chip}
           </button>
         )
       })}

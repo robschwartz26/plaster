@@ -234,7 +234,7 @@ function EventRow({ event }: { event: TonightEvent }) {
       <div style={{ flexShrink: 0, textAlign: 'right' }}>
         <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>{time}</p>
         {event.like_count > 0 && (
-          <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>♥ {event.like_count}</p>
+          <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>{'♥\uFE0E'} {event.like_count}</p>
         )}
       </div>
     </div>
