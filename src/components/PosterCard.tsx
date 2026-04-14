@@ -16,6 +16,9 @@ interface Props {
   onLike: (eventId: string) => void
   isAdminMode?: boolean
   onEventSaved?: (eventId: string, newPosterUrl?: string) => void
+  previousPosterUrl?: string
+  onUndoCrop?: () => void
+  onConfirmCrop?: () => void
 }
 
 interface EventDetail {
@@ -129,7 +132,7 @@ function usePosterBackdrop(posterUrl: string | null) {
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved }: Props) {
+export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop }: Props) {
   const { user } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed = activeFilter !== 'All' && !matches
@@ -137,6 +140,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const sampledBackdrop = usePosterBackdrop(event.poster_url)
 
   const [showEdit, setShowEdit] = useState(false)
+  const [confirmToast, setConfirmToast] = useState(false)
 
   // ── 2-5 col: double-tap → zoom to 1-col ───────────────────────────────
   const lastTap = useRef(0)
@@ -445,6 +449,43 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           </div>
         </div>
 
+        {/* Confirm ✓ / Undo ↩ pills — shown in admin mode when a recent crop exists */}
+        {isAdminMode && previousPosterUrl && !showEdit && (
+          <div style={{
+            position: 'absolute',
+            bottom: 'max(60px, calc(env(safe-area-inset-bottom) + 46px))',
+            left: 0, right: 0,
+            display: 'flex', justifyContent: 'center', gap: 8,
+            zIndex: 21,
+          }}>
+            {confirmToast ? (
+              <span style={{ padding: '5px 12px', background: 'rgba(0,0,0,0.7)', borderRadius: 20, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                Locked in
+              </span>
+            ) : (
+              <>
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    onConfirmCrop?.()
+                    setConfirmToast(true)
+                    setTimeout(() => setConfirmToast(false), 1800)
+                  }}
+                  style={{ padding: '5px 12px', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(168,85,247,0.5)', borderRadius: 20, color: '#c084fc', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Confirm ✓
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); onUndoCrop?.() }}
+                  style={{ padding: '5px 12px', background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid rgba(239,68,68,0.45)', borderRadius: 20, color: 'rgba(239,68,68,0.8)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+                >
+                  Undo ↩
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
         {/* ✏️ edit button — outside the strip so it stays fixed over all panels */}
         {isAdminMode && (
           <button
@@ -472,6 +513,8 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             event={event}
             onClose={() => setShowEdit(false)}
             onSaved={(newUrl) => { setShowEdit(false); onEventSaved?.(event.id, newUrl) }}
+            onCropSaved={(newUrl) => onEventSaved?.(event.id, newUrl)}
+            onUndo={() => onUndoCrop?.()}
           />
         )}
       </div>
@@ -548,6 +591,8 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           event={event}
           onClose={() => setShowEdit(false)}
           onSaved={(newUrl) => { setShowEdit(false); onEventSaved?.(event.id, newUrl) }}
+          onCropSaved={(newUrl) => onEventSaved?.(event.id, newUrl)}
+          onUndo={() => onUndoCrop?.()}
         />
       )}
     </div>

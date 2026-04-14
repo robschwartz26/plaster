@@ -12,7 +12,9 @@ interface Venue { id: string; name: string; neighborhood?: string }
 interface Props {
   event: WallEvent
   onClose: () => void
-  onSaved: (newPosterUrl?: string) => void
+  onSaved: (newPosterUrl?: string) => void  // details save + delete — closes modal
+  onCropSaved: (newPosterUrl: string) => void // crop save — modal stays open for undo
+  onUndo: () => void                          // undo crop — Wall handles DB + state
 }
 
 const inputSt: React.CSSProperties = {
@@ -32,7 +34,7 @@ const HANDLES: [CropHandle, number, number, string][] = [
   ['bl', 0, 100, 'sw-resize'], ['bc', 50, 100, 's-resize'], ['br', 100, 100, 'se-resize'],
 ]
 
-export function AdminEditModal({ event, onClose, onSaved }: Props) {
+export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }: Props) {
   // ── Crop state ─────────────────────────────────────────────
   const [cropMode, setCropMode] = useState(false)
   const [editCrop, setEditCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
@@ -41,6 +43,11 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const smartCropRef = useRef<CropRect | null>(null)
   const [isSnapAnimating, setIsSnapAnimating] = useState(false)
   const [snapToast, setSnapToast] = useState<string | null>(null)
+
+  // ── Undo state ─────────────────────────────────────────────
+  const previousUrlRef = useRef<string | null>(null)
+  const [undoAvailable, setUndoAvailable] = useState(false)
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const imgWrapRef = useRef<HTMLDivElement>(null)
   // Cached loaded image — avoids re-fetching on every drag for the preview canvas
@@ -67,6 +74,9 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const [saving, setSaving] = useState<'crop' | 'details' | 'delete' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [saveError, setSaveError] = useState('')
+
+  // Clear undo timer on unmount
+  useEffect(() => () => { if (undoTimerRef.current) clearTimeout(undoTimerRef.current) }, [])
 
   // ── On mount: fetch event details + venues + poster blob + cached img + smart bounds ─
   useEffect(() => {
@@ -221,7 +231,9 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
   const handleSaveCrop = async () => {
     if (!imageFile) { console.warn('[SaveCrop] No imageFile — aborting'); return }
     setSaving('crop'); setSaveError('')
-    console.log('[SaveCrop] Starting. Event ID:', event.id, '| imageFile size:', imageFile.size, '| crop:', editCrop)
+    // Store current URL before overwriting so undo can restore it
+    previousUrlRef.current = event.poster_url
+    console.log('[SaveCrop] Starting. Event ID:', event.id, '| imageFile size:', imageFile.size, '| crop:', editCrop, '| previousUrl:', previousUrlRef.current)
     try {
       const optimized = await optimizeImage(imageFile, editCrop)
       console.log('[SaveCrop] optimizeImage complete. Blob size:', optimized.size)
@@ -245,8 +257,12 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
       console.log('[SaveCrop] DB update success:', updateData)
 
       setCropMode(false)
-      console.log('[SaveCrop] Calling onSaved with new URL')
-      onSaved(urlData.publicUrl)
+      console.log('[SaveCrop] Calling onCropSaved with new URL')
+      onCropSaved(urlData.publicUrl)
+      // Show undo button for 30 seconds
+      setUndoAvailable(true)
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = setTimeout(() => setUndoAvailable(false), 30_000)
     } catch (e) {
       console.error('[SaveCrop] Caught error:', e)
       setSaveError(String(e))
@@ -442,6 +458,18 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
                     Reset
                   </button>
                   <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                    {undoAvailable && (
+                      <button
+                        onClick={() => {
+                          if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+                          setUndoAvailable(false)
+                          onUndo()
+                        }}
+                        style={{ padding: '5px 12px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 5, color: 'rgba(239,68,68,0.8)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Undo ↩
+                      </button>
+                    )}
                     <button
                       onClick={() => { setCropMode(false); setEditCrop({ x: 0, y: 0, width: 1, height: 1 }) }}
                       style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}
@@ -459,12 +487,26 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
                 </div>
               </div>
             ) : (
-              <button
-                onClick={handleEnterCrop}
-                style={{ marginBottom: 16, padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6, color: 'rgba(255,255,255,0.7)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer' }}
-              >
-                Adjust Crop
-              </button>
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <button
+                  onClick={handleEnterCrop}
+                  style={{ padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6, color: 'rgba(255,255,255,0.7)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer' }}
+                >
+                  Adjust Crop
+                </button>
+                {undoAvailable && (
+                  <button
+                    onClick={() => {
+                      if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+                      setUndoAvailable(false)
+                      onUndo()
+                    }}
+                    style={{ padding: '7px 14px', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 6, color: 'rgba(239,68,68,0.8)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+                  >
+                    Undo ↩
+                  </button>
+                )}
+              </div>
             )}
           </>
         ) : (

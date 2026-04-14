@@ -25,6 +25,8 @@ export function Wall() {
 
   const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('plaster_admin_unlocked') === '1')
   const [isAdminMode, setIsAdminMode] = useState(false)
+  // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
+  const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
   // Re-check admin flag when tab regains focus (e.g. after visiting /admin)
   useEffect(() => {
@@ -97,6 +99,19 @@ export function Wall() {
     navigate(`/venue/${venueId}`)
   }
 
+  async function handleUndoCrop(eventId: string) {
+    const previousUrl = prevUrlMap[eventId]
+    if (!previousUrl) return
+    await supabase.from('events').update({ poster_url: previousUrl }).eq('id', eventId)
+    setEvents(prev => prev.map(e => e.id === eventId ? { ...e, poster_url: previousUrl } : e))
+    setPrevUrlMap(prev => { const next = { ...prev }; delete next[eventId]; return next })
+    fetchEvents()
+  }
+
+  function handleConfirmCrop(eventId: string) {
+    setPrevUrlMap(prev => { const next = { ...prev }; delete next[eventId]; return next })
+  }
+
   return (
     <>
     <div
@@ -142,10 +157,18 @@ export function Wall() {
         isAdminMode={isAdminMode}
         onEventSaved={(eventId, newPosterUrl) => {
           if (newPosterUrl) {
-            setEvents(prev => prev.map(e => e.id === eventId ? { ...e, poster_url: newPosterUrl + '?t=' + Date.now() } : e))
+            // Capture the current poster URL before overwriting so undo can restore it
+            setEvents(prev => {
+              const old = prev.find(e => e.id === eventId)
+              if (old?.poster_url) setPrevUrlMap(p => ({ ...p, [eventId]: old.poster_url! }))
+              return prev.map(e => e.id === eventId ? { ...e, poster_url: newPosterUrl + '?t=' + Date.now() } : e)
+            })
           }
           fetchEvents()
         }}
+        prevUrlMap={prevUrlMap}
+        onUndoCrop={handleUndoCrop}
+        onConfirmCrop={handleConfirmCrop}
       />
 
       <BottomNav />

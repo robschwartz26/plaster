@@ -31,13 +31,16 @@ interface Props {
   onVenueTap?: (venueId: string) => void
   isAdminMode?: boolean
   onEventSaved?: (eventId: string, newPosterUrl?: string) => void
+  prevUrlMap?: Record<string, string>
+  onUndoCrop?: (eventId: string) => void
+  onConfirmCrop?: (eventId: string) => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -294,6 +297,9 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
               onLike={onLike}
               isAdminMode={isAdminMode}
               onEventSaved={onEventSaved}
+              previousPosterUrl={prevUrlMap?.[event.id]}
+              onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
+              onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
             />
           ))
         ) : (
