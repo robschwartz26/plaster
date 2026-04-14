@@ -1,369 +1,310 @@
-# PLASTER
-
-Plaster is a mobile-first event poster wall app for Portland, Oregon. It is a living digital version of a physical bulletin board — a place to discover what's happening tonight and this week through the visual language of event posters. The design is editorial, not social. The poster is the content.
+# PLASTER — Full Project Brief
+Paste this at the start of every new Claude session
 
 ---
 
-## What Plaster Is
+## What Is Plaster — The One Sentence Version
+Plaster is a living Portland event poster wall — a beautiful, scrollable city of flyers that treats event art with the respect it deserves, connects people to their city's culture, and builds genuine community around the venues and nights that make Portland worth living in.
 
-- Browse upcoming Portland events as a scrollable poster wall
-- Pinch to adjust the grid density (1–5 columns)
-- Double-tap any poster in multi-column mode to jump into 1-column view centered on that event
-- In 1-column mode: full-height snap-scroll through posters one at a time, with event info in the top bar
-- Filter by category or "Tonight"
-- Day/night theme toggle — hidden gesture on the wordmark (swipe right to toggle)
-- Admin upload page at `/admin` for adding venues and events
+---
 
-Plaster is not a social app. There are no accounts, no feeds, no follows on the main wall. It is a read-only discovery surface. The admin page is the only write surface for now.
+## Live URLs & Repos
+- **Live:** https://the-plaster-wall.vercel.app
+- **GitHub:** robschwartz26/plaster
+- **Local dev:** localhost:8081
+- **Admin:** /admin (password: Plast3r!PDX#26 stored as VITE_ADMIN_PASSWORD env var)
+- **Supabase project:** lhetwgdlpulgnjetuope (us-west-1)
 
 ---
 
 ## Tech Stack
-
-| Layer | Choice |
-|---|---|
-| Framework | React 18 + TypeScript |
-| Build | Vite (port 8081) |
-| Styling | Tailwind CSS v3 + inline styles |
-| Animation | Framer Motion |
-| Routing | React Router v6 |
-| Backend | Supabase (Postgres + Storage) |
-| Fonts | Google Fonts |
-| Geocoding | Mapbox Geocoding API |
-| Deploy | Vercel (connected to GitHub) |
-
-### Path alias
-`@/` resolves to `./src/` — configured in both `vite.config.ts` and `tsconfig.app.json`.
-
-### Environment variables (`.env.local`)
-```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-VITE_SUPABASE_SERVICE_KEY=   # used only by /admin — bypasses RLS
-VITE_MAPBOX_TOKEN=            # used only for venue geocoding in /admin
-```
-
-### Dev commands
-```bash
-npm run dev      # start dev server on port 8081
-npm run build    # production build (tsc + vite)
-npm run lint     # eslint
-```
+- **Frontend:** React + TypeScript + Vite + Tailwind + shadcn/ui + Framer Motion
+- **Backend/DB:** Supabase (auth, DB, storage)
+- **Map:** Mapbox GL JS (token: VITE_MAPBOX_TOKEN)
+- **Hosting:** Vercel (auto-deploys from GitHub main)
+- **Auth:** Supabase email/password auth
+- **Storage:** Supabase storage buckets: posters (public), avatars (public)
+- **AI:** Claude Vision via Supabase Edge Function (extract-poster)
 
 ---
 
-## Design System
-
-### Theme
-
-Two themes: `night` (default) and `day`. Applied via `data-theme` attribute on `document.documentElement`. Toggled by swiping right on the "plaster" wordmark. Persisted in `localStorage` under key `plaster-theme`.
-
-**Night (default):** `--bg: #0c0b0b` / `--fg: #f0ece3`
-**Day:** `--bg: #f0ece3` / `--fg: #0c0b0b`
-
-All colors use CSS custom properties — never hardcode hex values for theme-sensitive colors. Full opacity ladder defined in `src/index.css`:
-
+## Environment Variables
+Set in .env.local and Vercel production:
 ```
---fg-80  --fg-65  --fg-55  --fg-40  --fg-30  --fg-25  --fg-18  --fg-15  --fg-08
---bg-50
+VITE_SUPABASE_URL=https://lhetwgdlpulgnjetuope.supabase.co
+VITE_SUPABASE_ANON_KEY=(set)
+VITE_SUPABASE_SERVICE_KEY=(set — quoted to handle # character)
+VITE_MAPBOX_TOKEN=(set)
+VITE_ADMIN_PASSWORD=Plast3r!PDX#26
+VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY for edge function)
 ```
-
-Theme transitions: `background-color`, `color`, and `border-color` all transition at `150ms ease` via a global `*` rule in `src/index.css`.
-
-### Fonts
-
-| Class | Font | Usage |
-|---|---|---|
-| `font-display` | Playfair Display | Wordmark, section headings |
-| `font-body` | Space Grotesk | UI chrome, inputs, info text |
-| `font-condensed` | Barlow Condensed | Date indicator blocks, info bar pills |
-
-### Layout constants (CSS vars)
-```
---nav-height: 64px
---topbar-height: 52px
---dateindicator-height: 28px
---filterbar-height: 44px
-```
-
-### Scrollbars
-Hidden globally — `::-webkit-scrollbar { display: none }` + `scrollbar-width: none`.
-
-### Pinch zoom
-Native browser pinch-zoom is disabled globally (`user-scalable=no` in viewport meta + document-level `touchmove` blocker in `main.tsx`). Pinch is intercepted only by the poster grid for column-count control.
-
----
-
-## Component Structure
-
-```
-src/
-  App.tsx                   # Router — /, /map, /venues, /you, /admin
-  main.tsx                  # Root render + global touch blocker
-  index.css                 # Theme tokens, global reset, font import
-
-  components/
-    Wall.tsx                # Main screen — top bar, filter bar, poster grid, bottom nav
-    Wordmark.tsx            # (inside Wall.tsx) swipe-to-toggle-theme easter egg
-    FilterBar.tsx           # Horizontally scrolling category chips
-    PosterGrid.tsx          # Grid container — pinch gesture, scroll tracking, column state
-    PosterCard.tsx          # Individual poster — 1-col and 2-5 col render paths
-    DateIndicator.tsx       # Top info bar — shows date (multi-col) or event info (1-col)
-    BottomNav.tsx           # Wall / Map / Venues / You tabs
-
-  pages/
-    Admin.tsx               # Password-gated admin upload page
-
-  hooks/
-    useTheme.ts             # Theme read/write/toggle — localStorage backed
-
-  lib/
-    supabase.ts             # Supabase client + DbEvent type
-    adapters.ts             # mockEventToWallEvent, dbEventToWallEvent
-
-  types/
-    event.ts                # WallEvent interface
-
-  data/
-    mockEvents.ts           # 20 Portland events across 5 days (fallback when DB is empty)
-```
-
----
-
-## Data Flow
-
-### WallEvent — the unified type
-
-All UI components consume `WallEvent`. Both mock data and DB rows are normalized to this shape before rendering.
-
-```ts
-interface WallEvent {
-  id: string
-  title: string
-  venue_name: string
-  starts_at: string       // ISO datetime
-  category: string
-  poster_url: string | null
-  color1: string          // gradient fallback color 1
-  color2: string          // gradient fallback color 2
-  view_count: number      // from DB; 0 for mock
-  like_count: number      // always 0 — no likes table yet
-}
-```
-
-### Supabase fetch
-
-`Wall.tsx` fetches live events from Supabase on mount. Falls back to mock data if the query errors or returns nothing.
-
-```ts
-supabase
-  .from('events')
-  .select('*, venues(name)')
-  .gte('starts_at', today)
-  .order('starts_at', { ascending: true })
-  .limit(200)
-```
-
-### Adapters (`src/lib/adapters.ts`)
-
-- `mockEventToWallEvent` — maps mock shape to WallEvent, assigns `view_count: 0`
-- `dbEventToWallEvent` — maps DB row to WallEvent, looks up gradient by category from `CATEGORY_GRADIENTS`
-
-Category gradients (color1 → color2):
-```
-Music:    #1a0533 → #7c3aed
-Drag:     #3b0764 → #ec4899
-Dance:    #431407 → #f97316
-Comedy:   #0f172a → #0ea5e9
-Literary: #1e1b4b → #6366f1
-Art:      #0a0a0a → #525252
-Film:     #1a1a1a → #737373
-Trivia:   #1c1917 → #78716c
-Other:    #0f0520 → #8b5cf6
-```
-
----
-
-## PosterGrid — How It Works
-
-`PosterGrid` is the core interactive component. It manages:
-
-### Column count (1–5)
-- State: `cols` (default 2)
-- **Pinch gesture** on the scroll container changes cols 2–5
-- **Ctrl+scroll** (desktop) simulates pinch
-- **Double-tap** on any card in 2-5 col: jumps to 1-col centered on that event
-- At 1-col, pinch is handed off to `PosterCard` for peek zoom
-
-### 1-col snap scroll
-- Cards are **direct children** of the scroll container (no grid wrapper)
-- `height: 100%` resolves to `clientHeight` because there's no intermediate wrapper with `height: auto`
-- `scroll-snap-type: y mandatory` + `scroll-snap-align: start` on each card
-
-### Scroll tracking → active day
-- Multi-col: `Math.floor((scrollTop + clientHeight / 2) / rowHeight) * cols`
-- 1-col: `Math.round(scrollTop / clientHeight)`
-- The active event index drives the `DateIndicator` in 1-col mode
-
-### Double-tap → 1-col
-1. `handleDoubleTap` finds event index in `allEvents`, stores in `pendingScrollIdx` ref, sets `cols = 1`
-2. `useEffect` on `cols` fires, RAF scrolls to `idx * clientHeight` after layout settles
-
----
-
-## PosterCard — Render Paths
-
-### 1-col
-- Outer div: `height: 100%`, `position: relative`, `overflow: hidden`, `scrollSnapAlign: start`
-- Image: `position: absolute; inset: 0; objectFit: contain` — full artwork, letterboxed
-- **No overlays of any kind** — poster is completely clean
-- Peek zoom: non-passive touchstart/touchmove on cardRef, mutates imgRef transform directly (no React re-renders), springs back on release
-
-### 2-5 col
-- Outer div: `aspectRatio: 2/3`, `position: relative`, `overflow: hidden`
-- Image: `objectFit: cover`
-- **HeartPill** overlaid top-right: dark blur-backed pill `rgba(0,0,0,0.52)` with `♥ {like_count}`
-- No other text overlays
-
----
-
-## DateIndicator
-
-Sits above the scroll container. Sticky, never scrolls.
-
-**Date mode** (multi-col): shows three pill blocks — day label (solid), short day (outline), date (ghost). All use CSS vars — theme-adaptive.
-
-**Event-info mode** (1-col): shows title · venue · time pills on the left, `♥ {likeCount}  👁 {viewCount}` on the right. Pill colors:
-- Block 1 (title): `background: var(--fg)`, `color: var(--bg)` — fully inverts
-- Block 2 (venue): `border: var(--fg-40)`, `color: var(--fg-80)`
-- Block 3 (time): `color: var(--fg-65)`
-
-Cross-fades between states via `AnimatePresence` with key `ev:{id}` vs `activeDay`.
 
 ---
 
 ## Database Schema
 
-Supabase project: `lhetwgdlpulgnjetuope`. All tables have RLS enabled.
+### Tables
+- **profiles** — id, username, avatar_url, bio, is_public, interests[], created_at
+- **venues** — id, name, neighborhood, address, location_lat, location_lng, website, instagram, cover_url, description, created_at
+- **events** — id, venue_id, title, category, poster_url, starts_at, view_count, like_count, neighborhood, address, description, is_recurring, recurrence_rule, created_at
+- **attendees** — id, event_id, user_id, created_at
+- **event_likes** — id, event_id, user_id, created_at
+- **event_wall_posts** — id, event_id, user_id, content, like_count, created_at
+- **post_likes** — id, post_id, user_id, created_at
+- **follows** — id, follower_id, following_id, status (pending/accepted), created_at
 
-### `venues`
-```sql
-id               uuid PK
-name             text NOT NULL
-description      text
-neighborhood     text   -- one of the 12 Portland neighborhoods
-address          text
-location_lat     double precision
-location_lng     double precision
-website          text
-instagram        text   -- stored without @
-avatar_url       text
-cover_url        text
-is_verified      boolean default false
-created_by       uuid → profiles.id
-created_at       timestamptz
-```
+### RPCs
+- add_view_count(p_event_id, delta)
+- add_like_count(p_event_id, delta)
+- add_post_like_count(p_post_id, delta)
 
-### `events`
-```sql
-id               uuid PK
-venue_id         uuid → venues.id ON DELETE CASCADE
-title            text NOT NULL
-description      text
-category         text   -- Music | Drag | Dance | Comedy | Art | Film | Literary | Trivia | Other
-poster_url       text   -- public URL from Supabase Storage (posters bucket)
-starts_at        timestamptz NOT NULL
-ends_at          timestamptz
-is_recurring     boolean default false
-recurrence_rule  text   -- FREQ=DAILY | FREQ=WEEKLY | FREQ=MONTHLY
-neighborhood     text
-address          text
-location_lat     double precision
-location_lng     double precision
-view_count       integer default 0
-created_at       timestamptz
-```
-
-### Other tables (not yet wired to UI)
-- `profiles` — user accounts (future)
-- `attendees` — event attendance (future)
-- `venue_follows` — venue following (future)
-- `event_wall_posts` — community posts on events (future)
-
-### Storage
-Bucket: `posters` (public). Admin uploads go to `/{uuid}.{ext}`. Public URL retrieved via `supabase.storage.from('posters').getPublicUrl(filename)`.
-
-### RLS notes
-- Select is open on all tables (anyone can read)
-- Insert/update requires `auth.role() = 'authenticated'` — the `/admin` page bypasses this using the service role key via `VITE_SUPABASE_SERVICE_KEY`
+### Real Data
+- One real event: Jimi Hendrix Experience at Holocene
+- Venue ID: 4afea641-c25e-4693-9aca-6f03e8e22b0f
+- Event date needs to be kept current (update starts_at to avoid 6-hour lookback filter)
 
 ---
 
-## Admin Page (`/admin`)
+## Design System (LOCKED IN)
 
-Password-gated. Hardcoded password: `plaster-admin`. Unlocked state stored in `sessionStorage` under `plaster_admin_unlocked`. Replace with proper auth later.
+### Colors
+- Night mode (default): background #0c0b0b, text #f0ece3
+- Day mode: background #f0ece3, text #0c0b0b
+- Theme toggle: Swipe "plaster" wordmark RIGHT — follows finger, spring bounce snap-back. Persisted in localStorage.
 
-Uses the regular `supabase` client aliased with the service role key from `VITE_SUPABASE_SERVICE_KEY` to bypass RLS.
+### Typography
+- Playfair Display 900 — wordmark + headings
+- Space Grotesk — UI, body text
+- Barlow Condensed 700/900 — date indicator blocks, chip labels
 
-### Section 1 — Add a Venue
-Fields: name, neighborhood (dropdown), address (auto-geocoded via Mapbox → lat/lng), website, Instagram handle.
-
-Geocoding: `https://api.mapbox.com/geocoding/v5/mapbox.places/{address}.json?...&proximity=-122.6784,45.5051` (Portland-biased).
-
-### Section 2 — Add an Event
-Fields: venue (dropdown from DB), poster image upload, title, category, date, start time, description, recurring toggle (daily/weekly/monthly).
-
----
-
-## Neighborhoods (dropdown)
-Northeast, Southeast, North, Northwest, Southwest, Downtown, Pearl, Alberta, Mississippi, Hawthorne, Division, Burnside
+### Hearts
+- Unicode ♥ only — NEVER emoji ❤️ (renders red on iOS)
+- Night mode: white heart / Day mode: black heart / Never red
 
 ---
 
-## Routes
+## Navigation (5 Tabs — LOCKED IN)
+Tonight · Map · Wall · Venues · You
 
-| Path | Component | Status |
-|---|---|---|
-| `/` | `Wall` | Live |
-| `/map` | Placeholder | Not built |
-| `/venues` | Placeholder | Not built |
-| `/you` | Placeholder | Not built |
-| `/admin` | `Admin` | Live |
+- **Tonight** (far left) — friend activity, RSVPs, social pulse of the night
+- **Map** — geographic venue/event view with knurl wheel day scrubber
+- **Wall** (CENTER, larger icon) — the heart of the app, main poster grid
+- **Venues** — browse Portland venues, tap to venue profile page
+- **You** (far right) — profile, poster collection, superlatives, friends
 
 ---
 
-## Feature Roadmap
+## Wall Screen
 
-### Next up
-- **Map view** — Mapbox GL map with venue pins, tap to see upcoming events at that venue
-- **Venue detail** — upcoming events list, address, Instagram, follow button
-- **Event detail** — full poster, description, time, venue info, attend button
+### Grid
+- Pinch zoom changes columns 1–5 (ctrl+scroll on desktop)
+- 2px gap between cards, edge to edge
+- At 4-5 columns: pure art, nothing on posters
+- At 2-3 columns: small ♥ count pill top-right of poster only
+- At 1 column: full letterboxed poster, no overlays at all
+
+### Poster Cards — Blurred Backdrop (IMPORTANT)
+Each poster card in 2-5 col view uses a **sampled color backdrop** — NOT objectFit cover cropping.
+- The poster's 4 corner colors are sampled via canvas at load time
+- A conic-gradient is built from those colors and used as the card background
+- The poster itself uses objectFit: contain — always shows fully, never cropped
+- This gives a natural color-matched backdrop at ALL column counts with consistent brightness
+- Falls back to the event's category gradient while image loads
+- This was built in Session 6 — do not revert to objectFit cover
+
+### Date Indicator (Ransom-note blocks)
+- Three Barlow Condensed blocks: solid "TONIGHT" + outline "TUE" + ghost "APR 14"
+- Updates via scroll center position, cross-fades between days
+- In 1-column mode: shows event title · venue · time on left, ♥ count + 👁 views on right
+
+### Filter Chips
+All · ♥ · Music · Drag · Dance · Art · Film · Literary · Trivia · Other
+
+### 1-Column Mode
+- Double tap any poster at 2-5 columns → jumps to 1-column centered on that poster
+- Swipe RIGHT → info panel, swipe RIGHT again → post wall, swipe RIGHT again → back to poster (full loop)
+- LEFT swipe to go back one panel
+- 60° angle threshold to prevent accidental vertical scroll triggering horizontal swipe
+- Poster is completely clean — no overlays
+- Pinch to peek zoom up to 3x, springs back on release
+
+---
+
+## AI Poster Ingestion (Session 6 — BUILT)
+
+### Import Poster section in /admin
+- Drag-drop zone for poster images (or click to browse)
+- Calls Supabase Edge Function `extract-poster` (NOT Anthropic API directly — CORS workaround)
+- Edge function URL: https://lhetwgdlpulgnjetuope.supabase.co/functions/v1/extract-poster
+- Claude Vision reads the image and extracts: title, venue_name, date, time, address, description, category, confidence, uncertain_fields, crop (fractional bounding box of poster art)
+- Poster isolation: if image contains Instagram UI, white borders, or other noise, AI returns crop coordinates and browser crops before upload
+- Review form pre-fills with extracted data — yellow ⚠ on uncertain fields
+- Image optimization: resized to max 1200px longest side, converted to JPEG 85% quality
+- Venue matching: tries to match extracted venue name to existing venues in DB; creates new venue if no match
+- On confirm: uploads optimized/cropped image to Supabase storage, creates event record, appears on wall immediately
+- DEV button (localhost only) for testing without real images
+- Works without API key (form fills manually) — warning banner shown if key missing
+
+### Edge Function
+- Location: ~/plaster/supabase/functions/extract-poster/index.ts
+- Deployed to Supabase (project: lhetwgdlpulgnjetuope)
+- ANTHROPIC_API_KEY set as Supabase secret (not in .env.local for this function)
+- Deploy command: npx supabase functions deploy extract-poster --project-ref lhetwgdlpulgnjetuope
+
+### NOT YET BUILT (Session 8)
+- Preview button at ingest review stage (shows poster in simulated grid card before posting)
+- Crop adjustment sliders (top/bottom/left/right) at ingest review stage
+- Admin crop editor on the wall — edit icon on each poster when logged in as admin, sliders to adjust crop, re-uploads cropped image replacing original in Supabase
+- Duplicate detection — when dropping a second poster for same event, offer to merge/update instead of creating new record
+
+---
+
+## Map Screen
+- Mapbox GL JS, centered on Portland (lat: 45.5051, lng: -122.6750, zoom: 12)
+- Night mode: mapbox://styles/mapbox/dark-v11 / Day mode: mapbox://styles/mapbox/light-v11
+- Venue pins for venues with events on selected day
+- Knurl Wheel Day Scrubber — machined metal rotary encoder aesthetic, 7 days, momentum drag
+- Radius filter top right
+- List mode toggle — bottom sheet with events for selected day
+- Category filter chips same as Wall screen
+
+---
+
+## Auth & Profiles
+- Supabase email/password signup/login
+- After sign in: check if username exists → skip onboarding if yes
+- Onboarding: username → avatar (optional) → interests (optional)
+- Profile: avatar, @username, bio, public/private toggle, liked events grid, superlatives, follows
+
+### Known Bugs
+- Avatar not displaying on profile — upload works, avatar_url not rendering in YouScreen
+- Onboarding shown every login — needs to check if username already exists before showing
+- Map theme — map.setStyle() fix may still be needed
+
+---
+
+## Venues Tab & Venue Profile
+- Alphabetical list of all venues as cards
+- Venue profile: hero image, follow button, address, website, Instagram, upcoming events row, post wall
+
+---
+
+## Tonight Tab
+- Events user has RSVPed to for tonight
+- Friend activity (public profiles only)
+- Superlative holders attending shown
+- Login prompt if not authenticated
+
+---
+
+## Admin Page (/admin)
+
+### Section 1 — Add Venue
+Name, neighborhood (dropdown), address (Mapbox auto-geocoded), website, Instagram
+
+### Section 2 — Add Event
+Venue selector, poster image upload, title, category, date picker, start time, description, recurring toggle
+
+### Section 3 — Import Poster (NEW — Session 6)
+See "AI Poster Ingestion" section above
+
+---
+
+## Superlatives System (PLANNED — Session 7)
+- Earned by repeatedly attending a venue
+- Named by venue admin: "King of Holocene", "Trivia Terror of Breakside"
+- Shows on user profile and event post wall when user RSVPs
+- Foursquare Mayorship inspiration but more personal and creative
+
+---
+
+## Dev Preview Mode
+Every new feature flow must include a DEV button that is:
+- Only visible on localhost (hidden in production)
+- Steps through multi-step flows with mock data
+- This is a hard rule. Every new flow, every session. No exceptions.
+
+---
+
+## Completed Sessions
+- **Session 1:** Wall UI — PosterGrid, PosterCard, DateIndicator, FilterBar, BottomNav, 20 mock events
+- **Session 2:** Supabase backend integration
+- **Session 3:** Admin page at /admin (password gated), PWA setup
+- **Session 4:** 5-tab nav, auth, profiles, follows, Tonight tab, Venues tab, heart filter chip, event_likes
+- **Session 5:** FlyerCarousel (1-column native carousel), carousel panel swipe fixes
+- **Map Sessions:** Mapbox map, venue pins, knurl wheel scrubber, day/night theme, radius filter, list mode
+- **Session 6:** AI poster ingestion — Import Poster section in admin, Supabase Edge Function for Claude Vision, poster isolation/cropping, image optimization, blurred backdrop replaced with sampled color gradient on grid cards
+
+---
+
+## Session Roadmap Going Forward
+
+### Session 7 — Superlatives
+- Database schema for superlatives
+- Venue admin superlative naming UI
+- Superlative display on profiles, post wall, Tonight tab
+
+### Session 8 — Admin Crop Editor + Ingest Preview
+- Preview button at ingest review stage (simulated grid card view before posting)
+- Crop adjustment sliders (top/bottom/left/right) at ingest review stage
+- Admin crop editor on the wall — edit icon on each poster when logged in as admin
+- Sliders to adjust crop → re-uploads cropped image replacing original in Supabase
+- Duplicate detection at ingest — offer to merge when same event dropped twice
+
+### Session 9 — Tonight Tab
+- Full friend activity feed
+- RSVPs displaying correctly
+- Superlative holder attendance
+- Real-time feel
+
+### Session 10 — Venue Owner Accounts
+- Claim venue page flow
+- Venue-scoped dashboard
+- Analytics placeholder
 
 ### Future
-- **User accounts** — Supabase Auth, profiles
-- **Likes** — `likes` table wired to heart counter
-- **Attendance** — "going" button, attendee count
-- **Venue-scoped upload** — venue owners upload their own events (admin page is already structured for this)
-- **Push notifications** — remind attendees an hour before event
-- **Recurring event expansion** — generate individual occurrences from recurrence rules
-- **Search** — full-text across titles, venues, neighborhoods
+- Map venue pins with event poster thumbnails
+- Post wall likes fully functional
+- Foursquare-style check-in mechanics
+- Email branding (currently shows "Supabase Auth")
+- Outpainting for poster backgrounds (fal.ai or similar) — deferred, not urgent
 
 ---
 
-## Conventions
+## Founder Context
+Rob Schwartz — first-time founder, Portland OR. Building Plaster and Swapper simultaneously. No prior coding background, using Claude Code in Warp terminal.
 
-### Never do
-- Hardcode `#0c0b0b` or `#f0ece3` anywhere — use `var(--bg)` and `var(--fg)`
-- Use `rgba(240,236,227,...)` — that's a night-mode-only hardcode; use `var(--fg-XX)` opacity vars
-- Put text overlays on poster images in the `PosterCard` render
-- Use a wrapper with `height: auto` between the snap scroll container and 1-col cards — breaks `height: 100%`
-- Create a new Supabase client (there is one instance in `src/lib/supabase.ts`; `/admin` imports it aliased)
+**Swapper** (other app) — community item trading platform. Repo: robschwartz26/cosmic-swaps. Deployed at cosmic-swaps.vercel.app. Supabase project: fiyoectikcqwpoqacdmm (us-west-2).
 
-### Always do
-- Normalize everything to `WallEvent` before it touches UI
-- Fall back to mock data when DB returns empty or errors
-- Use `var(--fg-65)` or higher for any text that must be readable in day mode (30% is too faint on light bg)
-- Run `npm run build` before committing to catch TypeScript errors early
+**Working style:**
+- Action-first — prefers direct instructions over theory
+- Learns by doing
+- Wants progress acknowledged
+- Two test accounts for testing social features simultaneously (main + "letshavesometea")
+- All credentials in a locked Apple Note
+- DEV button must be in every new flow
+- When asked to cat a file, paste the full raw output — never summarize
 
-### Git
-Remote: `https://github.com/robschwartz26/plaster.git` — `main` branch, deployed to Vercel on push.
+**Beta launch plan:** Portland book community first → expand by category → expand by city
+
+---
+
+## How to Start a New Claude Code Session
+```bash
+cd ~/plaster
+# Paste PLASTER.md contents at start of conversation
+npm run dev
+# App runs on localhost:8081
+# Live: the-plaster-wall.vercel.app
+# Admin: localhost:8081/admin (password: Plast3r!PDX#26)
+```
+
+---
+
+## Ad Philosophy
+Tasteful local advertising between forum posts and on swap/RSVP completion screen. NEVER on the wall itself, exchange screen, chat, or any core browsing screen.
+
+---
+
+*Last updated: April 14, 2026 — end of Session 6 (AI ingestion + sampled color backdrop)*
+*This document should be updated at the end of every major session*
