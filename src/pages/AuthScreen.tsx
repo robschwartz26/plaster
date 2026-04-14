@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
 type Tab = 'signin' | 'signup'
@@ -11,7 +10,6 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const { signIn, signUp } = useAuth()
-  const navigate = useNavigate()
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -21,12 +19,15 @@ export function AuthScreen() {
       if (tab === 'signin') {
         const { error } = await signIn(email, password)
         if (error) { setError(error.message); return }
-        navigate('/', { replace: true })
       } else {
         const { error } = await signUp(email, password)
         if (error) { setError(error.message); return }
-        navigate('/onboarding', { replace: true })
       }
+      // Don't navigate here — AuthRoute reads the actual profile and decides:
+      //   username set   → Wall (/)
+      //   username empty → Onboarding (/onboarding)
+      // This prevents returning users who accidentally hit "Sign up" from
+      // being sent back through onboarding.
     } finally {
       setBusy(false)
     }

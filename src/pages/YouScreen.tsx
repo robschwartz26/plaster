@@ -135,6 +135,7 @@ export function YouScreen() {
   }
 
   const avatarSrc = avatarPreview ?? profile?.avatar_url ?? null
+  const userInitial = (profile?.username ?? user?.email ?? '?')[0].toUpperCase()
 
   return (
     <div
@@ -158,19 +159,33 @@ export function YouScreen() {
               height: 72,
               borderRadius: '50%',
               flexShrink: 0,
-              background: avatarSrc ? 'transparent' : 'var(--fg-18)',
+              background: 'var(--fg-18)',
               overflow: 'hidden',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               border: '2px solid var(--fg-18)',
+              position: 'relative',
             }}
           >
-            {avatarSrc
-              ? <img src={avatarSrc} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontSize: 28, color: 'var(--fg-30)' }}>+</span>
-            }
+            {/* Initials shown by default; hidden behind img when img loads */}
+            <span style={{
+              fontSize: 26,
+              fontWeight: 700,
+              color: 'var(--fg-40)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              userSelect: 'none',
+            }}>
+              {userInitial}
+            </span>
+            {avatarSrc && (
+              <img
+                src={avatarSrc}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                onError={(e) => { e.currentTarget.style.display = 'none' }}
+              />
+            )}
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
 

@@ -32,10 +32,11 @@ export function OnboardingScreen() {
       return
     }
     setBusy(true)
+    // upsert (not update) — if no profile row exists yet (DB trigger not yet run
+    // for this user), update is a silent no-op. upsert ensures the row is created.
     const { error } = await supabase
       .from('profiles')
-      .update({ username: clean })
-      .eq('id', user.id)
+      .upsert({ id: user.id, username: clean }, { onConflict: 'id' })
     setBusy(false)
     if (error) {
       setUsernameError(error.code === '23505' ? 'Username taken — try another' : error.message)
