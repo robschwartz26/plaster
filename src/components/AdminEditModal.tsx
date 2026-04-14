@@ -88,7 +88,9 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
 
   useEffect(() => {
     if (!event.poster_url) return
+    console.log('[SmartSnap] Mount: calling detectContentBounds for', event.poster_url)
     detectContentBounds(event.poster_url).then(detected => {
+      console.log('[SmartSnap] Mount: detected bounds:', detected)
       smartCropRef.current = detected
       setSmartCrop(detected)
     })
@@ -150,8 +152,29 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
 
   const handleEnterCrop = () => {
     const snap = smartCropRef.current
+    console.log('[SmartSnap] Entering crop mode. smartSnap:', smartSnap, '| cached bounds:', snap)
     setEditCrop(smartSnap && snap ? snap : { x: 0, y: 0, width: 1, height: 1 })
     setCropMode(true)
+  }
+
+  const handleSmartSnapToggle = () => {
+    const turningOn = !smartSnap
+    console.log('[SmartSnap] Toggle clicked, calling detectContentBounds. Turning ON:', turningOn)
+    setSmartSnap(turningOn)
+    if (turningOn) {
+      // Apply cached bounds immediately if available; otherwise re-detect
+      if (smartCropRef.current) {
+        console.log('[SmartSnap] Applying cached bounds:', smartCropRef.current)
+        setEditCrop(smartCropRef.current)
+      } else if (event.poster_url) {
+        detectContentBounds(event.poster_url).then(detected => {
+          console.log('[SmartSnap] Re-detected bounds:', detected)
+          smartCropRef.current = detected
+          setSmartCrop(detected)
+          setEditCrop(detected)
+        })
+      }
+    }
   }
 
   // ── Save Crop ──────────────────────────────────────────────
@@ -313,7 +336,7 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
             {cropMode ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
                 <button
-                  onClick={() => setSmartSnap(v => !v)}
+                  onClick={handleSmartSnapToggle}
                   style={{ padding: '5px 11px', background: smartSnap ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${smartSnap ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 5, color: smartSnap ? '#c084fc' : 'rgba(255,255,255,0.3)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
                 >
                   Smart snap: {smartSnap ? 'ON' : 'OFF'}
