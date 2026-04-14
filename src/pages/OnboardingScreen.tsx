@@ -61,9 +61,16 @@ export function OnboardingScreen() {
       const { error: uploadErr } = await supabase.storage
         .from('avatars')
         .upload(path, avatarFile, { upsert: true })
-      if (!uploadErr) {
+      if (uploadErr) {
+        console.error('[Onboarding] avatar upload failed:', uploadErr.message)
+      } else {
         const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-        await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id)
+        console.log('[Onboarding] avatar publicUrl:', publicUrl)
+        const { error: updateErr } = await supabase
+          .from('profiles')
+          .update({ avatar_url: publicUrl })
+          .eq('id', user.id)
+        if (updateErr) console.error('[Onboarding] profile avatar_url update failed:', updateErr.message)
       }
       setBusy(false)
     }

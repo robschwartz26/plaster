@@ -61,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
+        // Clear stale profile immediately so AuthRoute waits for the fresh fetch
+        // instead of seeing user=set, profile=null and routing to onboarding.
+        setProfile(null)
         fetchProfile(session.user.id)
       } else {
         setProfile(null)

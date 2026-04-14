@@ -43,6 +43,7 @@ export function YouScreen() {
 
   useEffect(() => {
     if (!user) return
+    console.log('[YouScreen] profile.avatar_url:', profile?.avatar_url)
     setBio(profile?.bio ?? '')
     setIsPublic(profile?.is_public ?? true)
     fetchAttended()

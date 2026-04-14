@@ -27,7 +27,11 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   const { user, loading, profile } = useAuth()
   if (loading) return null
   if (user) {
-    if (!profile?.username) return <Navigate to="/onboarding" replace />
+    // profile=null means the fetch is still in flight — don't decide yet.
+    // Returning null here prevents the "existing user lands on onboarding"
+    // race: user becomes non-null before the profile fetch resolves.
+    if (profile === null) return null
+    if (!profile.username) return <Navigate to="/onboarding" replace />
     return <Navigate to="/" replace />
   }
   return <>{children}</>
