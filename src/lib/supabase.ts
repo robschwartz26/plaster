@@ -22,6 +22,7 @@ export interface DbEvent {
   address: string | null
   location_lat: number | null
   location_lng: number | null
+  fill_frame: boolean
   view_count: number
   like_count: number
   created_at: string
@@ -36,6 +37,7 @@ export interface DbVenue {
   address: string | null
   location_lat: number | null
   location_lng: number | null
+  hours?: string | null
   website: string | null
   instagram: string | null
   avatar_url: string | null

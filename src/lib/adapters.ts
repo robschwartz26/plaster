@@ -44,6 +44,7 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     starts_at: e.starts_at,
     category: cat,
     poster_url: e.poster_url,
+    fill_frame: e.fill_frame ?? false,
     color1: c1,
     color2: c2,
     view_count: e.view_count,
