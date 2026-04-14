@@ -29,13 +29,14 @@ interface Props {
   onDayChange: (day: string) => void
   onLike: (eventId: string) => void
   onVenueTap?: (venueId: string) => void
+  onOpen: (event: WallEvent) => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, onOpen }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -49,7 +50,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     peekImg: HTMLImageElement | null
     peeking: boolean
   }>({ active: false, startDist: 0, startCols: 2, peekImg: null, peeking: false })
-  const pendingScrollIdx = useRef<number | null>(null)
 
   const days = useMemo(() => uniqueDays(events), [events])
   const grouped = useMemo(() => groupByDay(events), [events])
@@ -198,26 +198,9 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return () => el.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
-  // ── Scroll to pending index once cols===1 layout has settled ──────────
-  useEffect(() => {
-    if (cols !== 1 || pendingScrollIdx.current === null) return
-    const idx = pendingScrollIdx.current
-    pendingScrollIdx.current = null
-    // rAF lets the browser paint the 1-col layout before we set scrollTop
-    requestAnimationFrame(() => {
-      const el = containerRef.current
-      if (!el) return
-      el.scrollTop = idx * el.clientHeight
-    })
-  }, [cols])
-
-  // ── Double-tap: jump to 1-col centered on the tapped event ────────────
+  // ── Double-tap: open flyer carousel overlay ────────────────────────────
   const handleDoubleTap = (event: WallEvent) => {
-    const idx = allEvents.findIndex((e) => e.id === event.id)
-    if (idx === -1) return
-    pendingScrollIdx.current = idx
-    setActiveEventIdx(idx)
-    setCols(1)
+    onOpen(event)
   }
 
   // In 1-col snap mode, show the current poster's details in the date bar
