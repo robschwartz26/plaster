@@ -29,13 +29,14 @@ interface Props {
   onDayChange: (day: string) => void
   onLike: (eventId: string) => void
   onVenueTap?: (venueId: string) => void
+  isAdminMode?: boolean
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -290,6 +291,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
               isLiked={likedIds.has(event.id)}
               isActive={idx === activeEventIdx}
               onLike={onLike}
+              isAdminMode={isAdminMode}
             />
           ))
         ) : (
@@ -304,6 +306,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
                 isLiked={likedIds.has(event.id)}
                 onDoubleTap={handleDoubleTap}
                 onLike={onLike}
+                isAdminMode={isAdminMode}
               />
             ))}
             <div style={{ gridColumn: '1 / -1', height: 'var(--nav-height)' }} />

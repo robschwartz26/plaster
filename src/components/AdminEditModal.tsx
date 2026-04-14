@@ -1,0 +1,443 @@
+import { useState, useEffect, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+import { type WallEvent } from '@/types/event'
+import { type CropRect, type CropHandle, applyHandleDrag, detectContentBounds, optimizeImage } from '@/lib/cropUtils'
+
+const IS_DEV = import.meta.env.DEV
+
+const CATEGORIES = ['Music', 'Drag', 'Dance', 'Comedy', 'Art', 'Film', 'Literary', 'Trivia', 'Other']
+
+interface Venue { id: string; name: string; neighborhood?: string }
+
+interface Props {
+  event: WallEvent
+  onClose: () => void
+  onSaved: () => void
+}
+
+const inputSt: React.CSSProperties = {
+  width: '100%', background: 'rgba(240,236,227,0.05)', border: '1px solid rgba(255,255,255,0.12)',
+  borderRadius: 6, padding: '10px 12px', color: 'var(--fg)',
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+}
+const labelSt: React.CSSProperties = {
+  display: 'block', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
+  letterSpacing: '0.08em', textTransform: 'uppercase' as const, color: 'rgba(255,255,255,0.4)', marginBottom: 6,
+}
+
+const HANDLES: [CropHandle, number, number, string][] = [
+  ['tl', 0, 0, 'nw-resize'], ['tc', 50, 0, 'n-resize'], ['tr', 100, 0, 'ne-resize'],
+  ['ml', 0, 50, 'w-resize'],                              ['mr', 100, 50, 'e-resize'],
+  ['bl', 0, 100, 'sw-resize'], ['bc', 50, 100, 's-resize'], ['br', 100, 100, 'se-resize'],
+]
+
+export function AdminEditModal({ event, onClose, onSaved }: Props) {
+  // ── Crop state ─────────────────────────────────────────────
+  const [cropMode, setCropMode] = useState(false)
+  const [editCrop, setEditCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
+  const [smartSnap, setSmartSnap] = useState(true)
+  const [smartCrop, setSmartCrop] = useState<CropRect | null>(null)
+  const smartCropRef = useRef<CropRect | null>(null)
+  const imgWrapRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const draggingRef = useRef<{ handle: CropHandle; startX: number; startY: number; startCrop: CropRect } | null>(null)
+
+  // ── Image fetch (needed for Save Crop upload) ──────────────
+  const [imageFile, setImageFile] = useState<File | null>(null)
+
+  // ── Details form ───────────────────────────────────────────
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [form, setForm] = useState({
+    title: event.title,
+    venue_id: event.venue_id ?? '',
+    date: event.starts_at.slice(0, 10),
+    time: event.starts_at.slice(11, 16),
+    category: event.category,
+    description: '',
+  })
+
+  // ── Save / delete state ────────────────────────────────────
+  const [saving, setSaving] = useState<'crop' | 'details' | 'delete' | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [saveError, setSaveError] = useState('')
+
+  // ── On mount: fetch full event details, venues, poster image, smart bounds ─
+  useEffect(() => {
+    supabase.from('events').select('description, venue_id').eq('id', event.id).single()
+      .then(({ data }) => {
+        if (data) setForm(f => ({
+          ...f,
+          description: data.description ?? '',
+          venue_id: data.venue_id ?? f.venue_id,
+        }))
+      })
+  }, [event.id])
+
+  useEffect(() => {
+    supabase.from('venues').select('id, name, neighborhood').order('name')
+      .then(({ data }) => { if (data) setVenues(data as Venue[]) })
+  }, [])
+
+  useEffect(() => {
+    if (!event.poster_url) return
+    fetch(event.poster_url)
+      .then(r => r.blob())
+      .then(blob => setImageFile(new File([blob], 'poster.jpg', { type: blob.type || 'image/jpeg' })))
+      .catch(() => { /* save crop will be disabled */ })
+  }, [event.poster_url])
+
+  useEffect(() => {
+    if (!event.poster_url) return
+    detectContentBounds(event.poster_url).then(detected => {
+      smartCropRef.current = detected
+      setSmartCrop(detected)
+    })
+  }, [event.poster_url])
+
+  // ── Live canvas preview while in crop mode ─────────────────
+  useEffect(() => {
+    if (!cropMode || !event.poster_url) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const ctx = canvas.getContext('2d')!
+      const cw = canvas.width, ch = canvas.height
+      const sx = editCrop.x * img.naturalWidth
+      const sy = editCrop.y * img.naturalHeight
+      const sw = Math.max(1, editCrop.width * img.naturalWidth)
+      const sh = Math.max(1, editCrop.height * img.naturalHeight)
+      const scale = Math.min(cw / sw, ch / sh)
+      const dw = sw * scale, dh = sh * scale
+      ctx.fillStyle = '#111'
+      ctx.fillRect(0, 0, cw, ch)
+      ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+    }
+    img.src = event.poster_url
+  }, [cropMode, editCrop, event.poster_url])
+
+  // ── Global drag tracking ───────────────────────────────────
+  useEffect(() => {
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const d = draggingRef.current
+      if (!d || !imgWrapRef.current) return
+      const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+      const rect = imgWrapRef.current.getBoundingClientRect()
+      setEditCrop(applyHandleDrag(d.startCrop, d.handle, (clientX - d.startX) / rect.width, (clientY - d.startY) / rect.height))
+    }
+    const onUp = () => { draggingRef.current = null }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove as EventListener, { passive: true })
+    window.addEventListener('touchend', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('touchmove', onMove as EventListener)
+      window.removeEventListener('touchend', onUp)
+    }
+  }, [])
+
+  // ── Crop handlers ──────────────────────────────────────────
+  const startDrag = (handle: CropHandle, e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation(); e.preventDefault()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    draggingRef.current = { handle, startX: clientX, startY: clientY, startCrop: { ...editCrop } }
+  }
+
+  const handleEnterCrop = () => {
+    const snap = smartCropRef.current
+    setEditCrop(smartSnap && snap ? snap : { x: 0, y: 0, width: 1, height: 1 })
+    setCropMode(true)
+  }
+
+  // ── Save Crop ──────────────────────────────────────────────
+  const handleSaveCrop = async () => {
+    if (!imageFile) return
+    setSaving('crop'); setSaveError('')
+    try {
+      const optimized = await optimizeImage(imageFile, editCrop)
+      const slug = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)
+      const filename = `${Date.now()}-${slug}.jpg`
+      const { error: storageError } = await supabase.storage
+        .from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
+      if (storageError) throw storageError
+      const { data: urlData } = supabase.storage.from('posters').getPublicUrl(filename)
+      const { error: updateError } = await supabase.from('events')
+        .update({ poster_url: urlData.publicUrl }).eq('id', event.id)
+      if (updateError) throw updateError
+      setCropMode(false)
+      onSaved()
+    } catch (e) {
+      setSaveError(String(e))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  // ── Save Details ───────────────────────────────────────────
+  const handleSaveDetails = async () => {
+    if (!form.title) return
+    setSaving('details'); setSaveError('')
+    try {
+      const timeStr = form.time || '20:00'
+      const starts_at = new Date(`${form.date}T${timeStr}:00`).toISOString()
+      const { error } = await supabase.from('events').update({
+        title: form.title,
+        venue_id: form.venue_id || null,
+        starts_at,
+        category: form.category,
+        description: form.description,
+      }).eq('id', event.id)
+      if (error) throw error
+      onSaved()
+    } catch (e) {
+      setSaveError(String(e))
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  // ── Delete Event ───────────────────────────────────────────
+  const handleDelete = async () => {
+    if (!deleteConfirm) { setDeleteConfirm(true); return }
+    setSaving('delete'); setSaveError('')
+    try {
+      const { error } = await supabase.from('events').delete().eq('id', event.id)
+      if (error) throw error
+      onSaved()
+    } catch (e) {
+      setSaveError(String(e))
+      setSaving(null)
+    }
+  }
+
+  // ── Render ─────────────────────────────────────────────────
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9990, background: '#0a0a0a', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+
+      {/* Top bar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))' }}>
+        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)' }}>
+          Edit Event
+        </span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {IS_DEV && (
+            <button
+              onClick={() => setForm(f => ({
+                ...f,
+                title: 'DEV: Neon Wolves',
+                category: 'Music',
+                description: 'With special guests The Static Age. $15 adv / $18 door. All ages.',
+              }))}
+              style={{ padding: '4px 10px', background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 4, color: 'rgba(234,179,8,0.8)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}
+            >
+              DEV
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            style={{ padding: '4px 8px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 20, cursor: 'pointer', lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+
+      {/* Poster + Crop section */}
+      <div style={{ padding: '16px 16px 0', flexShrink: 0 }}>
+        {event.poster_url ? (
+          <>
+            {/* Image with drag handles */}
+            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
+              <div ref={imgWrapRef} style={{ flex: 1, position: 'relative', display: 'inline-block', lineHeight: 0, maxWidth: '100%', overflow: 'hidden' }}>
+                <img
+                  src={event.poster_url}
+                  alt={event.title}
+                  draggable={false}
+                  style={{ display: 'block', width: '100%', maxHeight: '42vh', objectFit: 'contain', userSelect: 'none', pointerEvents: 'none' }}
+                />
+
+                {cropMode && (
+                  <>
+                    {/* Dark masks outside crop rect */}
+                    <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${editCrop.y * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
+                      <div style={{ position: 'absolute', top: `${(editCrop.y + editCrop.height) * 100}%`, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.62)' }} />
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: 0, width: `${editCrop.x * 100}%`, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: `${(editCrop.x + editCrop.width) * 100}%`, right: 0, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.62)' }} />
+                    </div>
+
+                    {/* Crop rect + handles */}
+                    <div style={{ position: 'absolute', left: `${editCrop.x * 100}%`, top: `${editCrop.y * 100}%`, width: `${editCrop.width * 100}%`, height: `${editCrop.height * 100}%`, border: '1.5px solid rgba(255,255,255,0.85)', boxSizing: 'border-box' }}>
+                      {HANDLES.map(([h, lp, tp, cur]) => (
+                        <div
+                          key={h}
+                          onMouseDown={e => startDrag(h, e)}
+                          onTouchStart={e => startDrag(h, e)}
+                          style={{ position: 'absolute', width: 12, height: 12, background: '#fff', border: '1.5px solid rgba(0,0,0,0.4)', borderRadius: 2, cursor: cur, left: `${lp}%`, top: `${tp}%`, transform: 'translate(-50%,-50%)', touchAction: 'none' }}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {cropMode && (
+                <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, paddingTop: 2 }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>Preview</span>
+                  <canvas ref={canvasRef} width={80} height={120} style={{ borderRadius: 4, display: 'block', background: '#111' }} />
+                </div>
+              )}
+            </div>
+
+            {/* Crop controls */}
+            {cropMode ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setSmartSnap(v => !v)}
+                  style={{ padding: '5px 11px', background: smartSnap ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${smartSnap ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 5, color: smartSnap ? '#c084fc' : 'rgba(255,255,255,0.3)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
+                >
+                  Smart snap: {smartSnap ? 'ON' : 'OFF'}
+                </button>
+                <button
+                  onClick={() => setEditCrop(smartSnap && smartCrop ? smartCrop : { x: 0, y: 0, width: 1, height: 1 })}
+                  style={{ padding: '5px 11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.45)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                >
+                  Reset
+                </button>
+                <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                  <button
+                    onClick={() => { setCropMode(false); setEditCrop({ x: 0, y: 0, width: 1, height: 1 }) }}
+                    style={{ padding: '5px 12px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveCrop}
+                    disabled={saving === 'crop' || !imageFile}
+                    style={{ padding: '5px 16px', background: '#A855F7', border: 'none', borderRadius: 5, color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: saving === 'crop' || !imageFile ? 'default' : 'pointer', opacity: saving === 'crop' || !imageFile ? 0.6 : 1 }}
+                  >
+                    {saving === 'crop' ? 'Saving…' : 'Save Crop'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={handleEnterCrop}
+                style={{ marginBottom: 16, padding: '7px 16px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 6, color: 'rgba(255,255,255,0.7)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer' }}
+              >
+                Adjust Crop
+              </button>
+            )}
+          </>
+        ) : (
+          <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.04)', borderRadius: 8, marginBottom: 16 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>No poster image</span>
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 16px', flexShrink: 0 }} />
+
+      {/* Details form */}
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14, paddingBottom: 'max(32px, env(safe-area-inset-bottom))' }}>
+
+        {/* Title */}
+        <div>
+          <label style={labelSt}>Title</label>
+          <input
+            style={inputSt}
+            value={form.title}
+            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+          />
+        </div>
+
+        {/* Venue */}
+        <div>
+          <label style={labelSt}>Venue</label>
+          <select
+            style={{ ...inputSt, appearance: 'auto' }}
+            value={form.venue_id}
+            onChange={e => setForm(f => ({ ...f, venue_id: e.target.value }))}
+          >
+            <option value="">— select venue —</option>
+            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </div>
+
+        {/* Date + Time */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={labelSt}>Date</label>
+            <input
+              type="date"
+              style={inputSt}
+              value={form.date}
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label style={labelSt}>Time</label>
+            <input
+              type="time"
+              style={inputSt}
+              value={form.time}
+              onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+            />
+          </div>
+        </div>
+
+        {/* Category */}
+        <div>
+          <label style={labelSt}>Category</label>
+          <select
+            style={{ ...inputSt, appearance: 'auto' }}
+            value={form.category}
+            onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+          >
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        {/* Description */}
+        <div>
+          <label style={labelSt}>Description</label>
+          <textarea
+            style={{ ...inputSt, minHeight: 72, resize: 'vertical' }}
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+          />
+        </div>
+
+        {saveError && (
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.8)' }}>
+            {saveError}
+          </p>
+        )}
+
+        {/* Save Details */}
+        <button
+          onClick={handleSaveDetails}
+          disabled={saving === 'details' || !form.title}
+          style={{ width: '100%', padding: '13px', borderRadius: 10, background: '#A855F7', border: 'none', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 600, cursor: saving === 'details' || !form.title ? 'default' : 'pointer', opacity: saving === 'details' || !form.title ? 0.6 : 1 }}
+        >
+          {saving === 'details' ? 'Saving…' : 'Save Details'}
+        </button>
+
+        {/* Delete Event */}
+        <button
+          onClick={handleDelete}
+          disabled={saving === 'delete'}
+          style={{ width: '100%', padding: '13px', borderRadius: 10, background: deleteConfirm ? 'rgba(239,68,68,0.85)' : 'transparent', border: `1px solid ${deleteConfirm ? 'rgba(239,68,68,0.6)' : 'rgba(255,255,255,0.12)'}`, color: deleteConfirm ? '#fff' : 'rgba(239,68,68,0.55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 600, cursor: saving === 'delete' ? 'default' : 'pointer', opacity: saving === 'delete' ? 0.6 : 1 }}
+        >
+          {saving === 'delete' ? 'Deleting…' : deleteConfirm ? 'Tap again to confirm delete' : 'Delete Event'}
+        </button>
+      </div>
+    </div>
+  )
+}

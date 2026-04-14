@@ -1,55 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useMotionValue, animate } from 'framer-motion'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
 import { BottomNav } from './BottomNav'
+import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 
 import { supabase } from '@/lib/supabase'
 import { mockEvents } from '@/data/mockEvents'
 import { dbEventToWallEvent, mockEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
-import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
 
 // Stable at module level — mock event dates are relative to app-load day,
 // which is the same reference point used by today below.
 const MOCK_WALL_EVENTS: WallEvent[] = mockEvents.map(mockEventToWallEvent)
-
-// Hidden swipe-to-toggle wordmark — no visual indicator, pure easter egg
-function Wordmark({ onSwipe }: { onSwipe: (dir: 'right' | 'left') => void }) {
-  const x = useMotionValue(0)
-
-  return (
-    <motion.span
-      className="font-display"
-      style={{
-        x,
-        fontSize: 26,
-        fontWeight: 900,
-        color: 'var(--fg)',
-        letterSpacing: '-0.02em',
-        lineHeight: 1,
-        userSelect: 'none',
-        touchAction: 'none',
-        cursor: 'default',
-        display: 'inline-block',
-      }}
-      drag="x"
-      dragMomentum={false}
-      onDragEnd={(_, info) => {
-        const offset = info.offset.x
-        if (Math.abs(offset) >= 40) {
-          onSwipe(offset > 0 ? 'right' : 'left')
-        }
-        animate(x, 0, { type: 'spring', stiffness: 500, damping: 22 })
-      }}
-    >
-      plaster
-    </motion.span>
-  )
-}
 
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
@@ -58,7 +23,9 @@ export function Wall() {
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
-  const { toggle } = useTheme()
+  const isAdmin = sessionStorage.getItem('plaster_admin_unlocked') === '1'
+  const [isAdminMode, setIsAdminMode] = useState(false)
+
   const { user } = useAuth()
   const navigate = useNavigate()
 
@@ -124,46 +91,37 @@ export function Wall() {
     navigate(`/venue/${venueId}`)
   }
 
-  const handleSwipe = (dir: 'right' | 'left') => {
-    if (dir === 'right') toggle()
-  }
-
   return (
     <>
     <div
       className="flex flex-col h-full overflow-hidden"
       style={{ background: 'var(--bg)' }}
     >
-      {/* Top bar */}
-      <div
-        className="shrink-0 flex items-center justify-between px-4"
-        style={{
-          paddingTop: 'max(12px, env(safe-area-inset-top))',
-          paddingBottom: 10,
-        }}
-      >
-        <Wordmark onSwipe={handleSwipe} />
-
-        <div className="flex items-center gap-2">
-          {[<Search key="s" size={16} />, <SlidersHorizontal key="f" size={16} />].map(
-            (icon, i) => (
+      <PlasterHeader
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {isAdmin && (
               <button
-                key={i}
-                className="flex items-center justify-center"
+                onClick={() => setIsAdminMode(v => !v)}
                 style={{
-                  width: 32,
-                  height: 32,
+                  padding: '3px 10px',
+                  background: isAdminMode ? 'rgba(168,85,247,0.18)' : 'transparent',
+                  border: `1px solid ${isAdminMode ? 'rgba(168,85,247,0.55)' : 'var(--fg-18)'}`,
                   borderRadius: 4,
-                  border: '1px solid var(--fg-18)',
-                  color: 'var(--fg-65)',
+                  color: isAdminMode ? '#c084fc' : 'var(--fg-55)',
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  fontSize: 11, fontWeight: 600, letterSpacing: '0.04em',
+                  cursor: 'pointer',
                 }}
               >
-                {icon}
+                {isAdminMode ? 'Done' : 'Edit'}
               </button>
-            ),
-          )}
-        </div>
-      </div>
+            )}
+            <button style={headerIconBtn()}><Search size={16} /></button>
+            <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
+          </div>
+        }
+      />
 
       <FilterBar active={activeFilter} onChange={setActiveFilter} />
 
@@ -175,6 +133,7 @@ export function Wall() {
         onDayChange={setActiveDay}
         onLike={handleLike}
         onVenueTap={handleVenueTap}
+        isAdminMode={isAdminMode}
       />
 
       <BottomNav />

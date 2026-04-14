@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { AdminEditModal } from './AdminEditModal'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -10,9 +11,10 @@ interface Props {
   cols: number
   activeFilter: string
   isLiked: boolean
-  isActive?: boolean        // 1-col only: true when this card is the snapped-to card
-  onDoubleTap?: (event: WallEvent) => void  // 2-5 col only: zoom to 1-col on this card
+  isActive?: boolean
+  onDoubleTap?: (event: WallEvent) => void
   onLike: (eventId: string) => void
+  isAdminMode?: boolean
 }
 
 interface EventDetail {
@@ -42,10 +44,10 @@ function formatDateTime(iso: string): string {
   const today = new Date()
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
-  const isToday  = d.toDateString() === today.toDateString()
+  const isToday = d.toDateString() === today.toDateString()
   const isTomorrow = d.toDateString() === tomorrow.toDateString()
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (isToday)    return `Tonight · ${time}`
+  if (isToday) return `Tonight · ${time}`
   if (isTomorrow) return `Tomorrow · ${time}`
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`
 }
@@ -78,6 +80,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
         fontFamily: '"Space Grotesk", sans-serif',
         fontSize: 11, fontWeight: 500, lineHeight: 1,
         userSelect: 'none', cursor: 'pointer',
+        zIndex: 2,
       }}
     >
       <svg width="11" height="10" viewBox="0 0 24 22"
@@ -90,33 +93,62 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
   )
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
+// ── Sample edge colors from a poster image ────────────────────────────────
 
-// Strip layout for 1-col (5 panels, width=500%):
-// [PostWallClone | Poster | Info | PostWall | PosterClone]
-//
-// Each panel = 100% of card = 20% of strip.
-// translateX of strip to show each panel:
-//   PostWallClone → 0%   (right-swipe loop target from Poster)
-//   Poster        → -20% (default)
-//   Info          → -40%
-//   PostWall      → -60%
-//   PosterClone   → -80% (left-swipe loop target from PostWall)
-//
-// Left-swipe  (dx<0) = advance:  Poster→Info→PostWall→PosterClone(-80%)→snap Poster(-20%)
-// Right-swipe (dx>0) = go back:  Poster→PostWallClone(0%)→snap PostWall(-60%), Info→Poster, PostWall→Info
+function usePosterBackdrop(posterUrl: string | null) {
+  const [backdrop, setBackdrop] = useState<string | null>(null)
 
-const PANEL_PCT = [-20, -40, -60] as const // translateX% for Poster, Info, PostWall
+  useEffect(() => {
+    if (!posterUrl) return
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      try {
+        const SIZE = 40 // sample at 40x40
+        const canvas = document.createElement('canvas')
+        canvas.width = SIZE; canvas.height = SIZE
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, SIZE, SIZE)
+        const d = ctx.getImageData(0, 0, SIZE, SIZE).data
 
-// Angle threshold: treat as horizontal if within 60° of horizontal.
-// tan(60°) ≈ 1.732 → horizontal when |dy| ≤ |dx| × TAN60
+        // Sample 4 corners + center
+        function px(x: number, y: number) {
+          const i = (y * SIZE + x) * 4
+          return `${d[i]},${d[i+1]},${d[i+2]}`
+        }
+
+        const tl = px(2, 2)
+        const tr = px(SIZE-3, 2)
+        const bl = px(2, SIZE-3)
+        const br = px(SIZE-3, SIZE-3)
+        const mid = px(SIZE>>1, SIZE>>1)
+
+        // Build a radial-ish gradient using corner samples
+        setBackdrop(
+          `conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`
+        )
+      } catch {
+        setBackdrop(null)
+      }
+    }
+    img.onerror = () => setBackdrop(null)
+    img.src = posterUrl
+  }, [posterUrl])
+
+  return backdrop
+}
+
+const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike }: Props) {
+export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode }: Props) {
   const { user } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
-  const dimmed   = activeFilter !== 'All' && !matches
+  const dimmed = activeFilter !== 'All' && !matches
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
+  const sampledBackdrop = usePosterBackdrop(event.poster_url)
+
+  const [showEdit, setShowEdit] = useState(false)
 
   // ── 2-5 col: double-tap → zoom to 1-col ───────────────────────────────
   const lastTap = useRef(0)
@@ -127,10 +159,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   }
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
-  const stripRef     = useRef<HTMLDivElement>(null)
-  const panelIdxRef  = useRef(0)
+  const stripRef = useRef<HTMLDivElement>(null)
+  const panelIdxRef = useRef(0)
   const [panelIdx, _setPanelIdx] = useState(0)
-  const loopingRef   = useRef(false)
+  const loopingRef = useRef(false)
 
   function setPanelIdx(i: number) {
     panelIdxRef.current = i
@@ -148,16 +180,16 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     }
   }, [isActive, cols])
 
-  // ── 1-col: lazy-fetched data (only when info/posts panel revealed) ─────
+  // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
-  const [detail,        setDetail]        = useState<EventDetail | null>(null)
+  const [detail, setDetail] = useState<EventDetail | null>(null)
   const [attendeeCount, setAttendeeCount] = useState(0)
-  const [isAttending,   setIsAttending]   = useState(false)
+  const [isAttending, setIsAttending] = useState(false)
   const [attendLoading, setAttendLoading] = useState(false)
-  const [posts,         setPosts]         = useState<WallPost[]>([])
-  const [likedPostIds,  setLikedPostIds]  = useState<Set<string>>(new Set())
-  const [newPostText,   setNewPostText]   = useState('')
-  const [postLoading,   setPostLoading]   = useState(false)
+  const [posts, setPosts] = useState<WallPost[]>([])
+  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set())
+  const [newPostText, setNewPostText] = useState('')
+  const [postLoading, setPostLoading] = useState(false)
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -195,23 +227,20 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       .then(({ data }) => setPosts((data as WallPost[] | null) ?? []))
   }
 
-  // ── 1-col: panel navigation (both directions) ────────────────────────
-  // dir=1: forward/advance (left-swipe), dir=-1: backward (right-swipe)
+  // ── 1-col: panel navigation ───────────────────────────────────────────
   function shiftPanel(dir: 1 | -1) {
     if (loopingRef.current) return
     const el = stripRef.current
     if (!el) return
     const cur = panelIdxRef.current
 
-    // Lazy-fetch panel data on first move away from Poster
     if (cur === 0) fetchPanelData()
 
     if (dir === 1) {
-      // Forward: Poster→Info→PostWall→PosterClone(loop)→Poster
       if (cur === 2) {
         loopingRef.current = true
         el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
-        el.style.transform = 'translateX(-80%)' // show PosterClone
+        el.style.transform = 'translateX(-80%)'
         setTimeout(() => {
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[0]}%)` }
@@ -225,11 +254,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         setPanelIdx(next)
       }
     } else {
-      // Backward: PostWall→Info→Poster→PostWallClone(loop)→PostWall
       if (cur === 0) {
         loopingRef.current = true
         el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
-        el.style.transform = 'translateX(0%)' // show PostWallClone
+        el.style.transform = 'translateX(0%)'
         setTimeout(() => {
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[2]}%)` }
@@ -245,15 +273,13 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     }
   }
 
-  // ── 1-col: bidirectional swipe (imperative for passive:false) ────────────
-  // React synthetic onTouchMove can't reliably call preventDefault — imperative
-  // listeners on the card element with passive:false give us that control.
+  // ── 1-col: bidirectional swipe ────────────────────────────────────────
   const cardRef = useRef<HTMLDivElement>(null)
   const swipe = useRef({
     active: false,
     startX: 0,
     startY: 0,
-    isHorizontal: null as boolean | null, // locked on first move
+    isHorizontal: null as boolean | null,
     cardW: 0,
   })
 
@@ -282,15 +308,11 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       const dx = e.touches[0].clientX - s.startX
       const dy = e.touches[0].clientY - s.startY
 
-      // Lock direction on the very first touchmove — no distance threshold.
-      // 60° threshold: horizontal if |dy| ≤ |dx| × tan(60°) ≈ 1.732.
-      // Anything within 60° of horizontal is treated as a panel swipe.
       if (s.isHorizontal === null) {
         s.isHorizontal = Math.abs(dy) <= Math.abs(dx) * TAN60
       }
 
       if (!s.isHorizontal) {
-        // Vertical — abandon swipe, restore strip, let scroll proceed
         s.active = false
         const strip = stripRef.current
         if (strip) {
@@ -300,13 +322,11 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         return
       }
 
-      // Horizontal confirmed — block scroll on this and parent containers
       e.preventDefault()
 
-      // Live drag preview for both directions
       const strip = stripRef.current
       if (!strip) return
-      const dragPct = (dx / (5 * s.cardW)) * 100 // 5-panel strip
+      const dragPct = (dx / (5 * s.cardW)) * 100
       strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
     }
 
@@ -317,10 +337,8 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       s.active = false
 
       if (Math.abs(dx) > 50) {
-        // left-swipe (dx<0) = advance forward, right-swipe (dx>0) = go back
         shiftPanel(dx < 0 ? 1 : -1)
       } else {
-        // Threshold not met — snap back
         const strip = stripRef.current
         if (strip) {
           strip.style.transition = 'transform 0.2s ease'
@@ -329,17 +347,14 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       }
     }
 
-    // passive:false on touchstart is required so that iOS Safari allows
-    // preventDefault in touchmove. Without it, iOS commits to scroll
-    // before touchmove fires, and preventDefault is silently ignored.
-    el.addEventListener('touchstart',  onStart, { passive: false })
-    el.addEventListener('touchmove',   onMove,  { passive: false })
-    el.addEventListener('touchend',    onEnd)
+    el.addEventListener('touchstart', onStart, { passive: false })
+    el.addEventListener('touchmove', onMove, { passive: false })
+    el.addEventListener('touchend', onEnd)
     el.addEventListener('touchcancel', onEnd)
     return () => {
-      el.removeEventListener('touchstart',  onStart)
-      el.removeEventListener('touchmove',   onMove)
-      el.removeEventListener('touchend',    onEnd)
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
       el.removeEventListener('touchcancel', onEnd)
     }
   }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -385,7 +400,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     setPostLoading(false)
   }
 
-  // ── 1-col render: 4-panel strip ────────────────────────────────────────
+  // ── 1-col render ──────────────────────────────────────────────────────
   if (cols === 1) {
     return (
       <div
@@ -401,9 +416,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           overflow: 'hidden',
         }}
       >
-        {/* 5-panel strip: [PostWallClone | Poster | Info | PostWall | PosterClone] */}
-        {/* Each panel = 20% of strip = 100% of card. Strip = 500% wide.        */}
-        {/* Initial transform: translateX(-20%) → shows Poster (panel 1).       */}
         <div
           ref={stripRef}
           style={{
@@ -414,57 +426,32 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             willChange: 'transform',
           }}
         >
-          {/* ── Panel 0: PostWallClone (right-swipe loop target) ─────── */}
-          <div style={{
-            width: '20%', flexShrink: 0, height: '100%',
-            background: 'var(--bg)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}>
+          {/* Panel 0: PostWallClone */}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderPostWall()}
           </div>
 
-          {/* ── Panel 1: Poster (default view) ───────────────────────── */}
+          {/* Panel 1: Poster */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
             {renderPosterContent()}
-            {/* Dot hint — faint carousel indicator, shown only on Poster panel */}
             {panelIdx === 0 && (
-              <div style={{
-                position: 'absolute',
-                bottom: 'max(18px, env(safe-area-inset-bottom))',
-                left: 0, right: 0,
-                display: 'flex', justifyContent: 'center',
-                zIndex: 10, pointerEvents: 'none',
-              }}>
-                <span style={{
-                  fontSize: 18,
-                  letterSpacing: '0.25em',
-                  color: 'rgba(255,255,255,0.22)',
-                  lineHeight: 1,
-                  userSelect: 'none',
-                }}>· · ·</span>
+              <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
+                <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
               </div>
             )}
           </div>
 
-          {/* ── Panel 2: Info ────────────────────────────────────────── */}
-          <div style={{
-            width: '20%', flexShrink: 0, height: '100%',
-            background: 'var(--bg)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}>
+          {/* Panel 2: Info */}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderInfo()}
           </div>
 
-          {/* ── Panel 3: PostWall ────────────────────────────────────── */}
-          <div style={{
-            width: '20%', flexShrink: 0, height: '100%',
-            background: 'var(--bg)',
-            display: 'flex', flexDirection: 'column', overflow: 'hidden',
-          }}>
+          {/* Panel 3: PostWall */}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {renderPostWall()}
           </div>
 
-          {/* ── Panel 4: PosterClone (left-swipe loop target) ────────── */}
+          {/* Panel 4: PosterClone */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
             {renderPosterContent()}
           </div>
@@ -473,7 +460,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     )
   }
 
-  // ── 2-5 col: standard grid card ────────────────────────────────────────
+  // ── 2-5 col: blurred backdrop card ────────────────────────────────────
   return (
     <div
       onClick={handleTap}
@@ -486,24 +473,69 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         transition: 'opacity 0.25s ease, filter 0.25s ease',
         cursor: 'pointer',
         userSelect: 'none',
+        background: '#000',
       }}
     >
       {event.poster_url ? (
-        <img
-          src={event.poster_url}
-          alt={event.title}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-        />
+        <>
+          {/* Backdrop — sampled colors from poster corners, identical at all column counts */}
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: sampledBackdrop ?? gradient,
+            transition: 'background 0.3s ease',
+          }} />
+          {/* Centered poster — full image, no cropping */}
+          <img
+            src={event.poster_url}
+            alt={event.title}
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%',
+              objectFit: 'contain',
+              pointerEvents: 'none',
+              userSelect: 'none',
+            }}
+          />
+        </>
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
       )}
+
       {cols <= 3 && (
         <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
+      )}
+
+      {isAdminMode && (
+        <button
+          onClick={e => { e.stopPropagation(); setShowEdit(true) }}
+          style={{
+            position: 'absolute', bottom: 6, left: 6,
+            width: 28, height: 28,
+            background: 'rgba(0,0,0,0.58)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            border: '1px solid rgba(168,85,247,0.55)',
+            borderRadius: 6,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, cursor: 'pointer',
+            zIndex: 3,
+          }}
+        >
+          ✏️
+        </button>
+      )}
+
+      {showEdit && (
+        <AdminEditModal
+          event={event}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => setShowEdit(false)}
+        />
       )}
     </div>
   )
 
-  // ── Render helpers (called as functions, not <Components />) ──────────
+  // ── Render helpers ─────────────────────────────────────────────────────
 
   function renderPosterContent() {
     return event.poster_url ? (
@@ -526,44 +558,14 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   function renderInfo() {
     return (
       <>
-        {/* Panel header */}
-        <div style={{
-          flexShrink: 0,
-          paddingTop: 'max(14px, env(safe-area-inset-top))',
-          padding: '14px 16px 12px',
-          borderBottom: '1px solid var(--fg-08)',
-        }}>
+        <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <span style={{
-              display: 'inline-block',
-              padding: '2px 8px',
-              borderRadius: 20,
-              background: event.color2 + '33',
-              border: `1px solid ${event.color2}55`,
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 10, fontWeight: 700,
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              color: event.color2,
-            }}>
+            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, background: event.color2 + '33', border: `1px solid ${event.color2}55`, fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: event.color2 }}>
               {event.category || 'Event'}
             </span>
-            <span style={{
-              marginLeft: 'auto',
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 10,
-              color: 'var(--fg-30)',
-              letterSpacing: '0.04em',
-            }}>
-              swipe → for wall
-            </span>
+            <span style={{ marginLeft: 'auto', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', letterSpacing: '0.04em' }}>swipe → for wall</span>
           </div>
-          <h2 style={{
-            margin: '8px 0 2px',
-            fontFamily: '"Playfair Display", serif',
-            fontSize: 22, fontWeight: 900,
-            color: 'var(--fg)', lineHeight: 1.15,
-          }}>
+          <h2 style={{ margin: '8px 0 2px', fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>
             {event.title}
           </h2>
           {event.venue_name && (
@@ -573,9 +575,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           )}
         </div>
 
-        {/* Scrollable body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 24px' }}>
-          {/* Date */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0 }}>
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -585,19 +585,15 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             </span>
           </div>
 
-          {/* Address */}
           {detail?.address && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0, marginTop: 1 }}>
                 <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
               </svg>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>
-                {detail.address}
-              </span>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>{detail.address}</span>
             </div>
           )}
 
-          {/* Description */}
           {detail?.description && (
             <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
               {detail.description}
@@ -606,35 +602,18 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
           <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
-          {/* Attendee count */}
           {attendeeCount > 0 && (
             <p style={{ margin: '0 0 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
               {attendeeCount} {attendeeCount === 1 ? 'person' : 'people'} going
             </p>
           )}
 
-          {/* RSVP */}
           {user ? (
-            <button
-              onClick={toggleAttend}
-              disabled={attendLoading}
-              style={{
-                width: '100%', padding: '12px 0', borderRadius: 10,
-                border: isAttending ? '1.5px solid var(--fg-25)' : 'none',
-                background: isAttending ? 'transparent' : event.color2,
-                color: isAttending ? 'var(--fg-65)' : '#fff',
-                fontFamily: '"Space Grotesk", sans-serif',
-                fontSize: 14, fontWeight: 700,
-                cursor: attendLoading ? 'default' : 'pointer',
-                opacity: attendLoading ? 0.6 : 1,
-              }}
-            >
+            <button onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
               {isAttending ? "I'm Going ✓" : "I'll Be There"}
             </button>
           ) : (
-            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-35)', textAlign: 'center' }}>
-              Sign in to RSVP
-            </p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-35)', textAlign: 'center' }}>Sign in to RSVP</p>
           )}
         </div>
       </>
@@ -644,82 +623,33 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   function renderPostWall() {
     return (
       <>
-        {/* Header */}
-        <div style={{
-          flexShrink: 0,
-          paddingTop: 'max(14px, env(safe-area-inset-top))',
-          padding: '14px 16px 12px',
-          borderBottom: '1px solid var(--fg-08)',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <span style={{
-            fontFamily: '"Space Grotesk", sans-serif',
-            fontSize: 11, fontWeight: 700,
-            letterSpacing: '0.07em',
-            textTransform: 'uppercase',
-            color: 'var(--fg-40)',
-          }}>Wall</span>
-          <span style={{
-            fontFamily: '"Space Grotesk", sans-serif',
-            fontSize: 10,
-            color: 'var(--fg-30)',
-            letterSpacing: '0.04em',
-          }}>swipe → to loop</span>
+        <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Wall</span>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', letterSpacing: '0.04em' }}>swipe → to loop</span>
         </div>
 
-        {/* Posts */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {posts.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120 }}>
-              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-25)' }}>
-                No notes yet. Be the first.
-              </p>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-25)' }}>No notes yet. Be the first.</p>
             </div>
           ) : posts.map((post) => (
             <div key={post.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{
-                  width: 26, height: 26, borderRadius: '50%',
-                  background: 'var(--fg-15)', flexShrink: 0,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 9, fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg-40)',
-                }}>
+                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--fg-15)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg-40)' }}>
                   {post.user_id.slice(0, 1).toUpperCase()}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, color: 'var(--fg-55)' }}>
-                      #{post.user_id.slice(0, 6)}
-                    </span>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, color: 'var(--fg-55)' }}>#{post.user_id.slice(0, 6)}</span>
                     {post.is_venue_post && (
-                      <span style={{
-                        padding: '1px 5px', borderRadius: 8,
-                        background: event.color2 + '33',
-                        fontFamily: '"Space Grotesk", sans-serif',
-                        fontSize: 8, fontWeight: 700,
-                        color: event.color2, textTransform: 'uppercase',
-                      }}>venue</span>
+                      <span style={{ padding: '1px 5px', borderRadius: 8, background: event.color2 + '33', fontFamily: '"Space Grotesk", sans-serif', fontSize: 8, fontWeight: 700, color: event.color2, textTransform: 'uppercase' }}>venue</span>
                     )}
-                    <span style={{ marginLeft: 'auto', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)' }}>
-                      {timeAgo(post.created_at)}
-                    </span>
+                    <span style={{ marginLeft: 'auto', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)' }}>{timeAgo(post.created_at)}</span>
                   </div>
-                  <p style={{ margin: '0 0 6px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-80)', lineHeight: 1.45 }}>
-                    {post.body}
-                  </p>
-                  <button
-                    onClick={() => togglePostLike(post.id)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 3,
-                      background: 'none', border: 'none', padding: 0,
-                      cursor: user ? 'pointer' : 'default',
-                      color: likedPostIds.has(post.id) ? event.color2 : 'var(--fg-25)',
-                      fontFamily: '"Space Grotesk", sans-serif', fontSize: 11,
-                    }}
-                  >
-                    <svg width="10" height="9" viewBox="0 0 24 22"
-                      fill={likedPostIds.has(post.id) ? 'currentColor' : 'none'}
-                      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <p style={{ margin: '0 0 6px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-80)', lineHeight: 1.45 }}>{post.body}</p>
+                  <button onClick={() => togglePostLike(post.id)} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', padding: 0, cursor: user ? 'pointer' : 'default', color: likedPostIds.has(post.id) ? event.color2 : 'var(--fg-25)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}>
+                    <svg width="10" height="9" viewBox="0 0 24 22" fill={likedPostIds.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
                     </svg>
                     {post.like_count > 0 && post.like_count}
@@ -730,14 +660,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           ))}
         </div>
 
-        {/* Compose */}
-        <div style={{
-          flexShrink: 0,
-          borderTop: '1px solid var(--fg-08)',
-          padding: '8px 12px',
-          paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-          background: 'var(--bg)',
-        }}>
+        <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-08)', padding: '8px 12px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))', background: 'var(--bg)' }}>
           {user ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
               <textarea
@@ -745,40 +668,21 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                 onChange={(e) => setNewPostText(e.target.value.slice(0, 280))}
                 placeholder="Leave a note on the wall…"
                 rows={1}
-                style={{
-                  flex: 1, resize: 'none',
-                  background: 'var(--fg-08)', border: '1px solid var(--fg-15)',
-                  borderRadius: 8, padding: '8px 10px',
-                  fontFamily: '"Space Grotesk", sans-serif',
-                  fontSize: 13, color: 'var(--fg)', lineHeight: 1.4,
-                  outline: 'none', minHeight: 36, maxHeight: 90, overflowY: 'auto',
-                }}
+                style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '8px 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 36, maxHeight: 90, overflowY: 'auto' }}
                 onInput={(e) => {
                   const el = e.currentTarget
                   el.style.height = 'auto'
                   el.style.height = Math.min(el.scrollHeight, 90) + 'px'
                 }}
               />
-              <button
-                onClick={submitPost}
-                disabled={!newPostText.trim() || postLoading}
-                style={{
-                  flexShrink: 0, width: 36, height: 36, borderRadius: 8,
-                  background: newPostText.trim() ? event.color2 : 'var(--fg-15)',
-                  border: 'none', color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: newPostText.trim() ? 'pointer' : 'default',
-                }}
-              >
+              <button onClick={submitPost} disabled={!newPostText.trim() || postLoading} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 8, background: newPostText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newPostText.trim() ? 'pointer' : 'default' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                   <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
                 </svg>
               </button>
             </div>
           ) : (
-            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-30)', textAlign: 'center', padding: '2px 0' }}>
-              Sign in to leave a note
-            </p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-30)', textAlign: 'center', padding: '2px 0' }}>Sign in to leave a note</p>
           )}
         </div>
       </>
