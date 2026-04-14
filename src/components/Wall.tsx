@@ -5,7 +5,7 @@ import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
 import { BottomNav } from './BottomNav'
-import { FlyerCarousel } from './FlyerCarousel'
+
 import { supabase } from '@/lib/supabase'
 import { mockEvents } from '@/data/mockEvents'
 import { dbEventToWallEvent, mockEventToWallEvent } from '@/lib/adapters'
@@ -57,7 +57,7 @@ export function Wall() {
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
-  const [openEvent, setOpenEvent] = useState<WallEvent | null>(null)
+
   const { toggle } = useTheme()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -121,7 +121,6 @@ export function Wall() {
   }
 
   function handleVenueTap(venueId: string) {
-    setOpenEvent(null)
     navigate(`/venue/${venueId}`)
   }
 
@@ -133,12 +132,7 @@ export function Wall() {
     <>
     <div
       className="flex flex-col h-full overflow-hidden"
-      style={{
-        background: 'var(--bg)',
-        filter: openEvent ? 'blur(3px) brightness(0.45)' : 'none',
-        transition: 'filter 0.25s ease',
-        pointerEvents: openEvent ? 'none' : undefined,
-      }}
+      style={{ background: 'var(--bg)' }}
     >
       {/* Top bar */}
       <div
@@ -181,21 +175,10 @@ export function Wall() {
         onDayChange={setActiveDay}
         onLike={handleLike}
         onVenueTap={handleVenueTap}
-        onOpen={setOpenEvent}
       />
 
       <BottomNav />
     </div>
-
-    {openEvent && (
-      <FlyerCarousel
-        event={openEvent}
-        isLiked={likedIds.has(openEvent.id)}
-        onLike={handleLike}
-        onClose={() => setOpenEvent(null)}
-        onVenueTap={handleVenueTap}
-      />
-    )}
     </>
   )
 }

@@ -29,14 +29,13 @@ interface Props {
   onDayChange: (day: string) => void
   onLike: (eventId: string) => void
   onVenueTap?: (venueId: string) => void
-  onOpen: (event: WallEvent) => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, onOpen }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -198,11 +197,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return () => el.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
-  // ── Double-tap: open flyer carousel overlay ────────────────────────────
-  const handleDoubleTap = (event: WallEvent) => {
-    onOpen(event)
-  }
-
   // In 1-col snap mode, show the current poster's details in the date bar
   const eventInfo: EventInfo | null =
     cols === 1 && allEvents[activeEventIdx]
@@ -272,7 +266,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
               activeFilter={activeFilter}
               isLiked={likedIds.has(event.id)}
               isActive={idx === activeEventIdx}
-              onDoubleTap={handleDoubleTap}
               onLike={onLike}
             />
           ))
@@ -286,7 +279,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
                 cols={cols}
                 activeFilter={activeFilter}
                 isLiked={likedIds.has(event.id)}
-                onDoubleTap={handleDoubleTap}
                 onLike={onLike}
               />
             ))}
