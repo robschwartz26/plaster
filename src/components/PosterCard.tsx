@@ -220,73 +220,109 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     }
   }
 
-  // ── 1-col: swipe gesture (right-swipe only) ───────────────────────────
-  const swipe = useRef({ active: false, startX: 0, startY: 0, locked: false, cardW: 0 })
+  // ── 1-col: swipe gesture (right-swipe only, imperative for passive:false) ──
+  // React synthetic onTouchMove is registered via root delegation and can't
+  // reliably call preventDefault to block scroll. Imperative listeners on the
+  // card element with passive:false give us that control.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const swipe = useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+    isHorizontal: null as boolean | null, // locked on first move
+    cardW: 0,
+  })
 
-  function onSwipeStart(e: React.TouchEvent) {
-    if (e.touches.length !== 1 || loopingRef.current) return
-    swipe.current = {
-      active: true,
-      startX: e.touches[0].clientX,
-      startY: e.touches[0].clientY,
-      locked: false,
-      cardW: e.currentTarget.clientWidth,
+  useEffect(() => {
+    if (cols !== 1) return
+    const el = cardRef.current
+    if (!el) return
+
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || loopingRef.current) return
+      swipe.current = {
+        active: true,
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        isHorizontal: null,
+        cardW: el.clientWidth,
+      }
+      const strip = stripRef.current
+      if (strip) strip.style.transition = 'none'
     }
-    const el = stripRef.current
-    if (el) el.style.transition = 'none'
-  }
 
-  function onSwipeMove(e: React.TouchEvent) {
-    const s = swipe.current
-    if (!s.active) return
-    const dx = e.touches[0].clientX - s.startX
-    const dy = e.touches[0].clientY - s.startY
+    const onMove = (e: TouchEvent) => {
+      const s = swipe.current
+      if (!s.active) return
 
-    if (!s.locked && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
-      s.locked = true
-      if (Math.abs(dy) >= Math.abs(dx)) {
-        // Vertical — cancel horizontal handling, let scroll container take over
+      const dx = e.touches[0].clientX - s.startX
+      const dy = e.touches[0].clientY - s.startY
+
+      // Lock direction on the very first touchmove — no distance threshold.
+      // This must happen before the browser commits to a scroll direction.
+      if (s.isHorizontal === null) {
+        s.isHorizontal = Math.abs(dx) >= Math.abs(dy)
+      }
+
+      if (!s.isHorizontal) {
+        // Vertical — abandon swipe, restore strip, let scroll container proceed
         s.active = false
-        // Restore strip to snapped position
-        const el = stripRef.current
-        if (el) {
-          el.style.transition = 'none'
-          el.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+        const strip = stripRef.current
+        if (strip) {
+          strip.style.transition = 'none'
+          strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
         }
         return
       }
-    }
 
-    if (!s.locked) return
+      // Horizontal confirmed — block all scroll on this and parent containers
+      e.preventDefault()
 
-    // Live drag preview — only follow right-swipe (dx > 0)
-    if (dx > 0) {
-      const el = stripRef.current
-      if (!el) return
-      // Each panel advance = 25% of strip (strip = 4 * cardW)
-      const dragPct = (dx / (4 * s.cardW)) * 100
-      el.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
-    }
-  }
-
-  function onSwipeEnd(e: React.TouchEvent) {
-    const s = swipe.current
-    if (!s.active) return
-    const dx = e.changedTouches[0].clientX - s.startX
-    const dy = e.changedTouches[0].clientY - s.startY
-    s.active = false
-
-    if (dx > 40 && Math.abs(dx) > Math.abs(dy)) {
-      advancePanel()
-    } else {
-      // Snap back to current panel
-      const el = stripRef.current
-      if (el) {
-        el.style.transition = 'transform 0.2s ease'
-        el.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+      // Live right-swipe drag preview (dx > 0 only — no left-swipe)
+      if (dx > 0) {
+        const strip = stripRef.current
+        if (!strip) return
+        const dragPct = (dx / (4 * s.cardW)) * 100
+        strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
       }
     }
-  }
+
+    const onEnd = (e: TouchEvent) => {
+      const s = swipe.current
+      if (!s.active || s.isHorizontal !== true) {
+        s.active = false
+        return
+      }
+      const dx = e.changedTouches[0].clientX - s.startX
+      const dy = e.changedTouches[0].clientY - s.startY
+      s.active = false
+
+      if (dx > 50 && Math.abs(dx) > Math.abs(dy)) {
+        advancePanel()
+      } else {
+        // Threshold not met — snap back to current panel
+        const strip = stripRef.current
+        if (strip) {
+          strip.style.transition = 'transform 0.2s ease'
+          strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+        }
+      }
+    }
+
+    // passive:false on touchstart is required so that iOS Safari allows
+    // preventDefault in touchmove. Without it, iOS commits to scroll
+    // before touchmove fires, and preventDefault is silently ignored.
+    el.addEventListener('touchstart',  onStart, { passive: false })
+    el.addEventListener('touchmove',   onMove,  { passive: false })
+    el.addEventListener('touchend',    onEnd)
+    el.addEventListener('touchcancel', onEnd)
+    return () => {
+      el.removeEventListener('touchstart',  onStart)
+      el.removeEventListener('touchmove',   onMove)
+      el.removeEventListener('touchend',    onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── RSVP ──────────────────────────────────────────────────────────────
   async function toggleAttend() {
@@ -333,6 +369,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   if (cols === 1) {
     return (
       <div
+        ref={cardRef}
         style={{
           height: '100%',
           background: 'var(--bg)',
@@ -342,12 +379,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           transition: 'opacity 0.25s ease, filter 0.25s ease',
           position: 'relative',
           overflow: 'hidden',
-          // pan-y: browser handles vertical scroll, we handle horizontal
-          touchAction: 'pan-y',
         }}
-        onTouchStart={onSwipeStart}
-        onTouchMove={onSwipeMove}
-        onTouchEnd={onSwipeEnd}
       >
         {/* 4-panel strip: [PosterClone][PostWall][Info][Poster] */}
         {/* Each panel = 25% of strip = 100% of card. Strip = 400% wide. */}
