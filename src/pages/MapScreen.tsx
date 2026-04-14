@@ -70,8 +70,8 @@ function formatDayFull(idx: number, today: string): string {
 }
 
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
-const WHEEL_H        = 28   // canvas surface height (CSS px)
-const WHEEL_HOUSING_H = 56  // total housing height (CSS px)
+const WHEEL_H         = 20   // canvas surface height (CSS px)
+const WHEEL_HOUSING_H = 28   // housing height inside control bar (CSS px)
 const WHEEL_ITEM_W   = 72   // px per day slot
 const WHEEL_COMP     = 0.70 // scroll→pattern compression
 const WHEEL_P        = 5    // diamond pitch (CSS px)
@@ -242,7 +242,6 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     drawKnurl(canvasRef.current, offsetRef.current * WHEEL_COMP, dark)
   }, [dark])
 
-  const activeIdx = Math.round(Math.max(0, Math.min(DAY_COUNT - 1, -offset / WHEEL_ITEM_W)))
 
   // ── Snap animation
   function snap() {
@@ -295,33 +294,32 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     dragging.current = false; startMomentum()
   }
 
-  const canvasTop = (WHEEL_HOUSING_H - WHEEL_H) / 2  // = 14px
+  // canvasTop: centres the 20px surface in the 28px housing → 4px each side
+  const canvasTop = (WHEEL_HOUSING_H - WHEEL_H) / 2
 
   return (
     <div
       ref={containerRef}
       style={{
-        flexShrink: 0,
+        width: '100%',
         height: WHEEL_HOUSING_H,
-        background: '#0a0908',
-        borderRadius: 12,
-        border: '0.5px solid rgba(255,255,255,0.05)',
+        background: '#0e0c0a',
+        borderRadius: 6,
+        border: '0.5px solid rgba(255,255,255,0.06)',
         position: 'relative',
         touchAction: 'none', userSelect: 'none',
         overflow: 'hidden', cursor: 'grab',
-        boxShadow: 'inset 0 4px 14px rgba(0,0,0,0.92), inset 0 -4px 14px rgba(0,0,0,0.88)',
+        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.90), inset 0 -2px 8px rgba(0,0,0,0.85)',
       }}
       onPointerDown={onDown} onPointerMove={onMove}
       onPointerUp={onUp}     onPointerCancel={onUp}
     >
-      {/* White indicator dot — top centre of slot */}
+      {/* White indicator dot — centred in top gap */}
       <div style={{
-        position: 'absolute',
-        top: Math.round(canvasTop / 2) - 2,
-        left: '50%', transform: 'translateX(-50%)',
-        width: 5, height: 5, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.90)',
-        boxShadow: '0 0 5px rgba(255,255,255,0.45)',
+        position: 'absolute', top: 2, left: '50%', transform: 'translateX(-50%)',
+        width: 4, height: 4, borderRadius: '50%',
+        background: 'rgba(255,255,255,0.85)',
+        boxShadow: '0 0 4px rgba(255,255,255,0.40)',
         pointerEvents: 'none',
       }} />
 
@@ -333,22 +331,6 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
           width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
         }}
       />
-
-      {/* Pip row — 7 dots below wheel */}
-      <div style={{
-        position: 'absolute', bottom: 6, left: 0, right: 0,
-        display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none',
-      }}>
-        {Array.from({ length: DAY_COUNT }, (_, i) => (
-          <div key={i} style={{
-            width:  i === activeIdx ? 5 : 3,
-            height: i === activeIdx ? 5 : 3,
-            borderRadius: '50%',
-            background: i === activeIdx ? 'rgba(255,255,255,0.90)' : 'rgba(255,255,255,0.10)',
-            transition: 'all 150ms ease',
-          }} />
-        ))}
-      </div>
     </div>
   )
 }
@@ -854,15 +836,45 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ── Day wheel picker ── */}
+      {/* ── Control bar ── */}
       <div style={{
-        display: 'flex', justifyContent: 'center', alignItems: 'center',
-        background: theme === 'night' ? '#0a0908' : '#f0ece3',
-        padding: '8px 0',
+        width: '100%', height: 52, flexShrink: 0,
+        background: theme === 'night' ? '#0a0908' : '#1e1c18',
+        borderTop: '0.5px solid rgba(255,255,255,0.08)',
+        position: 'relative',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 5,
       }}>
-        <div style={{ width: 'clamp(160px, 33vw, 240px)' }}>
+        {/* Wheel — 33% of bar width */}
+        <div style={{ width: '33%' }}>
           <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} dark={theme === 'night'} />
         </div>
+
+        {/* Pip row */}
+        <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+          {Array.from({ length: DAY_COUNT }, (_, i) => (
+            <div key={i} style={{
+              width:  i === dayIdx ? 5 : 3,
+              height: i === dayIdx ? 5 : 3,
+              borderRadius: '50%',
+              background: i === dayIdx ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.10)',
+              transition: 'all 150ms ease',
+            }} />
+          ))}
+        </div>
+
+        {/* PLR product stamp */}
+        <span style={{
+          position: 'absolute', bottom: 5, right: 10,
+          fontFamily: '"Barlow Condensed", sans-serif',
+          fontWeight: 700, fontSize: 8,
+          letterSpacing: '0.12em',
+          color: 'rgba(255,255,255,0.08)',
+          userSelect: 'none', pointerEvents: 'none',
+        }}>
+          PLR
+        </span>
       </div>
 
       <BottomNav />
