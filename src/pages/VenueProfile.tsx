@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { type DbVenue } from '@/lib/supabase'
+import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
 interface VenueEvent {

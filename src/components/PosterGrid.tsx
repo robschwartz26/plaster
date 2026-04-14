@@ -255,9 +255,9 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
           style={{
             fontSize: 11,
             letterSpacing: '0.06em',
-            background: 'rgba(240,236,227,0.12)',
-            border: '1px solid rgba(240,236,227,0.3)',
-            color: '#f0ece3',
+            background: 'var(--fg-08)',
+            border: '1px solid var(--fg-25)',
+            color: 'var(--fg)',
             padding: '6px 10px',
             borderRadius: 4,
           }}
