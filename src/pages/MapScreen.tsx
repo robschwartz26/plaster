@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 import { useTheme } from '@/hooks/useTheme'
+import { DateIndicator } from '@/components/DateIndicator'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 const PORTLAND = { latitude: 45.5051, longitude: -122.6750 }
@@ -61,11 +62,6 @@ function addDays(dateStr: string, n: number): string {
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
 }
-function dayShortLabel(idx: number, today: string): string {
-  if (idx === 0) return 'Tonight'
-  const date = addDays(today, idx)
-  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' })
-}
 function formatDayFull(idx: number, today: string): string {
   if (idx === 0) return 'Tonight'
   if (idx === 1) return 'Tomorrow'
@@ -87,10 +83,11 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
   const CH = canvas.height / dpr
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-  // Palette
-  const [edge0, edge1, mid0, mid1, lineCol, hlCol, lipEdge, fadeRgb] = dark
-    ? ['#040303','#181614','#282420','#302c28', 'rgba(255,244,216,0.10)', 'rgba(255,248,214,0.45)', 'rgba(160,152,140,0.70)', '14,12,10']
-    : ['#9e9a95','#c4c0ba','#d4d0ca','#dedad4', 'rgba(60,56,50,0.12)',   'rgba(80,70,60,0.30)',    'rgba(255,255,255,0.80)',  '232,228,223']
+  // Palette — fadeRgb always matches the dark #0a0908 housing
+  const [edge0, edge1, mid0, mid1, lineCol, hlCol, lipEdge] = dark
+    ? ['#0a0908','#181614','#2a2825','#322e2a', 'rgba(8,6,4,1)',       'rgba(210,202,188,1)',    'rgba(160,152,140,0.70)']
+    : ['#5e5a56','#747068','#8a8680','#908c88', 'rgba(30,26,20,0.8)',  'rgba(255,255,255,0.95)', 'rgba(220,215,210,0.70)']
+  const fadeRgb = '10,9,8' // always fade into the dark housing
 
   // 1 ── Cylinder body
   const body = ctx.createLinearGradient(0, 0, 0, CH)
@@ -105,7 +102,7 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
 
   // 2 ── Specular band
   const spec = ctx.createLinearGradient(0, 0, 0, CH)
-  const sw = dark ? 0.09 : 0.18
+  const sw = dark ? 0.09 : 0.26
   spec.addColorStop(0,    'rgba(255,255,255,0)')
   spec.addColorStop(0.44, 'rgba(255,255,255,0)')
   spec.addColorStop(0.50, `rgba(255,255,255,${sw})`)
@@ -176,11 +173,10 @@ function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number, dark: boolean): 
 interface KnurlWheelProps {
   dayIdx: number
   setDayIdx: (i: number) => void
-  today: string
   dark: boolean
 }
 
-function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
+function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasReady  = useRef(false)
@@ -289,14 +285,12 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
       style={{
         flexShrink: 0,
         height: 28,
-        background: dark ? '#0e0c0a' : '#e8e4df',
-        borderTop: `1px solid ${dark ? 'rgba(0,0,0,0.7)' : 'rgba(180,172,162,0.6)'}`,
+        background: '#0a0908',
+        borderTop: '1px solid rgba(0,0,0,0.75)',
         position: 'relative',
         touchAction: 'none', userSelect: 'none',
         overflow: 'hidden', cursor: 'grab',
-        boxShadow: dark
-          ? 'inset 0 2px 8px rgba(0,0,0,0.80), inset 0 -2px 8px rgba(0,0,0,0.80)'
-          : 'inset 0 2px 6px rgba(0,0,0,0.12), inset 0 -2px 6px rgba(0,0,0,0.10)',
+        boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.85), inset 0 -2px 8px rgba(0,0,0,0.85)',
       }}
       onPointerDown={onDown} onPointerMove={onMove}
       onPointerUp={onUp}     onPointerCancel={onUp}
@@ -310,48 +304,14 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, today, dark }: KnurlWheelProps) {
         }}
       />
 
-      {/* Day label overlay */}
-      <div style={{ position: 'absolute', top: 5, left: 0, right: 0, height: WHEEL_H, overflow: 'hidden', pointerEvents: 'none' }}>
-        {Array.from({ length: DAY_COUNT }, (_, i) => {
-          const pos  = offset + i * WHEEL_ITEM_W
-          const dist = Math.abs(pos)
-          const op   = Math.max(0.07, 1 - dist / (WHEEL_ITEM_W * 2.1))
-          const act  = i === activeIdx
-          const textCol = dark ? '#f0ece3' : '#1a1814'
-          return (
-            <div key={i} style={{
-              position: 'absolute',
-              left: `calc(50% + ${pos - WHEEL_ITEM_W / 2}px)`,
-              width: WHEEL_ITEM_W, height: '100%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              opacity: op, pointerEvents: 'none',
-            }}>
-              <span style={{
-                fontFamily: '"Space Grotesk", sans-serif',
-                fontSize: act ? 13 : 11,
-                fontWeight: act ? 700 : 400,
-                color: textCol,
-                letterSpacing: act ? 0 : '0.04em',
-                textShadow: act
-                  ? (dark ? '0 1px 5px rgba(0,0,0,0.95)' : '0 1px 3px rgba(255,255,255,0.8)')
-                  : 'none',
-                pointerEvents: 'none',
-              }}>
-                {dayShortLabel(i, today)}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Pip indicators */}
+      {/* Pip indicators — always on dark housing */}
       <div style={{ position: 'absolute', bottom: 3, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 4, pointerEvents: 'none' }}>
         {Array.from({ length: DAY_COUNT }, (_, i) => (
           <div key={i} style={{
             width:  i === activeIdx ? 4 : 2.5,
             height: i === activeIdx ? 4 : 2.5,
             borderRadius: '50%',
-            background: i === activeIdx ? '#c42000' : (dark ? 'rgba(240,236,227,0.18)' : 'rgba(26,24,20,0.18)'),
+            background: i === activeIdx ? '#c42000' : 'rgba(240,236,227,0.18)',
             transition: 'all 150ms ease',
           }} />
         ))}
@@ -858,13 +818,16 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
+      {/* ── Date indicator blocks ── */}
+      <DateIndicator activeDay={selectedDate} today={today} />
+
       {/* ── Day wheel picker ── */}
       <div style={{
         display: 'flex', justifyContent: 'center', alignItems: 'center',
-        background: 'var(--bg)', padding: '5px 0',
+        background: 'var(--bg)', paddingBottom: 6,
       }}>
         <div style={{ width: 'clamp(160px, 33vw, 240px)' }}>
-          <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} dark={theme === 'night'} />
+          <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} dark={theme === 'night'} />
         </div>
       </div>
 
