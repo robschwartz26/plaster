@@ -68,63 +68,80 @@ export async function sampleCornerColors(url: string): Promise<string[]> {
   })
 }
 
-// Scans from each edge inward at natural image size.
-// Compares 10-pixel row/col samples against the top-left corner color.
-// Applies a 2px inset after detection to avoid capturing the border pixel.
+// Scans from each edge inward on a 400px-wide canvas.
+// Uses row 0 average as reference for top/bottom scans and col 0 average for left/right scans.
+// Threshold: 25 mean absolute difference. Buffer: 3px inward after detection.
+// Returns full image if no threshold is ever exceeded.
 export async function detectContentBounds(src: string): Promise<CropRect> {
   return new Promise(resolve => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      const W = img.naturalWidth, H = img.naturalHeight
-      if (!W || !H) { resolve({ x: 0, y: 0, width: 1, height: 1 }); return }
+      const NW = img.naturalWidth, NH = img.naturalHeight
+      if (!NW || !NH) { resolve({ x: 0, y: 0, width: 1, height: 1 }); return }
 
+      const CW = 400
+      const CH = Math.round(NH * CW / NW)
       const canvas = document.createElement('canvas')
-      canvas.width = W; canvas.height = H
+      canvas.width = CW; canvas.height = CH
       const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0)
-      const data = ctx.getImageData(0, 0, W, H).data
+      ctx.drawImage(img, 0, 0, CW, CH)
+      const data = ctx.getImageData(0, 0, CW, CH).data
 
-      const THRESH = 20
+      const THRESH = 25
       const SAMPLES = 10
-      const INSET = 2
+      const BUFFER = 3
 
-      // Reference: top-left corner pixel
-      const refR = data[0], refG = data[1], refB = data[2]
-
-      function rowSample(y: number): [number, number, number] {
+      function rowAvg(y: number): [number, number, number] {
         let r = 0, g = 0, b = 0
         for (let s = 0; s < SAMPLES; s++) {
-          const x = Math.floor(s * (W - 1) / (SAMPLES - 1))
-          const i = (y * W + x) * 4
+          const x = Math.floor(s * (CW - 1) / (SAMPLES - 1))
+          const i = (y * CW + x) * 4
           r += data[i]; g += data[i + 1]; b += data[i + 2]
         }
         return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
       }
 
-      function colSample(x: number): [number, number, number] {
+      function colAvg(x: number): [number, number, number] {
         let r = 0, g = 0, b = 0
         for (let s = 0; s < SAMPLES; s++) {
-          const y = Math.floor(s * (H - 1) / (SAMPLES - 1))
-          const i = (y * W + x) * 4
+          const y = Math.floor(s * (CH - 1) / (SAMPLES - 1))
+          const i = (y * CW + x) * 4
           r += data[i]; g += data[i + 1]; b += data[i + 2]
         }
         return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
       }
 
-      function diff([r, g, b]: [number, number, number]): number {
-        return (Math.abs(r - refR) + Math.abs(g - refG) + Math.abs(b - refB)) / 3
+      function rowDiff(y: number, ref: [number, number, number]): number {
+        const [r, g, b] = rowAvg(y)
+        return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
       }
 
-      let top = 0, bottom = H - 1, left = 0, right = W - 1
+      function colDiff(x: number, ref: [number, number, number]): number {
+        const [r, g, b] = colAvg(x)
+        return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
+      }
 
-      for (let y = 0; y < H; y++)     { if (diff(rowSample(y)) > THRESH) { top    = Math.min(y + INSET, H - 1); break } }
-      for (let y = H - 1; y > top; y--)  { if (diff(rowSample(y)) > THRESH) { bottom = Math.max(y - INSET, 0);   break } }
-      for (let x = 0; x < W; x++)     { if (diff(colSample(x)) > THRESH) { left   = Math.min(x + INSET, W - 1); break } }
-      for (let x = W - 1; x > left; x--) { if (diff(colSample(x)) > THRESH) { right  = Math.max(x - INSET, 0);   break } }
+      const topRef = rowAvg(0)
+      const bottomRef = rowAvg(CH - 1)
+      const leftRef = colAvg(0)
+      const rightRef = colAvg(CW - 1)
 
-      const fx = left / W, fy = top / H
-      const fw = (right - left) / W, fh = (bottom - top) / H
+      let top = -1, bottom = -1, left = -1, right = -1
+
+      for (let y = 0; y < CH; y++)         { if (rowDiff(y, topRef) > THRESH)    { top    = Math.min(y + BUFFER, CH - 1); break } }
+      for (let y = CH - 1; y >= 0; y--)   { if (rowDiff(y, bottomRef) > THRESH) { bottom = Math.max(y - BUFFER, 0);     break } }
+      for (let x = 0; x < CW; x++)         { if (colDiff(x, leftRef) > THRESH)   { left   = Math.min(x + BUFFER, CW - 1); break } }
+      for (let x = CW - 1; x >= 0; x--)   { if (colDiff(x, rightRef) > THRESH)  { right  = Math.max(x - BUFFER, 0);     break } }
+
+      // If any edge never exceeded the threshold, return full image
+      if (top === -1 || bottom === -1 || left === -1 || right === -1 || bottom <= top || right <= left) {
+        resolve({ x: 0, y: 0, width: 1, height: 1 })
+        return
+      }
+
+      const fx = left / CW, fy = top / CH
+      const fw = (right - left) / CW, fh = (bottom - top) / CH
 
       if (fx < 0.02 && fy < 0.02 && fw > 0.96 && fh > 0.96) {
         resolve({ x: 0, y: 0, width: 1, height: 1 })

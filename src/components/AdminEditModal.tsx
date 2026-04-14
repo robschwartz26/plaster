@@ -12,7 +12,7 @@ interface Venue { id: string; name: string; neighborhood?: string }
 interface Props {
   event: WallEvent
   onClose: () => void
-  onSaved: () => void
+  onSaved: (newPosterUrl?: string) => void
 }
 
 const inputSt: React.CSSProperties = {
@@ -159,18 +159,22 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
     if (!imageFile) return
     setSaving('crop'); setSaveError('')
     try {
+      console.log('[SaveCrop] Optimizing image with crop:', editCrop)
       const optimized = await optimizeImage(imageFile, editCrop)
       const slug = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)
       const filename = `${Date.now()}-${slug}.jpg`
+      console.log('[SaveCrop] Uploading to storage:', filename)
       const { error: storageError } = await supabase.storage
         .from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
-      if (storageError) throw storageError
+      if (storageError) { console.error('[SaveCrop] Storage error:', storageError); throw storageError }
       const { data: urlData } = supabase.storage.from('posters').getPublicUrl(filename)
+      console.log('[SaveCrop] Public URL:', urlData.publicUrl)
       const { error: updateError } = await supabase.from('events')
         .update({ poster_url: urlData.publicUrl }).eq('id', event.id)
-      if (updateError) throw updateError
+      if (updateError) { console.error('[SaveCrop] DB update error:', updateError); throw updateError }
+      console.log('[SaveCrop] DB updated successfully for event:', event.id)
       setCropMode(false)
-      onSaved()
+      onSaved(urlData.publicUrl)
     } catch (e) {
       setSaveError(String(e))
     } finally {

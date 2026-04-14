@@ -140,7 +140,12 @@ export function Wall() {
         onLike={handleLike}
         onVenueTap={handleVenueTap}
         isAdminMode={isAdminMode}
-        onEventSaved={fetchEvents}
+        onEventSaved={(eventId, newPosterUrl) => {
+          if (newPosterUrl) {
+            setEvents(prev => prev.map(e => e.id === eventId ? { ...e, poster_url: newPosterUrl } : e))
+          }
+          fetchEvents()
+        }}
       />
 
       <BottomNav />

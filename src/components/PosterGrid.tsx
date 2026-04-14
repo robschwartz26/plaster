@@ -30,7 +30,7 @@ interface Props {
   onLike: (eventId: string) => void
   onVenueTap?: (venueId: string) => void
   isAdminMode?: boolean
-  onEventSaved?: () => void
+  onEventSaved?: (eventId: string, newPosterUrl?: string) => void
 }
 
 function clamp(v: number, min: number, max: number) {

@@ -15,7 +15,7 @@ interface Props {
   onDoubleTap?: (event: WallEvent) => void
   onLike: (eventId: string) => void
   isAdminMode?: boolean
-  onEventSaved?: () => void
+  onEventSaved?: (eventId: string, newPosterUrl?: string) => void
 }
 
 interface EventDetail {
@@ -471,7 +471,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           <AdminEditModal
             event={event}
             onClose={() => setShowEdit(false)}
-            onSaved={() => { setShowEdit(false); onEventSaved?.() }}
+            onSaved={(newUrl) => { setShowEdit(false); onEventSaved?.(event.id, newUrl) }}
           />
         )}
       </div>
@@ -547,7 +547,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         <AdminEditModal
           event={event}
           onClose={() => setShowEdit(false)}
-          onSaved={() => { setShowEdit(false); onEventSaved?.() }}
+          onSaved={(newUrl) => { setShowEdit(false); onEventSaved?.(event.id, newUrl) }}
         />
       )}
     </div>
