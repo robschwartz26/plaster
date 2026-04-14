@@ -250,7 +250,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     function tick() {
       velRef.current *= 0.88
       if (Math.abs(velRef.current) < 0.5) { snap(); return }
-      const next = Math.max(-(DAY_COUNT - 1) * WHEEL_ITEM_W, Math.min(0, offsetRef.current + velRef.current))
+      const next = offsetRef.current + velRef.current
       offsetRef.current = next; setOffset(next)
       rafRef.current = requestAnimationFrame(tick)
     }
@@ -269,7 +269,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     const dx = e.clientX - lastXRef.current
     const dt = Math.max(1, e.timeStamp - lastTRef.current)
     velRef.current = (dx / dt) * 16
-    const next = Math.max(-(DAY_COUNT - 1) * WHEEL_ITEM_W, Math.min(0, offsetRef.current + dx))
+    const next = offsetRef.current + dx
     offsetRef.current = next; setOffset(next)
     lastXRef.current = e.clientX; lastTRef.current = e.timeStamp
   }
