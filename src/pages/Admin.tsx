@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { PlasterHeader } from '@/components/PlasterHeader'
-import { type CropRect, type CropHandle, clampN, applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds } from '@/lib/cropUtils'
+import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds } from '@/lib/cropUtils'
 
 // ── Constants ────────────────────────────────────────────────
 
