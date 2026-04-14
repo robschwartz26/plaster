@@ -427,24 +427,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                 <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
               </div>
             )}
-            {isAdminMode && (
-              <button
-                onClick={e => { e.stopPropagation(); setShowEdit(true) }}
-                style={{
-                  position: 'absolute', top: 'max(10px, env(safe-area-inset-top))', right: 10,
-                  width: 32, height: 32,
-                  background: 'rgba(0,0,0,0.58)',
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
-                  border: '1px solid rgba(168,85,247,0.55)',
-                  borderRadius: 6,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 15, cursor: 'pointer', zIndex: 20,
-                }}
-              >
-                ✏️
-              </button>
-            )}
           </div>
 
           {/* Panel 2: Info */}
@@ -462,6 +444,28 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             {renderPosterContent()}
           </div>
         </div>
+
+        {/* ✏️ edit button — outside the strip so it stays fixed over all panels */}
+        {isAdminMode && (
+          <button
+            onClick={e => { e.stopPropagation(); setShowEdit(true) }}
+            style={{
+              position: 'absolute',
+              bottom: 'max(14px, env(safe-area-inset-bottom))',
+              right: 14,
+              width: 34, height: 34,
+              background: 'rgba(0,0,0,0.58)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              border: '1px solid rgba(168,85,247,0.55)',
+              borderRadius: 8,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, cursor: 'pointer', zIndex: 20,
+            }}
+          >
+            ✏️
+          </button>
+        )}
 
         {showEdit && (
           <AdminEditModal
