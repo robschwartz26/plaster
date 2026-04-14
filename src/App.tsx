@@ -12,6 +12,7 @@ const YouScreen    = lazy(() => import('./pages/YouScreen').then(m => ({ default
 const VenuesScreen = lazy(() => import('./pages/VenuesScreen').then(m => ({ default: m.VenuesScreen })))
 const VenueProfile = lazy(() => import('./pages/VenueProfile').then(m => ({ default: m.VenueProfile })))
 const Tonight      = lazy(() => import('./pages/TonightScreen').then(m => ({ default: m.TonightScreen })))
+const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -37,22 +38,6 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function MapPlaceholder() {
-  return (
-    <div style={{
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'var(--bg)',
-      color: 'var(--fg-30)',
-      fontFamily: '"Space Grotesk", sans-serif',
-      fontSize: 14,
-    }}>
-      Map — coming soon
-    </div>
-  )
-}
 
 function AppRoutes() {
   return (
@@ -63,7 +48,7 @@ function AppRoutes() {
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/"           element={<ProtectedRoute><Wall /></ProtectedRoute>} />
         <Route path="/tonight"    element={<ProtectedRoute><Tonight /></ProtectedRoute>} />
-        <Route path="/map"        element={<ProtectedRoute><MapPlaceholder /></ProtectedRoute>} />
+        <Route path="/map"        element={<ProtectedRoute><MapScreen /></ProtectedRoute>} />
         <Route path="/venues"     element={<ProtectedRoute><VenuesScreen /></ProtectedRoute>} />
         <Route path="/venue/:id"  element={<ProtectedRoute><VenueProfile /></ProtectedRoute>} />
         <Route path="/you"        element={<ProtectedRoute><YouScreen /></ProtectedRoute>} />
