@@ -11,9 +11,9 @@ import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
+import { useTheme } from '@/hooks/useTheme'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
-const MAP_STYLE = 'mapbox://styles/mapbox/dark-v11'
 const PORTLAND = { latitude: 45.5051, longitude: -122.6750 }
 
 const CHIPS = ['All', '♥', 'Music', 'Drag', 'Dance', 'Art', 'Film', 'Literary', 'Trivia', 'Other'] as const
@@ -86,9 +86,14 @@ interface VenueEvent {
 // ── Component ─────────────────────────────────────────────────────────────────
 export function MapScreen() {
   const { user } = useAuth()
+  const { theme } = useTheme()
   const navigate = useNavigate()
   const mapRef = useRef<any>(null)
   const mapLoadedRef = useRef(false)
+
+  const mapStyle = theme === 'day'
+    ? 'mapbox://styles/mapbox/light-v11'
+    : 'mapbox://styles/mapbox/dark-v11'
 
   const today = todayStr()
   const [dayIdx, setDayIdx] = useState(0)
@@ -255,40 +260,79 @@ export function MapScreen() {
       })
     : []
 
-  // ── Day scrubber drag ─────────────────────────────────────────────────────
-  const scrubRef = useRef<HTMLDivElement>(null)
-  const isDragging = useRef(false)
-  const [liveIdx, setLiveIdx] = useState<number | null>(null)
-  const displayIdx = liveIdx ?? dayIdx
-  const SCRUB_PAD = 16
+  // ── Wheel picker ──────────────────────────────────────────────────────────
+  const ITEM_W = 80
+  const wheelOffsetRef = useRef(0)
+  const [wheelOffset, setWheelOffset] = useState(0)
+  const wheelDragging = useRef(false)
+  const velRef = useRef(0)
+  const lastXRef = useRef(0)
+  const lastTRef = useRef(0)
+  const rafRef = useRef<number | null>(null)
 
-  function idxFromPointer(clientX: number): number {
-    const el = scrubRef.current
-    if (!el) return dayIdx
-    const rect = el.getBoundingClientRect()
-    const trackW = rect.width - SCRUB_PAD * 2
-    const relX = Math.max(0, Math.min(trackW, clientX - rect.left - SCRUB_PAD))
-    return Math.round((relX / trackW) * (DAY_COUNT - 1))
+  // Cleanup RAF on unmount
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
+
+  const activeDayIdx = Math.round(Math.max(0, Math.min(DAY_COUNT - 1, -wheelOffset / ITEM_W)))
+
+  function snapWheel() {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    const raw = -wheelOffsetRef.current / ITEM_W
+    const idx = Math.max(0, Math.min(DAY_COUNT - 1, Math.round(raw)))
+    const target = -idx * ITEM_W
+    function tick() {
+      const diff = target - wheelOffsetRef.current
+      if (Math.abs(diff) < 0.3) {
+        wheelOffsetRef.current = target
+        setWheelOffset(target)
+        setDayIdx(idx)
+        return
+      }
+      wheelOffsetRef.current += diff * 0.18
+      setWheelOffset(wheelOffsetRef.current)
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
   }
 
-  function onScrubPointerDown(e: React.PointerEvent) {
+  function startMomentum() {
+    function tick() {
+      velRef.current *= 0.90
+      if (Math.abs(velRef.current) < 0.5) { snapWheel(); return }
+      const next = Math.max(-(DAY_COUNT - 1) * ITEM_W, Math.min(0, wheelOffsetRef.current + velRef.current))
+      wheelOffsetRef.current = next
+      setWheelOffset(next)
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }
+
+  function onWheelDown(e: React.PointerEvent) {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
     e.currentTarget.setPointerCapture(e.pointerId)
-    isDragging.current = true
-    setLiveIdx(idxFromPointer(e.clientX))
-  }
-  function onScrubPointerMove(e: React.PointerEvent) {
-    if (!isDragging.current) return
-    setLiveIdx(idxFromPointer(e.clientX))
-  }
-  function onScrubPointerUp(e: React.PointerEvent) {
-    if (!isDragging.current) return
-    isDragging.current = false
-    const idx = idxFromPointer(e.clientX)
-    setDayIdx(idx)
-    setLiveIdx(null)
+    wheelDragging.current = true
+    velRef.current = 0
+    lastXRef.current = e.clientX
+    lastTRef.current = e.timeStamp
   }
 
-  const thumbPct = (displayIdx / (DAY_COUNT - 1)) * 100
+  function onWheelMove(e: React.PointerEvent) {
+    if (!wheelDragging.current) return
+    const dx = e.clientX - lastXRef.current
+    const dt = Math.max(1, e.timeStamp - lastTRef.current)
+    velRef.current = (dx / dt) * 16
+    const next = Math.max(-(DAY_COUNT - 1) * ITEM_W, Math.min(0, wheelOffsetRef.current + dx))
+    wheelOffsetRef.current = next
+    setWheelOffset(next)
+    lastXRef.current = e.clientX
+    lastTRef.current = e.timeStamp
+  }
+
+  function onWheelUp() {
+    if (!wheelDragging.current) return
+    wheelDragging.current = false
+    startMomentum()
+  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -341,7 +385,7 @@ export function MapScreen() {
           onMove={(e) => setViewState(e.viewState)}
           onLoad={handleMapLoad}
           style={{ width: '100%', height: '100%' }}
-          mapStyle={MAP_STYLE}
+          mapStyle={mapStyle}
           mapboxAccessToken={MAPBOX_TOKEN}
           attributionControl={false}
           onClick={() => { setSelectedVenue(null) }}
@@ -592,70 +636,84 @@ export function MapScreen() {
         </AnimatePresence>
       </div>
 
-      {/* ── Day scrubber ── */}
-      <div
-        style={{
-          background: 'rgba(12,11,11,0.97)',
-          borderTop: '1px solid rgba(240,236,227,0.08)',
-          padding: '10px 0 10px',
-          flexShrink: 0,
-          userSelect: 'none',
-          touchAction: 'none',
-        }}
-      >
-        {/* Day labels */}
-        <div style={{ position: 'relative', height: 18, marginBottom: 6, paddingLeft: SCRUB_PAD, paddingRight: SCRUB_PAD }}>
-          {Array.from({ length: DAY_COUNT }, (_, i) => {
-            const pct = i / (DAY_COUNT - 1)
-            const isActive = i === displayIdx
-            return (
-              <span
-                key={i}
-                onClick={() => setDayIdx(i)}
-                style={{
-                  position: 'absolute',
-                  left: `calc(${SCRUB_PAD}px + ${pct * 100}% - ${SCRUB_PAD * 2 * pct}px)`,
-                  transform: 'translateX(-50%)',
-                  fontFamily: '"Space Grotesk", sans-serif',
-                  fontSize: 10, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? '#f0ece3' : 'rgba(240,236,227,0.3)',
-                  whiteSpace: 'nowrap', cursor: 'pointer',
-                  transition: 'color 150ms ease, font-weight 150ms ease',
-                }}
-              >
-                {dayShortLabel(i, today)}
-              </span>
-            )
-          })}
-        </div>
-
-        {/* Track + thumb */}
-        <div
-          ref={scrubRef}
-          onPointerDown={onScrubPointerDown}
-          onPointerMove={onScrubPointerMove}
-          onPointerUp={onScrubPointerUp}
-          onPointerCancel={onScrubPointerUp}
-          style={{ position: 'relative', height: 44, paddingLeft: SCRUB_PAD, paddingRight: SCRUB_PAD, display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-        >
-          {/* Track background */}
-          <div style={{ position: 'absolute', left: SCRUB_PAD, right: SCRUB_PAD, height: 2, borderRadius: 1, background: 'rgba(240,236,227,0.15)' }} />
-          {/* Active fill */}
-          <div style={{ position: 'absolute', left: SCRUB_PAD, right: `calc(${100 - thumbPct}% * (100% - ${SCRUB_PAD * 2}px) / 100%)`, height: 2, borderRadius: 1, background: '#f0ece3' }} />
-          {/* Thumb */}
+      {/* ── Day wheel picker ── */}
+      {(() => {
+        const isNight = theme === 'night'
+        const bgColor = isNight ? 'rgba(12,11,11,0.97)' : 'rgba(240,236,227,0.97)'
+        const borderColor = isNight ? 'rgba(240,236,227,0.08)' : 'rgba(12,11,11,0.08)'
+        const fgColor = isNight ? '#f0ece3' : '#0c0b0b'
+        const fadeStart = isNight ? 'rgba(12,11,11,1)' : 'rgba(240,236,227,1)'
+        const fadeEnd = isNight ? 'rgba(12,11,11,0)' : 'rgba(240,236,227,0)'
+        const bandBg = isNight ? 'rgba(240,236,227,0.06)' : 'rgba(12,11,11,0.06)'
+        const bandBorder = isNight ? 'rgba(240,236,227,0.12)' : 'rgba(12,11,11,0.12)'
+        return (
           <div
             style={{
-              position: 'absolute',
-              left: `calc(${SCRUB_PAD}px + ${thumbPct / 100} * (100% - ${SCRUB_PAD * 2}px) - 11px)`,
-              width: 22, height: 22,
-              borderRadius: '50%',
-              background: '#f0ece3',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-              transition: isDragging.current ? 'none' : 'left 200ms ease',
+              flexShrink: 0,
+              background: bgColor,
+              borderTop: `1px solid ${borderColor}`,
+              height: 72,
+              position: 'relative',
+              touchAction: 'none',
+              userSelect: 'none',
+              overflow: 'hidden',
+              cursor: 'grab',
             }}
-          />
-        </div>
-      </div>
+            onPointerDown={onWheelDown}
+            onPointerMove={onWheelMove}
+            onPointerUp={onWheelUp}
+            onPointerCancel={onWheelUp}
+          >
+            {/* Center highlight band */}
+            <div style={{
+              position: 'absolute', left: '50%', top: 10, bottom: 10,
+              transform: `translateX(-${ITEM_W / 2}px)`,
+              width: ITEM_W, background: bandBg,
+              borderRadius: 10, border: `1px solid ${bandBorder}`,
+              pointerEvents: 'none', zIndex: 1,
+            }} />
+
+            {/* Day items */}
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
+              {Array.from({ length: DAY_COUNT }, (_, i) => {
+                const centerOffset = wheelOffset + i * ITEM_W
+                const dist = Math.abs(centerOffset)
+                const opacity = Math.max(0.12, 1 - dist / (ITEM_W * 2))
+                const isActive = i === activeDayIdx
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      position: 'absolute',
+                      left: `calc(50% + ${centerOffset - ITEM_W / 2}px)`,
+                      width: ITEM_W, height: '100%',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity,
+                    }}
+                  >
+                    <span style={{
+                      fontFamily: '"Space Grotesk", sans-serif',
+                      fontSize: isActive ? 14 : 12,
+                      fontWeight: isActive ? 700 : 400,
+                      color: fgColor,
+                      letterSpacing: isActive ? '-0.01em' : '0.03em',
+                      pointerEvents: 'none',
+                    }}>
+                      {dayShortLabel(i, today)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Edge fade masks */}
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2,
+              background: `linear-gradient(to right, ${fadeStart} 0%, ${fadeEnd} 28%, ${fadeEnd} 72%, ${fadeStart} 100%)`,
+            }} />
+          </div>
+        )
+      })()}
 
       <BottomNav />
     </div>
