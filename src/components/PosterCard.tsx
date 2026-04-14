@@ -92,18 +92,25 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-// Strip layout for 1-col: [PosterClone | PostWall | Info | Poster]
-// Strip width = 400% of card. Each panel = 100% of card (25% of strip).
-// translateX positions:
-//   Poster     (panelIdx 0) → -75%
-//   Info       (panelIdx 1) → -50%
-//   PostWall   (panelIdx 2) → -25%
-//   PosterClone (loop target) →   0%  (identical to Poster, used for seamless loop)
+// Strip layout for 1-col (5 panels, width=500%):
+// [PostWallClone | Poster | Info | PostWall | PosterClone]
 //
-// Right-swipe advances (0→1→2→clone-at-0→snap-back-to-real-0).
-// The strip moves RIGHT on each advance, matching the finger direction.
+// Each panel = 100% of card = 20% of strip.
+// translateX of strip to show each panel:
+//   PostWallClone → 0%   (right-swipe loop target from Poster)
+//   Poster        → -20% (default)
+//   Info          → -40%
+//   PostWall      → -60%
+//   PosterClone   → -80% (left-swipe loop target from PostWall)
+//
+// Left-swipe  (dx<0) = advance:  Poster→Info→PostWall→PosterClone(-80%)→snap Poster(-20%)
+// Right-swipe (dx>0) = go back:  Poster→PostWallClone(0%)→snap PostWall(-60%), Info→Poster, PostWall→Info
 
-const PANEL_PCT = [-75, -50, -25] as const // translateX% for Poster, Info, PostWall
+const PANEL_PCT = [-20, -40, -60] as const // translateX% for Poster, Info, PostWall
+
+// Angle threshold: treat as horizontal if within 60° of horizontal.
+// tan(60°) ≈ 1.732 → horizontal when |dy| ≤ |dx| × TAN60
+const TAN60 = Math.tan(Math.PI / 3)
 
 export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike }: Props) {
   const { user } = useAuth()
@@ -188,42 +195,59 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       .then(({ data }) => setPosts((data as WallPost[] | null) ?? []))
   }
 
-  // ── 1-col: panel advance on right-swipe ───────────────────────────────
-  function advancePanel() {
+  // ── 1-col: panel navigation (both directions) ────────────────────────
+  // dir=1: forward/advance (left-swipe), dir=-1: backward (right-swipe)
+  function shiftPanel(dir: 1 | -1) {
     if (loopingRef.current) return
     const el = stripRef.current
     if (!el) return
     const cur = panelIdxRef.current
 
-    // Fetch detail data on first advance away from poster
+    // Lazy-fetch panel data on first move away from Poster
     if (cur === 0) fetchPanelData()
 
-    if (cur === 2) {
-      // PostWall → PosterClone (seamless loop)
-      loopingRef.current = true
-      el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
-      el.style.transform = 'translateX(0%)' // show PosterClone
-      setTimeout(() => {
-        const el2 = stripRef.current
-        if (el2) {
-          el2.style.transition = 'none'
-          el2.style.transform = `translateX(${PANEL_PCT[0]}%)` // snap back to real Poster
-        }
-        setPanelIdx(0)
-        loopingRef.current = false
-      }, 300)
+    if (dir === 1) {
+      // Forward: Poster→Info→PostWall→PosterClone(loop)→Poster
+      if (cur === 2) {
+        loopingRef.current = true
+        el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
+        el.style.transform = 'translateX(-80%)' // show PosterClone
+        setTimeout(() => {
+          const el2 = stripRef.current
+          if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[0]}%)` }
+          setPanelIdx(0)
+          loopingRef.current = false
+        }, 300)
+      } else {
+        const next = (cur + 1) as 1 | 2
+        el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
+        el.style.transform = `translateX(${PANEL_PCT[next]}%)`
+        setPanelIdx(next)
+      }
     } else {
-      const next = cur + 1 as 1 | 2
-      el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
-      el.style.transform = `translateX(${PANEL_PCT[next]}%)`
-      setPanelIdx(next)
+      // Backward: PostWall→Info→Poster→PostWallClone(loop)→PostWall
+      if (cur === 0) {
+        loopingRef.current = true
+        el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
+        el.style.transform = 'translateX(0%)' // show PostWallClone
+        setTimeout(() => {
+          const el2 = stripRef.current
+          if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[2]}%)` }
+          setPanelIdx(2)
+          loopingRef.current = false
+        }, 300)
+      } else {
+        const prev = (cur - 1) as 0 | 1
+        el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)'
+        el.style.transform = `translateX(${PANEL_PCT[prev]}%)`
+        setPanelIdx(prev)
+      }
     }
   }
 
-  // ── 1-col: swipe gesture (right-swipe only, imperative for passive:false) ──
-  // React synthetic onTouchMove is registered via root delegation and can't
-  // reliably call preventDefault to block scroll. Imperative listeners on the
-  // card element with passive:false give us that control.
+  // ── 1-col: bidirectional swipe (imperative for passive:false) ────────────
+  // React synthetic onTouchMove can't reliably call preventDefault — imperative
+  // listeners on the card element with passive:false give us that control.
   const cardRef = useRef<HTMLDivElement>(null)
   const swipe = useRef({
     active: false,
@@ -259,13 +283,14 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       const dy = e.touches[0].clientY - s.startY
 
       // Lock direction on the very first touchmove — no distance threshold.
-      // This must happen before the browser commits to a scroll direction.
+      // 60° threshold: horizontal if |dy| ≤ |dx| × tan(60°) ≈ 1.732.
+      // Anything within 60° of horizontal is treated as a panel swipe.
       if (s.isHorizontal === null) {
-        s.isHorizontal = Math.abs(dx) >= Math.abs(dy)
+        s.isHorizontal = Math.abs(dy) <= Math.abs(dx) * TAN60
       }
 
       if (!s.isHorizontal) {
-        // Vertical — abandon swipe, restore strip, let scroll container proceed
+        // Vertical — abandon swipe, restore strip, let scroll proceed
         s.active = false
         const strip = stripRef.current
         if (strip) {
@@ -275,32 +300,27 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         return
       }
 
-      // Horizontal confirmed — block all scroll on this and parent containers
+      // Horizontal confirmed — block scroll on this and parent containers
       e.preventDefault()
 
-      // Live right-swipe drag preview (dx > 0 only — no left-swipe)
-      if (dx > 0) {
-        const strip = stripRef.current
-        if (!strip) return
-        const dragPct = (dx / (4 * s.cardW)) * 100
-        strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
-      }
+      // Live drag preview for both directions
+      const strip = stripRef.current
+      if (!strip) return
+      const dragPct = (dx / (5 * s.cardW)) * 100 // 5-panel strip
+      strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
     }
 
     const onEnd = (e: TouchEvent) => {
       const s = swipe.current
-      if (!s.active || s.isHorizontal !== true) {
-        s.active = false
-        return
-      }
+      if (!s.active || s.isHorizontal !== true) { s.active = false; return }
       const dx = e.changedTouches[0].clientX - s.startX
-      const dy = e.changedTouches[0].clientY - s.startY
       s.active = false
 
-      if (dx > 50 && Math.abs(dx) > Math.abs(dy)) {
-        advancePanel()
+      if (Math.abs(dx) > 50) {
+        // left-swipe (dx<0) = advance forward, right-swipe (dx>0) = go back
+        shiftPanel(dx < 0 ? 1 : -1)
       } else {
-        // Threshold not met — snap back to current panel
+        // Threshold not met — snap back
         const strip = stripRef.current
         if (strip) {
           strip.style.transition = 'transform 0.2s ease'
@@ -381,74 +401,72 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           overflow: 'hidden',
         }}
       >
-        {/* 4-panel strip: [PosterClone][PostWall][Info][Poster] */}
-        {/* Each panel = 25% of strip = 100% of card. Strip = 400% wide. */}
-        {/* Initial transform: translateX(-75%) → shows Poster (rightmost panel). */}
+        {/* 5-panel strip: [PostWallClone | Poster | Info | PostWall | PosterClone] */}
+        {/* Each panel = 20% of strip = 100% of card. Strip = 500% wide.        */}
+        {/* Initial transform: translateX(-20%) → shows Poster (panel 1).       */}
         <div
           ref={stripRef}
           style={{
             display: 'flex',
-            width: '400%',
+            width: '500%',
             height: '100%',
-            transform: 'translateX(-75%)',
+            transform: 'translateX(-20%)',
             willChange: 'transform',
           }}
         >
-          {/* ── Panel A: PosterClone (loop target, leftmost) ─────────── */}
-          <div style={{ width: '25%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
-            {renderPosterContent()}
-          </div>
-
-          {/* ── Panel B: PostWall ───────────────────────────────────── */}
+          {/* ── Panel 0: PostWallClone (right-swipe loop target) ─────── */}
           <div style={{
-            width: '25%', flexShrink: 0, height: '100%',
+            width: '20%', flexShrink: 0, height: '100%',
             background: 'var(--bg)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             {renderPostWall()}
           </div>
 
-          {/* ── Panel C: Info ───────────────────────────────────────── */}
+          {/* ── Panel 1: Poster (default view) ───────────────────────── */}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
+            {renderPosterContent()}
+            {/* Dot hint — faint carousel indicator, shown only on Poster panel */}
+            {panelIdx === 0 && (
+              <div style={{
+                position: 'absolute',
+                bottom: 'max(18px, env(safe-area-inset-bottom))',
+                left: 0, right: 0,
+                display: 'flex', justifyContent: 'center',
+                zIndex: 10, pointerEvents: 'none',
+              }}>
+                <span style={{
+                  fontSize: 18,
+                  letterSpacing: '0.25em',
+                  color: 'rgba(255,255,255,0.22)',
+                  lineHeight: 1,
+                  userSelect: 'none',
+                }}>· · ·</span>
+              </div>
+            )}
+          </div>
+
+          {/* ── Panel 2: Info ────────────────────────────────────────── */}
           <div style={{
-            width: '25%', flexShrink: 0, height: '100%',
+            width: '20%', flexShrink: 0, height: '100%',
             background: 'var(--bg)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
             {renderInfo()}
           </div>
 
-          {/* ── Panel D: Poster (rightmost, shown by default) ────────── */}
-          <div style={{ width: '25%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
+          {/* ── Panel 3: PostWall ────────────────────────────────────── */}
+          <div style={{
+            width: '20%', flexShrink: 0, height: '100%',
+            background: 'var(--bg)',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            {renderPostWall()}
+          </div>
+
+          {/* ── Panel 4: PosterClone (left-swipe loop target) ────────── */}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
             {renderPosterContent()}
-            {/* Swipe hint — only shown when on Poster panel */}
-            {panelIdx === 0 && (
-              <div style={{
-                position: 'absolute',
-                bottom: 'max(20px, env(safe-area-inset-bottom))',
-                left: 0, right: 0,
-                display: 'flex', justifyContent: 'center',
-                zIndex: 10, pointerEvents: 'none',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'rgba(0,0,0,0.42)',
-                  backdropFilter: 'blur(6px)',
-                  WebkitBackdropFilter: 'blur(6px)',
-                  borderRadius: 20,
-                  padding: '5px 12px',
-                }}>
-                  <span style={{
-                    fontFamily: '"Space Grotesk", sans-serif',
-                    fontSize: 11,
-                    color: 'rgba(255,255,255,0.65)',
-                    letterSpacing: '0.04em',
-                  }}>swipe for info</span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.65)" strokeWidth="2.5" strokeLinecap="round">
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
