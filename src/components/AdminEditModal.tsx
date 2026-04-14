@@ -156,26 +156,37 @@ export function AdminEditModal({ event, onClose, onSaved }: Props) {
 
   // ── Save Crop ──────────────────────────────────────────────
   const handleSaveCrop = async () => {
-    if (!imageFile) return
+    if (!imageFile) { console.warn('[SaveCrop] No imageFile — aborting'); return }
     setSaving('crop'); setSaveError('')
+    // Note: using anon client (same as Admin.tsx — no service role client exists in browser)
+    console.log('[SaveCrop] Starting. Event ID:', event.id, '| imageFile size:', imageFile.size, '| crop:', editCrop)
     try {
-      console.log('[SaveCrop] Optimizing image with crop:', editCrop)
       const optimized = await optimizeImage(imageFile, editCrop)
+      console.log('[SaveCrop] optimizeImage complete. Blob size:', optimized.size)
+
       const slug = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)
       const filename = `${Date.now()}-${slug}.jpg`
-      console.log('[SaveCrop] Uploading to storage:', filename)
-      const { error: storageError } = await supabase.storage
+      console.log('[SaveCrop] Uploading to storage bucket "posters":', filename)
+      const { error: storageError, data: storageData } = await supabase.storage
         .from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
-      if (storageError) { console.error('[SaveCrop] Storage error:', storageError); throw storageError }
+      if (storageError) { console.error('[SaveCrop] Storage upload error:', storageError); throw storageError }
+      console.log('[SaveCrop] Storage upload success:', storageData)
+
       const { data: urlData } = supabase.storage.from('posters').getPublicUrl(filename)
       console.log('[SaveCrop] Public URL:', urlData.publicUrl)
-      const { error: updateError } = await supabase.from('events')
+
+      console.log('[SaveCrop] Updating events table for event id:', event.id)
+      const { error: updateError, data: updateData } = await supabase.from('events')
         .update({ poster_url: urlData.publicUrl }).eq('id', event.id)
+        .select('id, poster_url')
       if (updateError) { console.error('[SaveCrop] DB update error:', updateError); throw updateError }
-      console.log('[SaveCrop] DB updated successfully for event:', event.id)
+      console.log('[SaveCrop] DB update success:', updateData)
+
       setCropMode(false)
+      console.log('[SaveCrop] Calling onSaved with new URL')
       onSaved(urlData.publicUrl)
     } catch (e) {
+      console.error('[SaveCrop] Caught error:', e)
       setSaveError(String(e))
     } finally {
       setSaving(null)

@@ -73,83 +73,104 @@ export async function sampleCornerColors(url: string): Promise<string[]> {
 // Threshold: 25 mean absolute difference. Buffer: 3px inward after detection.
 // Returns full image if no threshold is ever exceeded.
 export async function detectContentBounds(src: string): Promise<CropRect> {
+  console.log('[detectContentBounds] Starting for:', src)
   return new Promise(resolve => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => {
-      const NW = img.naturalWidth, NH = img.naturalHeight
-      if (!NW || !NH) { resolve({ x: 0, y: 0, width: 1, height: 1 }); return }
-
-      const CW = 400
-      const CH = Math.round(NH * CW / NW)
-      const canvas = document.createElement('canvas')
-      canvas.width = CW; canvas.height = CH
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, CW, CH)
-      const data = ctx.getImageData(0, 0, CW, CH).data
-
-      const THRESH = 25
-      const SAMPLES = 10
-      const BUFFER = 3
-
-      function rowAvg(y: number): [number, number, number] {
-        let r = 0, g = 0, b = 0
-        for (let s = 0; s < SAMPLES; s++) {
-          const x = Math.floor(s * (CW - 1) / (SAMPLES - 1))
-          const i = (y * CW + x) * 4
-          r += data[i]; g += data[i + 1]; b += data[i + 2]
+      console.log('[detectContentBounds] Image loaded, natural size:', img.naturalWidth, 'x', img.naturalHeight)
+      try {
+        const NW = img.naturalWidth, NH = img.naturalHeight
+        if (!NW || !NH) {
+          console.warn('[detectContentBounds] Zero dimensions, returning full image')
+          resolve({ x: 0, y: 0, width: 1, height: 1 }); return
         }
-        return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
-      }
 
-      function colAvg(x: number): [number, number, number] {
-        let r = 0, g = 0, b = 0
-        for (let s = 0; s < SAMPLES; s++) {
-          const y = Math.floor(s * (CH - 1) / (SAMPLES - 1))
-          const i = (y * CW + x) * 4
-          r += data[i]; g += data[i + 1]; b += data[i + 2]
+        const CW = 400
+        const CH = Math.round(NH * CW / NW)
+        console.log('[detectContentBounds] Canvas size:', CW, 'x', CH)
+        const canvas = document.createElement('canvas')
+        canvas.width = CW; canvas.height = CH
+        const ctx = canvas.getContext('2d')!
+        ctx.drawImage(img, 0, 0, CW, CH)
+        const data = ctx.getImageData(0, 0, CW, CH).data
+
+        const THRESH = 25
+        const SAMPLES = 10
+        const BUFFER = 3
+
+        function rowAvg(y: number): [number, number, number] {
+          let r = 0, g = 0, b = 0
+          for (let s = 0; s < SAMPLES; s++) {
+            const x = Math.floor(s * (CW - 1) / (SAMPLES - 1))
+            const i = (y * CW + x) * 4
+            r += data[i]; g += data[i + 1]; b += data[i + 2]
+          }
+          return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
         }
-        return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
-      }
 
-      function rowDiff(y: number, ref: [number, number, number]): number {
-        const [r, g, b] = rowAvg(y)
-        return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
-      }
+        function colAvg(x: number): [number, number, number] {
+          let r = 0, g = 0, b = 0
+          for (let s = 0; s < SAMPLES; s++) {
+            const y = Math.floor(s * (CH - 1) / (SAMPLES - 1))
+            const i = (y * CW + x) * 4
+            r += data[i]; g += data[i + 1]; b += data[i + 2]
+          }
+          return [r / SAMPLES, g / SAMPLES, b / SAMPLES]
+        }
 
-      function colDiff(x: number, ref: [number, number, number]): number {
-        const [r, g, b] = colAvg(x)
-        return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
-      }
+        function rowDiff(y: number, ref: [number, number, number]): number {
+          const [r, g, b] = rowAvg(y)
+          return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
+        }
 
-      const topRef = rowAvg(0)
-      const bottomRef = rowAvg(CH - 1)
-      const leftRef = colAvg(0)
-      const rightRef = colAvg(CW - 1)
+        function colDiff(x: number, ref: [number, number, number]): number {
+          const [r, g, b] = colAvg(x)
+          return (Math.abs(r - ref[0]) + Math.abs(g - ref[1]) + Math.abs(b - ref[2])) / 3
+        }
 
-      let top = -1, bottom = -1, left = -1, right = -1
+        const topRef = rowAvg(0)
+        const bottomRef = rowAvg(CH - 1)
+        const leftRef = colAvg(0)
+        const rightRef = colAvg(CW - 1)
+        console.log('[detectContentBounds] References — topRef:', topRef, 'bottomRef:', bottomRef, 'leftRef:', leftRef, 'rightRef:', rightRef)
 
-      for (let y = 0; y < CH; y++)         { if (rowDiff(y, topRef) > THRESH)    { top    = Math.min(y + BUFFER, CH - 1); break } }
-      for (let y = CH - 1; y >= 0; y--)   { if (rowDiff(y, bottomRef) > THRESH) { bottom = Math.max(y - BUFFER, 0);     break } }
-      for (let x = 0; x < CW; x++)         { if (colDiff(x, leftRef) > THRESH)   { left   = Math.min(x + BUFFER, CW - 1); break } }
-      for (let x = CW - 1; x >= 0; x--)   { if (colDiff(x, rightRef) > THRESH)  { right  = Math.max(x - BUFFER, 0);     break } }
+        let top = -1, bottom = -1, left = -1, right = -1
 
-      // If any edge never exceeded the threshold, return full image
-      if (top === -1 || bottom === -1 || left === -1 || right === -1 || bottom <= top || right <= left) {
+        for (let y = 0; y < CH; y++)         { if (rowDiff(y, topRef) > THRESH)    { top    = Math.min(y + BUFFER, CH - 1); break } }
+        for (let y = CH - 1; y >= 0; y--)   { if (rowDiff(y, bottomRef) > THRESH) { bottom = Math.max(y - BUFFER, 0);     break } }
+        for (let x = 0; x < CW; x++)         { if (colDiff(x, leftRef) > THRESH)   { left   = Math.min(x + BUFFER, CW - 1); break } }
+        for (let x = CW - 1; x >= 0; x--)   { if (colDiff(x, rightRef) > THRESH)  { right  = Math.max(x - BUFFER, 0);     break } }
+
+        console.log('[detectContentBounds] Detected edges (canvas px) — top:', top, 'bottom:', bottom, 'left:', left, 'right:', right)
+
+        // If any edge never exceeded the threshold, return full image
+        if (top === -1 || bottom === -1 || left === -1 || right === -1 || bottom <= top || right <= left) {
+          console.log('[detectContentBounds] Edge(s) never exceeded threshold — returning full image')
+          resolve({ x: 0, y: 0, width: 1, height: 1 })
+          return
+        }
+
+        const fx = left / CW, fy = top / CH
+        const fw = (right - left) / CW, fh = (bottom - top) / CH
+
+        if (fx < 0.02 && fy < 0.02 && fw > 0.96 && fh > 0.96) {
+          console.log('[detectContentBounds] Bounds nearly full image — returning full image')
+          resolve({ x: 0, y: 0, width: 1, height: 1 })
+        } else {
+          const result = { x: fx, y: fy, width: Math.min(fw, 1 - fx), height: Math.min(fh, 1 - fy) }
+          console.log('[detectContentBounds] Result:', result)
+          resolve(result)
+        }
+      } catch (err) {
+        console.error('[detectContentBounds] Canvas error (possible CORS taint):', err)
         resolve({ x: 0, y: 0, width: 1, height: 1 })
-        return
-      }
-
-      const fx = left / CW, fy = top / CH
-      const fw = (right - left) / CW, fh = (bottom - top) / CH
-
-      if (fx < 0.02 && fy < 0.02 && fw > 0.96 && fh > 0.96) {
-        resolve({ x: 0, y: 0, width: 1, height: 1 })
-      } else {
-        resolve({ x: fx, y: fy, width: Math.min(fw, 1 - fx), height: Math.min(fh, 1 - fy) })
       }
     }
-    img.onerror = () => resolve({ x: 0, y: 0, width: 1, height: 1 })
+    img.onerror = (err) => {
+      console.error('[detectContentBounds] Image load error:', err)
+      resolve({ x: 0, y: 0, width: 1, height: 1 })
+    }
     img.src = src
   })
 }
