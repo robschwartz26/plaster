@@ -73,6 +73,290 @@ function formatDayFull(idx: number, today: string): string {
   return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+// ── Knurl wheel constants & renderer ─────────────────────────────────────────
+const WHEEL_H = 88           // drum height in CSS px
+const WHEEL_ITEM_W = 80      // px per day slot
+const WHEEL_COMP = 0.70      // scroll→pattern compression (cylinder effect)
+const WHEEL_PITCH = 12       // diamond knurl pitch in CSS px
+
+function drawKnurl(canvas: HTMLCanvasElement, scrollPx: number): void {
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const dpr = window.devicePixelRatio || 1
+  const CW = canvas.width / dpr
+  const CH = canvas.height / dpr
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+  // 1 ── Cylinder body (dark edges, aluminium centre)
+  const body = ctx.createLinearGradient(0, 0, 0, CH)
+  body.addColorStop(0,    '#050403')
+  body.addColorStop(0.07, '#1c1a16')
+  body.addColorStop(0.22, '#342f2a')
+  body.addColorStop(0.42, '#464038')
+  body.addColorStop(0.50, '#504a42')
+  body.addColorStop(0.58, '#464038')
+  body.addColorStop(0.78, '#342f2a')
+  body.addColorStop(0.93, '#1c1a16')
+  body.addColorStop(1,    '#050403')
+  ctx.fillStyle = body; ctx.fillRect(0, 0, CW, CH)
+
+  // 2 ── Specular highlight band
+  const spec = ctx.createLinearGradient(0, 0, 0, CH)
+  spec.addColorStop(0,    'rgba(255,255,255,0)')
+  spec.addColorStop(0.42, 'rgba(255,255,255,0)')
+  spec.addColorStop(0.48, 'rgba(255,255,255,0.06)')
+  spec.addColorStop(0.50, 'rgba(255,255,255,0.11)')
+  spec.addColorStop(0.52, 'rgba(255,255,255,0.06)')
+  spec.addColorStop(0.58, 'rgba(255,255,255,0)')
+  spec.addColorStop(1,    'rgba(255,255,255,0)')
+  ctx.fillStyle = spec; ctx.fillRect(0, 0, CW, CH)
+
+  // 3 ── Diamond knurl lines
+  const P = WHEEL_PITCH
+  const s = ((scrollPx % P) + P * 1000) % P   // normalised 0..P
+  ctx.strokeStyle = 'rgba(255,244,216,0.13)'; ctx.lineWidth = 0.65
+  // Set A: slope +1
+  for (let a = s - P * (Math.ceil(CH / P) + 2); a < CW + CH; a += P) {
+    ctx.beginPath(); ctx.moveTo(a, 0); ctx.lineTo(a + CH, CH); ctx.stroke()
+  }
+  // Set B: slope -1
+  for (let b = s - P * 2; b < CW + CH + P; b += P) {
+    ctx.beginPath(); ctx.moveTo(b, 0); ctx.lineTo(b - CH, CH); ctx.stroke()
+  }
+
+  // 4 ── Pyramid highlights at each intersection
+  //   A_i  :  y = x − (s + i·P)
+  //   B_j  :  y = −x + (s + j·P)
+  //   Meet at ix = s + (i+j)·P/2,  iy = (j−i)·P/2
+  //   Valid iff sum = i+j and diff = j−i have the same parity
+  const halfP = P / 2
+  const maxDiff = Math.ceil(CH / halfP) + 1
+  const sumMin = Math.floor((-2 - s) / halfP) - 2
+  const sumMax = Math.ceil((CW + 2 - s) / halfP) + 2
+  ctx.fillStyle = 'rgba(255,248,214,0.52)'
+  for (let diff = 0; diff <= maxDiff; diff++) {
+    const iy = diff * halfP
+    if (iy > CH + 1) break
+    for (let sum = sumMin; sum <= sumMax; sum++) {
+      if ((sum + diff) % 2 !== 0) continue   // parity guard
+      const ix = s + sum * halfP
+      if (ix < -1 || ix > CW + 1) continue
+      // Offset upper-left to simulate light from that direction
+      ctx.beginPath(); ctx.arc(ix - 0.6, iy - 0.6, 1.4, 0, Math.PI * 2); ctx.fill()
+    }
+  }
+
+  // 5 ── Machined bevel lips
+  const topLip = ctx.createLinearGradient(0, 0, 0, 7)
+  topLip.addColorStop(0, 'rgba(172,163,148,0.90)')
+  topLip.addColorStop(0.5, 'rgba(118,112,100,0.60)')
+  topLip.addColorStop(1, 'rgba(68,64,56,0)')
+  ctx.fillStyle = topLip; ctx.fillRect(0, 0, CW, 7)
+  const botLip = ctx.createLinearGradient(0, CH - 7, 0, CH)
+  botLip.addColorStop(0, 'rgba(68,64,56,0)')
+  botLip.addColorStop(0.5, 'rgba(118,112,100,0.60)')
+  botLip.addColorStop(1, 'rgba(172,163,148,0.90)')
+  ctx.fillStyle = botLip; ctx.fillRect(0, CH - 7, CW, 7)
+  // Bright edge lines
+  ctx.fillStyle = 'rgba(196,188,174,0.75)'
+  ctx.fillRect(0, 0, CW, 1); ctx.fillRect(0, CH - 1, CW, 1)
+
+  // 6 ── Side fades into housing
+  const fadeW = 50
+  const lf = ctx.createLinearGradient(0, 0, fadeW, 0)
+  lf.addColorStop(0, 'rgba(14,12,10,0.94)'); lf.addColorStop(1, 'rgba(14,12,10,0)')
+  ctx.fillStyle = lf; ctx.fillRect(0, 0, fadeW, CH)
+  const rf = ctx.createLinearGradient(CW - fadeW, 0, CW, 0)
+  rf.addColorStop(0, 'rgba(14,12,10,0)'); rf.addColorStop(1, 'rgba(14,12,10,0.94)')
+  ctx.fillStyle = rf; ctx.fillRect(CW - fadeW, 0, fadeW, CH)
+
+  // 7 ── Centre selector lines (white verticals)
+  const cx = CW / 2
+  const hw = WHEEL_ITEM_W / 2
+  ctx.strokeStyle = 'rgba(255,255,255,0.52)'; ctx.lineWidth = 1
+  ctx.beginPath(); ctx.moveTo(cx - hw, 10); ctx.lineTo(cx - hw, CH - 10); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(cx + hw, 10); ctx.lineTo(cx + hw, CH - 10); ctx.stroke()
+
+  // 8 ── Red top indicator dot
+  ctx.fillStyle = '#c42000'
+  ctx.beginPath(); ctx.arc(cx, 5, 3.5, 0, Math.PI * 2); ctx.fill()
+  ctx.fillStyle = 'rgba(255,105,85,0.45)'
+  ctx.beginPath(); ctx.arc(cx - 1.0, 4.0, 1.6, 0, Math.PI * 2); ctx.fill()
+}
+
+interface KnurlWheelProps {
+  dayIdx: number
+  setDayIdx: (i: number) => void
+  today: string
+}
+
+function KnurlWheelPicker({ dayIdx, setDayIdx, today }: KnurlWheelProps) {
+  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const canvasReady  = useRef(false)
+
+  const offsetRef  = useRef(-dayIdx * WHEEL_ITEM_W)
+  const [offset, setOffset] = useState(-dayIdx * WHEEL_ITEM_W)
+  const velRef     = useRef(0)
+  const lastXRef   = useRef(0)
+  const lastTRef   = useRef(0)
+  const dragging   = useRef(false)
+  const rafRef     = useRef<number | null>(null)
+
+  // Cleanup on unmount
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
+
+  // Init canvas dimensions + watch resize
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+    function resize() {
+      const dpr = window.devicePixelRatio || 1
+      const w = container!.offsetWidth
+      if (!w) return
+      canvas!.width  = w * dpr
+      canvas!.height = WHEEL_H * dpr
+      canvasReady.current = true
+      drawKnurl(canvas!, offsetRef.current * WHEEL_COMP)
+    }
+    resize()
+    const ro = new ResizeObserver(resize)
+    ro.observe(container)
+    return () => ro.disconnect()
+  }, [])
+
+  // Redraw whenever offset changes
+  useEffect(() => {
+    if (!canvasReady.current || !canvasRef.current) return
+    drawKnurl(canvasRef.current, offset * WHEEL_COMP)
+  }, [offset])
+
+  const activeIdx = Math.round(Math.max(0, Math.min(DAY_COUNT - 1, -offset / WHEEL_ITEM_W)))
+
+  // ── Snap animation
+  function snap() {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    const idx    = Math.max(0, Math.min(DAY_COUNT - 1, Math.round(-offsetRef.current / WHEEL_ITEM_W)))
+    const target = -idx * WHEEL_ITEM_W
+    function tick() {
+      const diff = target - offsetRef.current
+      if (Math.abs(diff) < 0.25) {
+        offsetRef.current = target; setOffset(target); setDayIdx(idx); return
+      }
+      offsetRef.current += diff * 0.18
+      setOffset(offsetRef.current)
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }
+
+  // ── Momentum
+  function startMomentum() {
+    function tick() {
+      velRef.current *= 0.88
+      if (Math.abs(velRef.current) < 0.5) { snap(); return }
+      const next = Math.max(-(DAY_COUNT - 1) * WHEEL_ITEM_W, Math.min(0, offsetRef.current + velRef.current))
+      offsetRef.current = next; setOffset(next)
+      rafRef.current = requestAnimationFrame(tick)
+    }
+    rafRef.current = requestAnimationFrame(tick)
+  }
+
+  function onDown(e: React.PointerEvent) {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current)
+    e.currentTarget.setPointerCapture(e.pointerId)
+    dragging.current = true; velRef.current = 0
+    lastXRef.current = e.clientX; lastTRef.current = e.timeStamp
+  }
+
+  function onMove(e: React.PointerEvent) {
+    if (!dragging.current) return
+    const dx = e.clientX - lastXRef.current
+    const dt = Math.max(1, e.timeStamp - lastTRef.current)
+    velRef.current = (dx / dt) * 16
+    const next = Math.max(-(DAY_COUNT - 1) * WHEEL_ITEM_W, Math.min(0, offsetRef.current + dx))
+    offsetRef.current = next; setOffset(next)
+    lastXRef.current = e.clientX; lastTRef.current = e.timeStamp
+  }
+
+  function onUp() {
+    if (!dragging.current) return
+    dragging.current = false; startMomentum()
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        flexShrink: 0,
+        height: WHEEL_H + 18,
+        background: '#0e0c0a',
+        borderTop: '1px solid rgba(0,0,0,0.7)',
+        position: 'relative',
+        touchAction: 'none', userSelect: 'none',
+        overflow: 'hidden', cursor: 'grab',
+        boxShadow: 'inset 0 3px 12px rgba(0,0,0,0.85), inset 0 -3px 12px rgba(0,0,0,0.85)',
+      }}
+      onPointerDown={onDown} onPointerMove={onMove}
+      onPointerUp={onUp}     onPointerCancel={onUp}
+    >
+      {/* Canvas: knurl texture */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute', top: 9, left: 0,
+          width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
+        }}
+      />
+
+      {/* Day label overlay */}
+      <div style={{ position: 'absolute', top: 9, left: 0, right: 0, height: WHEEL_H, overflow: 'hidden', pointerEvents: 'none' }}>
+        {Array.from({ length: DAY_COUNT }, (_, i) => {
+          const pos  = offset + i * WHEEL_ITEM_W
+          const dist = Math.abs(pos)
+          const op   = Math.max(0.07, 1 - dist / (WHEEL_ITEM_W * 2.1))
+          const act  = i === activeIdx
+          return (
+            <div key={i} style={{
+              position: 'absolute',
+              left: `calc(50% + ${pos - WHEEL_ITEM_W / 2}px)`,
+              width: WHEEL_ITEM_W, height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              opacity: op, pointerEvents: 'none',
+            }}>
+              <span style={{
+                fontFamily: '"Space Grotesk", sans-serif',
+                fontSize: act ? 13 : 11,
+                fontWeight: act ? 700 : 400,
+                color: '#f0ece3',
+                letterSpacing: act ? 0 : '0.04em',
+                textShadow: act ? '0 1px 5px rgba(0,0,0,0.95)' : 'none',
+                pointerEvents: 'none',
+              }}>
+                {dayShortLabel(i, today)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Red pip indicators */}
+      <div style={{ position: 'absolute', bottom: 4, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5, pointerEvents: 'none' }}>
+        {Array.from({ length: DAY_COUNT }, (_, i) => (
+          <div key={i} style={{
+            width:  i === activeIdx ? 5 : 3,
+            height: i === activeIdx ? 5 : 3,
+            borderRadius: '50%',
+            background: i === activeIdx ? '#c42000' : 'rgba(240,236,227,0.18)',
+            transition: 'all 150ms ease',
+          }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface VenueEvent {
   id: string
@@ -151,6 +435,13 @@ export function MapScreen() {
     setupLayers(map)
     map.on('style.load', () => setupLayers(map))
   }, [setupLayers])
+
+  // ── Dynamic map style switch (theme toggle) ───────────────────────────────
+  useEffect(() => {
+    if (!mapLoadedRef.current || !mapRef.current) return
+    const map = mapRef.current?.getMap?.() ?? mapRef.current
+    if (map?.getStyle?.()) map.setStyle(mapStyle)
+  }, [mapStyle])
 
   useEffect(() => {
     if (!mapLoadedRef.current || !mapRef.current) return
@@ -260,79 +551,6 @@ export function MapScreen() {
       })
     : []
 
-  // ── Wheel picker ──────────────────────────────────────────────────────────
-  const ITEM_W = 80
-  const wheelOffsetRef = useRef(0)
-  const [wheelOffset, setWheelOffset] = useState(0)
-  const wheelDragging = useRef(false)
-  const velRef = useRef(0)
-  const lastXRef = useRef(0)
-  const lastTRef = useRef(0)
-  const rafRef = useRef<number | null>(null)
-
-  // Cleanup RAF on unmount
-  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }, [])
-
-  const activeDayIdx = Math.round(Math.max(0, Math.min(DAY_COUNT - 1, -wheelOffset / ITEM_W)))
-
-  function snapWheel() {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    const raw = -wheelOffsetRef.current / ITEM_W
-    const idx = Math.max(0, Math.min(DAY_COUNT - 1, Math.round(raw)))
-    const target = -idx * ITEM_W
-    function tick() {
-      const diff = target - wheelOffsetRef.current
-      if (Math.abs(diff) < 0.3) {
-        wheelOffsetRef.current = target
-        setWheelOffset(target)
-        setDayIdx(idx)
-        return
-      }
-      wheelOffsetRef.current += diff * 0.18
-      setWheelOffset(wheelOffsetRef.current)
-      rafRef.current = requestAnimationFrame(tick)
-    }
-    rafRef.current = requestAnimationFrame(tick)
-  }
-
-  function startMomentum() {
-    function tick() {
-      velRef.current *= 0.90
-      if (Math.abs(velRef.current) < 0.5) { snapWheel(); return }
-      const next = Math.max(-(DAY_COUNT - 1) * ITEM_W, Math.min(0, wheelOffsetRef.current + velRef.current))
-      wheelOffsetRef.current = next
-      setWheelOffset(next)
-      rafRef.current = requestAnimationFrame(tick)
-    }
-    rafRef.current = requestAnimationFrame(tick)
-  }
-
-  function onWheelDown(e: React.PointerEvent) {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current)
-    e.currentTarget.setPointerCapture(e.pointerId)
-    wheelDragging.current = true
-    velRef.current = 0
-    lastXRef.current = e.clientX
-    lastTRef.current = e.timeStamp
-  }
-
-  function onWheelMove(e: React.PointerEvent) {
-    if (!wheelDragging.current) return
-    const dx = e.clientX - lastXRef.current
-    const dt = Math.max(1, e.timeStamp - lastTRef.current)
-    velRef.current = (dx / dt) * 16
-    const next = Math.max(-(DAY_COUNT - 1) * ITEM_W, Math.min(0, wheelOffsetRef.current + dx))
-    wheelOffsetRef.current = next
-    setWheelOffset(next)
-    lastXRef.current = e.clientX
-    lastTRef.current = e.timeStamp
-  }
-
-  function onWheelUp() {
-    if (!wheelDragging.current) return
-    wheelDragging.current = false
-    startMomentum()
-  }
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -637,83 +855,7 @@ export function MapScreen() {
       </div>
 
       {/* ── Day wheel picker ── */}
-      {(() => {
-        const isNight = theme === 'night'
-        const bgColor = isNight ? 'rgba(12,11,11,0.97)' : 'rgba(240,236,227,0.97)'
-        const borderColor = isNight ? 'rgba(240,236,227,0.08)' : 'rgba(12,11,11,0.08)'
-        const fgColor = isNight ? '#f0ece3' : '#0c0b0b'
-        const fadeStart = isNight ? 'rgba(12,11,11,1)' : 'rgba(240,236,227,1)'
-        const fadeEnd = isNight ? 'rgba(12,11,11,0)' : 'rgba(240,236,227,0)'
-        const bandBg = isNight ? 'rgba(240,236,227,0.06)' : 'rgba(12,11,11,0.06)'
-        const bandBorder = isNight ? 'rgba(240,236,227,0.12)' : 'rgba(12,11,11,0.12)'
-        return (
-          <div
-            style={{
-              flexShrink: 0,
-              background: bgColor,
-              borderTop: `1px solid ${borderColor}`,
-              height: 72,
-              position: 'relative',
-              touchAction: 'none',
-              userSelect: 'none',
-              overflow: 'hidden',
-              cursor: 'grab',
-            }}
-            onPointerDown={onWheelDown}
-            onPointerMove={onWheelMove}
-            onPointerUp={onWheelUp}
-            onPointerCancel={onWheelUp}
-          >
-            {/* Center highlight band */}
-            <div style={{
-              position: 'absolute', left: '50%', top: 10, bottom: 10,
-              transform: `translateX(-${ITEM_W / 2}px)`,
-              width: ITEM_W, background: bandBg,
-              borderRadius: 10, border: `1px solid ${bandBorder}`,
-              pointerEvents: 'none', zIndex: 1,
-            }} />
-
-            {/* Day items */}
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
-              {Array.from({ length: DAY_COUNT }, (_, i) => {
-                const centerOffset = wheelOffset + i * ITEM_W
-                const dist = Math.abs(centerOffset)
-                const opacity = Math.max(0.12, 1 - dist / (ITEM_W * 2))
-                const isActive = i === activeDayIdx
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      position: 'absolute',
-                      left: `calc(50% + ${centerOffset - ITEM_W / 2}px)`,
-                      width: ITEM_W, height: '100%',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity,
-                    }}
-                  >
-                    <span style={{
-                      fontFamily: '"Space Grotesk", sans-serif',
-                      fontSize: isActive ? 14 : 12,
-                      fontWeight: isActive ? 700 : 400,
-                      color: fgColor,
-                      letterSpacing: isActive ? '-0.01em' : '0.03em',
-                      pointerEvents: 'none',
-                    }}>
-                      {dayShortLabel(i, today)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Edge fade masks */}
-            <div style={{
-              position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2,
-              background: `linear-gradient(to right, ${fadeStart} 0%, ${fadeEnd} 28%, ${fadeEnd} 72%, ${fadeStart} 100%)`,
-            }} />
-          </div>
-        )
-      })()}
+      <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} today={today} />
 
       <BottomNav />
     </div>
