@@ -44,6 +44,12 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [showFocalPanel, setShowFocalPanel] = useState(false)
   const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
 
+  // ── Position offset (contain mode) ────────────────────────────────────────
+  const [offsetX, setOffsetX] = useState(event.poster_offset_x ?? 0)
+  const [offsetY, setOffsetY] = useState(event.poster_offset_y ?? 0)
+  const [offsetBackdrop, setOffsetBackdrop] = useState<string | null>(null)
+  const offsetDragRef = useRef<{ startX: number; startY: number; startOffsetX: number; startOffsetY: number; imgW: number; imgH: number } | null>(null)
+
   // ── Undo state ─────────────────────────────────────────────
   const previousUrlRef = useRef<string | null>(null)
   const [undoAvailable, setUndoAvailable] = useState(false)
@@ -111,7 +117,18 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     setImgCacheReady(false)
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true) }
+    img.onload = () => {
+      imgCacheRef.current = img; setImgCacheReady(true)
+      // Sample corners for the offset preview card backdrop
+      try {
+        const SIZE = 40
+        const sc = document.createElement('canvas'); sc.width = SIZE; sc.height = SIZE
+        const sctx = sc.getContext('2d')!; sctx.drawImage(img, 0, 0, SIZE, SIZE)
+        const d = sctx.getImageData(0, 0, SIZE, SIZE).data
+        const px = (x: number, y: number) => { const i = (y * SIZE + x) * 4; return `${d[i]},${d[i+1]},${d[i+2]}` }
+        setOffsetBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${px(2,2)}), rgb(${px(SIZE-3,2)}), rgb(${px(SIZE-3,SIZE-3)}), rgb(${px(2,SIZE-3)}), rgb(${px(2,2)}))`)
+      } catch { setOffsetBackdrop(null) }
+    }
     img.src = event.poster_url
   }, [event.poster_url])
 
@@ -200,7 +217,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const handleSaveFillFrame = async () => {
     setSaving('fill_frame'); setSaveError('')
     try {
-      const { error } = await supabase.from('events').update({ fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }).eq('id', event.id)
+      const { error } = await supabase.from('events').update({ fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, poster_offset_x: offsetX, poster_offset_y: offsetY }).eq('id', event.id)
       if (error) throw error
     } catch (e) {
       setSaveError(String(e))
@@ -233,7 +250,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 
       console.log('[SaveCrop] Updating events table for event id:', event.id)
       const { error: updateError, data: updateData } = await supabase.from('events')
-        .update({ poster_url: urlData.publicUrl, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }).eq('id', event.id)
+        .update({ poster_url: urlData.publicUrl, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, poster_offset_x: offsetX, poster_offset_y: offsetY }).eq('id', event.id)
         .select('id, poster_url')
       if (updateError) { console.error('[SaveCrop] DB update error:', updateError); throw updateError }
       console.log('[SaveCrop] DB update success:', updateData)
@@ -333,7 +350,18 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
               {/* imgWrap — inline-block so it shrinks to match the exact rendered image size */}
               <div
                 ref={imgWrapRef}
-                style={{ position: 'relative', lineHeight: 0, display: 'inline-block', maxWidth: '100%' }}
+                onPointerDown={cropMode ? undefined : e => {
+                  const rect = imgRef.current!.getBoundingClientRect()
+                  e.currentTarget.setPointerCapture(e.pointerId)
+                  offsetDragRef.current = { startX: e.clientX, startY: e.clientY, startOffsetX: offsetX, startOffsetY: offsetY, imgW: rect.width, imgH: rect.height }
+                }}
+                onPointerMove={cropMode ? undefined : e => {
+                  const d = offsetDragRef.current; if (!d) return
+                  setOffsetX(Math.round(Math.min(50, Math.max(-50, d.startOffsetX + (e.clientX - d.startX) / d.imgW * 100))))
+                  setOffsetY(Math.round(Math.min(50, Math.max(-50, d.startOffsetY + (e.clientY - d.startY) / d.imgH * 100))))
+                }}
+                onPointerUp={cropMode ? undefined : () => { offsetDragRef.current = null }}
+                style={{ position: 'relative', lineHeight: 0, display: 'inline-block', maxWidth: '100%', cursor: cropMode ? 'default' : 'move', touchAction: cropMode ? 'auto' : 'none', userSelect: 'none' }}
               >
                 <img
                   ref={imgRef}
@@ -484,6 +512,32 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                     Undo ↩
                   </button>
                 )}
+              </div>
+            )}
+            {/* Offset preview card — visible when not in crop mode */}
+            {!cropMode && (
+              <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', marginBottom: 16 }}>
+                <div style={{ position: 'relative', width: 160, height: 240, borderRadius: 8, overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ position: 'absolute', inset: 0, background: offsetBackdrop ?? `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)` }} />
+                  <img
+                    src={event.poster_url!}
+                    draggable={false}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', transform: `translate(${offsetX}%, ${offsetY}%)`, pointerEvents: 'none', userSelect: 'none' }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingTop: 4 }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>Preview</span>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 1.4 }}>Drag poster to reposition</span>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.25)', fontVariantNumeric: 'tabular-nums' }}>x {offsetX > 0 ? '+' : ''}{offsetX}% · y {offsetY > 0 ? '+' : ''}{offsetY}%</span>
+                  {(offsetX !== 0 || offsetY !== 0) && (
+                    <button
+                      onClick={() => { setOffsetX(0); setOffsetY(0) }}
+                      style={{ marginTop: 2, padding: '3px 8px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer', alignSelf: 'flex-start' }}
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </>

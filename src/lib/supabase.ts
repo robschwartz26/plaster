@@ -23,6 +23,10 @@ export interface DbEvent {
   location_lat: number | null
   location_lng: number | null
   fill_frame: boolean
+  focal_x: number
+  focal_y: number
+  poster_offset_x: number
+  poster_offset_y: number
   view_count: number
   like_count: number
   created_at: string

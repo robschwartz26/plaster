@@ -14,4 +14,8 @@ export interface WallEvent {
   view_count: number
   like_count: number
   fill_frame?: boolean
+  focal_x?: number
+  focal_y?: number
+  poster_offset_x?: number
+  poster_offset_y?: number
 }
