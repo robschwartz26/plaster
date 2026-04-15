@@ -201,6 +201,8 @@ interface Venue {
   name: string
   neighborhood?: string
   address?: string
+  location_lat?: number | null
+  location_lng?: number | null
   website?: string
   instagram?: string
   hours?: string
@@ -624,7 +626,7 @@ function ImportForm() {
   useEffect(() => {
     supabaseAdmin
       .from('venues')
-      .select('id, name, neighborhood, address, website, instagram, hours')
+      .select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours')
       .order('name', { ascending: true })
       .then(({ data }) => { if (data) setVenues(data) })
   }, [])
@@ -1366,7 +1368,7 @@ function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
 
   const fetchVenues = async () => {
-    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, website, instagram, hours').order('name', { ascending: true })
+    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
     if (data) setVenues(data)
   }
 
