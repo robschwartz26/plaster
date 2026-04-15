@@ -631,6 +631,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
 
   const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
   const [fillFrame, setFillFrame] = useState(false)
+  const [reExtracting, setReExtracting] = useState(false)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
 
@@ -662,6 +663,51 @@ function ImportForm({ venues }: { venues: Venue[] }) {
       setErrorMsg(String(e)); setPhase('error')
     }
   }, [venues, infoFile])
+
+  // Drop an info image during the review phase — re-extracts and merges only empty fields
+  const handleInfoSet = useCallback(async (file: File) => {
+    const url = await fileToDataURL(file)
+    setInfoFile(file)
+    setInfoPreview(url)
+    if (!imageFiles[0]) return
+    setReExtracting(true)
+    try {
+      const [posterBase64, infoBase64] = await Promise.all([
+        fileToBase64(imageFiles[0]),
+        fileToBase64(file),
+      ])
+      const payload: ExtractPayload = {
+        images: [
+          { base64: posterBase64, mimeType: imageFiles[0].type || 'image/jpeg' },
+          { base64: infoBase64, mimeType: file.type || 'image/jpeg' },
+        ],
+      }
+      const result = await extractEventFromImage(payload)
+      setExtracted(result)
+      const match = venues.find(v =>
+        v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
+        result.venue_name.toLowerCase().includes(v.name.toLowerCase())
+      )
+      setForm(f => ({
+        title: f.title || result.title,
+        venue_id: f.venue_id || (match?.id ?? ''),
+        venue_name_manual: f.venue_name_manual || (match ? '' : result.venue_name),
+        date: f.date || result.date,
+        time: f.time || result.time,
+        address: f.address || result.address,
+        description: f.description || result.description,
+        category: (f.category || result.category) as Category,
+        neighborhood: f.neighborhood || neighborhoodFromAddress(result.address) || match?.neighborhood || '',
+        website: f.website || (result.website ?? ''),
+        instagram: f.instagram || (result.instagram ?? ''),
+        hours: f.hours || (result.hours ?? ''),
+      }))
+    } catch {
+      // silently ignore re-extraction errors — user keeps original fields
+    } finally {
+      setReExtracting(false)
+    }
+  }, [imageFiles, venues])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
@@ -938,27 +984,48 @@ function ImportForm({ venues }: { venues: Venue[] }) {
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', marginTop: 6, textAlign: 'center' }}>
                 {userCrop ? '✂ Cropped (adjusted) · max 1200px · JPEG' : hasDisplayCrop ? '✂ Cropped by AI · max 1200px · JPEG' : 'Will be resized to max 1200px · JPEG'}
               </p>
-              {/* Supplemental image thumbnails */}
-              {imagePreviews.length > 1 && (
-                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  {imagePreviews.map((src, i) => (
-                    <div key={i} style={{ position: 'relative', flexShrink: 0 }}>
-                      <img src={src} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, display: 'block', border: i === 0 ? '1.5px solid rgba(168,85,247,0.55)' : '1px solid var(--fg-18)' }} />
-                      {i > 0 && (
-                        <button
-                          onClick={() => {
-                            setImageFiles(prev => prev.filter((_, idx) => idx !== i))
-                            setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
-                          }}
-                          style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
-                        >
-                          ✕
-                        </button>
-                      )}
+              {/* Info image zone — stays visible the entire review phase */}
+              <div style={{ marginTop: 10 }}>
+                {reExtracting ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>Re-reading with extra image…</span>
+                  </div>
+                ) : infoPreview ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <img src={infoPreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
+                      <button
+                        onClick={() => { setInfoFile(null); setInfoPreview('') }}
+                        style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                      >✕</button>
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div>
+                      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Extra info image used</p>
+                      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Drop another to re-read</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={e => { e.preventDefault(); setInfoDragging(true) }}
+                    onDragLeave={() => setInfoDragging(false)}
+                    onDrop={e => {
+                      e.preventDefault(); setInfoDragging(false)
+                      const f = e.dataTransfer.files[0]
+                      if (f?.type.startsWith('image/')) handleInfoSet(f)
+                    }}
+                    onClick={() => infoFileRef.current?.click()}
+                    style={{ border: `1px dashed ${infoDragging ? 'var(--fg-40)' : 'var(--fg-18)'}`, borderRadius: 8, padding: '14px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.03)' : 'transparent', transition: 'all 0.15s ease' }}
+                  >
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>Extra info image <span style={{ color: 'var(--fg-25)' }}>(optional)</span></p>
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-25)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
+                  </div>
+                )}
+                <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) handleInfoSet(f)
+                }} />
+              </div>
             </div>
           )
         })()}
