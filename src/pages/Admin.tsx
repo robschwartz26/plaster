@@ -371,7 +371,9 @@ function fileToDataURL(file: File): Promise<string> {
   })
 }
 
-async function extractEventFromImage(base64: string, mimeType: string): Promise<ExtractedEvent> {
+async function extractEventFromImage(
+  images: { base64: string; mimeType: string }[]
+): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
@@ -381,7 +383,7 @@ async function extractEventFromImage(base64: string, mimeType: string): Promise<
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ base64, mimeType }),
+    body: JSON.stringify({ images }),
   })
 
   if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
@@ -607,8 +609,8 @@ function CropPreviewModal({
 
 function ImportForm({ venues }: { venues: Venue[] }) {
   const [phase, setPhase] = useState<ImportPhase>('idle')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState('')
+  const [imageFiles, setImageFiles] = useState<File[]>([])
+  const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [extracted, setExtracted] = useState<ExtractedEvent | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [dragging, setDragging] = useState(false)
@@ -626,14 +628,19 @@ function ImportForm({ venues }: { venues: Venue[] }) {
 
   const uncertainInput: React.CSSProperties = { ...inputStyle, borderColor: 'rgba(234,179,8,0.5)', background: 'rgba(234,179,8,0.04)' }
 
-  const handleFile = useCallback(async (file: File) => {
-    setImageFile(file)
+  const handleFiles = useCallback(async (files: File[]) => {
+    const limited = files.filter(f => f.type.startsWith('image/')).slice(0, 4)
+    if (limited.length === 0) return
+    setImageFiles(limited)
     setPhase('extracting')
     setErrorMsg('')
     try {
-      const [dataURL, base64] = await Promise.all([fileToDataURL(file), fileToBase64(file)])
-      setImagePreview(dataURL)
-      const result = await extractEventFromImage(base64, file.type || 'image/jpeg')
+      const [dataURLs, imagesData] = await Promise.all([
+        Promise.all(limited.map(fileToDataURL)),
+        Promise.all(limited.map(async f => ({ base64: await fileToBase64(f), mimeType: f.type || 'image/jpeg' }))),
+      ])
+      setImagePreviews(dataURLs)
+      const result = await extractEventFromImage(imagesData)
       setExtracted(result)
       const match = venues.find(v => v.name.toLowerCase().includes(result.venue_name.toLowerCase()) || result.venue_name.toLowerCase().includes(v.name.toLowerCase()))
       const detectedNeighborhood = neighborhoodFromAddress(result.address)
@@ -646,15 +653,15 @@ function ImportForm({ venues }: { venues: Venue[] }) {
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file?.type.startsWith('image/')) handleFile(file)
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) handleFiles(files)
   }
 
   const doUpload = async (updateExistingId?: string) => {
-    if (!imageFile || !form.title || !form.date) return
+    if (!imageFiles[0] || !form.title || !form.date) return
     setPhase('uploading')
     try {
-      const optimized = await optimizeImage(imageFile, userCrop ?? extracted?.crop)
+      const optimized = await optimizeImage(imageFiles[0], userCrop ?? extracted?.crop)
       const filename = `${Date.now()}-${form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`
       const { error: storageError } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
       if (storageError) throw storageError
@@ -686,7 +693,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   }
 
   const handleSubmit = async () => {
-    if (!imageFile || !form.title || !form.date) return
+    if (!imageFiles[0] || !form.title || !form.date) return
 
     // Duplicate detection: same venue + date ±1 day + similar title
     if (form.venue_id && form.date) {
@@ -711,7 +718,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const handlePreview = () => setShowPreviewModal(true)
 
   const reset = () => {
-    setPhase('idle'); setImageFile(null); setImagePreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
+    setPhase('idle'); setImageFiles([]); setImagePreviews([]); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
     setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false)
   }
@@ -730,7 +737,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
     ctx.fillText('Friday Apr 18, 2026 · 9PM', 200, 290)
     ctx.fillText('$15 advance / $18 door · All ages', 200, 330)
     canvas.toBlob(blob => {
-      if (blob) handleFile(new File([blob], 'dev-poster.jpg', { type: 'image/jpeg' }))
+      if (blob) handleFiles([new File([blob], 'dev-poster.jpg', { type: 'image/jpeg' })])
     }, 'image/jpeg')
   }
 
@@ -748,7 +755,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', margin: 0, textAlign: 'center' }}>Drop a poster image here</p>
         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>or click to browse · JPG, PNG, WEBP</p>
       </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+      <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length > 0) handleFiles(files) }} />
       {IS_DEV && (
         <button onClick={loadDevPoster} style={{ marginTop: 12, padding: '6px 14px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.05em' }}>
           DEV — Load Test Poster
@@ -759,7 +766,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
 
   if (phase === 'extracting') return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '40px 0' }}>
-      {imagePreview && <img src={imagePreview} alt="" style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 8, objectFit: 'contain' }} />}
+      {imagePreviews[0] && <img src={imagePreviews[0]} alt="" style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 8, objectFit: 'contain' }} />}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite' }} />
         <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>Asking Claude Vision…</span>
@@ -862,8 +869,8 @@ function ImportForm({ venues }: { venues: Venue[] }) {
       </div>
 
       {/* Preview + form */}
-      <div style={{ display: 'grid', gridTemplateColumns: imagePreview ? '1fr 1.5fr' : '1fr', gap: 20, alignItems: 'start' }}>
-        {imagePreview && (() => {
+      <div style={{ display: 'grid', gridTemplateColumns: imagePreviews[0] ? '1fr 1.5fr' : '1fr', gap: 20, alignItems: 'start' }}>
+        {imagePreviews[0] && (() => {
           const displayCrop = userCrop ?? extracted?.crop ?? { x: 0, y: 0, width: 1, height: 1 }
           const hasDisplayCrop = !(displayCrop.x === 0 && displayCrop.y === 0 && displayCrop.width === 1 && displayCrop.height === 1)
           return (
@@ -871,15 +878,36 @@ function ImportForm({ venues }: { venues: Venue[] }) {
               <div style={{ borderRadius: 8, overflow: 'hidden', background: '#111', maxHeight: 420 }}>
                 {hasDisplayCrop ? (
                   <div style={{ position: 'relative', width: '100%', paddingBottom: `${(displayCrop.height / displayCrop.width) * 100}%`, overflow: 'hidden' }}>
-                    <img src={imagePreview} alt="Poster" style={{ position: 'absolute', width: `${100 / displayCrop.width}%`, height: `${100 / displayCrop.height}%`, left: `${-displayCrop.x / displayCrop.width * 100}%`, top: `${-displayCrop.y / displayCrop.height * 100}%`, objectFit: 'cover' }} />
+                    <img src={imagePreviews[0]} alt="Poster" style={{ position: 'absolute', width: `${100 / displayCrop.width}%`, height: `${100 / displayCrop.height}%`, left: `${-displayCrop.x / displayCrop.width * 100}%`, top: `${-displayCrop.y / displayCrop.height * 100}%`, objectFit: 'cover' }} />
                   </div>
                 ) : (
-                  <img src={imagePreview} alt="Poster" style={{ width: '100%', objectFit: 'contain', maxHeight: 420, display: 'block' }} />
+                  <img src={imagePreviews[0]} alt="Poster" style={{ width: '100%', objectFit: 'contain', maxHeight: 420, display: 'block' }} />
                 )}
               </div>
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', marginTop: 6, textAlign: 'center' }}>
                 {userCrop ? '✂ Cropped (adjusted) · max 1200px · JPEG' : hasDisplayCrop ? '✂ Cropped by AI · max 1200px · JPEG' : 'Will be resized to max 1200px · JPEG'}
               </p>
+              {/* Supplemental image thumbnails */}
+              {imagePreviews.length > 1 && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                  {imagePreviews.map((src, i) => (
+                    <div key={i} style={{ position: 'relative', flexShrink: 0 }}>
+                      <img src={src} style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 4, display: 'block', border: i === 0 ? '1.5px solid rgba(168,85,247,0.55)' : '1px solid var(--fg-18)' }} />
+                      {i > 0 && (
+                        <button
+                          onClick={() => {
+                            setImageFiles(prev => prev.filter((_, idx) => idx !== i))
+                            setImagePreviews(prev => prev.filter((_, idx) => idx !== i))
+                          }}
+                          style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.2)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })()}
@@ -1003,7 +1031,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
             <button
               type="button"
               onClick={handlePreview}
-              disabled={!imageFile}
+              disabled={!imageFiles[0]}
               style={{ padding: '12px 14px', background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}
             >
               Preview
@@ -1023,10 +1051,10 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         </div>
       </div>
 
-      {showPreviewModal && imageFile && (
+      {showPreviewModal && imageFiles[0] && (
         <CropPreviewModal
-          imageSrc={imagePreview}
-          imageFile={imageFile}
+          imageSrc={imagePreviews[0]}
+          imageFile={imageFiles[0]}
           aiCrop={extracted?.crop ?? { x: 0, y: 0, width: 1, height: 1 }}
           currentCrop={userCrop ?? extracted?.crop ?? { x: 0, y: 0, width: 1, height: 1 }}
           onCropChange={c => { setUserCrop(c); setShowPreviewModal(true) }}
