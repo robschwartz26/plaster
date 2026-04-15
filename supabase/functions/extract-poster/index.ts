@@ -8,99 +8,105 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const body = await req.json()
-  // Backward compat: accept { base64, mimeType } (single) or { images: [...] } (multi)
-  const images: { base64: string; mimeType: string }[] =
-    body.images ?? [{ base64: body.base64, mimeType: body.mimeType }]
-  const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
-
-  const year = new Date().getFullYear()
-
-  const imageBlocks = images.map((img: { base64: string; mimeType: string }) => ({
-    type: 'image',
-    source: { type: 'base64', media_type: img.mimeType, data: img.base64 },
-  }))
-
-  const promptText = images.length > 1
-    ? `These images are all related to the same Portland event. The first image is the event poster. Additional images may contain supplemental information like ticket prices, times, supporting acts, or venue details. Extract the most complete event information possible by reading all images together. If information conflicts, prefer the most specific/detailed version.
-
-Return ONLY a JSON object, no markdown, no explanation:
-{
-  "title": "event or artist name",
-  "venue_name": "venue name exactly as shown",
-  "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
-  "time": "HH:MM 24-hour format, empty string if not found",
-  "address": "street address if visible, empty string if not",
-  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
-  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
-  "confidence": "high or medium or low",
-  "uncertain_fields": ["fields you were unsure about"],
-  "crop": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
-  }
-}
-
-For the "crop" field: applies only to the FIRST image (the poster art). Express the poster art bounds as fractions of that image's dimensions (0.0 to 1.0).
-- If the first image IS the poster (clean, no surrounding UI): use x=0, y=0, width=1, height=1
-- If the poster art is only PART of the first image: give the fractional coordinates of just the poster art rectangle.`
-    : `Analyze this image carefully. It may be a clean poster, or it may be a screenshot containing a poster alongside other content (website UI, event listing text, Instagram chrome, white borders, etc).
-
-Return ONLY a JSON object, no markdown, no explanation:
-{
-  "title": "event or artist name",
-  "venue_name": "venue name exactly as shown",
-  "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
-  "time": "HH:MM 24-hour format, empty string if not found",
-  "address": "street address if visible, empty string if not",
-  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
-  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
-  "confidence": "high or medium or low",
-  "uncertain_fields": ["fields you were unsure about"],
-  "crop": {
-    "x": 0.0,
-    "y": 0.0,
-    "width": 1.0,
-    "height": 1.0
-  }
-}
-
-For the "crop" field: express the poster art bounds as fractions of the total image dimensions (0.0 to 1.0).
-- If the image IS the poster (clean, no surrounding UI): use x=0, y=0, width=1, height=1
-- If the poster art is only PART of the image (e.g. right half of a webpage screenshot, or surrounded by white borders/UI): give the fractional coordinates of just the poster art rectangle.
-- x and y are the top-left corner. width and height are the size of the crop area.
-- Example: poster on right half of image → {"x": 0.5, "y": 0.0, "width": 0.5, "height": 1.0}
-- Example: poster centered with white borders → {"x": 0.05, "y": 0.05, "width": 0.9, "height": 0.9}`
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY!,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-5',
-      max_tokens: 1024,
-      messages: [{
-        role: 'user',
-        content: [...imageBlocks, { type: 'text', text: promptText }],
-      }]
-    })
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    return new Response(JSON.stringify({ error: err }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-  }
-
-  const data = await response.json()
-  const text = data.content?.[0]?.text ?? ''
-
   try {
-    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+    const body = await req.json()
+
+    // Support { images: [...] } (multi, new) or { base64, mimeType } (single, backward compat)
+    const images: Array<{ base64: string; mimeType: string }> =
+      Array.isArray(body.images) && body.images.length > 0
+        ? body.images
+        : [{ base64: body.base64, mimeType: body.mimeType || 'image/jpeg' }]
+
+    const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+
+    const year = new Date().getFullYear()
+
+    // Build one image content block per image
+    const imageBlocks = images.map((img) => ({
+      type: 'image',
+      source: {
+        type: 'base64',
+        media_type: img.mimeType,
+        data: img.base64,
+      },
+    }))
+
+    const promptText = images.length > 1
+      ? `These images are all related to the same Portland event. The first image is the event poster. Additional images may contain supplemental information like ticket prices, times, supporting acts, or venue details. Extract the most complete event information possible by reading all images together. If information conflicts, prefer the most specific/detailed version.
+
+Return ONLY a JSON object, no markdown, no explanation:
+{
+  "title": "event or artist name",
+  "venue_name": "venue name exactly as shown",
+  "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
+  "time": "HH:MM 24-hour format, empty string if not found",
+  "address": "street address if visible, empty string if not",
+  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
+  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
+  "confidence": "high or medium or low",
+  "uncertain_fields": ["fields you were unsure about"],
+  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
+}
+
+For the "crop" field: applies only to the FIRST image (the poster art). Express bounds as fractions of that image's dimensions (0.0–1.0). If the first image IS the poster with no surrounding UI, use x=0, y=0, width=1, height=1.`
+      : `Analyze this image carefully. It may be a clean poster, or a screenshot containing a poster alongside other content (website UI, event listing text, Instagram chrome, white borders, etc).
+
+Return ONLY a JSON object, no markdown, no explanation:
+{
+  "title": "event or artist name",
+  "venue_name": "venue name exactly as shown",
+  "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
+  "time": "HH:MM 24-hour format, empty string if not found",
+  "address": "street address if visible, empty string if not",
+  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
+  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
+  "confidence": "high or medium or low",
+  "uncertain_fields": ["fields you were unsure about"],
+  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
+}
+
+For the "crop" field: express poster art bounds as fractions of the total image dimensions (0.0–1.0).
+- If the image IS the poster (clean, no surrounding UI): use x=0, y=0, width=1, height=1
+- If the poster is only PART of the image (webpage screenshot, white borders, etc): give the fractional coordinates of just the poster art rectangle.
+- x and y are the top-left corner. width and height are the size of the crop area.
+- Example: poster on right half → {"x":0.5,"y":0.0,"width":0.5,"height":1.0}
+- Example: poster with white borders → {"x":0.05,"y":0.05,"width":0.9,"height":0.9}`
+
+    const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-opus-4-5',
+        max_tokens: 1024,
+        messages: [{
+          role: 'user',
+          content: [
+            ...imageBlocks,
+            { type: 'text', text: promptText },
+          ],
+        }],
+      }),
+    })
+
+    if (!anthropicRes.ok) {
+      const errText = await anthropicRes.text()
+      throw new Error(`Anthropic API error ${anthropicRes.status}: ${errText}`)
+    }
+
+    const anthropicData = await anthropicRes.json()
+    const text = anthropicData.content?.[0]?.text ?? ''
+
+    let parsed: Record<string, unknown>
+    try {
+      parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+    } catch {
+      throw new Error(`Failed to parse Claude response as JSON. Raw: ${text.slice(0, 300)}`)
+    }
 
     // ── Venue enrichment (DB → Mapbox → AI) ─────────────────
     if (parsed.venue_name) {
@@ -120,7 +126,7 @@ For the "crop" field: express the poster art bounds as fractions of the total im
             headers: {
               'apikey': SUPABASE_SERVICE_KEY,
               'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-            }
+            },
           })
           if (dbRes.ok) {
             const rows = await dbRes.json()
@@ -142,7 +148,7 @@ For the "crop" field: express the poster art bounds as fractions of the total im
       // 2. Mapbox geocoding (only if no DB match and address still empty)
       if (!resolved && !parsed.address && MAPBOX_TOKEN) {
         try {
-          const q = encodeURIComponent(parsed.venue_name + ' Portland Oregon')
+          const q = encodeURIComponent(`${parsed.venue_name} Portland Oregon`)
           const mbUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1&proximity=-122.6784,45.5051`
           const mbRes = await fetch(mbUrl)
           if (mbRes.ok) {
@@ -166,7 +172,7 @@ For the "crop" field: express the poster art bounds as fractions of the total im
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'x-api-key': ANTHROPIC_KEY!,
+              'x-api-key': ANTHROPIC_KEY,
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
@@ -180,9 +186,9 @@ For the "crop" field: express the poster art bounds as fractions of the total im
   "hours": "hours like Mon-Thu 5pm-2am, Fri-Sat 4pm-3am",
   "website": "full URL like https://example.com",
   "instagram": "handle without @ like venuename"
-}`
-              }]
-            })
+}`,
+              }],
+            }),
           })
           if (aiRes.ok) {
             const aiData = await aiRes.json()
@@ -193,7 +199,9 @@ For the "crop" field: express the poster art bounds as fractions of the total im
                 parsed.address = ai.address
                 parsed.address_source = 'ai'
                 if (!parsed.uncertain_fields) parsed.uncertain_fields = []
-                if (!parsed.uncertain_fields.includes('address')) parsed.uncertain_fields.push('address')
+                if (!(parsed.uncertain_fields as string[]).includes('address')) {
+                  (parsed.uncertain_fields as string[]).push('address')
+                }
               }
               if (ai.hours)     parsed.hours     = ai.hours
               if (ai.website)   parsed.website   = ai.website
@@ -207,8 +215,15 @@ For the "crop" field: express the poster art bounds as fractions of the total im
       if (!resolved) parsed.address_source = 'none'
     }
 
-    return new Response(JSON.stringify(parsed), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-  } catch {
-    return new Response(JSON.stringify({ error: 'Failed to parse AI response', raw: text }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return new Response(JSON.stringify(parsed), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return new Response(
+      JSON.stringify({ error: message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    )
   }
 })
