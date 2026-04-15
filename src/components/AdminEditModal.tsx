@@ -41,7 +41,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [fillFrame, setFillFrame] = useState(event.fill_frame ?? false)
   const [focalX, setFocalX] = useState(event.focal_x ?? 0.5)
   const [focalY, setFocalY] = useState(event.focal_y ?? 0.5)
-  const [focalNatural, setFocalNatural] = useState<{ w: number; h: number } | null>(null)
+  const [showFocalPanel, setShowFocalPanel] = useState(false)
   const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
 
   // ── Undo state ─────────────────────────────────────────────
@@ -111,8 +111,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     setImgCacheReady(false)
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true); console.log('[AdminEditModal] imgCache loaded — naturalWidth:', img.naturalWidth, 'naturalHeight:', img.naturalHeight) }
-    img.onerror = () => console.warn('[AdminEditModal] imgCache failed to load:', event.poster_url)
+    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true) }
     img.src = event.poster_url
   }, [event.poster_url])
 
@@ -494,17 +493,25 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           </div>
         )}
 
-        {/* Fill frame toggle + focal point pan */}
+        {/* Fill frame toggle */}
         {event.poster_url && (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: fillFrame ? 10 : 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>Fill frame</span>
               <button
-                onClick={() => setFillFrame(v => !v)}
+                onClick={() => { setFillFrame(v => !v); setShowFocalPanel(false) }}
                 style={{ padding: '4px 10px', background: fillFrame ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${fillFrame ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.14)'}`, borderRadius: 4, color: fillFrame ? '#c084fc' : 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
               >
                 {fillFrame ? 'ON' : 'OFF'}
               </button>
+              {fillFrame && (
+                <button
+                  onClick={() => setShowFocalPanel(v => !v)}
+                  style={{ padding: '4px 10px', background: showFocalPanel ? 'rgba(255,255,255,0.08)' : 'transparent', border: '1px solid rgba(255,255,255,0.18)', borderRadius: 4, color: 'rgba(255,255,255,0.6)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
+                >
+                  {showFocalPanel ? 'Done' : 'Preview & Position'}
+                </button>
+              )}
               <button
                 onClick={handleSaveFillFrame}
                 disabled={saving === 'fill_frame'}
@@ -516,48 +523,31 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                 {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
               </span>
             </div>
-            {fillFrame && (() => {
-              const cw = 160, ch = 240
-              const scale = focalNatural ? Math.max(cw / focalNatural.w, ch / focalNatural.h) : 1
-              const ox = focalNatural ? Math.max(0, focalNatural.w * scale - cw) : 0
-              const oy = focalNatural ? Math.max(0, focalNatural.h * scale - ch) : 0
-              return (
-                <div style={{ marginBottom: 16 }}>
-                  <div
-                    onPointerDown={e => {
-                      if (!focalNatural) return
-                      e.currentTarget.setPointerCapture(e.pointerId)
-                      focalDragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: focalX, startFocalY: focalY }
-                    }}
-                    onPointerMove={e => {
-                      const d = focalDragRef.current
-                      if (!d || !focalNatural) return
-                      const startLeft = ox > 0 ? -d.startFocalX * ox : 0
-                      const startTop = oy > 0 ? -d.startFocalY * oy : 0
-                      const nLeft = ox > 0 ? Math.min(0, Math.max(-ox, startLeft + (e.clientX - d.startX))) : 0
-                      const nTop = oy > 0 ? Math.min(0, Math.max(-oy, startTop + (e.clientY - d.startY))) : 0
-                      setFocalX(ox > 0 ? -nLeft / ox : 0.5)
-                      setFocalY(oy > 0 ? -nTop / oy : 0.5)
-                    }}
-                    onPointerUp={() => { focalDragRef.current = null }}
-                    style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: focalNatural ? 'grab' : 'default', userSelect: 'none', touchAction: 'none', border: '1px solid rgba(255,255,255,0.12)', background: '#111' }}
-                  >
-                    <img
-                      src={event.poster_url!}
-                      draggable={false}
-                      onLoad={e => {
-                        const img = e.currentTarget
-                        setFocalNatural({ w: img.naturalWidth, h: img.naturalHeight })
-                      }}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${focalX * 100}% ${focalY * 100}%`, display: 'block', pointerEvents: 'none', userSelect: 'none' }}
-                    />
-                  </div>
-                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.3)', display: 'block', marginTop: 5 }}>
-                    {focalNatural ? 'Drag to reposition · saved with Apply' : 'Loading…'}
-                  </span>
+            {fillFrame && showFocalPanel && (
+              <div style={{ marginBottom: 16 }}>
+                <div
+                  onPointerDown={e => {
+                    e.currentTarget.setPointerCapture(e.pointerId)
+                    focalDragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: focalX, startFocalY: focalY }
+                  }}
+                  onPointerMove={e => {
+                    const d = focalDragRef.current
+                    if (!d) return
+                    setFocalX(Math.min(1, Math.max(0, d.startFocalX - (e.clientX - d.startX) / 160)))
+                    setFocalY(Math.min(1, Math.max(0, d.startFocalY - (e.clientY - d.startY) / 240)))
+                  }}
+                  onPointerUp={() => { focalDragRef.current = null }}
+                  style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: 'grab', userSelect: 'none', touchAction: 'none', border: '1px solid rgba(255,255,255,0.12)', background: '#111' }}
+                >
+                  <img
+                    src={event.poster_url!}
+                    draggable={false}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${focalX * 100}% ${focalY * 100}%`, display: 'block', pointerEvents: 'none', userSelect: 'none' }}
+                  />
                 </div>
-              )
-            })()}
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.3)', display: 'block', marginTop: 5 }}>Drag image to reposition</span>
+              </div>
+            )}
           </>
         )}
       </div>
