@@ -39,6 +39,9 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [cropMode, setCropMode] = useState(false)
   const [editCrop, setEditCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
   const [fillFrame, setFillFrame] = useState(event.fill_frame ?? false)
+  const [focalX, setFocalX] = useState(event.focal_x ?? 0.5)
+  const [focalY, setFocalY] = useState(event.focal_y ?? 0.5)
+  const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
 
   // ── Undo state ─────────────────────────────────────────────
   const previousUrlRef = useRef<string | null>(null)
@@ -196,7 +199,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const handleSaveFillFrame = async () => {
     setSaving('fill_frame'); setSaveError('')
     try {
-      const { error } = await supabase.from('events').update({ fill_frame: fillFrame }).eq('id', event.id)
+      const { error } = await supabase.from('events').update({ fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }).eq('id', event.id)
       if (error) throw error
     } catch (e) {
       setSaveError(String(e))
@@ -229,7 +232,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 
       console.log('[SaveCrop] Updating events table for event id:', event.id)
       const { error: updateError, data: updateData } = await supabase.from('events')
-        .update({ poster_url: urlData.publicUrl, fill_frame: fillFrame }).eq('id', event.id)
+        .update({ poster_url: urlData.publicUrl, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }).eq('id', event.id)
         .select('id, poster_url')
       if (updateError) { console.error('[SaveCrop] DB update error:', updateError); throw updateError }
       console.log('[SaveCrop] DB update success:', updateData)
@@ -489,27 +492,67 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           </div>
         )}
 
-        {/* Fill frame toggle */}
+        {/* Fill frame toggle + focal point pan */}
         {event.poster_url && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>Fill frame</span>
-            <button
-              onClick={() => setFillFrame(v => !v)}
-              style={{ padding: '4px 10px', background: fillFrame ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${fillFrame ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.14)'}`, borderRadius: 4, color: fillFrame ? '#c084fc' : 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
-            >
-              {fillFrame ? 'ON' : 'OFF'}
-            </button>
-            <button
-              onClick={handleSaveFillFrame}
-              disabled={saving === 'fill_frame'}
-              style={{ padding: '4px 10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: 'rgba(255,255,255,0.4)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: saving === 'fill_frame' ? 'default' : 'pointer', opacity: saving === 'fill_frame' ? 0.6 : 1, flexShrink: 0 }}
-            >
-              {saving === 'fill_frame' ? 'Saving…' : 'Apply'}
-            </button>
-            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.22)', minWidth: 0 }}>
-              {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
-            </span>
-          </div>
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: fillFrame ? 10 : 16 }}>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>Fill frame</span>
+              <button
+                onClick={() => setFillFrame(v => !v)}
+                style={{ padding: '4px 10px', background: fillFrame ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${fillFrame ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.14)'}`, borderRadius: 4, color: fillFrame ? '#c084fc' : 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
+              >
+                {fillFrame ? 'ON' : 'OFF'}
+              </button>
+              <button
+                onClick={handleSaveFillFrame}
+                disabled={saving === 'fill_frame'}
+                style={{ padding: '4px 10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: 'rgba(255,255,255,0.4)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: saving === 'fill_frame' ? 'default' : 'pointer', opacity: saving === 'fill_frame' ? 0.6 : 1, flexShrink: 0 }}
+              >
+                {saving === 'fill_frame' ? 'Saving…' : 'Apply'}
+              </button>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.22)', minWidth: 0 }}>
+                {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
+              </span>
+            </div>
+            {fillFrame && imgCacheReady && (() => {
+              const img = imgCacheRef.current!
+              const cw = 160, ch = 240
+              const scale = Math.max(cw / (img.naturalWidth || 1), ch / (img.naturalHeight || 1))
+              const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale
+              const ox = dw - cw, oy = dh - ch
+              const imgLeft = ox > 0 ? -focalX * ox : (cw - dw) / 2
+              const imgTop = oy > 0 ? -focalY * oy : (ch - dh) / 2
+              return (
+                <div style={{ marginBottom: 16 }}>
+                  <div
+                    onPointerDown={e => {
+                      e.currentTarget.setPointerCapture(e.pointerId)
+                      focalDragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: focalX, startFocalY: focalY }
+                    }}
+                    onPointerMove={e => {
+                      const d = focalDragRef.current
+                      if (!d) return
+                      const startLeft = ox > 0 ? -d.startFocalX * ox : (cw - dw) / 2
+                      const startTop = oy > 0 ? -d.startFocalY * oy : (ch - dh) / 2
+                      const nLeft = ox > 0 ? Math.min(0, Math.max(-ox, startLeft + (e.clientX - d.startX))) : startLeft
+                      const nTop = oy > 0 ? Math.min(0, Math.max(-oy, startTop + (e.clientY - d.startY))) : startTop
+                      setFocalX(ox > 0 ? -nLeft / ox : 0.5)
+                      setFocalY(oy > 0 ? -nTop / oy : 0.5)
+                    }}
+                    onPointerUp={() => { focalDragRef.current = null }}
+                    style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: 'grab', position: 'relative', userSelect: 'none', touchAction: 'none', border: '1px solid rgba(255,255,255,0.12)', background: '#111' }}
+                  >
+                    <img
+                      src={event.poster_url!}
+                      draggable={false}
+                      style={{ position: 'absolute', width: dw, height: dh, left: imgLeft, top: imgTop, pointerEvents: 'none', userSelect: 'none', display: 'block' }}
+                    />
+                  </div>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.3)', display: 'block', marginTop: 5 }}>Drag to reposition · saved with Apply</span>
+                </div>
+              )
+            })()}
+          </>
         )}
       </div>
 

@@ -650,6 +650,10 @@ function ImportForm() {
 
   const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
   const [fillFrame, setFillFrame] = useState(false)
+  const [focalX, setFocalX] = useState(0.5)
+  const [focalY, setFocalY] = useState(0.5)
+  const [posterNatural, setPosterNatural] = useState<{ w: number; h: number } | null>(null)
+  const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
   const [reExtracting, setReExtracting] = useState(false)
   const [reuseExistingPoster, setReuseExistingPoster] = useState(false)
 
@@ -767,6 +771,15 @@ function ImportForm() {
     }))
   }
 
+  // Load natural dimensions of poster for focal pan math
+  useEffect(() => {
+    const src = imagePreviews[0] || extracted?.existing_poster_url
+    if (!src) { setPosterNatural(null); return }
+    const img = new Image()
+    img.onload = () => setPosterNatural({ w: img.naturalWidth, h: img.naturalHeight })
+    img.src = src
+  }, [imagePreviews[0], extracted?.existing_poster_url])
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
     const file = e.dataTransfer.files[0]
@@ -803,7 +816,7 @@ function ImportForm() {
         if (!venue_id) throw new Error('A venue is required')
         const timeStr = form.time || '20:00'
         const starts_at = new Date(`${form.date}T${timeStr}:00`).toISOString()
-        const { error: eventError } = await supabaseAdmin.from('events').insert({ venue_id, title: form.title, category: form.category, poster_url, starts_at, neighborhood: form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || '', address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame })
+        const { error: eventError } = await supabaseAdmin.from('events').insert({ venue_id, title: form.title, category: form.category, poster_url, starts_at, neighborhood: form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || '', address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY })
         if (eventError) throw eventError
       }
 
@@ -842,7 +855,7 @@ function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setReuseExistingPoster(false)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false)
   }
 
   // DEV: generate a mock test poster
@@ -1222,6 +1235,45 @@ function ImportForm() {
                 {fillFrame ? 'fills grid card (edges cropped)' : 'fits grid card (backdrop visible)'}
               </span>
             </div>
+            {fillFrame && posterNatural && (() => {
+              const posterSrc = reuseExistingPoster ? extracted?.existing_poster_url : imagePreviews[0]
+              if (!posterSrc) return null
+              const cw = 160, ch = 240
+              const scale = Math.max(cw / (posterNatural.w || 1), ch / (posterNatural.h || 1))
+              const dw = posterNatural.w * scale, dh = posterNatural.h * scale
+              const ox = dw - cw, oy = dh - ch
+              const imgLeft = ox > 0 ? -focalX * ox : (cw - dw) / 2
+              const imgTop = oy > 0 ? -focalY * oy : (ch - dh) / 2
+              return (
+                <div style={{ marginTop: 10 }}>
+                  <div
+                    onPointerDown={e => {
+                      e.currentTarget.setPointerCapture(e.pointerId)
+                      focalDragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: focalX, startFocalY: focalY }
+                    }}
+                    onPointerMove={e => {
+                      const d = focalDragRef.current
+                      if (!d) return
+                      const startLeft = ox > 0 ? -d.startFocalX * ox : (cw - dw) / 2
+                      const startTop = oy > 0 ? -d.startFocalY * oy : (ch - dh) / 2
+                      const nLeft = ox > 0 ? Math.min(0, Math.max(-ox, startLeft + (e.clientX - d.startX))) : startLeft
+                      const nTop = oy > 0 ? Math.min(0, Math.max(-oy, startTop + (e.clientY - d.startY))) : startTop
+                      setFocalX(ox > 0 ? -nLeft / ox : 0.5)
+                      setFocalY(oy > 0 ? -nTop / oy : 0.5)
+                    }}
+                    onPointerUp={() => { focalDragRef.current = null }}
+                    style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: 'grab', position: 'relative', userSelect: 'none', touchAction: 'none', border: '1px solid var(--fg-18)', background: '#111' }}
+                  >
+                    <img
+                      src={posterSrc}
+                      draggable={false}
+                      style={{ position: 'absolute', width: dw, height: dh, left: imgLeft, top: imgTop, pointerEvents: 'none', userSelect: 'none', display: 'block' }}
+                    />
+                  </div>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', display: 'block', marginTop: 5 }}>Drag to reposition</span>
+                </div>
+              )
+            })()}
           </div>
 
           {/* Submit */}
