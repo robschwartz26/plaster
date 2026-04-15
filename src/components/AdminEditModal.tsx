@@ -110,7 +110,8 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     setImgCacheReady(false)
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true) }
+    img.onload = () => { imgCacheRef.current = img; setImgCacheReady(true); console.log('[AdminEditModal] imgCache loaded — naturalWidth:', img.naturalWidth, 'naturalHeight:', img.naturalHeight) }
+    img.onerror = () => console.warn('[AdminEditModal] imgCache failed to load:', event.poster_url)
     img.src = event.poster_url
   }, [event.poster_url])
 
@@ -514,6 +515,13 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                 {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
               </span>
             </div>
+            {fillFrame && !imgCacheReady && (
+              <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.12)', borderTopColor: '#c084fc', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Loading pan control…</span>
+                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+              </div>
+            )}
             {fillFrame && imgCacheReady && (() => {
               const img = imgCacheRef.current!
               const cw = 160, ch = 240
