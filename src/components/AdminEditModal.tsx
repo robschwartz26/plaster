@@ -38,6 +38,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   // ── Crop state ─────────────────────────────────────────────
   const [cropMode, setCropMode] = useState(false)
   const [editCrop, setEditCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
+  const [fillFrame, setFillFrame] = useState(event.fill_frame ?? false)
 
   // ── Undo state ─────────────────────────────────────────────
   const previousUrlRef = useRef<string | null>(null)
@@ -68,7 +69,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   })
 
   // ── Save / delete state ────────────────────────────────────
-  const [saving, setSaving] = useState<'crop' | 'details' | 'delete' | null>(null)
+  const [saving, setSaving] = useState<'crop' | 'details' | 'delete' | 'fill_frame' | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [saveError, setSaveError] = useState('')
 
@@ -123,10 +124,21 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     const sy = editCrop.y * img.naturalHeight
     const sw = Math.max(1, editCrop.width * img.naturalWidth)
     const sh = Math.max(1, editCrop.height * img.naturalHeight)
-    const scale = Math.min(cw / sw, ch / sh)
-    const dw = sw * scale, dh = sh * scale
     ctx.clearRect(0, 0, cw, ch)
-    ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+    if (fillFrame) {
+      // cover: scale to fill canvas, clip overflow
+      const scale = Math.max(cw / sw, ch / sh)
+      const dw = sw * scale, dh = sh * scale
+      ctx.save()
+      ctx.beginPath(); ctx.rect(0, 0, cw, ch); ctx.clip()
+      ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+      ctx.restore()
+    } else {
+      // contain: letterbox within canvas
+      const scale = Math.min(cw / sw, ch / sh)
+      const dw = sw * scale, dh = sh * scale
+      ctx.drawImage(img, sx, sy, sw, sh, (cw - dw) / 2, (ch - dh) / 2, dw, dh)
+    }
 
     // Sample the 4 corners of the cropped region to generate a live backdrop
     try {
@@ -140,7 +152,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
       const tl = px(2, 2), tr = px(SIZE-3, 2), bl = px(2, SIZE-3), br = px(SIZE-3, SIZE-3)
       setPreviewBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
     } catch { /* CORS taint — no backdrop */ }
-  }, [cropMode, editCrop, imgCacheReady])
+  }, [cropMode, editCrop, imgCacheReady, fillFrame])
 
   // ── Global drag tracking (passive:false so we can preventDefault on touch) ──
   useEffect(() => {
@@ -180,6 +192,19 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     setCropMode(true)
   }
 
+  // ── Save Fill Frame ────────────────────────────────────────
+  const handleSaveFillFrame = async () => {
+    setSaving('fill_frame'); setSaveError('')
+    try {
+      const { error } = await supabase.from('events').update({ fill_frame: fillFrame }).eq('id', event.id)
+      if (error) throw error
+    } catch (e) {
+      setSaveError(String(e))
+    } finally {
+      setSaving(null)
+    }
+  }
+
   // ── Save Crop ──────────────────────────────────────────────
   const handleSaveCrop = async () => {
     if (!imageFile) { console.warn('[SaveCrop] No imageFile — aborting'); return }
@@ -204,7 +229,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 
       console.log('[SaveCrop] Updating events table for event id:', event.id)
       const { error: updateError, data: updateData } = await supabase.from('events')
-        .update({ poster_url: urlData.publicUrl }).eq('id', event.id)
+        .update({ poster_url: urlData.publicUrl, fill_frame: fillFrame }).eq('id', event.id)
         .select('id, poster_url')
       if (updateError) { console.error('[SaveCrop] DB update error:', updateError); throw updateError }
       console.log('[SaveCrop] DB update success:', updateData)
@@ -461,6 +486,29 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
         ) : (
           <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.04)', borderRadius: 8, marginBottom: 16 }}>
             <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.25)' }}>No poster image</span>
+          </div>
+        )}
+
+        {/* Fill frame toggle */}
+        {event.poster_url && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.35)', flexShrink: 0 }}>Fill frame</span>
+            <button
+              onClick={() => setFillFrame(v => !v)}
+              style={{ padding: '4px 10px', background: fillFrame ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${fillFrame ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.14)'}`, borderRadius: 4, color: fillFrame ? '#c084fc' : 'rgba(255,255,255,0.35)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
+            >
+              {fillFrame ? 'ON' : 'OFF'}
+            </button>
+            <button
+              onClick={handleSaveFillFrame}
+              disabled={saving === 'fill_frame'}
+              style={{ padding: '4px 10px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 4, color: 'rgba(255,255,255,0.4)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: saving === 'fill_frame' ? 'default' : 'pointer', opacity: saving === 'fill_frame' ? 0.6 : 1, flexShrink: 0 }}
+            >
+              {saving === 'fill_frame' ? 'Saving…' : 'Apply'}
+            </button>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.22)', minWidth: 0 }}>
+              {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
+            </span>
           </div>
         )}
       </div>

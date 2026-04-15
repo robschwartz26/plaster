@@ -424,7 +424,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           </div>
 
           {/* Panel 1: Poster */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
             {panelIdx === 0 && (
               <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
@@ -444,7 +444,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           </div>
 
           {/* Panel 4: PosterClone */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: '#000' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
           </div>
         </div>

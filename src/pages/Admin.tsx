@@ -620,6 +620,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const [duplicateEvent, setDuplicateEvent] = useState<{ id: string; title: string; poster_url: string | null; starts_at: string } | null>(null)
 
   const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
+  const [fillFrame, setFillFrame] = useState(false)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
 
@@ -673,7 +674,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         if (!venue_id) throw new Error('A venue is required')
         const timeStr = form.time || '20:00'
         const starts_at = new Date(`${form.date}T${timeStr}:00`).toISOString()
-        const { error: eventError } = await supabaseAdmin.from('events').insert({ venue_id, title: form.title, category: form.category, poster_url, starts_at, neighborhood: form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || '', address: form.address, description: form.description, view_count: 0, like_count: 0 })
+        const { error: eventError } = await supabaseAdmin.from('events').insert({ venue_id, title: form.title, category: form.category, poster_url, starts_at, neighborhood: form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || '', address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame })
         if (eventError) throw eventError
       }
 
@@ -712,7 +713,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const reset = () => {
     setPhase('idle'); setImageFile(null); setImagePreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false)
   }
 
   // DEV: generate a mock test poster
@@ -978,6 +979,23 @@ function ImportForm({ venues }: { venues: Venue[] }) {
           <div style={fieldStyle}>
             <label style={{ ...labelStyle, color: isUncertain('description') ? '#facc15' : 'var(--fg-55)' }}>Description {isUncertain('description') && '⚠'}</label>
             <textarea style={{ ...(isUncertain('description') ? uncertainInput : inputStyle), minHeight: 72, resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Supporting acts, price, ages…" />
+          </div>
+
+          {/* Fill frame */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Fill frame</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setFillFrame(v => !v)}
+                style={{ padding: '6px 14px', background: fillFrame ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${fillFrame ? 'rgba(168,85,247,0.55)' : 'var(--fg-18)'}`, borderRadius: 4, color: fillFrame ? '#c084fc' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em' }}
+              >
+                {fillFrame ? 'ON' : 'OFF'}
+              </button>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>
+                {fillFrame ? 'fills grid card (edges cropped)' : 'fits grid card (backdrop visible)'}
+              </span>
+            </div>
           </div>
 
           {/* Submit */}
