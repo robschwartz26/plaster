@@ -359,6 +359,7 @@ interface ExtractedEvent {
   website?: string
   instagram?: string
   hours?: string
+  existing_poster_url?: string
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -650,6 +651,7 @@ function ImportForm() {
   const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
   const [fillFrame, setFillFrame] = useState(false)
   const [reExtracting, setReExtracting] = useState(false)
+  const [reuseExistingPoster, setReuseExistingPoster] = useState(false)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
 
@@ -673,6 +675,7 @@ function ImportForm() {
         : { base64: posterBase64, mimeType: poster.type || 'image/jpeg' }
       const result = await extractEventFromImage(payload)
       setExtracted(result)
+      setReuseExistingPoster(!!result.existing_poster_url)
       const match = venues.find(v =>
         v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
         result.venue_name.toLowerCase().includes(v.name.toLowerCase())
@@ -718,6 +721,7 @@ function ImportForm() {
       }
       const result = await extractEventFromImage(payload)
       setExtracted(result)
+      setReuseExistingPoster(!!result.existing_poster_url)
       const match = venues.find(v =>
         v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
         result.venue_name.toLowerCase().includes(v.name.toLowerCase())
@@ -770,15 +774,21 @@ function ImportForm() {
   }
 
   const doUpload = async (updateExistingId?: string) => {
-    if (!imageFiles[0] || !form.title || !form.date) return
+    if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
     setPhase('uploading')
     try {
-      const optimized = await optimizeImage(imageFiles[0], userCrop ?? extracted?.crop)
-      const filename = `${Date.now()}-${form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`
-      const { error: storageError } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
-      if (storageError) throw storageError
-      const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
-      const poster_url = urlData.publicUrl
+      let poster_url: string
+      if (reuseExistingPoster && extracted?.existing_poster_url) {
+        poster_url = extracted.existing_poster_url
+      } else {
+        if (!imageFiles[0]) throw new Error('No image to upload')
+        const optimized = await optimizeImage(imageFiles[0], userCrop ?? extracted?.crop)
+        const filename = `${Date.now()}-${form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.jpg`
+        const { error: storageError } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
+        if (storageError) throw storageError
+        const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
+        poster_url = urlData.publicUrl
+      }
 
       if (updateExistingId) {
         const { error } = await supabaseAdmin.from('events').update({ poster_url }).eq('id', updateExistingId)
@@ -805,7 +815,7 @@ function ImportForm() {
   }
 
   const handleSubmit = async () => {
-    if (!imageFiles[0] || !form.title || !form.date) return
+    if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
 
     // Duplicate detection: same venue + date ±1 day + similar title
     if (form.venue_id && form.date) {
@@ -832,7 +842,7 @@ function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setReuseExistingPoster(false)
   }
 
   // DEV: generate a mock test poster
@@ -1020,14 +1030,28 @@ function ImportForm() {
       </div>
 
       {/* Preview + form */}
-      <div style={{ display: 'grid', gridTemplateColumns: imagePreviews[0] ? '1fr 1.5fr' : '1fr', gap: 20, alignItems: 'start' }}>
-        {imagePreviews[0] && (() => {
+      <div style={{ display: 'grid', gridTemplateColumns: (imagePreviews[0] || reuseExistingPoster) ? '1fr 1.5fr' : '1fr', gap: 20, alignItems: 'start' }}>
+        {(imagePreviews[0] || reuseExistingPoster) && (() => {
           const displayCrop = userCrop ?? extracted?.crop ?? { x: 0, y: 0, width: 1, height: 1 }
           const hasDisplayCrop = !(displayCrop.x === 0 && displayCrop.y === 0 && displayCrop.width === 1 && displayCrop.height === 1)
           return (
             <div>
+              {/* Poster reuse banner */}
+              {reuseExistingPoster && extracted?.existing_poster_url && (
+                <div style={{ marginBottom: 8, padding: '7px 10px', borderRadius: 6, background: 'rgba(74,222,128,0.10)', border: '1px solid rgba(74,222,128,0.30)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', fontWeight: 600 }}>Existing poster found — reusing it</span>
+                  <button
+                    onClick={() => setReuseExistingPoster(false)}
+                    style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', padding: 0, whiteSpace: 'nowrap', flexShrink: 0 }}
+                  >
+                    Use a different poster
+                  </button>
+                </div>
+              )}
               <div style={{ borderRadius: 8, overflow: 'hidden', background: '#111', maxHeight: 420 }}>
-                {hasDisplayCrop ? (
+                {reuseExistingPoster && extracted?.existing_poster_url ? (
+                  <img src={extracted.existing_poster_url} alt="Existing poster" style={{ width: '100%', objectFit: 'contain', maxHeight: 420, display: 'block' }} />
+                ) : hasDisplayCrop ? (
                   <div style={{ position: 'relative', width: '100%', paddingBottom: `${(displayCrop.height / displayCrop.width) * 100}%`, overflow: 'hidden' }}>
                     <img src={imagePreviews[0]} alt="Poster" style={{ position: 'absolute', width: `${100 / displayCrop.width}%`, height: `${100 / displayCrop.height}%`, left: `${-displayCrop.x / displayCrop.width * 100}%`, top: `${-displayCrop.y / displayCrop.height * 100}%`, objectFit: 'cover' }} />
                   </div>
@@ -1035,9 +1059,11 @@ function ImportForm() {
                   <img src={imagePreviews[0]} alt="Poster" style={{ width: '100%', objectFit: 'contain', maxHeight: 420, display: 'block' }} />
                 )}
               </div>
-              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', marginTop: 6, textAlign: 'center' }}>
-                {userCrop ? '✂ Cropped (adjusted) · max 1200px · JPEG' : hasDisplayCrop ? '✂ Cropped by AI · max 1200px · JPEG' : 'Will be resized to max 1200px · JPEG'}
-              </p>
+              {!reuseExistingPoster && (
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', marginTop: 6, textAlign: 'center' }}>
+                  {userCrop ? '✂ Cropped (adjusted) · max 1200px · JPEG' : hasDisplayCrop ? '✂ Cropped by AI · max 1200px · JPEG' : 'Will be resized to max 1200px · JPEG'}
+                </p>
+              )}
               {/* Info image zone — stays visible the entire review phase */}
               <div style={{ marginTop: 10 }}>
                 {reExtracting ? (
@@ -1200,14 +1226,16 @@ function ImportForm() {
 
           {/* Submit */}
           <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={handlePreview}
-              disabled={!imageFiles[0]}
-              style={{ padding: '12px 14px', background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}
-            >
-              Preview
-            </button>
+            {!reuseExistingPoster && (
+              <button
+                type="button"
+                onClick={handlePreview}
+                disabled={!imageFiles[0]}
+                style={{ padding: '12px 14px', background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}
+              >
+                Preview
+              </button>
+            )}
             <button
               onClick={handleSubmit}
               disabled={!form.title || !form.date || (!form.venue_id && !form.venue_name_manual)}

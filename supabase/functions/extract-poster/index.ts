@@ -213,6 +213,63 @@ For the "crop" field: express poster art bounds as fractions of the total image 
       }
 
       if (!resolved) parsed.address_source = 'none'
+
+      // ── Poster reuse — find existing event with matching title at same venue ──
+      if (parsed.title && SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+        try {
+          const titleWords = (s: string) =>
+            new Set((s as string).toLowerCase().split(/\W+/).filter(w => w.length > 2))
+          const titleSim = (a: string, b: string): number => {
+            const wa = titleWords(a), wb = titleWords(b)
+            if (wa.size === 0 || wb.size === 0) return 0
+            let overlap = 0
+            for (const w of wa) { if (wb.has(w)) overlap++ }
+            return overlap / Math.max(wa.size, wb.size)
+          }
+
+          // Find venue_id for this venue
+          const vParams = new URLSearchParams()
+          vParams.set('name', `ilike.%${parsed.venue_name}%`)
+          vParams.set('select', 'id')
+          vParams.set('limit', '1')
+          const vRes = await fetch(`${SUPABASE_URL}/rest/v1/venues?${vParams}`, {
+            headers: {
+              'apikey': SUPABASE_SERVICE_KEY,
+              'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+            },
+          })
+          if (vRes.ok) {
+            const vRows = await vRes.json()
+            if (Array.isArray(vRows) && vRows.length > 0) {
+              const venueId = vRows[0].id
+              // Fetch recent events at this venue that have a poster
+              const eParams = new URLSearchParams()
+              eParams.set('venue_id', `eq.${venueId}`)
+              eParams.set('poster_url', 'not.is.null')
+              eParams.set('select', 'title,poster_url')
+              eParams.set('limit', '40')
+              const eRes = await fetch(`${SUPABASE_URL}/rest/v1/events?${eParams}`, {
+                headers: {
+                  'apikey': SUPABASE_SERVICE_KEY,
+                  'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+                },
+              })
+              if (eRes.ok) {
+                const events = await eRes.json()
+                if (Array.isArray(events) && events.length > 0) {
+                  const best = events
+                    .filter(e => e.poster_url)
+                    .map(e => ({ poster_url: e.poster_url as string, score: titleSim(e.title, parsed.title as string) }))
+                    .sort((a, b) => b.score - a.score)[0]
+                  if (best && best.score > 0.6) {
+                    parsed.existing_poster_url = best.poster_url
+                  }
+                }
+              }
+            }
+          }
+        } catch { /* ignore poster reuse failures */ }
+      }
     }
 
     return new Response(JSON.stringify(parsed), {
