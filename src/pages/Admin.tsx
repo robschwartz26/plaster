@@ -371,9 +371,11 @@ function fileToDataURL(file: File): Promise<string> {
   })
 }
 
-async function extractEventFromImage(
-  images: { base64: string; mimeType: string }[]
-): Promise<ExtractedEvent> {
+type ExtractPayload =
+  | { base64: string; mimeType: string }
+  | { images: { base64: string; mimeType: string }[] }
+
+async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
@@ -383,7 +385,7 @@ async function extractEventFromImage(
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
     },
-    body: JSON.stringify({ images }),
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
@@ -617,6 +619,12 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const [successTitle, setSuccessTitle] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
+  // Extra info image — sent to Claude but NOT uploaded to storage
+  const [infoFile, setInfoFile] = useState<File | null>(null)
+  const [infoPreview, setInfoPreview] = useState('')
+  const [infoDragging, setInfoDragging] = useState(false)
+  const infoFileRef = useRef<HTMLInputElement>(null)
+
   const [userCrop, setUserCrop] = useState<CropRect | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [duplicateEvent, setDuplicateEvent] = useState<{ id: string; title: string; poster_url: string | null; starts_at: string } | null>(null)
@@ -629,18 +637,22 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const uncertainInput: React.CSSProperties = { ...inputStyle, borderColor: 'rgba(234,179,8,0.5)', background: 'rgba(234,179,8,0.04)' }
 
   const handleFiles = useCallback(async (files: File[]) => {
-    const limited = files.filter(f => f.type.startsWith('image/')).slice(0, 4)
-    if (limited.length === 0) return
-    setImageFiles(limited)
+    const poster = files.find(f => f.type.startsWith('image/'))
+    if (!poster) return
+    setImageFiles([poster])
     setPhase('extracting')
     setErrorMsg('')
     try {
-      const [dataURLs, imagesData] = await Promise.all([
-        Promise.all(limited.map(fileToDataURL)),
-        Promise.all(limited.map(async f => ({ base64: await fileToBase64(f), mimeType: f.type || 'image/jpeg' }))),
-      ])
-      setImagePreviews(dataURLs)
-      const result = await extractEventFromImage(imagesData)
+      const [dataURL, posterBase64] = await Promise.all([fileToDataURL(poster), fileToBase64(poster)])
+      setImagePreviews([dataURL])
+      // If an extra info image is queued, send both to Claude in one call
+      const payload: ExtractPayload = infoFile
+        ? { images: [
+            { base64: posterBase64, mimeType: poster.type || 'image/jpeg' },
+            { base64: await fileToBase64(infoFile), mimeType: infoFile.type || 'image/jpeg' },
+          ]}
+        : { base64: posterBase64, mimeType: poster.type || 'image/jpeg' }
+      const result = await extractEventFromImage(payload)
       setExtracted(result)
       const match = venues.find(v => v.name.toLowerCase().includes(result.venue_name.toLowerCase()) || result.venue_name.toLowerCase().includes(v.name.toLowerCase()))
       const detectedNeighborhood = neighborhoodFromAddress(result.address)
@@ -649,12 +661,12 @@ function ImportForm({ venues }: { venues: Venue[] }) {
     } catch (e) {
       setErrorMsg(String(e)); setPhase('error')
     }
-  }, [venues])
+  }, [venues, infoFile])
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) handleFiles(files)
+    const file = e.dataTransfer.files[0]
+    if (file?.type.startsWith('image/')) handleFiles([file])
   }
 
   const doUpload = async (updateExistingId?: string) => {
@@ -718,7 +730,7 @@ function ImportForm({ venues }: { venues: Venue[] }) {
   const handlePreview = () => setShowPreviewModal(true)
 
   const reset = () => {
-    setPhase('idle'); setImageFiles([]); setImagePreviews([]); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
+    setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
     setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false)
   }
@@ -755,7 +767,46 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', margin: 0, textAlign: 'center' }}>Drop a poster image here</p>
         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>or click to browse · JPG, PNG, WEBP</p>
       </div>
-      <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length > 0) handleFiles(files) }} />
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFiles([f]) }} />
+
+      {/* Extra info image zone */}
+      <div style={{ marginTop: 10 }}>
+        {infoPreview ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <img src={infoPreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
+              <button
+                onClick={() => { setInfoFile(null); setInfoPreview('') }}
+                style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+              >✕</button>
+            </div>
+            <div>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Extra info image attached</p>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Will be sent to Claude · not uploaded to storage</p>
+            </div>
+          </div>
+        ) : (
+          <div
+            onDragOver={e => { e.preventDefault(); setInfoDragging(true) }}
+            onDragLeave={() => setInfoDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setInfoDragging(false)
+              const f = e.dataTransfer.files[0]
+              if (f?.type.startsWith('image/')) { setInfoFile(f); fileToDataURL(f).then(url => setInfoPreview(url)) }
+            }}
+            onClick={() => infoFileRef.current?.click()}
+            style={{ border: `1px dashed ${infoDragging ? 'var(--fg-40)' : 'var(--fg-18)'}`, borderRadius: 8, padding: '14px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.03)' : 'transparent', transition: 'all 0.15s ease' }}
+          >
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>Extra info image <span style={{ color: 'var(--fg-25)' }}>(optional)</span></p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-25)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
+          </div>
+        )}
+        <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+          const f = e.target.files?.[0]
+          if (f) { setInfoFile(f); fileToDataURL(f).then(url => setInfoPreview(url)) }
+        }} />
+      </div>
+
       {IS_DEV && (
         <button onClick={loadDevPoster} style={{ marginTop: 12, padding: '6px 14px', background: '#7c3aed', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.05em' }}>
           DEV — Load Test Poster
