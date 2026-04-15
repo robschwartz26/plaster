@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { PlasterHeader } from '@/components/PlasterHeader'
-import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds } from '@/lib/cropUtils'
+import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors } from '@/lib/cropUtils'
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -423,7 +423,7 @@ function CropPreviewModal({
   const [previewColors, setPreviewColors] = useState<string[]>([])
   const [previewLoading, setPreviewLoading] = useState(true)
   const [smartSnap, setSmartSnap] = useState(true)
-  const [smartCrop, setSmartCrop] = useState<CropRect | null>(null)
+  const [smartCrop] = useState<CropRect | null>(null)
 
   const imgWrapRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -442,13 +442,6 @@ function CropPreviewModal({
       setPreviewLoading(false)
     }
   }, [imageFile])
-
-  // Detect content bounds in background on mount
-  useEffect(() => {
-    detectContentBounds(imageSrc).then(detected => {
-      if (detected) { smartCropRef.current = detected; setSmartCrop(detected) }
-    })
-  }, []) // eslint-disable-line
 
   // Entering crop mode: auto-apply smart snap if user hasn't manually adjusted
   const handleEnterCropMode = () => {

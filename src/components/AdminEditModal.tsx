@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
-import { type CropRect, type CropHandle, applyHandleDrag, detectContentBounds, optimizeImage } from '@/lib/cropUtils'
+import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '@/lib/cropUtils'
 
 const IS_DEV = import.meta.env.DEV
 
@@ -38,11 +38,6 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   // ── Crop state ─────────────────────────────────────────────
   const [cropMode, setCropMode] = useState(false)
   const [editCrop, setEditCrop] = useState<CropRect>({ x: 0, y: 0, width: 1, height: 1 })
-  const [smartSnap, setSmartSnap] = useState(true)
-  const [smartCrop, setSmartCrop] = useState<CropRect | null>(null)
-  const smartCropRef = useRef<CropRect | null>(null)
-  const [isSnapAnimating, setIsSnapAnimating] = useState(false)
-  const [snapToast, setSnapToast] = useState<string | null>(null)
 
   // ── Undo state ─────────────────────────────────────────────
   const previousUrlRef = useRef<string | null>(null)
@@ -115,18 +110,6 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     img.src = event.poster_url
   }, [event.poster_url])
 
-  // Detect solid borders on mount; store result for smart snap
-  useEffect(() => {
-    if (!event.poster_url) return
-    console.log('[SmartSnap] Mount: calling detectContentBounds for', event.poster_url)
-    detectContentBounds(event.poster_url).then(detected => {
-      if (!detected) { console.log('[SmartSnap] Mount: no solid borders detected'); return }
-      console.log('[SmartSnap] Mount: detected bounds:', detected)
-      smartCropRef.current = detected
-      setSmartCrop(detected)
-    })
-  }, [event.poster_url])
-
   // ── Live preview canvas: redraws on every editCrop change using cached image ──
   useEffect(() => {
     if (!cropMode) return
@@ -193,42 +176,8 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   }
 
   const handleEnterCrop = () => {
-    const snap = smartCropRef.current
-    console.log('[SmartSnap] Entering crop mode. smartSnap:', smartSnap, '| cached bounds:', snap)
-    setEditCrop(smartSnap && snap ? snap : { x: 0, y: 0, width: 1, height: 1 })
+    setEditCrop({ x: 0, y: 0, width: 1, height: 1 })
     setCropMode(true)
-  }
-
-  const applySnap = (bounds: CropRect) => {
-    setIsSnapAnimating(true)
-    setEditCrop(bounds)
-    setTimeout(() => setIsSnapAnimating(false), 250)
-  }
-
-  const handleSmartSnapToggle = () => {
-    const turningOn = !smartSnap
-    console.log('[SmartSnap] Toggle clicked, calling detectContentBounds. Turning ON:', turningOn)
-    setSmartSnap(turningOn)
-    if (turningOn) {
-      if (smartCropRef.current) {
-        console.log('[SmartSnap] Applying cached bounds:', smartCropRef.current)
-        applySnap(smartCropRef.current)
-      } else if (event.poster_url) {
-        detectContentBounds(event.poster_url).then(detected => {
-          if (!detected) {
-            console.log('[SmartSnap] No borders detected')
-            setSnapToast('No borders detected')
-            setTimeout(() => setSnapToast(null), 2500)
-            setSmartSnap(false)
-            return
-          }
-          console.log('[SmartSnap] Re-detected bounds:', detected)
-          smartCropRef.current = detected
-          setSmartCrop(detected)
-          applySnap(detected)
-        })
-      }
-    }
   }
 
   // ── Save Crop ──────────────────────────────────────────────
@@ -312,9 +261,6 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     }
   }
 
-  // ── CSS transition string for animated snap ────────────────
-  const snapTransition = isSnapAnimating ? 'all 0.2s ease' : 'none'
-
   // ── Render ─────────────────────────────────────────────────
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9990, background: '#0a0a0a', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
@@ -381,13 +327,13 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                     {/* Full-image dark overlay — 4 rects surrounding the crop window */}
                     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
                       {/* top strip */}
-                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${editCrop.y * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: `${editCrop.y * 100}%`, background: 'rgba(0,0,0,0.55)' }} />
                       {/* bottom strip */}
-                      <div style={{ position: 'absolute', top: `${(editCrop.y + editCrop.height) * 100}%`, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      <div style={{ position: 'absolute', top: `${(editCrop.y + editCrop.height) * 100}%`, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.55)' }} />
                       {/* left strip */}
-                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: 0, width: `${editCrop.x * 100}%`, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: 0, width: `${editCrop.x * 100}%`, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)' }} />
                       {/* right strip */}
-                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: `${(editCrop.x + editCrop.width) * 100}%`, right: 0, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)', transition: snapTransition }} />
+                      <div style={{ position: 'absolute', top: `${editCrop.y * 100}%`, left: `${(editCrop.x + editCrop.width) * 100}%`, right: 0, height: `${editCrop.height * 100}%`, background: 'rgba(0,0,0,0.55)' }} />
                     </div>
 
                     {/* Crop rect border + 8 handles */}
@@ -399,7 +345,6 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                       height: `${editCrop.height * 100}%`,
                       border: '1.5px solid rgba(255,255,255,0.9)',
                       boxSizing: 'border-box',
-                      transition: snapTransition,
                     }}>
                       {HANDLES.map(([h, lp, tp, cur]) => (
                         // Outer div = 20×20 touch target (invisible)
@@ -454,21 +399,9 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
             {/* Crop controls */}
             {cropMode ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-                {/* Toast */}
-                {snapToast && (
-                  <div style={{ padding: '6px 12px', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)' }}>
-                    {snapToast}
-                  </div>
-                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <button
-                    onClick={handleSmartSnapToggle}
-                    style={{ padding: '5px 11px', background: smartSnap ? 'rgba(168,85,247,0.18)' : 'transparent', border: `1px solid ${smartSnap ? 'rgba(168,85,247,0.55)' : 'rgba(255,255,255,0.1)'}`, borderRadius: 5, color: smartSnap ? '#c084fc' : 'rgba(255,255,255,0.3)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', letterSpacing: '0.04em', flexShrink: 0 }}
-                  >
-                    Smart snap: {smartSnap ? 'ON' : 'OFF'}
-                  </button>
-                  <button
-                    onClick={() => setEditCrop(smartSnap && smartCrop ? smartCrop : { x: 0, y: 0, width: 1, height: 1 })}
+                    onClick={() => setEditCrop({ x: 0, y: 0, width: 1, height: 1 })}
                     style={{ padding: '5px 11px', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 5, color: 'rgba(255,255,255,0.45)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer', flexShrink: 0 }}
                   >
                     Reset
