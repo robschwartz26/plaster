@@ -196,7 +196,15 @@ function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
 
 // ── Event form ───────────────────────────────────────────────
 
-interface Venue { id: string; name: string; neighborhood?: string }
+interface Venue {
+  id: string
+  name: string
+  neighborhood?: string
+  address?: string
+  website?: string
+  instagram?: string
+  hours?: string
+}
 
 function EventForm({ venues }: { venues: Venue[] }) {
   const [form, setForm] = useState({ venue_id: '', title: '', category: '', date: '', start_time: '', description: '', is_recurring: false, recurrence_rule: '' })
@@ -609,7 +617,17 @@ function CropPreviewModal({
   )
 }
 
-function ImportForm({ venues }: { venues: Venue[] }) {
+function ImportForm() {
+  const [venues, setVenues] = useState<Venue[]>([])
+
+  useEffect(() => {
+    supabaseAdmin
+      .from('venues')
+      .select('id, name, neighborhood, address, website, instagram, hours')
+      .order('name', { ascending: true })
+      .then(({ data }) => { if (data) setVenues(data) })
+  }, [])
+
   const [phase, setPhase] = useState<ImportPhase>('idle')
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
@@ -655,9 +673,25 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         : { base64: posterBase64, mimeType: poster.type || 'image/jpeg' }
       const result = await extractEventFromImage(payload)
       setExtracted(result)
-      const match = venues.find(v => v.name.toLowerCase().includes(result.venue_name.toLowerCase()) || result.venue_name.toLowerCase().includes(v.name.toLowerCase()))
-      const detectedNeighborhood = neighborhoodFromAddress(result.address)
-      setForm({ title: result.title, venue_id: match?.id ?? '', venue_name_manual: match ? '' : result.venue_name, date: result.date, time: result.time, address: result.address, description: result.description, category: result.category, neighborhood: detectedNeighborhood || match?.neighborhood || '', website: result.website ?? '', instagram: result.instagram ?? '', hours: result.hours ?? '' })
+      const match = venues.find(v =>
+        v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
+        result.venue_name.toLowerCase().includes(v.name.toLowerCase())
+      )
+      const detectedNeighborhood = neighborhoodFromAddress(match?.address || result.address)
+      setForm({
+        title: result.title,
+        venue_id: match?.id ?? '',
+        venue_name_manual: match ? '' : result.venue_name,
+        date: result.date,
+        time: result.time,
+        address: match?.address || result.address,
+        description: result.description,
+        category: result.category,
+        neighborhood: match?.neighborhood || detectedNeighborhood || '',
+        website: match?.website || result.website || '',
+        instagram: match?.instagram || result.instagram || '',
+        hours: match?.hours || result.hours || '',
+      })
       setPhase('review')
     } catch (e) {
       setErrorMsg(String(e)); setPhase('error')
@@ -688,26 +722,46 @@ function ImportForm({ venues }: { venues: Venue[] }) {
         v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
         result.venue_name.toLowerCase().includes(v.name.toLowerCase())
       )
-      setForm(f => ({
-        title: f.title || result.title,
-        venue_id: f.venue_id || (match?.id ?? ''),
-        venue_name_manual: f.venue_name_manual || (match ? '' : result.venue_name),
-        date: f.date || result.date,
-        time: f.time || result.time,
-        address: f.address || result.address,
-        description: f.description || result.description,
-        category: (f.category || result.category) as Category,
-        neighborhood: f.neighborhood || neighborhoodFromAddress(result.address) || match?.neighborhood || '',
-        website: f.website || (result.website ?? ''),
-        instagram: f.instagram || (result.instagram ?? ''),
-        hours: f.hours || (result.hours ?? ''),
-      }))
+      setForm(f => {
+        const resolvedVenueId = f.venue_id || match?.id || ''
+        const resolvedMatch = resolvedVenueId ? (venues.find(v => v.id === resolvedVenueId) ?? match) : match
+        return {
+          title: f.title || result.title,
+          venue_id: resolvedVenueId,
+          venue_name_manual: f.venue_name_manual || (resolvedMatch ? '' : result.venue_name),
+          date: f.date || result.date,
+          time: f.time || result.time,
+          address: f.address || resolvedMatch?.address || result.address,
+          description: f.description || result.description,
+          category: (f.category || result.category) as Category,
+          neighborhood: f.neighborhood || resolvedMatch?.neighborhood || neighborhoodFromAddress(result.address) || '',
+          website: f.website || resolvedMatch?.website || result.website || '',
+          instagram: f.instagram || resolvedMatch?.instagram || result.instagram || '',
+          hours: f.hours || resolvedMatch?.hours || result.hours || '',
+        }
+      })
     } catch {
       // silently ignore re-extraction errors — user keeps original fields
     } finally {
       setReExtracting(false)
     }
   }, [imageFiles, venues])
+
+  const handleVenueChange = (venueId: string) => {
+    const v = venues.find(v => v.id === venueId)
+    setForm(f => ({
+      ...f,
+      venue_id: venueId,
+      venue_name_manual: '',
+      ...(v ? {
+        address: v.address || f.address,
+        neighborhood: v.neighborhood || f.neighborhood,
+        website: v.website || f.website,
+        instagram: v.instagram || f.instagram,
+        hours: v.hours || f.hours,
+      } : {}),
+    }))
+  }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
@@ -1041,15 +1095,15 @@ function ImportForm({ venues }: { venues: Venue[] }) {
           {/* Venue */}
           <div style={fieldStyle}>
             <label style={{ ...labelStyle, color: isUncertain('venue_name') ? '#facc15' : 'var(--fg-55)' }}>Venue {isUncertain('venue_name') && '⚠'} *</label>
-            <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.venue_id} onChange={e => setForm(f => ({ ...f, venue_id: e.target.value, venue_name_manual: '' }))}>
-              <option value="">— Select existing venue —</option>
+            <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.venue_id} onChange={e => handleVenueChange(e.target.value)}>
+              <option value="">— New venue —</option>
               {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
             {form.venue_id && (
-              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>matched existing venue</p>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>existing venue · address &amp; details auto-filled</p>
             )}
             {!form.venue_id && (
-              <input style={{ ...inputStyle, marginTop: 8 }} value={form.venue_name_manual} onChange={e => setForm(f => ({ ...f, venue_name_manual: e.target.value }))} placeholder="Or type new venue name (will be created)" />
+              <input style={{ ...inputStyle, marginTop: 8 }} value={form.venue_name_manual} onChange={e => setForm(f => ({ ...f, venue_name_manual: e.target.value }))} placeholder="New venue name (will be created)" />
             )}
           </div>
 
@@ -1232,7 +1286,7 @@ function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
 
   const fetchVenues = async () => {
-    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood').order('name', { ascending: true })
+    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, website, instagram, hours').order('name', { ascending: true })
     if (data) setVenues(data)
   }
 
@@ -1253,7 +1307,7 @@ function AdminDashboard() {
           </Section>
 
           <Section title="Import Poster">
-            <ImportForm venues={venues} />
+            <ImportForm />
           </Section>
 
         </div>
