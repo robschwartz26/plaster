@@ -41,6 +41,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [fillFrame, setFillFrame] = useState(event.fill_frame ?? false)
   const [focalX, setFocalX] = useState(event.focal_x ?? 0.5)
   const [focalY, setFocalY] = useState(event.focal_y ?? 0.5)
+  const [focalNatural, setFocalNatural] = useState<{ w: number; h: number } | null>(null)
   const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
 
   // ── Undo state ─────────────────────────────────────────────
@@ -515,48 +516,45 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                 {fillFrame ? 'fills card, edges cropped' : 'fits card, backdrop visible'}
               </span>
             </div>
-            {fillFrame && !imgCacheReady && (
-              <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.12)', borderTopColor: '#c084fc', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>Loading pan control…</span>
-                <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-              </div>
-            )}
-            {fillFrame && imgCacheReady && (() => {
-              const img = imgCacheRef.current!
+            {fillFrame && (() => {
               const cw = 160, ch = 240
-              const scale = Math.max(cw / (img.naturalWidth || 1), ch / (img.naturalHeight || 1))
-              const dw = img.naturalWidth * scale, dh = img.naturalHeight * scale
-              const ox = dw - cw, oy = dh - ch
-              const imgLeft = ox > 0 ? -focalX * ox : (cw - dw) / 2
-              const imgTop = oy > 0 ? -focalY * oy : (ch - dh) / 2
+              const scale = focalNatural ? Math.max(cw / focalNatural.w, ch / focalNatural.h) : 1
+              const ox = focalNatural ? Math.max(0, focalNatural.w * scale - cw) : 0
+              const oy = focalNatural ? Math.max(0, focalNatural.h * scale - ch) : 0
               return (
                 <div style={{ marginBottom: 16 }}>
                   <div
                     onPointerDown={e => {
+                      if (!focalNatural) return
                       e.currentTarget.setPointerCapture(e.pointerId)
                       focalDragRef.current = { startX: e.clientX, startY: e.clientY, startFocalX: focalX, startFocalY: focalY }
                     }}
                     onPointerMove={e => {
                       const d = focalDragRef.current
-                      if (!d) return
-                      const startLeft = ox > 0 ? -d.startFocalX * ox : (cw - dw) / 2
-                      const startTop = oy > 0 ? -d.startFocalY * oy : (ch - dh) / 2
-                      const nLeft = ox > 0 ? Math.min(0, Math.max(-ox, startLeft + (e.clientX - d.startX))) : startLeft
-                      const nTop = oy > 0 ? Math.min(0, Math.max(-oy, startTop + (e.clientY - d.startY))) : startTop
+                      if (!d || !focalNatural) return
+                      const startLeft = ox > 0 ? -d.startFocalX * ox : 0
+                      const startTop = oy > 0 ? -d.startFocalY * oy : 0
+                      const nLeft = ox > 0 ? Math.min(0, Math.max(-ox, startLeft + (e.clientX - d.startX))) : 0
+                      const nTop = oy > 0 ? Math.min(0, Math.max(-oy, startTop + (e.clientY - d.startY))) : 0
                       setFocalX(ox > 0 ? -nLeft / ox : 0.5)
                       setFocalY(oy > 0 ? -nTop / oy : 0.5)
                     }}
                     onPointerUp={() => { focalDragRef.current = null }}
-                    style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: 'grab', position: 'relative', userSelect: 'none', touchAction: 'none', border: '1px solid rgba(255,255,255,0.12)', background: '#111' }}
+                    style={{ width: 160, height: 240, overflow: 'hidden', borderRadius: 8, cursor: focalNatural ? 'grab' : 'default', userSelect: 'none', touchAction: 'none', border: '1px solid rgba(255,255,255,0.12)', background: '#111' }}
                   >
                     <img
                       src={event.poster_url!}
                       draggable={false}
-                      style={{ position: 'absolute', width: dw, height: dh, left: imgLeft, top: imgTop, pointerEvents: 'none', userSelect: 'none', display: 'block' }}
+                      onLoad={e => {
+                        const img = e.currentTarget
+                        setFocalNatural({ w: img.naturalWidth, h: img.naturalHeight })
+                      }}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${focalX * 100}% ${focalY * 100}%`, display: 'block', pointerEvents: 'none', userSelect: 'none' }}
                     />
                   </div>
-                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.3)', display: 'block', marginTop: 5 }}>Drag to reposition · saved with Apply</span>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(255,255,255,0.3)', display: 'block', marginTop: 5 }}>
+                    {focalNatural ? 'Drag to reposition · saved with Apply' : 'Loading…'}
+                  </span>
                 </div>
               )
             })()}
