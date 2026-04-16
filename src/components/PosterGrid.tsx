@@ -34,13 +34,14 @@ interface Props {
   prevUrlMap?: Record<string, string>
   onUndoCrop?: (eventId: string) => void
   onConfirmCrop?: (eventId: string) => void
+  onActiveCategoryChange?: (category: string | null) => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange }: Props) {
   const [cols, setCols] = useState(2)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -238,6 +239,14 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
           viewCount: allEvents[activeEventIdx].view_count,
         }
       : null
+
+  // Notify parent of the active poster's category (1-col only; null otherwise)
+  const onActiveCategoryChangeRef = useRef(onActiveCategoryChange)
+  onActiveCategoryChangeRef.current = onActiveCategoryChange
+  useEffect(() => {
+    const category = cols === 1 ? (allEvents[activeEventIdx]?.category ?? null) : null
+    onActiveCategoryChangeRef.current?.(category)
+  }, [cols, activeEventIdx, allEvents])
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',

@@ -19,6 +19,7 @@ const MOCK_WALL_EVENTS: WallEvent[] = mockEvents.map(mockEventToWallEvent)
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
+  const [activePosterCategory, setActivePosterCategory] = useState<string | null>(null)
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
@@ -144,7 +145,7 @@ export function Wall() {
         }
       />
 
-      <FilterBar active={activeFilter} onChange={setActiveFilter} />
+      <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
 
       <PosterGrid
         events={events}
@@ -153,6 +154,7 @@ export function Wall() {
         likedIds={likedIds}
         onDayChange={setActiveDay}
         onLike={handleLike}
+        onActiveCategoryChange={setActivePosterCategory}
         onVenueTap={handleVenueTap}
         isAdminMode={isAdminMode}
         onEventSaved={(eventId, newPosterUrl) => {
