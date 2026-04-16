@@ -736,18 +736,18 @@ function ImportForm() {
         const resolvedVenueId = f.venue_id || match?.id || ''
         const resolvedMatch = resolvedVenueId ? (venues.find(v => v.id === resolvedVenueId) ?? match) : match
         return {
-          title: f.title || result.title,
+          title: result.title || f.title,
           venue_id: resolvedVenueId,
-          venue_name_manual: f.venue_name_manual || (resolvedMatch ? '' : result.venue_name),
-          date: f.date || result.date,
-          time: f.time || result.time,
-          address: f.address || resolvedMatch?.address || result.address,
-          description: f.description || result.description,
-          category: (f.category || result.category) as Category,
-          neighborhood: f.neighborhood || resolvedMatch?.neighborhood || neighborhoodFromAddress(result.address) || '',
-          website: f.website || resolvedMatch?.website || result.website || '',
-          instagram: f.instagram || resolvedMatch?.instagram || result.instagram || '',
-          hours: f.hours || resolvedMatch?.hours || result.hours || '',
+          venue_name_manual: resolvedMatch ? '' : (result.venue_name || f.venue_name_manual),
+          date: result.date || f.date,
+          time: result.time || f.time,
+          address: resolvedMatch?.address || result.address || f.address,
+          description: result.description || f.description,
+          category: (result.category || f.category) as Category,
+          neighborhood: resolvedMatch?.neighborhood || neighborhoodFromAddress(result.address) || f.neighborhood || '',
+          website: resolvedMatch?.website || result.website || f.website || '',
+          instagram: resolvedMatch?.instagram || result.instagram || f.instagram || '',
+          hours: resolvedMatch?.hours || result.hours || f.hours || '',
         }
       })
     } catch {

@@ -33,7 +33,7 @@ serve(async (req) => {
     }))
 
     const promptText = images.length > 1
-      ? `These images are all related to the same Portland event. The first image is the event poster. Additional images may contain supplemental information like ticket prices, times, supporting acts, or venue details. Extract the most complete event information possible by reading all images together. If information conflicts, prefer the most specific/detailed version.
+      ? `You are reading event poster images. The FIRST image is the event poster art. Any ADDITIONAL images contain supplemental event information — they may be screenshots of ticket pages, venue websites, Instagram posts, or event listings with text details. Extract the most complete event information possible by reading ALL images together. Pay special attention to additional images for: exact ticket price, door time vs show time, supporting acts, age restrictions, website URLs, and any other details not visible on the main poster.
 
 Return ONLY a JSON object, no markdown, no explanation:
 {
@@ -42,7 +42,7 @@ Return ONLY a JSON object, no markdown, no explanation:
   "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
   "time": "HH:MM 24-hour format, empty string if not found",
   "address": "street address if visible, empty string if not",
-  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
+  "description": "Write 2-3 sentences in a warm, culturally informed Portland voice. Lead with what makes this event worth attending — the artist, the vibe, the occasion. Include one key practical detail (price, age restriction, or door time) woven in naturally. Write like a knowledgeable friend recommending the show, not a list of facts.",
   "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
@@ -59,7 +59,7 @@ Return ONLY a JSON object, no markdown, no explanation:
   "date": "YYYY-MM-DD, use ${year} if year not shown, empty string if no date visible",
   "time": "HH:MM 24-hour format, empty string if not found",
   "address": "street address if visible, empty string if not",
-  "description": "supporting acts, ticket price, ages, other details — max 2 sentences",
+  "description": "Write 2-3 sentences in a warm, culturally informed Portland voice. Lead with what makes this event worth attending — the artist, the vibe, the occasion. Include one key practical detail (price, age restriction, or door time) woven in naturally. Write like a knowledgeable friend recommending the show, not a list of facts.",
   "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
