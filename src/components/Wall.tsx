@@ -7,21 +7,16 @@ import { BottomNav } from './BottomNav'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 
 import { supabase } from '@/lib/supabase'
-import { mockEvents } from '@/data/mockEvents'
-import { dbEventToWallEvent, mockEventToWallEvent } from '@/lib/adapters'
+import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
-
-// Stable at module level — mock event dates are relative to app-load day,
-// which is the same reference point used by today below.
-const MOCK_WALL_EVENTS: WallEvent[] = mockEvents.map(mockEventToWallEvent)
 
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
   const [activePosterCategory, setActivePosterCategory] = useState<string | null>(null)
   const [_activeDay, setActiveDay] = useState(today)
-  const [events, setEvents] = useState<WallEvent[]>(MOCK_WALL_EVENTS)
+  const [events, setEvents] = useState<WallEvent[]>([])
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
   const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('plaster_admin_unlocked') === '1')
@@ -54,11 +49,7 @@ export function Wall() {
       .limit(200)
 
     const realEvents = (data ?? []).map(dbEventToWallEvent)
-
-    const merged = [...realEvents, ...MOCK_WALL_EVENTS]
-      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-
-    setEvents(merged)
+    setEvents(realEvents)
   }, [])
 
   useEffect(() => { fetchEvents() }, [fetchEvents])
