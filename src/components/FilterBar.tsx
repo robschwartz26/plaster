@@ -38,7 +38,8 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
       const targetI  = CATS.length + catIdx
       const chipW    = chipEls[targetI].offsetWidth
       const saW      = sa.offsetWidth
-      const idealOffset = positions[targetI] - saW + chipW + SAFE
+      const RIGHT_MARGIN = 12
+      const idealOffset = positions[targetI] - saW + chipW + RIGHT_MARGIN
 
       // Snap to nearest chip left-edge
       let bestOffset = positions[0]
