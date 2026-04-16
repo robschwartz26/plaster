@@ -56,6 +56,18 @@ function formatDateTime(iso: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`
 }
 
+function formatDatePill(iso: string): string {
+  const d = new Date(iso)
+  const h = d.getHours(), m = d.getMinutes()
+  const hour12 = h % 12 || 12
+  const ampm = h < 12 ? 'AM' : 'PM'
+  const timeStr = m === 0 ? `${hour12}${ampm}` : `${hour12}:${String(m).padStart(2, '0')}${ampm}`
+  if (d.toDateString() === new Date().toDateString()) return `TONIGHT · ${timeStr}`
+  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
+  const month   = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+  return `${weekday} · ${month} ${d.getDate()} · ${timeStr}`
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -431,6 +443,28 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                 <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
               </div>
             )}
+            {panelIdx === 0 && (
+              <div style={{
+                position: 'absolute',
+                bottom: 'max(48px, calc(env(safe-area-inset-bottom) + 34px))',
+                right: 0,
+                padding: '4px 8px',
+                background: 'rgba(var(--bg-rgb, 10,10,10), 0.8)',
+                backgroundColor: 'color-mix(in srgb, var(--bg) 80%, transparent)',
+                color: 'var(--fg)',
+                fontFamily: '"Barlow Condensed", sans-serif',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                borderRadius: 0,
+                zIndex: 5,
+                pointerEvents: 'none',
+                userSelect: 'none',
+              }}>
+                {formatDatePill(event.starts_at)}
+              </div>
+            )}
           </div>
 
           {/* Panel 2: Info */}
@@ -562,6 +596,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         </>
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+      )}
+
+      {new Date(event.starts_at).toDateString() === new Date().toDateString() && (
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'rgba(240,236,227,0.6)', zIndex: 2 }} />
       )}
 
       {cols <= 3 && (
