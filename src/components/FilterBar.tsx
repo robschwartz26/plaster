@@ -85,7 +85,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
             key={chip}
             onClick={() => onChange(chip)}
             className="font-body font-medium"
-            style={chipStyle(chip === active, chip === '♥')}
+            style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
             {chip === '♥' ? '♥\uFE0E' : chip}
           </button>
