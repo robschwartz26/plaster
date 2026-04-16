@@ -70,6 +70,39 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
   return { lat, lng }
 }
 
+// ── Recurrence helpers ───────────────────────────────────────
+
+type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly'
+
+const FREQ_LABELS: Record<RecurrenceFrequency, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly' }
+const FREQ_COUNTS: Record<RecurrenceFrequency, number> = { weekly: 12, biweekly: 6, monthly: 3 }
+
+function generateOccurrenceDates(start: Date, freq: RecurrenceFrequency): Date[] {
+  const dates: Date[] = []
+  const end = new Date(start); end.setMonth(end.getMonth() + 3)
+  const cur = new Date(start)
+  while (cur <= end) {
+    dates.push(new Date(cur))
+    if (freq === 'weekly')    cur.setDate(cur.getDate() + 7)
+    else if (freq === 'biweekly') cur.setDate(cur.getDate() + 14)
+    else cur.setMonth(cur.getMonth() + 1)
+  }
+  return dates
+}
+
+// ── Admin notification types ─────────────────────────────────
+
+interface AdminNotification {
+  id: string
+  type: string
+  title: string
+  message: string
+  recurrence_group_id: string | null
+  snoozed_until: string | null
+  dismissed: boolean
+  created_at: string
+}
+
 // ── Password gate ────────────────────────────────────────────
 
 function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
@@ -658,6 +691,9 @@ function ImportForm() {
   const focalDragRef = useRef<{ startX: number; startY: number; startFocalX: number; startFocalY: number } | null>(null)
   const [reExtracting, setReExtracting] = useState(false)
   const [reuseExistingPoster, setReuseExistingPoster] = useState(false)
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('weekly')
+  const [successCount, setSuccessCount] = useState(1)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
 
@@ -817,9 +853,34 @@ function ImportForm() {
         }
         if (!venue_id) throw new Error('A venue is required')
         const timeStr = form.time || '20:00'
-        const starts_at = new Date(`${form.date}T${timeStr}:00`).toISOString()
-        const { error: eventError } = await supabaseAdmin.from('events').insert({ venue_id, title: form.title, category: form.category, poster_url, starts_at, neighborhood: form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || '', address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY })
-        if (eventError) throw eventError
+        const startDate = new Date(`${form.date}T${timeStr}:00`)
+        const nbhd = form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || ''
+        const baseRow = { venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }
+
+        if (isRecurring) {
+          const recurrenceGroupId = crypto.randomUUID()
+          const dates = generateOccurrenceDates(startDate, recurrenceFrequency)
+          const { error: eventError } = await supabaseAdmin.from('events').insert(
+            dates.map(d => ({ ...baseRow, starts_at: d.toISOString(), recurrence_group_id: recurrenceGroupId, recurrence_frequency: recurrenceFrequency }))
+          )
+          if (eventError) throw eventError
+          const lastDate = dates[dates.length - 1]
+          const snoozeDate = new Date(lastDate); snoozeDate.setMonth(snoozeDate.getMonth() + 3)
+          const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
+          const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : 'monthly'
+          await supabaseAdmin.from('admin_notifications').insert({
+            type: 'recurrence_check',
+            title: `Check recurring event: ${form.title}`,
+            message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
+            recurrence_group_id: recurrenceGroupId,
+            snoozed_until: snoozeDate.toISOString(),
+          })
+          setSuccessCount(dates.length)
+        } else {
+          const { error: eventError } = await supabaseAdmin.from('events').insert({ ...baseRow, starts_at: startDate.toISOString() })
+          if (eventError) throw eventError
+          setSuccessCount(1)
+        }
       }
 
       setSuccessTitle(form.title)
@@ -857,7 +918,7 @@ function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setIsRecurring(false); setRecurrenceFrequency('weekly'); setSuccessCount(1)
   }
 
   // DEV: generate a mock test poster
@@ -963,7 +1024,9 @@ function ImportForm() {
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: '40px 0', textAlign: 'center' }}>
       <span style={{ fontSize: 40 }}>✓</span>
       <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, color: 'var(--fg)', margin: 0 }}>{successTitle}</p>
-      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>Posted to the wall</p>
+      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>
+      {successCount > 1 ? `${successCount} events posted · ${FREQ_LABELS[recurrenceFrequency]} for 3 months` : 'Posted to the wall'}
+    </p>
       <button onClick={reset} style={{ marginTop: 8, padding: '10px 28px', background: '#A855F7', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
         Import Another
       </button>
@@ -1189,6 +1252,39 @@ function ImportForm() {
             </div>
           </div>
 
+          {/* Recurring event */}
+          <div style={fieldStyle}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setIsRecurring(v => !v)}
+                style={{ width: 40, height: 22, borderRadius: 11, border: 'none', background: isRecurring ? '#A855F7' : 'var(--fg-18)', position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s ease' }}
+              >
+                <span style={{ position: 'absolute', top: 3, left: isRecurring ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s ease' }} />
+              </button>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>Recurring event</span>
+            </div>
+            {isRecurring && (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {(['weekly', 'biweekly', 'monthly'] as RecurrenceFrequency[]).map(f => (
+                    <button
+                      key={f}
+                      type="button"
+                      onClick={() => setRecurrenceFrequency(f)}
+                      style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${recurrenceFrequency === f ? 'var(--fg)' : 'var(--fg-18)'}`, background: recurrenceFrequency === f ? 'var(--fg)' : 'transparent', color: recurrenceFrequency === f ? 'var(--bg)' : 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s ease' }}
+                    >
+                      {FREQ_LABELS[f]}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
+                  This will post {FREQ_COUNTS[recurrenceFrequency]} events over the next 3 months ({FREQ_LABELS[recurrenceFrequency]})
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Category */}
           <div style={fieldStyle}>
             <label style={{ ...labelStyle, color: isUncertain('category') ? '#facc15' : 'var(--fg-55)' }}>Category {isUncertain('category') && '⚠'}</label>
@@ -1362,6 +1458,107 @@ function AdminBottomNav() {
   )
 }
 
+// ── Admin notifications ──────────────────────────────────────
+
+function AdminNotifications() {
+  const [notifications, setNotifications] = useState<AdminNotification[]>([])
+  const [actioning, setActioning] = useState<string | null>(null)
+
+  const fetchNotifications = async () => {
+    const now = new Date().toISOString()
+    const { data } = await supabaseAdmin
+      .from('admin_notifications')
+      .select('*')
+      .eq('dismissed', false)
+      .or(`snoozed_until.is.null,snoozed_until.lt.${now}`)
+      .order('created_at', { ascending: false })
+    if (data) setNotifications(data as AdminNotification[])
+  }
+
+  useEffect(() => { fetchNotifications() }, [])
+
+  if (!notifications.length) return null
+
+  const handleExtend = async (n: AdminNotification) => {
+    if (!n.recurrence_group_id) return
+    setActioning(n.id)
+    try {
+      const { data: events } = await supabaseAdmin
+        .from('events')
+        .select('starts_at, recurrence_frequency, venue_id, title, category, poster_url, description, fill_frame, focal_x, focal_y, neighborhood, address')
+        .eq('recurrence_group_id', n.recurrence_group_id)
+        .order('starts_at', { ascending: false })
+        .limit(1)
+      if (!events?.length) return
+      const last = events[0]
+      const freq = (last.recurrence_frequency ?? 'weekly') as RecurrenceFrequency
+      const nextStart = new Date(last.starts_at)
+      if (freq === 'weekly')        nextStart.setDate(nextStart.getDate() + 7)
+      else if (freq === 'biweekly') nextStart.setDate(nextStart.getDate() + 14)
+      else                          nextStart.setMonth(nextStart.getMonth() + 1)
+      const newDates = generateOccurrenceDates(nextStart, freq)
+      await supabaseAdmin.from('events').insert(newDates.map(d => ({
+        venue_id: last.venue_id, title: last.title, category: last.category,
+        poster_url: last.poster_url, starts_at: d.toISOString(),
+        neighborhood: last.neighborhood, address: last.address,
+        description: last.description, view_count: 0, like_count: 0,
+        fill_frame: last.fill_frame, focal_x: last.focal_x, focal_y: last.focal_y,
+        recurrence_group_id: n.recurrence_group_id, recurrence_frequency: freq,
+      })))
+      const newSnooze = new Date(newDates[newDates.length - 1])
+      newSnooze.setMonth(newSnooze.getMonth() + 3)
+      await supabaseAdmin.from('admin_notifications').update({ snoozed_until: newSnooze.toISOString() }).eq('id', n.id)
+      await fetchNotifications()
+    } finally { setActioning(null) }
+  }
+
+  const handleMarkEnded = async (id: string) => {
+    await supabaseAdmin.from('admin_notifications').update({ dismissed: true }).eq('id', id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  const handleSnooze = async (id: string) => {
+    const until = new Date(); until.setDate(until.getDate() + 14)
+    await supabaseAdmin.from('admin_notifications').update({ snoozed_until: until.toISOString() }).eq('id', id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  return (
+    <section style={{ marginBottom: 8 }}>
+      <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: 'var(--fg)', margin: '0 0 14px 0' }}>Notifications</h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {notifications.map(n => (
+          <div key={n.id} style={{ padding: '14px 16px', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 8, background: 'rgba(234,179,8,0.05)' }}>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: '0 0 6px 0' }}>{n.title}</p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: '0 0 12px 0', lineHeight: 1.5 }}>{n.message}</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => handleExtend(n)}
+                disabled={actioning === n.id}
+                style={{ padding: '6px 12px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: actioning === n.id ? 'default' : 'pointer', opacity: actioning === n.id ? 0.6 : 1 }}
+              >
+                {actioning === n.id ? 'Extending…' : 'Extend 3 months'}
+              </button>
+              <button
+                onClick={() => handleMarkEnded(n.id)}
+                style={{ padding: '6px 12px', background: 'transparent', color: 'rgba(239,68,68,0.7)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}
+              >
+                Mark as ended
+              </button>
+              <button
+                onClick={() => handleSnooze(n.id)}
+                style={{ padding: '6px 12px', background: 'transparent', color: 'var(--fg-40)', border: '1px solid var(--fg-18)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}
+              >
+                Dismiss for now
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 // ── Main admin dashboard ─────────────────────────────────────
 
 function AdminDashboard() {
@@ -1379,6 +1576,8 @@ function AdminDashboard() {
       <PlasterHeader />
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 32px', width: '100%' }}>
+
+          <AdminNotifications />
 
           <Section title="Add a Venue">
             <VenueForm onVenueAdded={fetchVenues} />
