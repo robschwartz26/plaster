@@ -174,9 +174,10 @@ export default function LineUpScreen() {
 
         {/* LINE UP panel — slides in from right, constrained to content area */}
         <div style={{
-          position: 'absolute', inset: 0, right: panelOpen ? 0 : '-100%',
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
           background: 'var(--bg)', zIndex: 10, display: 'flex', flexDirection: 'column',
-          transition: 'right 0.35s cubic-bezier(0.4,0,0.2,1)',
+          transform: panelOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
             <div>
