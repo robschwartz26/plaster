@@ -12,7 +12,7 @@ const YouScreen    = lazy(() => import('./pages/YouScreen').then(m => ({ default
 const VenuesScreen = lazy(() => import('./pages/VenuesScreen').then(m => ({ default: m.VenuesScreen })))
 const VenueProfile = lazy(() => import('./pages/VenueProfile').then(m => ({ default: m.VenueProfile })))
 const Tonight      = lazy(() => import('./pages/TonightScreen').then(m => ({ default: m.TonightScreen })))
-const LineUp       = lazy(() => import('./pages/LineUpScreen').then(m => ({ default: m.LineUpScreen })))
+const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 
 // Redirects unauthenticated users to /auth
