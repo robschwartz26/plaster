@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { BottomNav } from '@/components/BottomNav'
 
 // ── Mock feed ──────────────────────────────────────────────────────────────
 
@@ -133,9 +134,9 @@ export default function LineUpScreen() {
   }, [user])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
 
-      {/* Header */}
+      {/* Header — outside content area, always visible */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 8px', flexShrink: 0 }}>
         <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)' }}>plaster</span>
         <button
@@ -146,47 +147,53 @@ export default function LineUpScreen() {
         </button>
       </div>
 
-      {/* Diamond queue */}
-      <div style={{ position: 'absolute', right: 10, top: 52, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 5, pointerEvents: 'none' }}>
-        {diamondQueue.map((color, i) => (
-          <DiamondImg key={i} color={color} posterUrl={events[i]?.poster_url ?? null} size={34} />
-        ))}
-      </div>
+      {/* Content area — panels are constrained here, nav is never covered */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-      {/* Feed */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-        {mockFeed.map((item, i) => (
-          <React.Fragment key={item.id}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 54px 9px', paddingLeft: item.type === 'friend' ? 24 : 14 }}>
-              <DiamondImg color={item.avatar} posterUrl={matchPoster(item, events)} size={28} />
-              <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
-                <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
+        {/* Diamond queue */}
+        <div style={{ position: 'absolute', right: 10, top: 4, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 5, pointerEvents: 'none' }}>
+          {diamondQueue.map((color, i) => (
+            <DiamondImg key={i} color={color} posterUrl={events[i]?.poster_url ?? null} size={34} />
+          ))}
+        </div>
+
+        {/* Feed */}
+        <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+          {mockFeed.map((item, i) => (
+            <React.Fragment key={item.id}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 54px 9px', paddingLeft: item.type === 'friend' ? 24 : 14 }}>
+                <DiamondImg color={item.avatar} posterUrl={matchPoster(item, events)} size={28} />
+                <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
+                  <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
+                </div>
               </div>
+              {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* LINE UP panel — slides in from right, constrained to content area */}
+        <div style={{
+          position: 'absolute', inset: 0, right: panelOpen ? 0 : '-100%',
+          background: 'var(--bg)', zIndex: 10, display: 'flex', flexDirection: 'column',
+          transition: 'right 0.35s cubic-bezier(0.4,0,0.2,1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
+            <div>
+              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0 }}>Your Line Up</p>
+              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{lineup.length} upcoming</p>
             </div>
-            {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
-          </React.Fragment>
-        ))}
+            <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, color: 'var(--fg-40)', padding: '4px 8px', lineHeight: 1 }}>×</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {lineup.map(item => <LineupRow key={item.id} item={item} />)}
+          </div>
+        </div>
+
       </div>
 
-      {/* LINE UP panel — slides in from right */}
-      <div style={{
-        position: 'absolute', top: 0, right: panelOpen ? 0 : '-100%', width: '100%', height: '100%',
-        background: 'var(--bg)', zIndex: 10, display: 'flex', flexDirection: 'column',
-        transition: 'right 0.35s cubic-bezier(0.4,0,0.2,1)', overflowY: 'auto',
-      }}>
-        {/* Panel header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
-          <div>
-            <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0 }}>Your Line Up</p>
-            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{lineup.length} upcoming</p>
-          </div>
-          <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: 18, color: 'var(--fg-40)', padding: '4px 8px', lineHeight: 1 }}>×</button>
-        </div>
-        {/* Lineup rows */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {lineup.map(item => <LineupRow key={item.id} item={item} />)}
-        </div>
-      </div>
+      {/* Bottom nav — sibling of content area, never covered by panels */}
+      <BottomNav />
 
     </div>
   )
