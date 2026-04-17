@@ -5,8 +5,6 @@ import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader } from '@/components/PlasterHeader'
 
-const IS_DEV = window.location.hostname === 'localhost'
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type FeedType = 'going' | 'liked' | 'post' | 'superlative' | 'past_attended'
@@ -318,39 +316,25 @@ const MOCK_RSVPS: RsvpItem[] = [
   { event_id:'r2', title:'Drag Spectacular', venue_name:"Dante's",             starts_at:off(1.2), poster_url:null, color1:'#831843', color2:'#ec4899', focal_x:0.5, focal_y:0.5, fill_frame:false },
   { event_id:'r3', title:'Late Cinema',      venue_name:'Clinton St. Theater', starts_at:off(2.8), poster_url:null, color1:'#312e81', color2:'#a5b4fc', focal_x:0.5, focal_y:0.5, fill_frame:false },
 ]
-const PLACEHOLDER_FEED: FeedItem[] = Array.from({ length: 8 }, (_, i) => ({
-  id: `ph${i}`, type: 'going' as FeedType, created_at: new Date().toISOString(),
-  avatar_img: null, avatar_name: '·····', avatar_color: PALETTE[i % PALETTE.length],
-  username: '·········', event_title: '··················', venue_name: '·············', poster_url: null,
-  panel_type: null, panel_id: null,
-}))
-const DEV_PANELS: PanelEntry[] = [
-  { type: 'user',   id: 'dev-user-1',   name: 'spacecadet',         color: nameColor('spacecadet'),         img: null },
-  { type: 'venue',  id: 'dev-venue-1',  name: 'Mississippi Studios', color: nameColor('Mississippi Studios'), img: null },
-  { type: 'artist', id: 'dev-artist-1', name: 'Neon Wolves',         color: nameColor('Neon Wolves'),         img: null },
-]
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function LineUpScreen() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [feed, setFeed] = useState<FeedItem[]>([])
-  const [rsvps, setRsvps] = useState<RsvpItem[]>([])
-  const [loading, setLoading] = useState(true)
+  // Start with mock data so the screen looks great immediately, for everyone
+  const [feed, setFeed] = useState<FeedItem[]>(MOCK_FEED)
+  const [rsvps, setRsvps] = useState<RsvpItem[]>(MOCK_RSVPS)
   const [lineupOpen, setLineupOpen] = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
-  const [devPanelIdx, setDevPanelIdx] = useState(0)
-  const [devMode, setDevMode] = useState(false)
 
   const pushPanel = (p: PanelEntry) => setPanelStack(prev => [...prev, p])
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
-  const handleMessage = () => navigate('/you') // TODO: navigate to MSG tab
+  const handleMessage = () => navigate('/you')
 
+  // Replace mock data with real data once user is available
   useEffect(() => {
-    if (!user) { setLoading(false); return }
-    if (IS_DEV) { setFeed(MOCK_FEED); setRsvps(MOCK_RSVPS); setLoading(false); return }
-
+    if (!user) return
     const load = async () => {
       const now = new Date().toISOString()
       const { data: friends } = await supabase.from('friends').select('friend_id').eq('user_id', user.id).eq('status', 'accepted')
@@ -366,7 +350,7 @@ export function LineUpScreen() {
         ])
         for (const r of rsvpAct.data ?? []) {
           const ev = r.events as any, p = r.profiles as any
-          items.push({ id: `rsvp-${r.user_id}-${r.event_id}`, type: (ev?.starts_at < now ? 'past_attended' : 'going'), created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, venue_name: ev?.venues?.name, starts_at: ev?.starts_at, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
+          items.push({ id: `rsvp-${r.user_id}-${r.event_id}`, type: ev?.starts_at < now ? 'past_attended' : 'going', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, venue_name: ev?.venues?.name, starts_at: ev?.starts_at, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
         }
         for (const r of likeAct.data ?? []) {
           const ev = r.events as any, p = r.profiles as any
@@ -382,17 +366,18 @@ export function LineUpScreen() {
         }
       }
 
-      items.sort((a, b) => b.created_at.localeCompare(a.created_at))
-      setFeed(items)
+      if (items.length > 0) {
+        items.sort((a, b) => b.created_at.localeCompare(a.created_at))
+        setFeed(items)
+      }
 
       const { data: rsvpData } = await supabase.from('attendees').select('event_id, events(title, starts_at, poster_url, fill_frame, focal_x, focal_y, venues(name))').eq('user_id', user.id)
-      setRsvps(((rsvpData ?? []) as any[]).filter(r => r.events?.starts_at >= now).map(r => { const ev = r.events as any; return { event_id: r.event_id, title: ev.title ?? 'Event', venue_name: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color1: '#2e1065', color2: '#7c3aed', focal_x: ev.focal_x ?? 0.5, focal_y: ev.focal_y ?? 0.5, fill_frame: ev.fill_frame ?? false } }).sort((a: any, b: any) => a.starts_at.localeCompare(b.starts_at)))
-      setLoading(false)
+      const myRsvps = ((rsvpData ?? []) as any[]).filter(r => r.events?.starts_at >= now).map(r => { const ev = r.events as any; return { event_id: r.event_id, title: ev.title ?? 'Event', venue_name: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color1: '#2e1065', color2: '#7c3aed', focal_x: ev.focal_x ?? 0.5, focal_y: ev.focal_y ?? 0.5, fill_frame: ev.fill_frame ?? false } }).sort((a: any, b: any) => a.starts_at.localeCompare(b.starts_at))
+      if (myRsvps.length > 0) setRsvps(myRsvps)
     }
     load()
   }, [user])
 
-  const isLoggedOut = !user
   const topPanel = panelStack.length > 0 ? panelStack[panelStack.length - 1] : null
 
   return (
@@ -400,7 +385,7 @@ export function LineUpScreen() {
       <PlasterHeader actions={
         <button onClick={() => setLineupOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.12em', color: lineupOpen ? 'var(--fg)' : 'var(--fg-40)', textTransform: 'uppercase', transition: 'color 0.2s' }}>Line Up</span>
-          <span style={{ color: lineupOpen ? 'var(--fg)' : 'var(--fg-40)', fontSize: 11 }}>{lineupOpen ? '✕' : (rsvps.length || '')}</span>
+          <span style={{ color: lineupOpen ? 'var(--fg)' : 'var(--fg-40)', fontSize: 11 }}>{lineupOpen ? '✕' : rsvps.length}</span>
         </button>
       } />
 
@@ -408,102 +393,55 @@ export function LineUpScreen() {
 
         {/* Activity feed */}
         <div style={{ flex: 1, overflowY: 'auto', paddingRight: 54, paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 8px)' }}>
-          {/* Debug mount marker — remove once feed confirmed working */}
-          {IS_DEV && !devMode && (
-            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)', margin: '6px 14px', letterSpacing: '0.06em' }}>
-              FEED LOADING{loading ? ' …' : ` · ${feed.length} items · ${isLoggedOut ? 'logged out' : 'logged in'}`}
-            </p>
-          )}
-          {loading ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, gap: 10 }}>
-              <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'lu-spin 0.8s linear infinite' }} />
-              <style>{`@keyframes lu-spin{to{transform:rotate(360deg)}}`}</style>
+          {feed.map((item, i) => (
+            <div key={item.id}>
+              <FeedRow
+                item={item}
+                onAvatarTap={item.panel_type ? () => pushPanel({ type: item.panel_type!, id: item.panel_id!, name: item.avatar_name, color: item.avatar_color, img: item.avatar_img }) : undefined}
+              />
+              {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 14px' }} />}
             </div>
-          ) : (() => {
-            const items = devMode ? MOCK_FEED : (isLoggedOut ? PLACEHOLDER_FEED : feed)
-            const blurred = !devMode && isLoggedOut
-            return (
-              <>
-                {items.map((item, i) => (
-                  <div key={item.id}>
-                    <FeedRow
-                      item={item}
-                      blurred={blurred}
-                      onAvatarTap={item.panel_type ? () => pushPanel({ type: item.panel_type!, id: item.panel_id!, name: item.avatar_name, color: item.avatar_color, img: item.avatar_img }) : undefined}
-                    />
-                    {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 14px' }} />}
-                  </div>
-                ))}
-                {!devMode && !isLoggedOut && feed.length === 0 && (
-                  <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                    <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)', margin: '0 0 8px 0' }}>Nothing here yet</p>
-                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>Follow people to see their activity</p>
-                  </div>
-                )}
-              </>
-            )
-          })()}
+          ))}
         </div>
 
-        {/* Sign-in prompt — shown when logged out and not in devMode */}
-        {isLoggedOut && !devMode && (
-          <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', width: '80%', maxWidth: 280, background: 'var(--bg)', border: '1px solid var(--fg-18)', borderRadius: 10, padding: 20, textAlign: 'center', zIndex: 5 }}>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-              {PALETTE.slice(0,3).map((c,i) => <div key={i} style={{ width: 28, height: 28, background: c, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />)}
+        {/* Passive diamond queue */}
+        <div style={{ position: 'absolute', right: 10, top: 52, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none', zIndex: 4 }}>
+          {rsvps.map(r => (
+            <div key={r.event_id} style={{ width: 34, height: 34, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', background: `linear-gradient(160deg,${r.color1},${r.color2})` }}>
+              {r.poster_url && <img src={r.poster_url} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
             </div>
-            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', margin: 0 }}>Sign in to see what your friends are up to</p>
-          </div>
-        )}
-
-        {/* Passive diamond queue — visible when logged in or in devMode */}
-        {(devMode || (!isLoggedOut && rsvps.length > 0)) && (
-          <div style={{ position: 'absolute', right: 10, top: 52, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none', zIndex: 4 }}>
-            {(devMode ? MOCK_RSVPS : rsvps).map(r => (
-              <div key={r.event_id} style={{ width: 34, height: 34, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', background: `linear-gradient(160deg,${r.color1},${r.color2})` }}>
-                {r.poster_url && <img src={r.poster_url} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
-              </div>
-            ))}
-          </div>
-        )}
+          ))}
+        </div>
 
         {/* LINE UP panel — slides from RIGHT */}
         <div style={{ position: 'absolute', inset: 0, right: lineupOpen ? 0 : '-100%', background: 'var(--bg)', transition: 'right 0.35s cubic-bezier(0.4,0,0.2,1)', zIndex: 20, overflowY: 'auto', paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 8px)' }}>
-          <div style={{ padding: '16px 16px 0' }}>
-            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '0 0 16px 0' }}>{rsvps.length === 0 ? 'No upcoming RSVPs' : `${rsvps.length} upcoming`}</p>
+          <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid var(--fg-08)' }}>
+            <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: 0 }}>
+              {rsvps.length} upcoming show{rsvps.length !== 1 ? 's' : ''}
+            </p>
           </div>
-          {rsvps.map(r => (
-            <div key={r.event_id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)' }}>
-              <div style={{ width: 30, height: 45, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: `linear-gradient(160deg,${r.color1},${r.color2})` }}>
+          {rsvps.map((r, i) => (
+            <div key={r.event_id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
+              {/* Diamond + poster */}
+              <div style={{ width: 36, height: 36, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', flexShrink: 0, background: `linear-gradient(160deg,${r.color1},${r.color2})` }}>
                 {r.poster_url && <img src={r.poster_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</p>
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '3px 0 0 0' }}>{r.venue_name} · {fmtTime(r.starts_at)}</p>
-                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-25)', margin: '2px 0 0 0' }}>{fmtDate(r.starts_at)}</p>
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</p>
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{r.venue_name}</p>
+                <p style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-25)', margin: '1px 0 0 0' }}>{fmtDate(r.starts_at)} · {fmtTime(r.starts_at)}</p>
               </div>
+              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--fg-18)' }}>{i + 1}</span>
             </div>
           ))}
-          {rsvps.length === 0 && <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', padding: '0 16px', margin: 0 }}>RSVP to events on the wall to build your lineup</p>}
         </div>
 
         {/* Person / Venue / Artist panels — slide from LEFT */}
         <div style={{ position: 'absolute', inset: 0, left: panelStack.length > 0 ? 0 : '-100%', background: 'var(--bg)', transition: 'left 0.35s cubic-bezier(0.4,0,0.2,1)', zIndex: 30, overflowY: 'auto', paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 8px)' }}>
-          {topPanel && topPanel.type === 'user'   && <PersonPanel key={topPanel.id} entry={topPanel} onBack={popPanel} onOpen={pushPanel} onMessage={handleMessage} />}
-          {topPanel && topPanel.type === 'venue'  && <VenuePanel  key={topPanel.id} entry={topPanel} onBack={popPanel} onOpen={pushPanel} onMessage={handleMessage} />}
-          {topPanel && topPanel.type === 'artist' && <ArtistPanel key={topPanel.id} entry={topPanel} onBack={popPanel} onOpen={pushPanel} onMessage={handleMessage} />}
+          {topPanel && topPanel.type === 'user'   && <PersonPanel key={topPanel.id} entry={topPanel} onBack={popPanel} onMessage={handleMessage} />}
+          {topPanel && topPanel.type === 'venue'  && <VenuePanel  key={topPanel.id} entry={topPanel} onBack={popPanel} onMessage={handleMessage} />}
+          {topPanel && topPanel.type === 'artist' && <ArtistPanel key={topPanel.id} entry={topPanel} onBack={popPanel} onMessage={handleMessage} />}
         </div>
-
-        {/* DEV buttons */}
-        {IS_DEV && (
-          <div style={{ position: 'absolute', bottom: 80, left: 10, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 50 }}>
-            <button onClick={() => { setDevMode(true); setFeed(MOCK_FEED); setRsvps(MOCK_RSVPS); setLoading(false) }} style={{ padding: '4px 10px', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 4, color: 'rgba(234,179,8,0.9)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer' }}>
-              DEV feed
-            </button>
-            <button onClick={() => { const p = DEV_PANELS[devPanelIdx % 3]; pushPanel(p); setDevPanelIdx(i => i + 1) }} style={{ padding: '4px 10px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: 4, color: 'rgba(168,85,247,0.9)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer' }}>
-              DEV panel ({['user','venue','artist'][devPanelIdx % 3]})
-            </button>
-          </div>
-        )}
       </div>
 
       <BottomNav />
