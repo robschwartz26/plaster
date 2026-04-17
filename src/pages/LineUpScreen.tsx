@@ -161,8 +161,8 @@ export default function LineUpScreen() {
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
           {mockFeed.map((item, i) => (
             <React.Fragment key={item.id}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 54px 9px', paddingLeft: item.type === 'friend' ? 24 : 14 }}>
-                <DiamondImg color={item.avatar} posterUrl={matchPoster(item, events)} size={28} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 54px 9px', paddingLeft: item.type === 'venue' ? 14 : item.type === 'artist' ? 24 : 36 }}>
+                <DiamondImg color={item.avatar} posterUrl={matchPoster(item, events)} size={item.type === 'venue' ? 36 : item.type === 'artist' ? 28 : 22} />
                 <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
                   <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
                 </div>
