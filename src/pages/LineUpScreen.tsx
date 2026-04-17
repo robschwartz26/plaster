@@ -61,7 +61,6 @@ export default function LineUpScreen() {
               <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
                 <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
               </div>
-              <div style={{ width: 18, height: 27, background: item.poster, borderRadius: 2, flexShrink: 0 }} />
             </div>
             {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
           </React.Fragment>
