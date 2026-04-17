@@ -341,6 +341,7 @@ export function LineUpScreen() {
   const [lineupOpen, setLineupOpen] = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
   const [devPanelIdx, setDevPanelIdx] = useState(0)
+  const [devMode, setDevMode] = useState(false)
 
   const pushPanel = (p: PanelEntry) => setPanelStack(prev => [...prev, p])
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
@@ -403,39 +404,49 @@ export function LineUpScreen() {
         </button>
       } />
 
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
         {/* Activity feed */}
-        <div style={{ height: '100%', overflowY: 'auto', paddingRight: 54, paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 8px)' }}>
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: 54, paddingBottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 8px)' }}>
+          {/* Debug mount marker — remove once feed confirmed working */}
+          {IS_DEV && !devMode && (
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)', margin: '6px 14px', letterSpacing: '0.06em' }}>
+              FEED LOADING{loading ? ' …' : ` · ${feed.length} items · ${isLoggedOut ? 'logged out' : 'logged in'}`}
+            </p>
+          )}
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 160, gap: 10 }}>
               <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'lu-spin 0.8s linear infinite' }} />
               <style>{`@keyframes lu-spin{to{transform:rotate(360deg)}}`}</style>
             </div>
-          ) : (
-            <>
-              {(isLoggedOut ? PLACEHOLDER_FEED : feed).map((item, i) => (
-                <div key={item.id}>
-                  <FeedRow
-                    item={item}
-                    blurred={isLoggedOut}
-                    onAvatarTap={item.panel_type ? () => pushPanel({ type: item.panel_type!, id: item.panel_id!, name: item.avatar_name, color: item.avatar_color, img: item.avatar_img }) : undefined}
-                  />
-                  {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 14px' }} />}
-                </div>
-              ))}
-              {!isLoggedOut && feed.length === 0 && (
-                <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                  <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)', margin: '0 0 8px 0' }}>Nothing here yet</p>
-                  <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>Follow people to see their activity</p>
-                </div>
-              )}
-            </>
-          )}
+          ) : (() => {
+            const items = devMode ? MOCK_FEED : (isLoggedOut ? PLACEHOLDER_FEED : feed)
+            const blurred = !devMode && isLoggedOut
+            return (
+              <>
+                {items.map((item, i) => (
+                  <div key={item.id}>
+                    <FeedRow
+                      item={item}
+                      blurred={blurred}
+                      onAvatarTap={item.panel_type ? () => pushPanel({ type: item.panel_type!, id: item.panel_id!, name: item.avatar_name, color: item.avatar_color, img: item.avatar_img }) : undefined}
+                    />
+                    {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 14px' }} />}
+                  </div>
+                ))}
+                {!devMode && !isLoggedOut && feed.length === 0 && (
+                  <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                    <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)', margin: '0 0 8px 0' }}>Nothing here yet</p>
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>Follow people to see their activity</p>
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
 
-        {/* Sign-in prompt */}
-        {isLoggedOut && (
+        {/* Sign-in prompt — shown when logged out and not in devMode */}
+        {isLoggedOut && !devMode && (
           <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%,-50%)', width: '80%', maxWidth: 280, background: 'var(--bg)', border: '1px solid var(--fg-18)', borderRadius: 10, padding: 20, textAlign: 'center', zIndex: 5 }}>
             <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
               {PALETTE.slice(0,3).map((c,i) => <div key={i} style={{ width: 28, height: 28, background: c, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />)}
@@ -444,10 +455,10 @@ export function LineUpScreen() {
           </div>
         )}
 
-        {/* Passive diamond queue */}
-        {!isLoggedOut && rsvps.length > 0 && (
+        {/* Passive diamond queue — visible when logged in or in devMode */}
+        {(devMode || (!isLoggedOut && rsvps.length > 0)) && (
           <div style={{ position: 'absolute', right: 10, top: 52, display: 'flex', flexDirection: 'column', gap: 8, pointerEvents: 'none', zIndex: 4 }}>
-            {rsvps.map(r => (
+            {(devMode ? MOCK_RSVPS : rsvps).map(r => (
               <div key={r.event_id} style={{ width: 34, height: 34, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', background: `linear-gradient(160deg,${r.color1},${r.color2})` }}>
                 {r.poster_url && <img src={r.poster_url} draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
               </div>
@@ -485,7 +496,7 @@ export function LineUpScreen() {
         {/* DEV buttons */}
         {IS_DEV && (
           <div style={{ position: 'absolute', bottom: 80, left: 10, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 50 }}>
-            <button onClick={() => { setFeed(MOCK_FEED); setRsvps(MOCK_RSVPS) }} style={{ padding: '4px 10px', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 4, color: 'rgba(234,179,8,0.9)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer' }}>
+            <button onClick={() => { setDevMode(true); setFeed(MOCK_FEED); setRsvps(MOCK_RSVPS); setLoading(false) }} style={{ padding: '4px 10px', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 4, color: 'rgba(234,179,8,0.9)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer' }}>
               DEV feed
             </button>
             <button onClick={() => { const p = DEV_PANELS[devPanelIdx % 3]; pushPanel(p); setDevPanelIdx(i => i + 1) }} style={{ padding: '4px 10px', background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.35)', borderRadius: 4, color: 'rgba(168,85,247,0.9)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer' }}>
