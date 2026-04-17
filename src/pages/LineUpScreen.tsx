@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const mockFeed = [
   // going
@@ -35,7 +36,49 @@ const mockFeed = [
 
 const diamondQueue = ['#4c1d95', '#831843', '#0c4a6e', '#365314', '#7c2d12']
 
+interface EventRow { id: string; title: string; poster_url: string; venue_name: string }
+
+function matchPoster(item: typeof mockFeed[0], events: EventRow[]): string | null {
+  if (!events.length) return null
+  const needle = (item.name + ' ' + item.text).toLowerCase()
+  // Try exact title or venue match first
+  for (const ev of events) {
+    if (needle.includes(ev.title.toLowerCase()) || needle.includes(ev.venue_name.toLowerCase())) {
+      return ev.poster_url
+    }
+  }
+  return null
+}
+
+function DiamondImg({ color, posterUrl, size = 28 }: { color: string; posterUrl: string | null; size?: number }) {
+  return (
+    <div style={{ width: size, height: size, background: color, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
+      {posterUrl && (
+        <img
+          src={posterUrl}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          draggable={false}
+        />
+      )}
+    </div>
+  )
+}
+
 export default function LineUpScreen() {
+  const [events, setEvents] = useState<EventRow[]>([])
+
+  useEffect(() => {
+    supabase
+      .from('events')
+      .select('id, title, poster_url, venues(name)')
+      .not('poster_url', 'is', null)
+      .order('starts_at', { ascending: true })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setEvents(data.map((e: any) => ({ id: e.id, title: e.title, poster_url: e.poster_url, venue_name: e.venues?.name ?? '' })))
+      })
+  }, [])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', background: 'var(--bg)', overflow: 'hidden' }}>
 
@@ -48,7 +91,7 @@ export default function LineUpScreen() {
       {/* Diamond queue */}
       <div style={{ position: 'absolute', right: 10, top: 52, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 5, pointerEvents: 'none' }}>
         {diamondQueue.map((color, i) => (
-          <div key={i} style={{ width: 34, height: 34, background: color, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
+          <DiamondImg key={i} color={color} posterUrl={events[i]?.poster_url ?? null} size={34} />
         ))}
       </div>
 
@@ -57,7 +100,7 @@ export default function LineUpScreen() {
         {mockFeed.map((item, i) => (
           <React.Fragment key={item.id}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', paddingRight: 54 }}>
-              <div style={{ width: 28, height: 28, background: item.avatar, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', flexShrink: 0 }} />
+              <DiamondImg color={item.avatar} posterUrl={matchPoster(item, events)} size={28} />
               <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
                 <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
               </div>
