@@ -332,48 +332,74 @@ export function LineUpScreen() {
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
   const handleMessage = () => navigate('/you')
 
-  // Replace mock data with real data once user is available
+  // Attempt to replace mock data with real data — all queries wrapped in try/catch
+  // so any failure (missing table, network error, bad column) is silently ignored
+  // and the mock feed continues to display.
   useEffect(() => {
     if (!user) return
     const load = async () => {
       const now = new Date().toISOString()
-      const { data: friends } = await supabase.from('friends').select('friend_id').eq('user_id', user.id).eq('status', 'accepted')
-      const followingIds = (friends ?? []).map((f: any) => f.friend_id)
-      const items: FeedItem[] = []
 
-      if (followingIds.length > 0) {
-        const [rsvpAct, likeAct, postAct, supAct] = await Promise.all([
-          supabase.from('attendees').select('user_id, event_id, created_at, profiles(id, username, avatar_url), events(title, starts_at, poster_url, venues(name))').in('user_id', followingIds).order('created_at', { ascending: false }).limit(20),
-          supabase.from('event_likes').select('user_id, event_id, created_at, profiles(id, username, avatar_url), events(title, poster_url, venues(name))').in('user_id', followingIds).order('created_at', { ascending: false }).limit(20),
-          supabase.from('event_wall_posts').select('id, user_id, body, created_at, profiles(id, username, avatar_url), events(title, poster_url)').in('user_id', followingIds).order('created_at', { ascending: false }).limit(10),
-          supabase.from('superlatives').select('id, user_id, awarded_at, title, venues(name), profiles(id, username, avatar_url)').order('awarded_at', { ascending: false }).limit(10),
-        ])
-        for (const r of rsvpAct.data ?? []) {
-          const ev = r.events as any, p = r.profiles as any
-          items.push({ id: `rsvp-${r.user_id}-${r.event_id}`, type: ev?.starts_at < now ? 'past_attended' : 'going', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, venue_name: ev?.venues?.name, starts_at: ev?.starts_at, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
-        }
-        for (const r of likeAct.data ?? []) {
-          const ev = r.events as any, p = r.profiles as any
-          items.push({ id: `like-${r.user_id}-${r.event_id}`, type: 'liked', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, poster_url: ev?.poster_url ?? null, venue_name: ev?.venues?.name, panel_type: 'user', panel_id: r.user_id })
-        }
-        for (const r of postAct.data ?? []) {
-          const ev = r.events as any, p = r.profiles as any
-          items.push({ id: `post-${r.id}`, type: 'post', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, post_content: r.body, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
-        }
-        for (const r of supAct.data ?? []) {
-          const p = r.profiles as any, v = r.venues as any
-          items.push({ id: `sup-${r.id}`, type: 'superlative', created_at: r.awarded_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, superlative_title: r.title, venue_name: v?.name, poster_url: null, panel_type: 'user', panel_id: r.user_id })
-        }
-      }
+      // ── Friend activity feed ──────────────────────────────────────────────
+      try {
+        const { data: friends } = await supabase
+          .from('friends').select('friend_id').eq('user_id', user.id).eq('status', 'accepted')
+        const followingIds = (friends ?? []).map((f: any) => f.friend_id)
+        if (followingIds.length > 0) {
+          const items: FeedItem[] = []
 
-      if (items.length > 0) {
-        items.sort((a, b) => b.created_at.localeCompare(a.created_at))
-        setFeed(items)
-      }
+          try {
+            const { data } = await supabase
+              .from('attendees')
+              .select('user_id, event_id, created_at, profiles(id, username, avatar_url), events(title, starts_at, poster_url, venues(name))')
+              .in('user_id', followingIds).order('created_at', { ascending: false }).limit(20)
+            for (const r of data ?? []) {
+              const ev = r.events as any, p = r.profiles as any
+              items.push({ id: `rsvp-${r.user_id}-${r.event_id}`, type: ev?.starts_at < now ? 'past_attended' : 'going', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, venue_name: ev?.venues?.name, starts_at: ev?.starts_at, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
+            }
+          } catch { /* attendees query failed — skip */ }
 
-      const { data: rsvpData } = await supabase.from('attendees').select('event_id, events(title, starts_at, poster_url, fill_frame, focal_x, focal_y, venues(name))').eq('user_id', user.id)
-      const myRsvps = ((rsvpData ?? []) as any[]).filter(r => r.events?.starts_at >= now).map(r => { const ev = r.events as any; return { event_id: r.event_id, title: ev.title ?? 'Event', venue_name: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color1: '#2e1065', color2: '#7c3aed', focal_x: ev.focal_x ?? 0.5, focal_y: ev.focal_y ?? 0.5, fill_frame: ev.fill_frame ?? false } }).sort((a: any, b: any) => a.starts_at.localeCompare(b.starts_at))
-      if (myRsvps.length > 0) setRsvps(myRsvps)
+          try {
+            const { data } = await supabase
+              .from('event_likes')
+              .select('user_id, event_id, created_at, profiles(id, username, avatar_url), events(title, poster_url, venues(name))')
+              .in('user_id', followingIds).order('created_at', { ascending: false }).limit(20)
+            for (const r of data ?? []) {
+              const ev = r.events as any, p = r.profiles as any
+              items.push({ id: `like-${r.user_id}-${r.event_id}`, type: 'liked', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, poster_url: ev?.poster_url ?? null, venue_name: ev?.venues?.name, panel_type: 'user', panel_id: r.user_id })
+            }
+          } catch { /* event_likes query failed — skip */ }
+
+          try {
+            const { data } = await supabase
+              .from('event_wall_posts')
+              .select('id, user_id, body, created_at, profiles(id, username, avatar_url), events(title, poster_url)')
+              .in('user_id', followingIds).order('created_at', { ascending: false }).limit(10)
+            for (const r of data ?? []) {
+              const ev = r.events as any, p = r.profiles as any
+              items.push({ id: `post-${r.id}`, type: 'post', created_at: r.created_at, avatar_img: p?.avatar_url ?? null, avatar_name: p?.username ?? '?', avatar_color: nameColor(p?.username ?? ''), username: p?.username, event_title: ev?.title, post_content: r.body, poster_url: ev?.poster_url ?? null, panel_type: 'user', panel_id: r.user_id })
+            }
+          } catch { /* event_wall_posts query failed — skip */ }
+
+          if (items.length > 0) {
+            items.sort((a, b) => b.created_at.localeCompare(a.created_at))
+            setFeed(items)
+          }
+        }
+      } catch { /* friends query failed — keep mock feed */ }
+
+      // ── User's own RSVPs ──────────────────────────────────────────────────
+      try {
+        const { data } = await supabase
+          .from('attendees')
+          .select('event_id, events(title, starts_at, poster_url, fill_frame, focal_x, focal_y, venues(name))')
+          .eq('user_id', user.id)
+        const myRsvps = ((data ?? []) as any[])
+          .filter(r => r.events?.starts_at >= now)
+          .map(r => { const ev = r.events as any; return { event_id: r.event_id, title: ev.title ?? 'Event', venue_name: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color1: '#2e1065', color2: '#7c3aed', focal_x: ev.focal_x ?? 0.5, focal_y: ev.focal_y ?? 0.5, fill_frame: ev.fill_frame ?? false } })
+          .sort((a: any, b: any) => a.starts_at.localeCompare(b.starts_at))
+        if (myRsvps.length > 0) setRsvps(myRsvps)
+      } catch { /* attendees/RSVPs query failed — keep mock rsvps */ }
     }
     load()
   }, [user])
