@@ -42,7 +42,7 @@ function clamp(v: number, min: number, max: number) {
 }
 
 export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange }: Props) {
-  const [cols, setCols] = useState(2)
+  const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
