@@ -6,6 +6,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlasterHeader } from '@/components/PlasterHeader'
+import { flipImageHorizontally } from '@/lib/imageUtils'
+import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 
 const supabaseAdmin = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -62,6 +64,9 @@ export function YouScreen() {
   const [panY,         setPanY]         = useState(0)
   const [scale,        setScale]        = useState(1)
   const [uploadBusy,   setUploadBusy]   = useState(false)
+
+  // Avatar fullscreen viewer (for other users' diamonds)
+  const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
 
   // Search state
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -122,12 +127,15 @@ export function YouScreen() {
 
   // ── Avatar — file select (opens editor) ────────────────────────────────
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    // Mirror front-camera captures to match what the user saw in the live preview
+    const isFrontCamera = e.target.getAttribute('capture') === 'user'
+    const source = isFrontCamera ? await flipImageHorizontally(file) : file
     setEditFile(file)
-    setEditSrc(URL.createObjectURL(file))
+    setEditSrc(URL.createObjectURL(source))
     setPanX(0); setPanY(0); setScale(1)
   }
 
@@ -143,40 +151,32 @@ export function YouScreen() {
     if (!editSrc || !user) return
     setUploadBusy(true)
 
-    const SIZE = 240
+    // 3:4 portrait rectangle — diamond shape is applied in CSS render, not baked into the file
+    const W = 180, H = 240
     const canvas = document.createElement('canvas')
-    canvas.width = SIZE; canvas.height = SIZE
+    canvas.width = W; canvas.height = H
     const ctx = canvas.getContext('2d')!
-
-    // Diamond clip
-    ctx.beginPath()
-    ctx.moveTo(SIZE / 2, 0)
-    ctx.lineTo(SIZE, SIZE / 2)
-    ctx.lineTo(SIZE / 2, SIZE)
-    ctx.lineTo(0, SIZE / 2)
-    ctx.closePath()
-    ctx.clip()
 
     const img = new Image()
     img.src = editSrc
     await new Promise<void>(res => { img.onload = () => res() })
 
-    const coverScale = Math.max(SIZE / img.naturalWidth, SIZE / img.naturalHeight)
+    const coverScale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
 
-    // Blurred backdrop
+    // Blurred backdrop fills any uncovered corners at extreme pan positions
     ctx.save()
     ctx.filter = 'blur(16px) brightness(0.5)'
     const bw = img.naturalWidth * coverScale
     const bh = img.naturalHeight * coverScale
-    ctx.drawImage(img, (SIZE - bw) / 2, (SIZE - bh) / 2, bw, bh)
+    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2, bw, bh)
     ctx.restore()
 
-    // Main image with pan + scale (display is 120px, canvas is 240 → ratio 2)
-    const RATIO = SIZE / 120
+    // Main image with pan + scale (display preview is 90×120, canvas is 180×240 → ratio 2)
+    const RATIO = 2
     const totalScale = coverScale * scale
     const sw = img.naturalWidth  * totalScale
     const sh = img.naturalHeight * totalScale
-    ctx.drawImage(img, (SIZE - sw) / 2 + panX * RATIO, (SIZE - sh) / 2 + panY * RATIO, sw, sh)
+    ctx.drawImage(img, (W - sw) / 2 + panX * RATIO, (H - sh) / 2 + panY * RATIO, sw, sh)
 
     const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
 
@@ -361,7 +361,7 @@ export function YouScreen() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {searchResults.map(u => (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--fg-08)' }}>
-                  <div style={{ width: 38, height: 38, flexShrink: 0 }}>
+                  <div onClick={() => setAvatarFullscreenId(u.id)} style={{ width: 38, height: 38, flexShrink: 0, cursor: 'pointer' }}>
                     {u.avatar_url ? (
                       <div style={{ width: 38, height: 38, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden' }}>
                         <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -405,6 +405,11 @@ export function YouScreen() {
 
       <BottomNav />
 
+      {/* ── Other user avatar fullscreen viewer ── */}
+      {avatarFullscreenId && (
+        <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
+      )}
+
       {/* ── Avatar crop editor overlay ── */}
       {editSrc && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(12,11,11,0.97)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
@@ -413,7 +418,7 @@ export function YouScreen() {
             Position your photo
           </p>
 
-          {/* Diamond preview */}
+          {/* 3:4 rectangle preview — diamond mask is CSS only, not baked into upload */}
           <div
             ref={previewRef}
             onTouchStart={handleTouchStart}
@@ -423,7 +428,7 @@ export function YouScreen() {
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onWheel={handleWheel}
-            style={{ width: 120, height: 120, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', position: 'relative', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
+            style={{ width: 90, height: 120, borderRadius: 6, overflow: 'hidden', position: 'relative', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
           >
             {/* Blurred backdrop */}
             <img src={editSrc} draggable={false}

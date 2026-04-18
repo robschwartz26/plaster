@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
+import { flipImageHorizontally } from '@/lib/imageUtils'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
@@ -47,11 +48,14 @@ export function OnboardingScreen() {
   }
 
   // ── Step 2: avatar ───────────────────────────────────────────
-  function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
+    // Mirror front-camera captures to match what the user saw in the live preview
+    const isFrontCamera = e.target.getAttribute('capture') === 'user'
+    const source = isFrontCamera ? await flipImageHorizontally(file) : file
+    setAvatarFile(new File([source], file.name, { type: file.type }))
+    setAvatarPreview(URL.createObjectURL(source))
   }
 
   async function submitAvatar() {

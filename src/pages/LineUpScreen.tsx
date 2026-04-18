@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
+import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 
 // ── Mock feed ──────────────────────────────────────────────────────────────
 
@@ -240,6 +241,7 @@ function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
 function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; onPush: (e: PanelEntry) => void }) {
   const navigate = useNavigate()
+  const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
   const [profile,        setProfile]        = useState<any>(null)
   const [posters,        setPosters]        = useState<{ url: string; title: string }[]>([])
   const [followerCount,  setFollowerCount]  = useState(0)
@@ -284,7 +286,7 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
       {/* Identity block */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
         {profile?.avatar_url
-          ? <DiamondImg color={entry.color} posterUrl={profile.avatar_url} size={80} />
+          ? <DiamondImg color={entry.color} posterUrl={profile.avatar_url} size={80} onTap={() => profile?.id && setAvatarFullscreenId(profile.id)} />
           : <DiamondEmpty size={80} />
         }
         <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0' }}>
@@ -330,6 +332,10 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
         <button style={btnPrimary}>Follow</button>
         <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
       </div>
+
+      {avatarFullscreenId && (
+        <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
+      )}
     </div>
   )
 }
