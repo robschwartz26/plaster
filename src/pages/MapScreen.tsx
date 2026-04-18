@@ -529,7 +529,7 @@ export function MapScreen() {
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (map) {
       map.flyTo({
-        center: [venue.location_lng! + 0.018, venue.location_lat! - 0.008],
+        center: [venue.location_lng! + 0.04, venue.location_lat! - 0.015],
         zoom: map.getZoom(),
         duration: 700,
         essential: true,
