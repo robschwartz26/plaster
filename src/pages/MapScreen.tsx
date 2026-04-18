@@ -665,7 +665,7 @@ export function MapScreen() {
           onClick={e => e.stopPropagation()}
           style={{
             position: 'absolute', bottom: 0, right: 0,
-            width: '60%', height: '55vh', zIndex: 30,
+            width: '55%', height: '40vh', zIndex: 30,
             background: 'var(--bg)',
             borderRadius: '12px 0 0 0',
             display: 'flex', flexDirection: 'column',
