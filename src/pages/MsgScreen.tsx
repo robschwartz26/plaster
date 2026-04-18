@@ -211,6 +211,32 @@ export function MsgScreen() {
             </div>
           </div>
 
+          {/* Quick-access bar */}
+          <div style={{ padding: '0 16px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
+            <div style={{ display: 'flex', gap: 16, width: 'max-content' }}>
+              {mockConvs.map(conv => (
+                <button
+                  key={conv.id}
+                  onClick={() => setActiveConvId(conv.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}
+                >
+                  <div style={{ position: 'relative', width: 44, height: 44 }}>
+                    {conv.unread && (
+                      <div style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: '#A855F7', border: '1.5px solid var(--bg)', zIndex: 2 }} />
+                    )}
+                    {conv.isGroup && conv.avatar2
+                      ? <StackedDiamondAvatar color1={conv.avatar} color2={conv.avatar2} size={44} />
+                      : <DiamondAvatar color={conv.avatar} size={44} />
+                    }
+                  </div>
+                  <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-55)', maxWidth: 48, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {conv.name.length > 8 ? conv.name.slice(0, 8) : conv.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Search */}
           <div style={{ padding: '0 16px 10px', flexShrink: 0 }}>
             <input
