@@ -150,7 +150,6 @@ export function YouScreen() {
   }
 
   const avatarSrc = avatarPreview ?? profile?.avatar_url ?? null
-  const userInitial = (profile?.username ?? user?.email ?? '?')[0].toUpperCase()
 
   return (
     <div
@@ -169,39 +168,21 @@ export function YouScreen() {
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
           {/* Avatar */}
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{
-              width: 72,
-              height: 72,
-              borderRadius: '50%',
-              flexShrink: 0,
-              background: 'var(--fg-18)',
-              overflow: 'hidden',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px solid var(--fg-18)',
-              position: 'relative',
-            }}
-          >
-            {/* Initials shown by default; hidden behind img when img loads */}
-            <span style={{
-              fontSize: 26,
-              fontWeight: 700,
-              color: 'var(--fg-40)',
-              fontFamily: '"Space Grotesk", sans-serif',
-              userSelect: 'none',
-            }}>
-              {userInitial}
-            </span>
-            {avatarSrc && (
-              <img
-                src={avatarSrc}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                onError={(e) => { e.currentTarget.style.display = 'none' }}
-              />
+          <div onClick={() => fileRef.current?.click()} style={{ flexShrink: 0, cursor: 'pointer' }}>
+            {avatarSrc ? (
+              <div style={{ width: 80, height: 80, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden' }}>
+                <img
+                  src={avatarSrc}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  onError={(e) => { e.currentTarget.style.display = 'none' }}
+                />
+              </div>
+            ) : (
+              <div style={{ width: 80, height: 80, position: 'relative' }}>
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                  <polygon points="40,4 76,40 40,76 4,40" fill="var(--bg)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="4 3" />
+                </svg>
+              </div>
             )}
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={uploadAvatar} style={{ display: 'none' }} />
@@ -357,17 +338,16 @@ export function YouScreen() {
                     borderBottom: '1px solid var(--fg-08)',
                   }}
                 >
-                  <div
-                    style={{
-                      width: 38,
-                      height: 38,
-                      borderRadius: '50%',
-                      background: u.avatar_url ? 'transparent' : 'var(--fg-18)',
-                      overflow: 'hidden',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {u.avatar_url && <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  <div style={{ width: 38, height: 38, flexShrink: 0 }}>
+                    {u.avatar_url ? (
+                      <div style={{ width: 38, height: 38, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden' }}>
+                        <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </div>
+                    ) : (
+                      <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+                        <polygon points="19,2 36,19 19,36 2,19" fill="var(--bg)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="4 3" />
+                      </svg>
+                    )}
                   </div>
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif' }}>
                     @{u.username}
