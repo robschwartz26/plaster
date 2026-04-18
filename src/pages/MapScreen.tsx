@@ -528,17 +528,29 @@ export function MapScreen() {
   function flyToVenue(venue: DbVenue) {
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (!map) return
+
+    // Panel is 55% wide, 40vh tall, anchored bottom-right.
+    // Calculate panel's top-left corner in pixels.
     const panelWidth  = window.innerWidth  * 0.55
     const panelHeight = window.innerHeight * 0.40
-    const panelTopLeftX = window.innerWidth  - panelWidth
-    const panelTopLeftY = window.innerHeight - panelHeight
-    const targetX = panelTopLeftX - (panelWidth  * 0.20)
-    const targetY = panelTopLeftY - (panelHeight * 0.15)
+    const panelCornerX = window.innerWidth  - panelWidth
+    const panelCornerY = window.innerHeight - panelHeight
+
+    // DIAGONAL_RATIO: how far along the diagonal line from the panel corner
+    // toward the screen's top-left the pin should land.
+    // 0 = at panel corner (bad, obscured). 1 = at screen top-left (too extreme).
+    // 0.65 feels right — pin lands well clear of the panel, upper-left area.
+    const DIAGONAL_RATIO = 0.65
+
+    const targetX = panelCornerX * (1 - DIAGONAL_RATIO)
+    const targetY = panelCornerY * (1 - DIAGONAL_RATIO)
+
     const venuePixel = map.project([venue.location_lng!, venue.location_lat!])
     const dx = venuePixel.x - targetX
     const dy = venuePixel.y - targetY
     const currentCenter = map.project(map.getCenter())
     const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
+
     map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
   }
 
