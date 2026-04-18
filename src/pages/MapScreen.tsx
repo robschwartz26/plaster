@@ -2,11 +2,11 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Map, { Marker } from 'react-map-gl/mapbox'
-import { motion, useMotionValue, animate as fmAnimate } from 'framer-motion'
+import { motion } from 'framer-motion'
 import circle from '@turf/circle'
 import difference from '@turf/difference'
 import { featureCollection } from '@turf/helpers'
-import { List, Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal, X } from 'lucide-react'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
@@ -62,13 +62,6 @@ function addDays(dateStr: string, n: number): string {
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
 }
-function formatDayFull(idx: number, today: string): string {
-  if (idx === 0) return 'Tonight'
-  if (idx === 1) return 'Tomorrow'
-  const date = addDays(today, idx)
-  return new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
 const WHEEL_H         = 12   // canvas surface height (CSS px)
 const WHEEL_HOUSING_H = 18   // housing height inside control bar (CSS px)
@@ -388,18 +381,6 @@ export function MapScreen() {
   const selectedDate = addDays(today, dayIdx)
 
   const [activeFilter, setActiveFilter] = useState('All')
-  type SheetSnap = 'hidden' | 'peek' | 'full'
-  const [sheetSnap, setSheetSnap] = useState<SheetSnap>('hidden')
-  const sheetRef = useRef<HTMLDivElement>(null)
-  const sheetYMV = useMotionValue(2000)
-  const sheetDragRef = useRef<{ startY: number; startT: number } | null>(null)
-
-  function snapTo(snap: SheetSnap) {
-    const h = sheetRef.current?.offsetHeight ?? window.innerHeight * 0.9
-    const target = snap === 'full' ? 0 : snap === 'peek' ? h - 256 : h - 40
-    fmAnimate(sheetYMV, target, { type: 'spring', damping: 32, stiffness: 280 })
-    setSheetSnap(snap)
-  }
 
   // Radius
   const RADIUS_PRESETS = [1, 2, 5, 10, 25, 100]
@@ -488,9 +469,6 @@ export function MapScreen() {
     return () => navigator.geolocation.clearWatch(wid)
   }, [user])
 
-  // ── Init sheet position after mount ──────────────────────────────────────
-  useEffect(() => { snapTo('hidden') }, []) // eslint-disable-line
-
   // ── Load venues (once) ────────────────────────────────────────────────────
   useEffect(() => {
     supabase.from('venues').select('*').not('location_lat', 'is', null).not('location_lng', 'is', null)
@@ -539,18 +517,6 @@ export function MapScreen() {
     return evs.some((ev) => ev.category === activeFilter)
   }
 
-  // ── Derived: sorted list events ───────────────────────────────────────────
-  const visibleVenueIds = new Set(visibleVenues.map((v) => v.id))
-  const listEvents: VenueEvent[] = Object.values(eventsByVenue)
-    .flat()
-    .filter((ev) => {
-      if (!visibleVenueIds.has(ev.venue_id)) return false
-      if (activeFilter === '♥') return likedEventIds.has(ev.id)
-      if (activeFilter !== 'All') return ev.category === activeFilter
-      return true
-    })
-    .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-
   // ── Handlers ─────────────────────────────────────────────────────────────
   function flyToUser() {
     if (!userLoc || !mapRef.current) return
@@ -571,7 +537,6 @@ export function MapScreen() {
       <PlasterHeader
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => snapTo(sheetSnap !== 'hidden' ? 'hidden' : 'peek')} style={headerIconBtn(sheetSnap !== 'hidden')}><List size={16} /></button>
             <button style={headerIconBtn()}><Search size={16} /></button>
             <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
           </div>
@@ -804,106 +769,6 @@ export function MapScreen() {
           </svg>
         </button>
 
-        {/* ── Events list sheet — snap: hidden (handle only) / peek / full ── */}
-        <motion.div
-          ref={sheetRef}
-          style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: '90dvh',
-            background: theme === 'night' ? 'rgba(10,9,8,0.99)' : 'rgba(244,241,237,0.99)',
-            borderRadius: '16px 16px 0 0',
-            display: 'flex', flexDirection: 'column', zIndex: 35,
-            y: sheetYMV,
-            willChange: 'transform',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Drag handle strip */}
-          <div
-            style={{ height: 40, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'grab', position: 'relative', touchAction: 'none', userSelect: 'none' }}
-            onPointerDown={(e) => {
-              e.currentTarget.setPointerCapture(e.pointerId)
-              sheetDragRef.current = { startY: e.clientY, startT: e.timeStamp }
-            }}
-            onPointerUp={(e) => {
-              if (!sheetDragRef.current) return
-              const dy = e.clientY - sheetDragRef.current.startY
-              const dt = Math.max(1, e.timeStamp - sheetDragRef.current.startT)
-              const vy = (dy / dt) * 16
-              sheetDragRef.current = null
-              if (sheetSnap === 'full') {
-                if (vy > 8 || dy > 70) snapTo('peek')
-              } else if (sheetSnap === 'peek') {
-                if (vy < -8 || dy < -50) snapTo('full')
-                else if (vy > 8 || dy > 70) snapTo('hidden')
-              } else {
-                if (vy < -5 || dy < -16) snapTo('peek')
-              }
-            }}
-            onPointerCancel={() => { sheetDragRef.current = null }}
-          >
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: theme === 'night' ? 'rgba(240,236,227,0.18)' : 'rgba(26,24,20,0.18)' }} />
-            {sheetSnap !== 'full' && listEvents.length > 0 && (
-              <div style={{ position: 'absolute', right: 14, background: 'rgba(168,85,247,0.85)', borderRadius: 10, padding: '2px 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, color: '#fff' }}>
-                {listEvents.length}
-              </div>
-            )}
-          </div>
-
-          {/* Sheet header */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px 10px', flexShrink: 0 }}>
-            <div>
-              <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: theme === 'night' ? '#f0ece3' : '#1a1814', fontFamily: '"Space Grotesk", sans-serif' }}>
-                {formatDayFull(dayIdx, today)}
-              </p>
-              <p style={{ margin: '2px 0 0', fontSize: 11, color: theme === 'night' ? 'rgba(240,236,227,0.35)' : 'rgba(26,24,20,0.45)', fontFamily: '"Space Grotesk", sans-serif' }}>
-                {listEvents.length} event{listEvents.length !== 1 ? 's' : ''}
-                {formatRadiusLabel(radiusMi) !== 'Any' ? ` within ${formatRadiusLabel(radiusMi)}` : ''}
-              </p>
-            </div>
-            {sheetSnap === 'full' && (
-              <button onClick={() => snapTo('hidden')} style={{ width: 32, height: 32, borderRadius: 8, border: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.15)' : 'rgba(26,24,20,0.15)'}`, background: theme === 'night' ? 'rgba(240,236,227,0.06)' : 'rgba(26,24,20,0.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme === 'night' ? 'rgba(240,236,227,0.6)' : 'rgba(26,24,20,0.5)' }}>
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
-          {/* Event list */}
-          <div style={{ flex: 1, overflowY: sheetSnap === 'full' ? 'auto' : 'hidden' }}>
-            {listEvents.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 8 }}>
-                <p style={{ margin: 0, fontSize: 14, color: theme === 'night' ? 'rgba(240,236,227,0.3)' : 'rgba(26,24,20,0.35)', fontFamily: '"Space Grotesk", sans-serif' }}>No events found</p>
-                <p style={{ margin: 0, fontSize: 12, color: theme === 'night' ? 'rgba(240,236,227,0.2)' : 'rgba(26,24,20,0.25)', fontFamily: '"Space Grotesk", sans-serif' }}>Try expanding the radius or changing the day</p>
-              </div>
-            ) : listEvents.map((ev) => {
-              const venue = venues.find((v) => v.id === ev.venue_id)
-              const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-              const bg = catGradient(ev.category)
-              const pinColor = catPinColor(ev.category)
-              return (
-                <button
-                  key={ev.id}
-                  onClick={() => { snapTo('hidden'); navigate('/') }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 18px', background: 'none', border: 'none', cursor: 'pointer', borderBottom: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.05)' : 'rgba(26,24,20,0.06)'}`, textAlign: 'left' }}
-                >
-                  <div style={{ width: 48, height: 72, borderRadius: 5, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
-                    {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: theme === 'night' ? '#f0ece3' : '#1a1814', fontFamily: '"Space Grotesk", sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 12, color: theme === 'night' ? 'rgba(240,236,227,0.45)' : 'rgba(26,24,20,0.5)', fontFamily: '"Space Grotesk", sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venue?.name ?? ''}</p>
-                    <p style={{ margin: '2px 0 0', fontSize: 11, color: theme === 'night' ? 'rgba(240,236,227,0.3)' : 'rgba(26,24,20,0.35)', fontFamily: '"Space Grotesk", sans-serif' }}>{timeStr}</p>
-                  </div>
-                  {ev.category && (
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: pinColor, border: `1px solid ${pinColor}55`, borderRadius: 4, padding: '2px 6px', flexShrink: 0, fontFamily: '"Space Grotesk", sans-serif' }}>
-                      {ev.category}
-                    </span>
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </motion.div>
       </div>
 
       {/* ── Control bar ── */}
