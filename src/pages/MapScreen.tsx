@@ -537,7 +537,12 @@ export function MapScreen() {
       const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
       map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
     }
+  }
+
+  function selectVenue(venue: DbVenue) {
     setSelectedVenue(venue)
+    flyToVenue(venue)
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
 
   // Scroll panel to top whenever selected venue changes
@@ -646,7 +651,7 @@ export function MapScreen() {
                   style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
                 >
                   <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedVenue(isSelected ? null : venue) }}
+                    onClick={(e) => { e.stopPropagation(); if (isSelected) setSelectedVenue(null); else selectVenue(venue) }}
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                   >
                     <svg
@@ -742,7 +747,7 @@ export function MapScreen() {
                     <div key={venue.id}>
                       <div style={{ height: 1, background: 'var(--fg-15)', margin: '6px 0' }} />
                       <button
-                        onClick={() => flyToVenue(venue)}
+                        onClick={() => selectVenue(venue)}
                         style={{ display: 'block', width: '100%', padding: '4px 16px 4px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
                       >
                         <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg-55)' }}>{venue.name}</span>
@@ -752,7 +757,7 @@ export function MapScreen() {
                         const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                         const bg = catGradient(ev.category)
                         return (
-                          <button key={ev.id} onClick={() => { flyToVenue(venue); navigate('/') }}
+                          <button key={ev.id} onClick={() => { selectVenue(venue); navigate('/') }}
                             style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
                           >
                             <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
