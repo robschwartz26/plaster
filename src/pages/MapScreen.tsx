@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import circle from '@turf/circle'
 import difference from '@turf/difference'
 import { featureCollection } from '@turf/helpers'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import { Search, SlidersHorizontal } from 'lucide-react'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
@@ -524,9 +524,21 @@ export function MapScreen() {
     map.flyTo({ center: [userLoc.lng, userLoc.lat], zoom: 14, duration: 1000 })
   }
 
+  function flyToVenue(venue: DbVenue) {
+    const map = mapRef.current?.getMap?.() ?? mapRef.current
+    if (map) map.flyTo({ center: [venue.location_lng!, venue.location_lat!], zoom: 14, duration: 800 })
+    setSelectedVenue(venue)
+  }
 
-  const selectedVenueEvents = selectedVenue
-    ? (eventsByVenue[selectedVenue.id] ?? [])
+  const selectedVenueEvents = selectedVenue ? (eventsByVenue[selectedVenue.id] ?? []) : []
+
+  const adjacentVenues = selectedVenue
+    ? visibleVenues
+        .filter(v => v.id !== selectedVenue.id && venueMatchesFilter(v.id))
+        .sort((a, b) =>
+          haversineMiles(selectedVenue.location_lat!, selectedVenue.location_lng!, a.location_lat!, a.location_lng!) -
+          haversineMiles(selectedVenue.location_lat!, selectedVenue.location_lng!, b.location_lat!, b.location_lng!)
+        )
     : []
 
 
@@ -648,81 +660,102 @@ export function MapScreen() {
           })}
         </Map>
 
-        {/* ── Right-side venue event panel — slides in from right ── */}
+        {/* ── Bottom slide-up venue panel ── */}
         <div
-          onClick={(e) => e.stopPropagation()}
+          onClick={e => e.stopPropagation()}
           style={{
-            position: 'absolute', right: 0, top: 0, bottom: 0,
-            width: 220, zIndex: 30,
-            background: theme === 'night' ? 'rgba(10,9,8,0.97)' : 'rgba(244,241,237,0.97)',
-            backdropFilter: 'blur(16px)',
-            borderLeft: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.1)' : 'rgba(26,24,20,0.1)'}`,
+            position: 'absolute', bottom: 0, left: 0, right: 0,
+            height: '55%', zIndex: 30,
+            background: 'var(--bg)',
+            borderRadius: '12px 12px 0 0',
             display: 'flex', flexDirection: 'column',
-            transform: selectedVenue ? 'translateX(0)' : 'translateX(100%)',
-            transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-            overflowY: 'auto',
+            transform: selectedVenue ? 'translateY(0)' : 'translateY(100%)',
+            transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+            overflow: 'hidden',
+            boxShadow: '0 -4px 32px rgba(0,0,0,0.4)',
           }}
         >
-          {selectedVenue && (
-            <>
-              {/* Close button */}
-              <button
-                onClick={() => setSelectedVenue(null)}
-                style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: theme === 'night' ? 'rgba(240,236,227,0.4)' : 'rgba(26,24,20,0.4)', padding: 4, zIndex: 2 }}
-              >
-                <X size={14} />
-              </button>
+          {/* Decorative indicator bar */}
+          <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 8, paddingBottom: 2, flexShrink: 0 }}>
+            <div style={{ width: 36, height: 3, borderRadius: 1.5, background: 'var(--fg-18)' }} />
+          </div>
 
-              {/* Venue header */}
-              <div style={{ padding: '16px 14px 10px' }}>
-                <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 18, lineHeight: 1.2, color: theme === 'night' ? '#f0ece3' : '#1a1814', paddingRight: 20 }}>
-                  {selectedVenue.name}
-                </p>
-                {selectedVenue.neighborhood && (
-                  <p style={{ margin: '4px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: theme === 'night' ? 'rgba(240,236,227,0.35)' : 'rgba(26,24,20,0.45)' }}>
-                    {selectedVenue.neighborhood}
+          {/* Scrollable content */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {selectedVenue && (
+              <>
+                {/* ── Featured venue ── */}
+                <div style={{ padding: '8px 16px 10px' }}>
+                  <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, lineHeight: 1.2, color: 'var(--fg)' }}>
+                    {selectedVenue.name}
                   </p>
-                )}
-              </div>
+                  {selectedVenue.neighborhood && (
+                    <p style={{ margin: '4px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+                      {selectedVenue.neighborhood}
+                    </p>
+                  )}
+                </div>
 
-              <div style={{ height: 1, background: theme === 'night' ? 'rgba(240,236,227,0.08)' : 'rgba(26,24,20,0.08)', flexShrink: 0 }} />
-
-              {/* Event list for selected day */}
-              {selectedVenueEvents.length === 0 ? (
-                <div style={{ padding: '32px 14px', textAlign: 'center' }}>
-                  <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: theme === 'night' ? 'rgba(240,236,227,0.3)' : 'rgba(26,24,20,0.35)' }}>
+                {selectedVenueEvents.length === 0 ? (
+                  <p style={{ margin: 0, padding: '8px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
                     Nothing on {dayIdx === 0 ? 'tonight' : 'this day'}
                   </p>
-                </div>
-              ) : (
-                <div style={{ flex: 1, overflowY: 'auto' }}>
-                  {selectedVenueEvents.map((ev) => {
+                ) : (
+                  selectedVenueEvents.map((ev, i) => {
                     const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                     const bg = catGradient(ev.category)
                     return (
-                      <button
-                        key={ev.id}
-                        onClick={() => { setSelectedVenue(null); navigate('/') }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', borderBottom: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.06)' : 'rgba(26,24,20,0.06)'}`, cursor: 'pointer', textAlign: 'left' }}
+                      <button key={ev.id} onClick={() => navigate('/')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
                       >
-                        <div style={{ width: 30, height: 45, borderRadius: 3, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
+                        <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
                           {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: theme === 'night' ? '#f0ece3' : '#1a1814', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {ev.title}
-                          </p>
-                          <p style={{ margin: '2px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', color: theme === 'night' ? 'rgba(240,236,227,0.4)' : 'rgba(26,24,20,0.45)' }}>
-                            {timeStr}
-                          </p>
+                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
+                          <p style={{ margin: '3px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{timeStr}</p>
                         </div>
                       </button>
                     )
-                  })}
-                </div>
-              )}
-            </>
-          )}
+                  })
+                )}
+
+                {/* ── Adjacent venues ── */}
+                {adjacentVenues.map(venue => {
+                  const vEvents = eventsByVenue[venue.id] ?? []
+                  return (
+                    <div key={venue.id}>
+                      <div style={{ height: 1, background: 'var(--fg-15)', margin: '6px 0' }} />
+                      <button
+                        onClick={() => flyToVenue(venue)}
+                        style={{ display: 'block', width: '100%', padding: '4px 16px 4px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                      >
+                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg-55)' }}>{venue.name}</span>
+                        {venue.neighborhood && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)', marginLeft: 6 }}>{venue.neighborhood}</span>}
+                      </button>
+                      {vEvents.map((ev, i) => {
+                        const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                        const bg = catGradient(ev.category)
+                        return (
+                          <button key={ev.id} onClick={() => { flyToVenue(venue); navigate('/') }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
+                              {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
+                              <p style={{ margin: '3px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{timeStr}</p>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </>
+            )}
+          </div>
         </div>
 
         {/* ── Radius pill — top right ── */}
