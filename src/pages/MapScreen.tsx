@@ -532,7 +532,7 @@ export function MapScreen() {
         center: [venue.location_lng!, venue.location_lat!],
         zoom: map.getZoom(),
         duration: 700,
-        padding: { top: 80, bottom: 400, left: 20, right: 500 },
+        padding: { top: 200, bottom: 100, left: 20, right: Math.round(window.innerWidth * 0.58) },
       })
     }
     setSelectedVenue(venue)
