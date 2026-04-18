@@ -1,7 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+
+const supabaseAdmin = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_SERVICE_KEY
+)
 import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -96,18 +102,22 @@ export function YouScreen() {
     const file = e.target.files?.[0]
     if (!file || !user) return
     setAvatarPreview(URL.createObjectURL(file))
+    console.log('[Avatar upload] Starting upload for user:', user.id)
+    console.log('[Avatar upload] File:', file.name, file.type, file.size)
     const fileExt = file.name.split('.').pop()
     const filePath = `${user.id}/avatar.${fileExt}`
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from('avatars')
       .upload(filePath, file, { upsert: true, contentType: file.type })
-    if (!uploadError) {
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath)
-      const avatarUrl = urlData.publicUrl + '?t=' + Date.now()
-      await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', user.id)
-      setAvatarPreview(avatarUrl)
-      await refreshProfile()
+    if (uploadError) {
+      console.error('[Avatar upload] Error:', uploadError.message, uploadError)
+      return
     }
+    const { data: urlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(filePath)
+    const avatarUrl = urlData.publicUrl + '?t=' + Date.now()
+    await supabaseAdmin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', user.id)
+    setAvatarPreview(avatarUrl)
+    await refreshProfile()
   }
 
   async function searchUsers(q: string) {
