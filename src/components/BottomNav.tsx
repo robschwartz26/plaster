@@ -36,13 +36,12 @@ const NAV_ITEMS = [
     ),
   },
   {
-    label: 'Venues',
-    path: '/venues',
+    label: 'MSG',
+    path: '/msg',
     center: false,
     icon: (size: number) => (
       <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-        <polyline points="9 22 9 12 15 12 15 22" />
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
       </svg>
     ),
   },

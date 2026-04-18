@@ -10,6 +10,7 @@ const AuthScreen   = lazy(() => import('./pages/AuthScreen').then(m => ({ defaul
 const Onboarding   = lazy(() => import('./pages/OnboardingScreen').then(m => ({ default: m.OnboardingScreen })))
 const YouScreen    = lazy(() => import('./pages/YouScreen').then(m => ({ default: m.YouScreen })))
 const VenuesScreen = lazy(() => import('./pages/VenuesScreen').then(m => ({ default: m.VenuesScreen })))
+const MsgScreen    = lazy(() => import('./pages/MsgScreen').then(m => ({ default: m.MsgScreen })))
 const VenueProfile = lazy(() => import('./pages/VenueProfile').then(m => ({ default: m.VenueProfile })))
 const Tonight      = lazy(() => import('./pages/TonightScreen').then(m => ({ default: m.TonightScreen })))
 const LineUp       = lazy(() => import('./pages/LineUpScreen'))
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route path="/lineup"     element={<ProtectedRoute><LineUp /></ProtectedRoute>} />
         <Route path="/map"        element={<ProtectedRoute><MapScreen /></ProtectedRoute>} />
         <Route path="/venues"     element={<ProtectedRoute><VenuesScreen /></ProtectedRoute>} />
+        <Route path="/msg"        element={<ProtectedRoute><MsgScreen /></ProtectedRoute>} />
         <Route path="/venue/:id"  element={<ProtectedRoute><VenueProfile /></ProtectedRoute>} />
         <Route path="/you"        element={<ProtectedRoute><YouScreen /></ProtectedRoute>} />
         <Route path="*"           element={<Navigate to="/" replace />} />
