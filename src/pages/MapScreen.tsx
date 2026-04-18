@@ -430,6 +430,7 @@ export function MapScreen() {
   }, [])
 
   const handleMapLoad = useCallback(() => {
+    console.log('[handleMapLoad] map loaded')
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (!map) return
     mapLoadedRef.current = true
@@ -439,6 +440,7 @@ export function MapScreen() {
 
   // ── Dynamic map style switch (theme toggle) ───────────────────────────────
   useEffect(() => {
+    console.log('[mapStyle effect] running, style=', mapStyle)
     if (!mapLoadedRef.current || !mapRef.current) return
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (map?.getStyle?.()) map.setStyle(mapStyle)
@@ -457,6 +459,7 @@ export function MapScreen() {
     let lastSaved = { lat: 0, lng: 0 }
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng } = pos.coords
+      console.log('[geolocation] update', lat, lng)
       setUserLoc({ lat, lng })
       setViewState((v) => ({ ...v, latitude: lat, longitude: lng }))
       if (Math.abs(lat - lastSaved.lat) > 0.0001 || Math.abs(lng - lastSaved.lng) > 0.0001) {
@@ -526,6 +529,7 @@ export function MapScreen() {
   }
 
   function flyToVenue(venue: DbVenue) {
+    console.log('[flyToVenue] called for', venue.name)
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (!map) return
 
@@ -551,10 +555,12 @@ export function MapScreen() {
     const currentCenter = map.project(map.getCenter())
     const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
 
+    console.log('[flyToVenue] easeTo to', newCenter)
     map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
   }
 
   function selectVenue(venue: DbVenue) {
+    console.log('[selectVenue]', venue.name)
     setSelectedVenue(venue)
     flyToVenue(venue)
     if (scrollRef.current) scrollRef.current.scrollTop = 0
