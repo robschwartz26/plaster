@@ -96,12 +96,16 @@ export function YouScreen() {
     const file = e.target.files?.[0]
     if (!file || !user) return
     setAvatarPreview(URL.createObjectURL(file))
-    const ext = file.name.split('.').pop()
-    const path = `${user.id}/avatar.${ext}`
-    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (!error) {
-      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-      await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id)
+    const fileExt = file.name.split('.').pop()
+    const filePath = `${user.id}/avatar.${fileExt}`
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, { upsert: true, contentType: file.type })
+    if (!uploadError) {
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(filePath)
+      const avatarUrl = urlData.publicUrl + '?t=' + Date.now()
+      await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', user.id)
+      setAvatarPreview(avatarUrl)
       await refreshProfile()
     }
   }
