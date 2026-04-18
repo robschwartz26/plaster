@@ -109,8 +109,8 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
     const fullBlob = await new Promise<Blob>(res => fullCanvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
 
     const ts = Date.now()
-    const diamondPath = `${userId}-diamond.jpg`
-    const fullPath    = `${userId}-full.jpg`
+    const diamondPath = `${userId}/diamond.jpg`
+    const fullPath    = `${userId}/full.jpg`
 
     const [diamondUp, fullUp] = await Promise.all([
       supabaseAdmin.storage.from('avatars').upload(diamondPath, diamondBlob, { upsert: true, contentType: 'image/jpeg' }),
