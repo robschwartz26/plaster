@@ -1,18 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlasterHeader } from '@/components/PlasterHeader'
-import { flipImageHorizontally } from '@/lib/imageUtils'
+import { Diamond } from '@/components/Diamond'
+import { AvatarUploader } from '@/components/AvatarUploader'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
-
-const supabaseAdmin = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_KEY
-)
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -27,16 +22,6 @@ interface AttendedEvent {
 }
 
 interface FollowCounts { followers: number; following: number }
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)) }
-
-function getTouchDist(touches: TouchList) {
-  const dx = touches[0].clientX - touches[1].clientX
-  const dy = touches[0].clientY - touches[1].clientY
-  return Math.sqrt(dx * dx + dy * dy)
-}
 
 // ── Main component ─────────────────────────────────────────────────────────
 
@@ -54,31 +39,17 @@ export function YouScreen() {
   const [attended, setAttended] = useState<AttendedEvent[]>([])
   const [counts,   setCounts]   = useState<FollowCounts>({ followers: 0, following: 0 })
 
-  // Avatar preview (after upload)
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-
-  // Avatar crop editor state
-  const [editSrc,  setEditSrc]  = useState<string | null>(null)
-  const [, setEditFile] = useState<File | null>(null)
-  const [panX,         setPanX]         = useState(0)
-  const [panY,         setPanY]         = useState(0)
-  const [scale,        setScale]        = useState(1)
-  const [uploadBusy,   setUploadBusy]   = useState(false)
-
-  // Avatar fullscreen viewer (for other users' diamonds)
-  const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
+  // Avatar state
+  const [avatarUploaderOpen,    setAvatarUploaderOpen]    = useState(false)
+  const [avatarPreview,         setAvatarPreview]         = useState<string | null>(null)
+  const [avatarFullscreenOpen,  setAvatarFullscreenOpen]  = useState(false)
+  const [avatarFullscreenId,    setAvatarFullscreenId]    = useState<string | null>(null)
 
   // Search state
   const [searchQuery,   setSearchQuery]   = useState('')
-  const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatar_url: string | null }[]>([])
+  const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatar_url: string | null; avatar_diamond_url: string | null }[]>([])
   const [searchBusy,    setSearchBusy]    = useState(false)
   const [following,     setFollowing]     = useState<Set<string>>(new Set())
-
-  // Refs
-  const fileRef    = useRef<HTMLInputElement>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
-  const dragRef    = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null)
-  const pinchRef   = useRef<{ dist: number; startScale: number } | null>(null)
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
@@ -125,127 +96,6 @@ export function YouScreen() {
     setEditing(false)
   }
 
-  // ── Avatar — file select (opens editor) ────────────────────────────────
-
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    e.target.value = ''
-    // Mirror front-camera captures to match what the user saw in the live preview
-    const isFrontCamera = e.target.getAttribute('capture') === 'user'
-    const source = isFrontCamera ? await flipImageHorizontally(file) : file
-    setEditFile(file)
-    setEditSrc(URL.createObjectURL(source))
-    setPanX(0); setPanY(0); setScale(1)
-  }
-
-  function cancelEdit() {
-    if (editSrc) URL.revokeObjectURL(editSrc)
-    setEditSrc(null); setEditFile(null)
-    setPanX(0); setPanY(0); setScale(1)
-  }
-
-  // ── Avatar — canvas export + upload ───────────────────────────────────
-
-  async function saveCroppedAvatar() {
-    if (!editSrc || !user) return
-    setUploadBusy(true)
-
-    // 3:4 portrait rectangle — diamond shape is applied in CSS render, not baked into the file
-    const W = 180, H = 240
-    const canvas = document.createElement('canvas')
-    canvas.width = W; canvas.height = H
-    const ctx = canvas.getContext('2d')!
-
-    const img = new Image()
-    img.src = editSrc
-    await new Promise<void>(res => { img.onload = () => res() })
-
-    const coverScale = Math.max(W / img.naturalWidth, H / img.naturalHeight)
-
-    // Blurred backdrop fills any uncovered corners at extreme pan positions
-    ctx.save()
-    ctx.filter = 'blur(16px) brightness(0.5)'
-    const bw = img.naturalWidth * coverScale
-    const bh = img.naturalHeight * coverScale
-    ctx.drawImage(img, (W - bw) / 2, (H - bh) / 2, bw, bh)
-    ctx.restore()
-
-    // Main image with pan + scale (display preview is 90×120, canvas is 180×240 → ratio 2)
-    const RATIO = 2
-    const totalScale = coverScale * scale
-    const sw = img.naturalWidth  * totalScale
-    const sh = img.naturalHeight * totalScale
-    ctx.drawImage(img, (W - sw) / 2 + panX * RATIO, (H - sh) / 2 + panY * RATIO, sw, sh)
-
-    const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
-
-    const filePath = `${user.id}/avatar.jpg`
-    const { error } = await supabaseAdmin.storage.from('avatars').upload(filePath, blob, { upsert: true, contentType: 'image/jpeg' })
-    if (error) { console.error('[Avatar] upload error:', error); setUploadBusy(false); return }
-
-    const { data: urlData } = supabaseAdmin.storage.from('avatars').getPublicUrl(filePath)
-    const avatarUrl = urlData.publicUrl + '?t=' + Date.now()
-    await supabaseAdmin.from('profiles').update({ avatar_url: avatarUrl }).eq('id', user.id)
-    setAvatarPreview(avatarUrl)
-    cancelEdit()
-    await refreshProfile()
-    setUploadBusy(false)
-  }
-
-  // ── Touch handlers for preview ─────────────────────────────────────────
-
-  // Register non-passive touchmove to allow preventDefault (prevents scroll during drag)
-  useEffect(() => {
-    const el = previewRef.current
-    if (!el) return
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault()
-      if (e.touches.length === 1 && dragRef.current) {
-        const dx = e.touches[0].clientX - dragRef.current.startX
-        const dy = e.touches[0].clientY - dragRef.current.startY
-        setPanX(clamp(dragRef.current.startPanX + dx, -80, 80))
-        setPanY(clamp(dragRef.current.startPanY + dy, -80, 80))
-      } else if (e.touches.length === 2 && pinchRef.current) {
-        const newDist = getTouchDist(e.touches)
-        setScale(clamp((newDist / pinchRef.current.dist) * pinchRef.current.startScale, 0.5, 3))
-      }
-    }
-    el.addEventListener('touchmove', onTouchMove, { passive: false })
-    return () => el.removeEventListener('touchmove', onTouchMove)
-  }, [editSrc])
-
-  function handleTouchStart(e: React.TouchEvent) {
-    if (e.touches.length === 1) {
-      dragRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, startPanX: panX, startPanY: panY }
-      pinchRef.current = null
-    } else if (e.touches.length === 2) {
-      pinchRef.current = { dist: getTouchDist(e.nativeEvent.touches), startScale: scale }
-      dragRef.current = null
-    }
-  }
-
-  function handleTouchEnd() { dragRef.current = null; pinchRef.current = null }
-
-  // Mouse handlers
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY }
-  }, [panX, panY])
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!dragRef.current) return
-    setPanX(clamp(dragRef.current.startPanX + (e.clientX - dragRef.current.startX), -80, 80))
-    setPanY(clamp(dragRef.current.startPanY + (e.clientY - dragRef.current.startY), -80, 80))
-  }, [])
-
-  const handleMouseUp = useCallback(() => { dragRef.current = null }, [])
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault()
-    setScale(prev => clamp(prev - e.deltaY * 0.003, 0.5, 3))
-  }, [])
-
   // ── Search + follow ────────────────────────────────────────────────────
 
   async function searchUsers(q: string) {
@@ -253,9 +103,10 @@ export function YouScreen() {
     if (!q.trim()) { setSearchResults([]); return }
     setSearchBusy(true)
     const clean = q.replace(/^@/, '').trim()
-    const { data } = await supabase.from('profiles').select('id, username, avatar_url')
+    const { data } = await supabase.from('profiles')
+      .select('id, username, avatar_url, avatar_diamond_url')
       .ilike('username', `${clean}%`).neq('id', user?.id ?? '').limit(8)
-    setSearchResults((data ?? []) as { id: string; username: string; avatar_url: string | null }[])
+    setSearchResults((data ?? []) as typeof searchResults)
     setSearchBusy(false)
   }
 
@@ -273,7 +124,7 @@ export function YouScreen() {
 
   // ── Derived ────────────────────────────────────────────────────────────
 
-  const avatarSrc = avatarPreview ?? profile?.avatar_url ?? null
+  const diamondSrc = avatarPreview ?? profile?.avatar_diamond_url ?? profile?.avatar_url ?? null
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -287,22 +138,12 @@ export function YouScreen() {
         {/* Profile header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
 
-          {/* Diamond avatar */}
-          <div onClick={() => fileRef.current?.click()} style={{ flexShrink: 0, cursor: 'pointer' }}>
-            {avatarSrc ? (
-              <div style={{ width: 80, height: 80, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden' }}>
-                <img src={avatarSrc} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  onError={e => { e.currentTarget.style.display = 'none' }} />
-              </div>
-            ) : (
-              <div style={{ width: 80, height: 80 }}>
-                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                  <polygon points="40,4 76,40 40,76 4,40" fill="var(--bg)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="4 3" />
-                </svg>
-              </div>
-            )}
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+          {/* Diamond avatar — tap to view fullscreen (with update option) */}
+          <Diamond
+            diamondUrl={diamondSrc}
+            size={80}
+            onClick={() => setAvatarFullscreenOpen(true)}
+          />
 
           {/* Name + stats */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -361,17 +202,12 @@ export function YouScreen() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
               {searchResults.map(u => (
                 <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--fg-08)' }}>
-                  <div onClick={() => setAvatarFullscreenId(u.id)} style={{ width: 38, height: 38, flexShrink: 0, cursor: 'pointer' }}>
-                    {u.avatar_url ? (
-                      <div style={{ width: 38, height: 38, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden' }}>
-                        <img src={u.avatar_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                      </div>
-                    ) : (
-                      <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
-                        <polygon points="19,2 36,19 19,36 2,19" fill="var(--bg)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="4 3" />
-                      </svg>
-                    )}
-                  </div>
+                  <Diamond
+                    diamondUrl={u.avatar_diamond_url}
+                    fallbackUrl={u.avatar_url}
+                    size={38}
+                    onClick={() => setAvatarFullscreenId(u.id)}
+                  />
                   <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif' }}>@{u.username}</span>
                   <button onClick={() => toggleFollow(u.id, true)}
                     style={{ padding: '6px 14px', borderRadius: 20, border: following.has(u.id) ? '1.5px solid var(--fg-25)' : 'none', background: following.has(u.id) ? 'transparent' : 'var(--fg)', color: following.has(u.id) ? 'var(--fg-55)' : 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
@@ -405,65 +241,31 @@ export function YouScreen() {
 
       <BottomNav />
 
-      {/* ── Other user avatar fullscreen viewer ── */}
+      {/* Own avatar fullscreen — "Update profile photo" opens uploader */}
+      {user && avatarFullscreenOpen && (
+        <AvatarFullscreen
+          userId={user.id}
+          onClose={() => setAvatarFullscreenOpen(false)}
+          onUpdatePhoto={() => { setAvatarFullscreenOpen(false); setAvatarUploaderOpen(true) }}
+        />
+      )}
+
+      {/* Other user avatar fullscreen viewer */}
       {avatarFullscreenId && (
         <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
       )}
 
-      {/* ── Avatar crop editor overlay ── */}
-      {editSrc && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(12,11,11,0.97)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28 }}>
-
-          <p style={{ margin: 0, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>
-            Position your photo
-          </p>
-
-          {/* 3:4 rectangle preview — diamond mask is CSS only, not baked into upload */}
-          <div
-            ref={previewRef}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onWheel={handleWheel}
-            style={{ width: 90, height: 120, borderRadius: 6, overflow: 'hidden', position: 'relative', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
-          >
-            {/* Blurred backdrop */}
-            <img src={editSrc} draggable={false}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(12px) brightness(0.5)', pointerEvents: 'none' }} />
-            {/* Main image */}
-            <img src={editSrc} draggable={false}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${panX}px, ${panY}px) scale(${scale})`, transformOrigin: 'center center', pointerEvents: 'none' }} />
-          </div>
-
-          <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-30)', letterSpacing: '0.03em' }}>
-            Drag to reposition · Pinch or scroll to zoom
-          </p>
-
-          {/* Scale slider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 200 }}>
-            <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, color: 'var(--fg-30)', letterSpacing: '0.08em' }}>−</span>
-            <input type="range" min={0.5} max={3} step={0.01} value={scale}
-              onChange={e => setScale(parseFloat(e.target.value))}
-              style={{ flex: 1, accentColor: '#A855F7', cursor: 'pointer' }} />
-            <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, color: 'var(--fg-30)', letterSpacing: '0.08em' }}>+</span>
-          </div>
-
-          {/* Buttons */}
-          <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={cancelEdit}
-              style={{ padding: '11px 28px', borderRadius: 8, border: '1.5px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-              Cancel
-            </button>
-            <button onClick={saveCroppedAvatar} disabled={uploadBusy}
-              style={{ padding: '11px 28px', borderRadius: 8, border: 'none', background: uploadBusy ? 'var(--fg-25)' : '#A855F7', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, cursor: uploadBusy ? 'not-allowed' : 'pointer', minWidth: 90 }}>
-              {uploadBusy ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-
-        </div>
+      {/* Avatar uploader */}
+      {user && avatarUploaderOpen && (
+        <AvatarUploader
+          userId={user.id}
+          onDone={(_fullUrl, diamondUrl) => {
+            setAvatarPreview(diamondUrl)
+            setAvatarUploaderOpen(false)
+            refreshProfile()
+          }}
+          onCancel={() => setAvatarUploaderOpen(false)}
+        />
       )}
     </div>
   )

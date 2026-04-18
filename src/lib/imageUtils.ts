@@ -1,5 +1,3 @@
-// Horizontally flip an image file on a canvas (mirrors front-camera selfies
-// to match what the user saw in the live preview).
 export async function flipImageHorizontally(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -21,4 +19,19 @@ export async function flipImageHorizontally(file: File): Promise<Blob> {
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('flipImageHorizontally: image load failed')) }
     img.src = url
   })
+}
+
+export async function processCaptureFile(
+  file: File,
+  captureSource: string | null,
+  log?: (msg: string) => void,
+): Promise<File> {
+  if (captureSource === 'user') {
+    log?.('[avatar-mirror] front camera detected, flipping horizontally')
+    const flipped = await flipImageHorizontally(file)
+    log?.('[avatar-mirror] flip complete')
+    return new File([flipped], file.name, { type: file.type || 'image/jpeg' })
+  }
+  log?.(`[avatar-mirror] no flip needed (captureSource=${captureSource ?? 'null'})`)
+  return file
 }

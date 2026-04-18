@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
+import { Diamond } from '@/components/Diamond'
 
 // ── Mock feed ──────────────────────────────────────────────────────────────
 
@@ -72,17 +73,6 @@ function DiamondImg({ color, posterUrl, size = 28, onTap }: { color: string; pos
     <div onClick={onTap} style={{ width: size, height: size, background: color, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', flexShrink: 0, overflow: 'hidden', position: 'relative', cursor: onTap ? 'pointer' : 'default' }}>
       {posterUrl && <img src={posterUrl} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} draggable={false} />}
     </div>
-  )
-}
-
-// Dashed diamond fallback (no image)
-function DiamondEmpty({ size = 80 }: { size?: number }) {
-  const half = size / 2, inset = size * 0.05
-  const pts = `${half},${inset} ${size - inset},${half} ${half},${size - inset} ${inset},${half}`
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none" style={{ flexShrink: 0 }}>
-      <polygon points={pts} fill="var(--bg)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="4 3" />
-    </svg>
   )
 }
 
@@ -250,7 +240,7 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
   const [superlatives,   setSuperlatives]   = useState<string[]>([])
 
   useEffect(() => {
-    supabase.from('profiles').select('id, username, avatar_url, bio').ilike('username', `%${entry.name}%`).limit(1)
+    supabase.from('profiles').select('id, username, avatar_url, avatar_diamond_url, bio').ilike('username', `%${entry.name}%`).limit(1)
       .then(({ data }) => {
         const p = data?.[0]; if (!p) return
         setProfile(p)
@@ -285,10 +275,12 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
       {/* Identity block */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
-        {profile?.avatar_url
-          ? <DiamondImg color={entry.color} posterUrl={profile.avatar_url} size={80} onTap={() => profile?.id && setAvatarFullscreenId(profile.id)} />
-          : <DiamondEmpty size={80} />
-        }
+        <Diamond
+            diamondUrl={profile?.avatar_diamond_url ?? null}
+            fallbackUrl={profile?.avatar_url ?? null}
+            size={80}
+            onClick={() => profile?.id && setAvatarFullscreenId(profile.id)}
+          />
         <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0' }}>
           @{profile?.username ?? entry.name}
         </p>

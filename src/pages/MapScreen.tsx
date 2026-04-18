@@ -13,6 +13,7 @@ import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 import { useTheme } from '@/hooks/useTheme'
 import { DateIndicator } from '@/components/DateIndicator'
+import { DebugOverlay } from '@/components/DebugOverlay'
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 const PORTLAND = { latitude: 45.5051, longitude: -122.6750 }
@@ -365,7 +366,6 @@ interface VenueEvent {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-const DEBUG_ENABLED = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
 
 export function MapScreen() {
   const { user } = useAuth()
@@ -381,7 +381,7 @@ export function MapScreen() {
   function debugLog(...args: unknown[]) {
     const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')
     console.log(...args)
-    if (DEBUG_ENABLED) setDebugLogs(prev => [...prev.slice(-9), msg])
+    if (import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')) setDebugLogs(prev => [...prev.slice(-9), msg])
   }
 
   const mapStyle = theme === 'day'
@@ -859,38 +859,7 @@ export function MapScreen() {
         </button>
 
         {/* ── Debug overlay ── */}
-        {DEBUG_ENABLED && (
-          debugOpen ? (
-            <div style={{
-              position: 'absolute', top: 12, left: 12, zIndex: 40,
-              background: 'rgba(0,0,0,0.75)', borderRadius: 4,
-              maxWidth: 240, padding: '6px 8px',
-              fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10, color: '#fff',
-              lineHeight: 1.3, maxHeight: 180, overflowY: 'auto',
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <span style={{ opacity: 0.5, fontSize: 9 }}>debug</span>
-                <button onClick={() => setDebugOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>×</button>
-              </div>
-              {debugLogs.length === 0
-                ? <div style={{ opacity: 0.4 }}>no logs yet</div>
-                : debugLogs.map((line, i) => <div key={i} style={{ wordBreak: 'break-all' }}>{line}</div>)
-              }
-            </div>
-          ) : (
-            <button
-              onClick={() => setDebugOpen(true)}
-              style={{
-                position: 'absolute', top: 12, left: 12, zIndex: 40,
-                background: 'rgba(0,0,0,0.65)', borderRadius: 4,
-                padding: '3px 7px', border: 'none', cursor: 'pointer',
-                fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 9, color: 'rgba(255,255,255,0.6)',
-              }}
-            >
-              debug
-            </button>
-          )
-        )}
+        <DebugOverlay logs={debugLogs} open={debugOpen} onToggle={() => setDebugOpen(v => !v)} />
 
       </div>
 

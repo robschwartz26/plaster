@@ -6,6 +6,8 @@ export interface Profile {
   id: string
   username: string | null
   avatar_url: string | null
+  avatar_full_url: string | null
+  avatar_diamond_url: string | null
   bio: string | null
   is_public: boolean
   interests: string[]

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { flipImageHorizontally } from '@/lib/imageUtils'
+import { Diamond } from '@/components/Diamond'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
@@ -142,24 +143,17 @@ export function OnboardingScreen() {
       {step === 'avatar' && (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
           <h2 style={headingStyle}>Add a photo</h2>
-          <div
-            onClick={() => fileRef.current?.click()}
-            style={{
-              width: 100,
-              height: 100,
-              borderRadius: '50%',
-              background: avatarPreview ? 'transparent' : 'var(--fg-08)',
-              border: '2px dashed var(--fg-25)',
-              overflow: 'hidden',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
+          <div onClick={() => fileRef.current?.click()} style={{ cursor: 'pointer' }}>
             {avatarPreview
-              ? <img src={avatarPreview} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontSize: 32 }}>+</span>
+              ? <Diamond diamondUrl={avatarPreview} size={100} />
+              : (
+                <div style={{ position: 'relative', width: 100, height: 100 }}>
+                  <svg width={100} height={100} viewBox="0 0 100 100" fill="none" style={{ display: 'block' }}>
+                    <polygon points="50,5 95,50 50,95 5,50" fill="var(--fg-08)" stroke="var(--fg-25)" strokeWidth="1.5" strokeDasharray="5 4" />
+                  </svg>
+                  <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, color: 'var(--fg-40)', pointerEvents: 'none' }}>+</span>
+                </div>
+              )
             }
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={pickFile} style={{ display: 'none' }} />
