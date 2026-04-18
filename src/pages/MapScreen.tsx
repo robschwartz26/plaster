@@ -527,16 +527,19 @@ export function MapScreen() {
 
   function flyToVenue(venue: DbVenue) {
     const map = mapRef.current?.getMap?.() ?? mapRef.current
-    if (map) {
-      const venuePixel = map.project([venue.location_lng!, venue.location_lat!])
-      const targetX = window.innerWidth * 0.20
-      const targetY = window.innerHeight * 0.30
-      const dx = venuePixel.x - targetX
-      const dy = venuePixel.y - targetY
-      const currentCenter = map.project(map.getCenter())
-      const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
-      map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
-    }
+    if (!map) return
+    const panelWidth  = window.innerWidth  * 0.55
+    const panelHeight = window.innerHeight * 0.40
+    const panelTopLeftX = window.innerWidth  - panelWidth
+    const panelTopLeftY = window.innerHeight - panelHeight
+    const targetX = panelTopLeftX - (panelWidth  * 0.20)
+    const targetY = panelTopLeftY - (panelHeight * 0.15)
+    const venuePixel = map.project([venue.location_lng!, venue.location_lat!])
+    const dx = venuePixel.x - targetX
+    const dy = venuePixel.y - targetY
+    const currentCenter = map.project(map.getCenter())
+    const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
+    map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
   }
 
   function selectVenue(venue: DbVenue) {
