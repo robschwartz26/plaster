@@ -371,6 +371,7 @@ export function MapScreen() {
   const navigate = useNavigate()
   const mapRef = useRef<any>(null)
   const mapLoadedRef = useRef(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   const mapStyle = theme === 'day'
     ? 'mapbox://styles/mapbox/light-v11'
@@ -526,9 +527,23 @@ export function MapScreen() {
 
   function flyToVenue(venue: DbVenue) {
     const map = mapRef.current?.getMap?.() ?? mapRef.current
-    if (map) map.flyTo({ center: [venue.location_lng!, venue.location_lat!], zoom: 14, duration: 800 })
+    if (map) {
+      const point = map.project([venue.location_lng!, venue.location_lat!])
+      const canvas = map.getCanvas()
+      const targetX = canvas.width * 0.25
+      const targetY = canvas.height * 0.35
+      const dx = point.x - targetX
+      const dy = point.y - targetY
+      const newCenter = map.unproject([canvas.width / 2 + dx, canvas.height / 2 + dy])
+      map.flyTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
+    }
     setSelectedVenue(venue)
   }
+
+  // Scroll panel to top whenever selected venue changes
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [selectedVenue?.id])
 
   const selectedVenueEvents = selectedVenue ? (eventsByVenue[selectedVenue.id] ?? []) : []
 
@@ -681,7 +696,7 @@ export function MapScreen() {
           </div>
 
           {/* Scrollable content */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
             {selectedVenue && (
               <>
                 {/* ── Featured venue ── */}
