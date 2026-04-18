@@ -365,6 +365,8 @@ interface VenueEvent {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
+const DEBUG_ENABLED = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
+
 export function MapScreen() {
   const { user } = useAuth()
   const { theme } = useTheme()
@@ -372,6 +374,15 @@ export function MapScreen() {
   const mapRef = useRef<any>(null)
   const mapLoadedRef = useRef(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // ── Debug overlay ─────────────────────────────────────────────────────────
+  const [debugLogs, setDebugLogs] = useState<string[]>([])
+  const [debugOpen, setDebugOpen] = useState(true)
+  function debugLog(...args: unknown[]) {
+    const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ')
+    console.log(...args)
+    if (DEBUG_ENABLED) setDebugLogs(prev => [...prev.slice(-9), msg])
+  }
 
   const mapStyle = theme === 'day'
     ? 'mapbox://styles/mapbox/light-v11'
@@ -430,7 +441,7 @@ export function MapScreen() {
   }, [])
 
   const handleMapLoad = useCallback(() => {
-    console.log('[handleMapLoad] map loaded')
+    debugLog('[handleMapLoad] map loaded')
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (!map) return
     mapLoadedRef.current = true
@@ -440,7 +451,7 @@ export function MapScreen() {
 
   // ── Dynamic map style switch (theme toggle) ───────────────────────────────
   useEffect(() => {
-    console.log('[mapStyle effect] running, style=', mapStyle)
+    debugLog('[mapStyle effect] running, style=', mapStyle)
     if (!mapLoadedRef.current || !mapRef.current) return
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (map?.getStyle?.()) map.setStyle(mapStyle)
@@ -459,7 +470,7 @@ export function MapScreen() {
     let lastSaved = { lat: 0, lng: 0 }
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng } = pos.coords
-      console.log('[geolocation] update', lat, lng)
+      debugLog('[geolocation] update', lat, lng)
       setUserLoc({ lat, lng })
       setViewState((v) => ({ ...v, latitude: lat, longitude: lng }))
       if (Math.abs(lat - lastSaved.lat) > 0.0001 || Math.abs(lng - lastSaved.lng) > 0.0001) {
@@ -529,7 +540,7 @@ export function MapScreen() {
   }
 
   function flyToVenue(venue: DbVenue) {
-    console.log('[flyToVenue] called for', venue.name)
+    debugLog('[flyToVenue] called for', venue.name)
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (!map) return
 
@@ -555,12 +566,12 @@ export function MapScreen() {
     const currentCenter = map.project(map.getCenter())
     const newCenter = map.unproject([currentCenter.x + dx, currentCenter.y + dy])
 
-    console.log('[flyToVenue] easeTo to', newCenter)
+    debugLog('[flyToVenue] easeTo to', newCenter)
     map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
   }
 
   function selectVenue(venue: DbVenue) {
-    console.log('[selectVenue]', venue.name)
+    debugLog('[selectVenue]', venue.name)
     setSelectedVenue(venue)
     flyToVenue(venue)
     if (scrollRef.current) scrollRef.current.scrollTop = 0
@@ -842,6 +853,40 @@ export function MapScreen() {
             <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" />
           </svg>
         </button>
+
+        {/* ── Debug overlay ── */}
+        {DEBUG_ENABLED && (
+          debugOpen ? (
+            <div style={{
+              position: 'absolute', top: 12, left: 12, zIndex: 40,
+              background: 'rgba(0,0,0,0.75)', borderRadius: 4,
+              maxWidth: 240, padding: '6px 8px',
+              fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 10, color: '#fff',
+              lineHeight: 1.3, maxHeight: 180, overflowY: 'auto',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ opacity: 0.5, fontSize: 9 }}>debug</span>
+                <button onClick={() => setDebugOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 12, padding: 0, lineHeight: 1 }}>×</button>
+              </div>
+              {debugLogs.length === 0
+                ? <div style={{ opacity: 0.4 }}>no logs yet</div>
+                : debugLogs.map((line, i) => <div key={i} style={{ wordBreak: 'break-all' }}>{line}</div>)
+              }
+            </div>
+          ) : (
+            <button
+              onClick={() => setDebugOpen(true)}
+              style={{
+                position: 'absolute', top: 12, left: 12, zIndex: 40,
+                background: 'rgba(0,0,0,0.65)', borderRadius: 4,
+                padding: '3px 7px', border: 'none', cursor: 'pointer',
+                fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 9, color: 'rgba(255,255,255,0.6)',
+              }}
+            >
+              debug
+            </button>
+          )
+        )}
 
       </div>
 
