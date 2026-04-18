@@ -840,6 +840,20 @@ function ImportForm() {
         hours: v.hours || f.hours,
       } : {}),
     }))
+    // Backfill coords into DB if venue has none but extraction returned them
+    if (v && !v.location_lat && extracted?.location_lat && extracted?.location_lng) {
+      supabaseAdmin.from('venues').update({
+        location_lat: extracted.location_lat,
+        location_lng: extracted.location_lng,
+        ...(extracted.address && !v.address ? { address: extracted.address } : {}),
+      }).eq('id', venueId).then(() => {
+        setVenues(prev => prev.map(venue =>
+          venue.id === venueId
+            ? { ...venue, location_lat: extracted!.location_lat, location_lng: extracted!.location_lng }
+            : venue
+        ))
+      })
+    }
   }
 
   // Load natural dimensions of poster for focal pan math
@@ -890,9 +904,28 @@ function ImportForm() {
       } else {
         let venue_id = form.venue_id
         if (!venue_id && form.venue_name_manual) {
-          const { data: newVenue, error: venueError } = await supabaseAdmin.from('venues').insert({ name: form.venue_name_manual, neighborhood: form.neighborhood || 'Portland', address: form.address || '', website: form.website || null, instagram: form.instagram.replace(/^@/, '') || null, hours: form.hours || null }).select('id').single()
+          const { data: newVenue, error: venueError } = await supabaseAdmin.from('venues').insert({
+            name: form.venue_name_manual,
+            neighborhood: form.neighborhood || 'Portland',
+            address: form.address || '',
+            website: form.website || null,
+            instagram: form.instagram.replace(/^@/, '') || null,
+            hours: form.hours || null,
+            location_lat: extracted?.location_lat ?? null,
+            location_lng: extracted?.location_lng ?? null,
+          }).select('id').single()
           if (venueError) throw venueError
           venue_id = newVenue.id
+        } else if (venue_id && extracted?.location_lat && extracted?.location_lng) {
+          // Backfill coords on existing venue if missing
+          const existingVenue = venues.find(v => v.id === venue_id)
+          if (existingVenue && !existingVenue.location_lat) {
+            await supabaseAdmin.from('venues').update({
+              location_lat: extracted.location_lat,
+              location_lng: extracted.location_lng,
+              ...(extracted.address && !existingVenue.address ? { address: extracted.address } : {}),
+            }).eq('id', venue_id)
+          }
         }
         if (!venue_id) throw new Error('A venue is required')
         const timeStr = form.time || '20:00'
@@ -1269,6 +1302,21 @@ function ImportForm() {
               </div>
             )}
           </div>
+
+          {/* Venue map preview — shown when we have geocoded coords */}
+          {MAPBOX_TOKEN && extracted?.location_lat && extracted?.location_lng && (
+            <div>
+              <img
+                src={`https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/pin-s+A855F7(${extracted.location_lng},${extracted.location_lat})/${extracted.location_lng},${extracted.location_lat},14/200x100@2x?access_token=${MAPBOX_TOKEN}`}
+                alt="venue location"
+                style={{ width: '100%', borderRadius: 6, display: 'block' }}
+              />
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0' }}>
+                ✓ geocoded
+                {extracted.address_source === 'db' ? ' · from database' : extracted.address_source === 'mapbox' ? ' · via Mapbox' : extracted.address_source === 'ai' ? ' · AI estimate ⚠' : ''}
+              </p>
+            </div>
+          )}
 
           {/* Neighborhood — only if new venue */}
           {!form.venue_id && form.venue_name_manual && (
