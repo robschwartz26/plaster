@@ -468,11 +468,15 @@ export function MapScreen() {
   useEffect(() => {
     if (!navigator.geolocation || !user) return
     let lastSaved = { lat: 0, lng: 0 }
+    let hasCenteredOnce = false
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng } = pos.coords
       debugLog('[geolocation] update', lat, lng)
       setUserLoc({ lat, lng })
-      setViewState((v) => ({ ...v, latitude: lat, longitude: lng }))
+      if (!hasCenteredOnce) {
+        hasCenteredOnce = true
+        setViewState((v) => ({ ...v, latitude: lat, longitude: lng }))
+      }
       if (Math.abs(lat - lastSaved.lat) > 0.0001 || Math.abs(lng - lastSaved.lng) > 0.0001) {
         lastSaved = { lat, lng }
         supabase.from('profiles').update({ location_lat: lat, location_lng: lng }).eq('id', user.id)
