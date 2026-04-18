@@ -66,7 +66,7 @@ export function BottomNav() {
     <nav
       className="shrink-0 flex items-center justify-around"
       style={{
-        height: 'var(--nav-height)',
+        height: 'calc(var(--nav-height) + env(safe-area-inset-bottom))',
         background: 'var(--bg)',
         borderTop: '1px solid var(--fg-08)',
         paddingBottom: 'env(safe-area-inset-bottom)',

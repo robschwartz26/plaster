@@ -5,7 +5,7 @@
 /* ── Theme tokens ─────────────────────────────────────────── */
 :root {
   /* Layout — nav-height grows to absorb the iOS home indicator in standalone PWA mode */
-  --nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
+  --nav-height: 64px;
   --topbar-height: 52px;
   --dateindicator-height: 28px;
   --filterbar-height: 44px;
