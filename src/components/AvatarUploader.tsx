@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@supabase/supabase-js'
-import { processCaptureFile } from '@/lib/imageUtils'
 
 const supabaseAdmin = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -26,16 +25,16 @@ const DIAMOND_OUT  = 400
 const FULL_MAX     = 1200
 
 export function AvatarUploader({ userId, onDone, onCancel }: Props) {
-  const [step,    setStep]    = useState<'pick' | 'crop'>('pick')
-  const [rawSrc,  setRawSrc]  = useState<string | null>(null)
-  const [panX,    setPanX]    = useState(0)
-  const [panY,    setPanY]    = useState(0)
-  const [scale,   setScale]   = useState(1)
-  const [busy,    setBusy]    = useState(false)
+  const [step,       setStep]       = useState<'pick' | 'crop'>('pick')
+  const [rawSrc,     setRawSrc]     = useState<string | null>(null)
+  const [panX,       setPanX]       = useState(0)
+  const [panY,       setPanY]       = useState(0)
+  const [scale,      setScale]      = useState(1)
+  const [busy,       setBusy]       = useState(false)
+  const [flipBusy,   setFlipBusy]   = useState(false)
 
   const fileRef    = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
-  const rawFileRef = useRef<File | null>(null)
   const dragRef    = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null)
   const pinchRef   = useRef<{ dist: number; startScale: number } | null>(null)
 
@@ -60,14 +59,11 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
     return () => el.removeEventListener('touchmove', onTouchMove)
   }, [step])
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    const capture = e.target.getAttribute('capture')
-    const processed = await processCaptureFile(file, capture)
-    rawFileRef.current = processed
-    setRawSrc(URL.createObjectURL(processed))
+    setRawSrc(URL.createObjectURL(file))
     setPanX(0); setPanY(0); setScale(1)
     setStep('crop')
   }
@@ -75,8 +71,35 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
   function cancelCrop() {
     if (rawSrc) URL.revokeObjectURL(rawSrc)
     setRawSrc(null)
-    rawFileRef.current = null
     setStep('pick')
+  }
+
+  // Rebake rawSrc as a horizontally flipped JPEG, replacing the blob URL.
+  // This keeps save() simple — it always draws from whatever rawSrc currently is.
+  async function flipHorizontal() {
+    if (!rawSrc || flipBusy) return
+    setFlipBusy(true)
+    const img = new Image()
+    img.src = rawSrc
+    await new Promise<void>(res => { img.onload = () => res() })
+
+    const longSide = Math.max(img.naturalWidth, img.naturalHeight)
+    const s = longSide > FULL_MAX ? FULL_MAX / longSide : 1
+    const w = Math.round(img.naturalWidth  * s)
+    const h = Math.round(img.naturalHeight * s)
+
+    const canvas = document.createElement('canvas')
+    canvas.width = w; canvas.height = h
+    const ctx = canvas.getContext('2d')!
+    ctx.translate(w, 0)
+    ctx.scale(-1, 1)
+    ctx.drawImage(img, 0, 0, w, h)
+
+    const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/jpeg', 0.95))
+    URL.revokeObjectURL(rawSrc)
+    setRawSrc(URL.createObjectURL(blob))
+    setPanX(0); setPanY(0)
+    setFlipBusy(false)
   }
 
   async function save() {
@@ -197,7 +220,7 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${panX}px, ${panY}px) scale(${scale})`, transformOrigin: 'center', pointerEvents: 'none' }} />
             </div>
 
-            {/* Diamond overlay — dark mask outside diamond, outline on diamond edge */}
+            {/* Diamond overlay — dark mask outside diamond, outline on edge */}
             <svg
               width={DISPLAY_SIZE} height={DISPLAY_SIZE}
               viewBox={`0 0 ${DISPLAY_SIZE} ${DISPLAY_SIZE}`}
@@ -221,6 +244,7 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
             Drag to reposition · Pinch or scroll to zoom
           </p>
 
+          {/* Zoom slider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 220 }}>
             <span style={scaleLabel}>−</span>
             <input type="range" min={0.5} max={4} step={0.01} value={scale}
@@ -229,8 +253,25 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
             <span style={scaleLabel}>+</span>
           </div>
 
-          <div style={{ display: 'flex', gap: 12 }}>
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button onClick={cancelCrop} style={outlineBtn}>Back</button>
+            <button
+              onClick={flipHorizontal}
+              disabled={flipBusy}
+              aria-label="Flip horizontal"
+              style={{ ...outlineBtn, display: 'flex', alignItems: 'center', gap: 6, opacity: flipBusy ? 0.5 : 1 }}
+            >
+              {/* Horizontal flip icon */}
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 3v18" />
+                <path d="M3 9l4-4 4 4" />
+                <path d="M3 15l4 4 4-4" />
+                <path d="M21 9l-4-4-4 4" />
+                <path d="M21 15l-4 4-4-4" />
+              </svg>
+              Flip
+            </button>
             <button onClick={save} disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}>
               {busy ? 'Saving…' : 'Save'}
             </button>
@@ -260,7 +301,7 @@ const ghostBtn: React.CSSProperties = {
 }
 
 const outlineBtn: React.CSSProperties = {
-  padding: '11px 28px', borderRadius: 8, border: '1.5px solid var(--fg-25)',
+  padding: '11px 18px', borderRadius: 8, border: '1.5px solid var(--fg-25)',
   background: 'transparent', color: 'var(--fg-55)',
   fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, cursor: 'pointer',
 }

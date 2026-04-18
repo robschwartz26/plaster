@@ -23,15 +23,8 @@ export async function flipImageHorizontally(file: File): Promise<Blob> {
 
 export async function processCaptureFile(
   file: File,
-  captureSource: string | null,
-  log?: (msg: string) => void,
+  _captureSource: string | null,
+  _log?: (msg: string) => void,
 ): Promise<File> {
-  if (captureSource === 'user') {
-    log?.('[avatar-mirror] front camera detected, flipping horizontally')
-    const flipped = await flipImageHorizontally(file)
-    log?.('[avatar-mirror] flip complete')
-    return new File([flipped], file.name, { type: file.type || 'image/jpeg' })
-  }
-  log?.(`[avatar-mirror] no flip needed (captureSource=${captureSource ?? 'null'})`)
   return file
 }
