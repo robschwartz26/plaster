@@ -35,13 +35,15 @@ interface Props {
   onUndoCrop?: (eventId: string) => void
   onConfirmCrop?: (eventId: string) => void
   onActiveCategoryChange?: (category: string | null) => void
+  openEventId?: string | null
+  onOpenEventHandled?: () => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
@@ -212,6 +214,16 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     pendingScrollIdxRef.current = idx
     setCols(1)
   }
+
+  // Open a specific event in 1-col mode (e.g. tapped from Map panel).
+  useEffect(() => {
+    if (!openEventId || allEvents.length === 0) return
+    const idx = allEvents.findIndex(e => e.id === openEventId)
+    if (idx === -1) return
+    pendingScrollIdxRef.current = idx
+    setCols(1)
+    onOpenEventHandled?.()
+  }, [openEventId, allEvents]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.

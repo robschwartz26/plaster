@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
@@ -33,6 +33,8 @@ export function Wall() {
 
   const { user } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
 
   // Fetch events — real DB events first, mock events fill the rest.
   // Mock events always show so the wall is never empty.
@@ -148,6 +150,8 @@ export function Wall() {
         onActiveCategoryChange={setActivePosterCategory}
         onVenueTap={handleVenueTap}
         isAdminMode={isAdminMode}
+        openEventId={openEventId}
+        onOpenEventHandled={() => navigate(location.pathname, { replace: true, state: null })}
         onEventSaved={(eventId, newPosterUrl) => {
           if (newPosterUrl) {
             // Capture the current poster URL before overwriting so undo can restore it

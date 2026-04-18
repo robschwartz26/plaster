@@ -700,8 +700,8 @@ export function MapScreen() {
                   </button>
                   <span style={{
                     fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600,
-                    color: '#f0ece3',
-                    background: 'rgba(0,0,0,0.65)',
+                    color:       theme === 'night' ? '#f0ece3' : '#0c0b0b',
+                    background:  theme === 'night' ? 'rgba(0,0,0,0.65)' : 'rgba(240,236,227,0.85)',
                     backdropFilter: 'blur(4px)',
                     padding: '1px 4px', borderRadius: 3,
                     whiteSpace: 'nowrap', maxWidth: 88,
@@ -761,7 +761,7 @@ export function MapScreen() {
                     const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                     const bg = catGradient(ev.category)
                     return (
-                      <button key={ev.id} onClick={() => navigate('/')}
+                      <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
                         style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
                       >
                         <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
@@ -793,7 +793,7 @@ export function MapScreen() {
                         const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                         const bg = catGradient(ev.category)
                         return (
-                          <button key={ev.id} onClick={() => { selectVenue(venue); navigate('/') }}
+                          <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
                             style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
                           >
                             <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
