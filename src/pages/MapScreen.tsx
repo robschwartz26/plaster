@@ -525,6 +525,7 @@ export function MapScreen() {
   }, [selectedDate])
 
   // ── Derived: visible + filtered pins ─────────────────────────────────────
+  const venuesWithEvents = new Set(Object.keys(eventsByVenue))
   const maxDist = radiusMi >= 99.5 ? Infinity : radiusMi
   const visibleVenues = venues.filter((v) =>
     haversineMiles(centerLat, centerLng, v.location_lat!, v.location_lng!) <= maxDist &&
@@ -537,8 +538,6 @@ export function MapScreen() {
     if (activeFilter === '♥') return evs.some((ev) => likedEventIds.has(ev.id))
     return evs.some((ev) => ev.category === activeFilter)
   }
-
-  const venuesWithEvents = new Set(Object.keys(eventsByVenue))
 
   // ── Derived: sorted list events ───────────────────────────────────────────
   const visibleVenueIds = new Set(visibleVenues.map((v) => v.id))
