@@ -1,7 +1,7 @@
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Map, { Marker, Popup } from 'react-map-gl/mapbox'
+import Map, { Marker } from 'react-map-gl/mapbox'
 import { motion, useMotionValue, animate as fmAnimate } from 'framer-motion'
 import circle from '@turf/circle'
 import difference from '@turf/difference'
@@ -70,8 +70,8 @@ function formatDayFull(idx: number, today: string): string {
 }
 
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
-const WHEEL_H         = 20   // canvas surface height (CSS px)
-const WHEEL_HOUSING_H = 28   // housing height inside control bar (CSS px)
+const WHEEL_H         = 12   // canvas surface height (CSS px)
+const WHEEL_HOUSING_H = 18   // housing height inside control bar (CSS px)
 const WHEEL_ITEM_W   = 72   // px per day slot
 const WHEEL_COMP     = 0.70 // scroll→pattern compression
 const WHEEL_P        = 5    // diamond pitch (CSS px)
@@ -527,7 +527,8 @@ export function MapScreen() {
   // ── Derived: visible + filtered pins ─────────────────────────────────────
   const maxDist = radiusMi >= 99.5 ? Infinity : radiusMi
   const visibleVenues = venues.filter((v) =>
-    haversineMiles(centerLat, centerLng, v.location_lat!, v.location_lng!) <= maxDist
+    haversineMiles(centerLat, centerLng, v.location_lat!, v.location_lng!) <= maxDist &&
+    venuesWithEvents.has(v.id)
   )
 
   function venueMatchesFilter(venueId: string): boolean {
@@ -560,11 +561,7 @@ export function MapScreen() {
 
 
   const selectedVenueEvents = selectedVenue
-    ? (eventsByVenue[selectedVenue.id] ?? []).filter((ev) => {
-        if (activeFilter === 'All') return true
-        if (activeFilter === '♥') return likedEventIds.has(ev.id)
-        return ev.category === activeFilter
-      })
+    ? (eventsByVenue[selectedVenue.id] ?? [])
     : []
 
 
@@ -641,93 +638,128 @@ export function MapScreen() {
             </Marker>
           )}
 
-          {/* Venue pins — 28px SVG circle, category-colored */}
+          {/* Venue pins — circle + venue name label */}
           {visibleVenues.map((venue, i) => {
-            const hasEvents = venuesWithEvents.has(venue.id)
             const matchesFilter = venueMatchesFilter(venue.id)
-            if (hasEvents && !matchesFilter) return null
+            if (!matchesFilter) return null
             const events = eventsByVenue[venue.id] ?? []
-            const isActive = hasEvents && matchesFilter
             const isSelected = selectedVenue?.id === venue.id
-            const pinColor = isActive ? catPinColor(events[0]?.category) : '#f0ece3'
+            const pinColor = catPinColor(events[0]?.category)
             const pinSize = isSelected ? 36 : 28
             return (
               <Marker key={venue.id} longitude={venue.location_lng!} latitude={venue.location_lat!} anchor="center">
-                <motion.button
+                <motion.div
                   initial={{ scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: isActive ? 1 : 0.22 }}
+                  animate={{ scale: 1, opacity: 1 }}
                   transition={{ delay: Math.min(i * 0.02, 0.4), type: 'spring', stiffness: 300 }}
-                  onClick={(e) => { e.stopPropagation(); if (isActive) setSelectedVenue(isSelected ? null : venue) }}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: isActive ? 'pointer' : 'default' }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}
                 >
-                  <svg
-                    width={pinSize} height={pinSize} viewBox="0 0 28 28" fill="none"
-                    style={{ display: 'block', filter: isActive ? `drop-shadow(0 2px 6px ${pinColor}99)` : 'none', transition: 'all 0.15s ease' }}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedVenue(isSelected ? null : venue) }}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                   >
-                    <circle cx="14" cy="14" r="12.5" stroke={isSelected ? '#ffffff' : `${pinColor}66`} strokeWidth={isSelected ? 2 : 1.5} />
-                    <circle cx="14" cy="14" r={isSelected ? 9 : 8} fill={pinColor} opacity={isActive ? 0.92 : 0.3} />
-                  </svg>
-                </motion.button>
+                    <svg
+                      width={pinSize} height={pinSize} viewBox="0 0 28 28" fill="none"
+                      style={{ display: 'block', filter: `drop-shadow(0 2px 6px ${pinColor}99)`, transition: 'all 0.15s ease' }}
+                    >
+                      <circle cx="14" cy="14" r="12.5" stroke={isSelected ? '#ffffff' : `${pinColor}66`} strokeWidth={isSelected ? 2 : 1.5} />
+                      <circle cx="14" cy="14" r={isSelected ? 9 : 8} fill={pinColor} opacity={0.92} />
+                    </svg>
+                  </button>
+                  <span style={{
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600,
+                    color: '#f0ece3',
+                    background: 'rgba(0,0,0,0.65)',
+                    backdropFilter: 'blur(4px)',
+                    padding: '1px 4px', borderRadius: 3,
+                    whiteSpace: 'nowrap', maxWidth: 88,
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                    pointerEvents: 'none',
+                  }}>
+                    {venue.name}
+                  </span>
+                </motion.div>
               </Marker>
             )
           })}
-          {/* Floating event popup above selected pin */}
-          {selectedVenue && (() => {
-            const evs = selectedVenueEvents
-            const first = evs[0]
-            if (!first) return null
-            const moreCount = evs.length - 1
-            const timeStr = new Date(first.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-            const bg = catGradient(first.category)
-            return (
-              <Popup
-                className="plaster-popup"
-                longitude={selectedVenue.location_lng!}
-                latitude={selectedVenue.location_lat!}
-                anchor="bottom"
-                offset={[0, -22]}
-                onClose={() => setSelectedVenue(null)}
-                closeButton={false}
-                maxWidth="none"
-              >
-                <div
-                  onClick={() => { setSelectedVenue(null); navigate('/') }}
-                  style={{
-                    width: 148, borderRadius: 10, overflow: 'hidden',
-                    background: 'rgba(10,9,8,0.97)',
-                    border: '1px solid rgba(240,236,227,0.14)',
-                    boxShadow: '0 12px 40px rgba(0,0,0,0.6)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ width: 148, height: 100, background: bg, position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {first.poster_url && (
-                      <img src={first.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />
-                    )}
-                  </div>
-                  <div style={{ padding: '9px 10px 10px' }}>
-                    <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 14, fontWeight: 700, color: '#f0ece3', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
-                      {first.title}
-                    </p>
-                    <p style={{ margin: '5px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.5)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {selectedVenue.name}
-                    </p>
-                    <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'rgba(240,236,227,0.35)' }}>
-                      {timeStr}
-                      {moreCount > 0 && <span style={{ color: 'rgba(240,236,227,0.5)', marginLeft: 4 }}>+{moreCount} more</span>}
-                    </p>
-                  </div>
-                </div>
-              </Popup>
-            )
-          })()}
         </Map>
 
-        {/* ── Popup style reset ── */}
-        <style>{`
-          .plaster-popup .mapboxgl-popup-content { background: transparent !important; padding: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
-          .plaster-popup .mapboxgl-popup-tip { display: none !important; }
-        `}</style>
+        {/* ── Right-side venue event panel — slides in from right ── */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', right: 0, top: 0, bottom: 0,
+            width: 220, zIndex: 30,
+            background: theme === 'night' ? 'rgba(10,9,8,0.97)' : 'rgba(244,241,237,0.97)',
+            backdropFilter: 'blur(16px)',
+            borderLeft: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.1)' : 'rgba(26,24,20,0.1)'}`,
+            display: 'flex', flexDirection: 'column',
+            transform: selectedVenue ? 'translateX(0)' : 'translateX(100%)',
+            transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
+            overflowY: 'auto',
+          }}
+        >
+          {selectedVenue && (
+            <>
+              {/* Close button */}
+              <button
+                onClick={() => setSelectedVenue(null)}
+                style={{ position: 'absolute', top: 10, right: 10, background: 'none', border: 'none', cursor: 'pointer', color: theme === 'night' ? 'rgba(240,236,227,0.4)' : 'rgba(26,24,20,0.4)', padding: 4, zIndex: 2 }}
+              >
+                <X size={14} />
+              </button>
+
+              {/* Venue header */}
+              <div style={{ padding: '16px 14px 10px' }}>
+                <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 18, lineHeight: 1.2, color: theme === 'night' ? '#f0ece3' : '#1a1814', paddingRight: 20 }}>
+                  {selectedVenue.name}
+                </p>
+                {selectedVenue.neighborhood && (
+                  <p style={{ margin: '4px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: theme === 'night' ? 'rgba(240,236,227,0.35)' : 'rgba(26,24,20,0.45)' }}>
+                    {selectedVenue.neighborhood}
+                  </p>
+                )}
+              </div>
+
+              <div style={{ height: 1, background: theme === 'night' ? 'rgba(240,236,227,0.08)' : 'rgba(26,24,20,0.08)', flexShrink: 0 }} />
+
+              {/* Event list for selected day */}
+              {selectedVenueEvents.length === 0 ? (
+                <div style={{ padding: '32px 14px', textAlign: 'center' }}>
+                  <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: theme === 'night' ? 'rgba(240,236,227,0.3)' : 'rgba(26,24,20,0.35)' }}>
+                    Nothing on {dayIdx === 0 ? 'tonight' : 'this day'}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ flex: 1, overflowY: 'auto' }}>
+                  {selectedVenueEvents.map((ev) => {
+                    const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                    const bg = catGradient(ev.category)
+                    return (
+                      <button
+                        key={ev.id}
+                        onClick={() => { setSelectedVenue(null); navigate('/') }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', borderBottom: `1px solid ${theme === 'night' ? 'rgba(240,236,227,0.06)' : 'rgba(26,24,20,0.06)'}`, cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <div style={{ width: 30, height: 45, borderRadius: 3, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
+                          {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: theme === 'night' ? '#f0ece3' : '#1a1814', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {ev.title}
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', color: theme === 'night' ? 'rgba(240,236,227,0.4)' : 'rgba(26,24,20,0.45)' }}>
+                            {timeStr}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
         {/* ── Radius pill — top right ── */}
         <button
