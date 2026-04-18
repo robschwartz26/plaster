@@ -664,15 +664,15 @@ export function MapScreen() {
         <div
           onClick={e => e.stopPropagation()}
           style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0,
-            height: '55%', zIndex: 30,
+            position: 'absolute', bottom: 0, right: 0,
+            width: '60%', height: '55vh', zIndex: 30,
             background: 'var(--bg)',
-            borderRadius: '12px 12px 0 0',
+            borderRadius: '12px 0 0 0',
             display: 'flex', flexDirection: 'column',
             transform: selectedVenue ? 'translateY(0)' : 'translateY(100%)',
             transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
             overflow: 'hidden',
-            boxShadow: '0 -4px 32px rgba(0,0,0,0.4)',
+            boxShadow: '-4px -4px 24px rgba(0,0,0,0.35)',
           }}
         >
           {/* Decorative indicator bar */}
