@@ -529,10 +529,10 @@ export function MapScreen() {
     const map = mapRef.current?.getMap?.() ?? mapRef.current
     if (map) {
       map.flyTo({
-        center: [venue.location_lng! + 0.04, venue.location_lat! - 0.015],
+        center: [venue.location_lng!, venue.location_lat!],
         zoom: map.getZoom(),
         duration: 700,
-        essential: true,
+        padding: { top: 80, bottom: 400, left: 20, right: 500 },
       })
     }
     setSelectedVenue(venue)
