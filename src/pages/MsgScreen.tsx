@@ -187,31 +187,30 @@ export function MsgScreen() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
+      <PlasterHeader
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {import.meta.env.DEV && (
+              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 9, color: '#A855F7', letterSpacing: '0.1em', border: '1px solid #A855F7', borderRadius: 4, padding: '2px 5px' }}>MOCK</span>
+            )}
+            <button
+              onClick={() => setShowCompose(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 4, display: 'flex', alignItems: 'center' }}
+            >
+              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+          </div>
+        }
+      />
+
       {/* Content area — panels are absolute children of this */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
         {/* ── INBOX ── */}
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
-
-          {/* Header — shared PlasterHeader handles env(safe-area-inset-top) */}
-          <PlasterHeader
-            actions={
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                {import.meta.env.DEV && (
-                  <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 9, color: '#A855F7', letterSpacing: '0.1em', border: '1px solid #A855F7', borderRadius: 4, padding: '2px 5px' }}>MOCK</span>
-                )}
-                <button
-                  onClick={() => setShowCompose(true)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 4, display: 'flex', alignItems: 'center' }}
-                >
-                  <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-                  </svg>
-                </button>
-              </div>
-            }
-          />
 
           {/* Quick-access bar */}
           <div style={{ padding: '0 16px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
