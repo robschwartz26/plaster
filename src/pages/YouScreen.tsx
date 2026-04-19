@@ -9,6 +9,7 @@ import { PlasterHeader } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
 import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
+import { FollowListPanel } from '@/components/FollowListPanel'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,10 @@ export function YouScreen() {
   const [avatarPreview,         setAvatarPreview]         = useState<string | null>(null)
   const [avatarFullscreenOpen,  setAvatarFullscreenOpen]  = useState(false)
   const [avatarFullscreenId,    setAvatarFullscreenId]    = useState<string | null>(null)
+
+  // Follow list panel state
+  const [followListOpen, setFollowListOpen] = useState(false)
+  const [followListTab,  setFollowListTab]  = useState<'followers' | 'following'>('followers')
 
   // Search state
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -172,13 +177,17 @@ export function YouScreen() {
             )}
             <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
               {[
-                { label: 'followers', count: counts.followers },
-                { label: 'following', count: counts.following },
-                { label: 'attended',  count: attended.length  },
-              ].map(({ label, count }) => (
-                <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                { label: 'followers', count: counts.followers, tab: 'followers' as const },
+                { label: 'following', count: counts.following, tab: 'following' as const },
+                { label: 'attended',  count: attended.length,  tab: null },
+              ].map(({ label, count, tab }) => (
+                <div
+                  key={label}
+                  onClick={tab ? () => { setFollowListTab(tab); setFollowListOpen(true) } : undefined}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: tab ? 'pointer' : 'default' }}
+                >
                   <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1 }}>{count}</span>
-                  <span style={{ fontSize: 10, color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', marginTop: 2 }}>{label}</span>
+                  <span style={{ fontSize: 10, color: tab ? 'var(--fg-55)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', marginTop: 2, textDecoration: tab ? 'underline' : 'none', textUnderlineOffset: 2 }}>{label}</span>
                 </div>
               ))}
             </div>
@@ -255,6 +264,19 @@ export function YouScreen() {
       </div>
 
       <BottomNav />
+
+      {/* Follow list panel — slides from RIGHT */}
+      {user && (
+        <FollowListPanel
+          userId={user.id}
+          currentUserId={user.id}
+          initialTab={followListTab}
+          open={followListOpen}
+          onClose={() => setFollowListOpen(false)}
+          following={following}
+          onFollowToggle={async (targetId) => { await toggleFollow(targetId, true) }}
+        />
+      )}
 
       {/* Own avatar fullscreen — pencil opens uploader */}
       {user && avatarFullscreenOpen && (
