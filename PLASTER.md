@@ -421,6 +421,27 @@ This logic must be maintained throughout the entire app.
 3. **Onboarding shown every login** — should check if username already exists before showing
 4. **Showbar address wrong** in DB — "Southwest Naito Parkway" is incorrect, needs manual fix
 5. **Diagnostic console.logs** in AdminEditModal — remove once stable
+6. **Admin duplicate-venue consolidation** — tapping 'Keep this one' never actually consolidates. Full diagnosis below.
+
+### Admin duplicate-venue consolidation
+**Symptom:** Duplicates are detected on /admin, but tapping 'Keep this one' never actually consolidates — duplicates keep getting re-flagged.
+
+**Diagnosed root cause (2 compounding bugs):**
+
+1. **Silent DELETE failure.** `src/pages/Admin.tsx` imports `supabase as supabaseAdmin` from `@/lib/supabase` — this is the anon-key singleton, NOT a service-role client. The `venues` table has no DELETE RLS policy defined in any migration. So `supabaseAdmin.from('venues').delete()` is blocked by RLS, the error is caught and only logged to console (`console.error('Merge failed:', e)`), and the user sees no indication of failure. Event reassignment (UPDATE) succeeds, but the loser venue row is never deleted.
+
+2. **Detection is too aggressive.** `venueSimilarity()` uses name-only fuzzy matching with a substring check at threshold 0.7. "McMenamins Crystal Ballroom" and "The Crystal Ballroom" score 0.9 by substring match regardless of address. Even if the DELETE worked, any two venue names where one is a substring of the other will always re-flag.
+
+**Fix paths (decide when fresh):**
+- **A.** Add DELETE RLS policy on venues for admin sessions. Simplest. Requires a new migration + auth model for the admin page.
+- **B.** Create a true service-role client for admin writes (stored server-side, never shipped to browser). More secure, more work.
+- **C.** Raise similarity threshold or add address-match disambiguation. Addresses detection over-flagging, but doesn't fix the delete problem.
+
+**Recommended fix order:** A or B first (make DELETE actually work), then test detection with clean data to see if C is still needed.
+
+**Workaround until fixed:** Find and merge duplicates manually via SQL in Supabase SQL editor.
+
+**Priority:** Low — cosmetic, workaround exists, no data corruption.
 
 ---
 
@@ -537,6 +558,12 @@ Hard-won rules and anti-patterns discovered across development sessions.
 **Context:** Map pin placement went through four approaches (padding-based → pixel-offset → zoom-change → ratio-based diagonal) before landing. Each approach took a full round-trip.
 **What we did wrong:** Didn't recognize when an approach was fundamentally wrong vs when numbers just needed tuning. Kept tuning numbers on wrong approaches.
 **The rule going forward:** After two failed tunings of an approach, step back and ask 'is this the right approach or the right numbers?' If the issue is that the approach produces wrong-feeling results regardless of values, switch approaches. One telltale: if tuning makes things 'better' but not 'right,' you're iterating on numbers when you should be iterating on approach.
+
+### 'Admin' client isn't always actually admin
+**Date:** 2026-04-18
+**Context:** Admin.tsx imports `supabase as supabaseAdmin` — the alias is misleading. It's still the anon-key client, subject to all user RLS. DELETE operations silently fail because no RLS policy allows them.
+**What we did wrong:** Trusted the alias. 'Admin' in a variable name meant 'privileged' to the reader, not 'still the anon client'.
+**The rule going forward:** Before trusting any 'admin' or 'privileged' write, confirm it's actually using a service-role client (different key, server-side only) and that the target table has an RLS policy allowing the operation. Anon-key clients can only do what RLS allows anonymous/authenticated users to do, regardless of what the variable is named.
 
 ### Imports-from-context bugs show as blank screens
 **Date:** 2026-04-18
