@@ -36,6 +36,7 @@ export function PlasterHeader({ actions }: Props) {
     <div
       className="shrink-0 flex items-center justify-between px-4"
       style={{
+        minHeight: 52,
         paddingTop: 'max(12px, env(safe-area-inset-top))',
         paddingBottom: 10,
         background: 'var(--bg)',
