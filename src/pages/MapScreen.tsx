@@ -188,9 +188,12 @@ interface KnurlWheelProps {
   dayIdx: number
   setDayIdx: (i: number) => void
   dark: boolean
+  onDragStart?: () => void
+  onDragEnd?: () => void
+  onLiveIdx?: (idx: number) => void
 }
 
-function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
+function KnurlWheelPicker({ dayIdx, setDayIdx, dark, onDragStart, onDragEnd, onLiveIdx }: KnurlWheelProps) {
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasReady  = useRef(false)
@@ -275,6 +278,7 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     e.currentTarget.setPointerCapture(e.pointerId)
     dragging.current = true; velRef.current = 0
     lastXRef.current = e.clientX; lastTRef.current = e.timeStamp
+    onDragStart?.()
   }
 
   function onMove(e: React.PointerEvent) {
@@ -285,11 +289,15 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
     const next = offsetRef.current + dx
     offsetRef.current = next; setOffset(next)
     lastXRef.current = e.clientX; lastTRef.current = e.timeStamp
+    const liveIdx = Math.max(0, Math.min(DAY_COUNT - 1, Math.round(-next / WHEEL_ITEM_W)))
+    onLiveIdx?.(liveIdx)
   }
 
   function onUp() {
     if (!dragging.current) return
-    dragging.current = false; startMomentum()
+    dragging.current = false
+    onDragEnd?.()
+    startMomentum()
   }
 
   // canvasTop: centres the 20px surface in the 28px housing → 4px each side
@@ -331,6 +339,57 @@ function KnurlWheelPicker({ dayIdx, setDayIdx, dark }: KnurlWheelProps) {
           width: '100%', height: WHEEL_H, display: 'block', pointerEvents: 'none',
         }}
       />
+    </div>
+  )
+}
+
+// ── Scrubbing ruler ───────────────────────────────────────────────────────────
+const RULER_DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+
+interface ScrubbingRulerProps {
+  centerDayIdx: number
+  isVisible: boolean
+  today: string
+  dark: boolean
+}
+
+function ScrubbingRuler({ centerDayIdx, isVisible, today, dark }: ScrubbingRulerProps) {
+  const offsets = [-2, -1, 0, 1, 2]
+  return (
+    <div style={{
+      position: 'absolute', bottom: '100%', left: '50%',
+      transform: 'translateX(-50%)',
+      width: 5 * WHEEL_ITEM_W,
+      paddingBottom: 5,
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 150ms ease',
+      pointerEvents: 'none',
+      display: 'flex',
+    }}>
+      {offsets.map(off => {
+        const idx = centerDayIdx + off
+        const inRange = idx >= 0 && idx < DAY_COUNT
+        let label = ''
+        if (inRange) {
+          const d = new Date(addDays(today, idx) + 'T12:00:00')
+          label = `${RULER_DAYS[d.getDay()]} ${d.getDate()}`
+        }
+        const isCenter = off === 0
+        return (
+          <div key={off} style={{
+            width: WHEEL_ITEM_W, textAlign: 'center',
+            fontFamily: '"Barlow Condensed", sans-serif',
+            fontWeight: isCenter ? 900 : 700,
+            fontSize: isCenter ? 13 : 10,
+            letterSpacing: '0.06em', lineHeight: 1,
+            color: isCenter
+              ? (dark ? 'rgba(240,236,227,1)' : 'rgba(12,11,11,1)')
+              : (dark ? 'rgba(240,236,227,0.4)' : 'rgba(12,11,11,0.35)'),
+          }}>
+            {label}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -391,6 +450,8 @@ export function MapScreen() {
   const today = todayStr()
   const [dayIdx, setDayIdx] = useState(0)
   const selectedDate = addDays(today, dayIdx)
+  const [isDragging, setIsDragging] = useState(false)
+  const [liveDayIdx, setLiveDayIdx] = useState(0)
 
   const [activeFilter, setActiveFilter] = useState('All')
 
@@ -874,8 +935,16 @@ export function MapScreen() {
         gap: 5,
       }}>
         {/* Wheel — 33% of bar width */}
-        <div style={{ width: '33%' }}>
-          <KnurlWheelPicker dayIdx={dayIdx} setDayIdx={setDayIdx} dark={theme === 'night'} />
+        <div style={{ width: '33%', position: 'relative' }}>
+          <ScrubbingRuler centerDayIdx={liveDayIdx} isVisible={isDragging} today={today} dark={theme === 'night'} />
+          <KnurlWheelPicker
+            dayIdx={dayIdx}
+            setDayIdx={setDayIdx}
+            dark={theme === 'night'}
+            onDragStart={() => { setIsDragging(true); setLiveDayIdx(dayIdx) }}
+            onDragEnd={() => setIsDragging(false)}
+            onLiveIdx={setLiveDayIdx}
+          />
         </div>
 
         {/* Pip row */}
