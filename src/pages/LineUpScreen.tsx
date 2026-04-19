@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { Diamond } from '@/components/Diamond'
+import { PlasterHeader } from '@/components/PlasterHeader'
 
 // ── Mock feed ──────────────────────────────────────────────────────────────
 
@@ -368,13 +369,14 @@ export default function LineUpScreen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
 
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 8px', flexShrink: 0 }}>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)' }}>plaster</span>
-        <button onClick={() => setPanelOpen(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', color: panelOpen ? 'var(--fg)' : 'var(--fg-40)', textTransform: 'uppercase', transition: 'color 0.2s' }}>
+      <PlasterHeader actions={
+        <button
+          onClick={() => setPanelOpen(v => !v)}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', color: panelOpen ? 'var(--fg)' : 'var(--fg-40)', textTransform: 'uppercase', transition: 'color 0.2s' }}
+        >
           {panelOpen ? 'LINE UP ×' : 'LINE UP'}
         </button>
-      </div>
+      } />
 
       {/* Content area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
