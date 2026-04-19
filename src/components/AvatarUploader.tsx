@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { createPortal } from 'react-dom'
 import { createClient } from '@supabase/supabase-js'
 
@@ -6,6 +6,10 @@ const supabaseAdmin = createClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_SERVICE_KEY,
 )
+
+export interface AvatarUploaderRef {
+  open: () => void
+}
 
 interface Props {
   userId: string
@@ -24,23 +28,27 @@ const DISPLAY_SIZE = 200
 const DIAMOND_OUT  = 400
 const FULL_MAX     = 1200
 
-export function AvatarUploader({ userId, onDone, onCancel }: Props) {
-  const [step,       setStep]       = useState<'pick' | 'crop'>('pick')
-  const [rawSrc,     setRawSrc]     = useState<string | null>(null)
-  const [panX,       setPanX]       = useState(0)
-  const [panY,       setPanY]       = useState(0)
-  const [scale,      setScale]      = useState(1)
-  const [busy,       setBusy]       = useState(false)
-  const [flipBusy,   setFlipBusy]   = useState(false)
+export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function AvatarUploader({ userId, onDone, onCancel }, ref) {
+  const [rawSrc,   setRawSrc]   = useState<string | null>(null)
+  const [panX,     setPanX]     = useState(0)
+  const [panY,     setPanY]     = useState(0)
+  const [scale,    setScale]    = useState(1)
+  const [busy,     setBusy]     = useState(false)
+  const [flipBusy, setFlipBusy] = useState(false)
 
   const fileRef    = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const dragRef    = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null)
   const pinchRef   = useRef<{ dist: number; startScale: number } | null>(null)
 
+  // Expose open() so parents can trigger file picker directly (in response to user gesture)
+  useImperativeHandle(ref, () => ({
+    open: () => fileRef.current?.click(),
+  }))
+
   // Non-passive touchmove to allow preventDefault during drag
   useEffect(() => {
-    if (step !== 'crop') return
+    if (!rawSrc) return
     const el = previewRef.current
     if (!el) return
     const onTouchMove = (e: TouchEvent) => {
@@ -57,7 +65,7 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
     }
     el.addEventListener('touchmove', onTouchMove, { passive: false })
     return () => el.removeEventListener('touchmove', onTouchMove)
-  }, [step])
+  }, [rawSrc])
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -65,17 +73,14 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
     e.target.value = ''
     setRawSrc(URL.createObjectURL(file))
     setPanX(0); setPanY(0); setScale(1)
-    setStep('crop')
   }
 
   function cancelCrop() {
     if (rawSrc) URL.revokeObjectURL(rawSrc)
     setRawSrc(null)
-    setStep('pick')
+    onCancel()
   }
 
-  // Rebake rawSrc as a horizontally flipped JPEG, replacing the blob URL.
-  // This keeps save() simple — it always draws from whatever rawSrc currently is.
   async function flipHorizontal() {
     if (!rawSrc || flipBusy) return
     setFlipBusy(true)
@@ -156,41 +161,28 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
     }).eq('id', userId)
 
     setBusy(false)
+    if (rawSrc) URL.revokeObjectURL(rawSrc)
+    setRawSrc(null)
     onDone(fullUrl, diamondUrl)
   }
 
-  return createPortal(
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 9000,
-      background: 'rgba(12,11,11,0.97)',
-      display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center',
-      gap: 28,
-    }}>
+  return (
+    <>
+      {/* Hidden file input — always in DOM so open() can trigger it from a user gesture */}
+      <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
 
-      {step === 'pick' && (
-        <>
-          <p style={labelStyle}>Choose a photo</p>
-
-          <svg width={120} height={120} viewBox="0 0 120 120" fill="none">
-            <polygon points="60,6 114,60 60,114 6,60" fill="none" stroke="rgba(240,236,227,0.2)" strokeWidth="1.5" strokeDasharray="5 4" />
-          </svg>
-
-          <button onClick={() => fileRef.current?.click()} style={primaryBtn}>
-            Choose from library
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
-
-          <button onClick={onCancel} style={ghostBtn}>Cancel</button>
-        </>
-      )}
-
-      {step === 'crop' && rawSrc && (
-        <>
+      {/* Crop portal — only rendered once a file is selected */}
+      {rawSrc && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9000,
+          background: 'rgba(12,11,11,0.97)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 28,
+        }}>
           <p style={labelStyle}>Position your photo</p>
 
           <div style={{ position: 'relative', width: DISPLAY_SIZE, height: DISPLAY_SIZE }}>
-            {/* Draggable image preview */}
             <div
               ref={previewRef}
               onTouchStart={e => {
@@ -220,7 +212,6 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${panX}px, ${panY}px) scale(${scale})`, transformOrigin: 'center', pointerEvents: 'none' }} />
             </div>
 
-            {/* Diamond overlay — dark mask outside diamond, outline on edge */}
             <svg
               width={DISPLAY_SIZE} height={DISPLAY_SIZE}
               viewBox={`0 0 ${DISPLAY_SIZE} ${DISPLAY_SIZE}`}
@@ -244,7 +235,6 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
             Drag to reposition · Pinch or scroll to zoom
           </p>
 
-          {/* Zoom slider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 220 }}>
             <span style={scaleLabel}>−</span>
             <input type="range" min={0.5} max={4} step={0.01} value={scale}
@@ -253,7 +243,6 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
             <span style={scaleLabel}>+</span>
           </div>
 
-          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             <button onClick={cancelCrop} style={outlineBtn}>Back</button>
             <button
@@ -262,7 +251,6 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
               aria-label="Flip horizontal"
               style={{ ...outlineBtn, display: 'flex', alignItems: 'center', gap: 6, opacity: flipBusy ? 0.5 : 1 }}
             >
-              {/* Horizontal flip icon */}
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 3v18" />
                 <path d="M3 9l4-4 4 4" />
@@ -276,28 +264,17 @@ export function AvatarUploader({ userId, onDone, onCancel }: Props) {
               {busy ? 'Saving…' : 'Save'}
             </button>
           </div>
-        </>
+        </div>,
+        document.body,
       )}
-    </div>,
-    document.body,
+    </>
   )
-}
+})
 
 const labelStyle: React.CSSProperties = {
   margin: 0,
   fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13,
   letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-55)',
-}
-
-const primaryBtn: React.CSSProperties = {
-  width: 220, padding: '13px 0', borderRadius: 12, border: 'none',
-  background: 'var(--fg)', color: 'var(--bg)',
-  fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer',
-}
-
-const ghostBtn: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-40)',
 }
 
 const outlineBtn: React.CSSProperties = {

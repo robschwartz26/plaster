@@ -38,11 +38,29 @@ export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText }: Pro
         position: 'relative',
       }}
     >
+      {/* Blurred backdrop fills corner gaps for non-square images */}
+      <img
+        src={src}
+        aria-hidden="true"
+        draggable={false}
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover',
+          filter: 'blur(16px) brightness(0.7)',
+          transform: 'scale(1.3)',
+          pointerEvents: 'none',
+        }}
+      />
+      {/* Main image */}
       <img
         src={src}
         alt={altText}
         draggable={false}
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover', display: 'block',
+          pointerEvents: 'none',
+        }}
         onError={e => { e.currentTarget.style.display = 'none' }}
       />
     </div>

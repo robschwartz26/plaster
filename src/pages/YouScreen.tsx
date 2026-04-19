@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
-import { AvatarUploader } from '@/components/AvatarUploader'
+import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ export function YouScreen() {
   const [counts,   setCounts]   = useState<FollowCounts>({ followers: 0, following: 0 })
 
   // Avatar state
-  const [avatarUploaderOpen,    setAvatarUploaderOpen]    = useState(false)
+  const uploaderRef = useRef<AvatarUploaderRef>(null)
   const [avatarPreview,         setAvatarPreview]         = useState<string | null>(null)
   const [avatarFullscreenOpen,  setAvatarFullscreenOpen]  = useState(false)
   const [avatarFullscreenId,    setAvatarFullscreenId]    = useState<string | null>(null)
@@ -138,12 +139,26 @@ export function YouScreen() {
         {/* Profile header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
 
-          {/* Diamond avatar — tap to view fullscreen (with update option) */}
-          <Diamond
-            diamondUrl={diamondSrc}
-            size={80}
-            onClick={() => setAvatarFullscreenOpen(true)}
-          />
+          {/* Diamond avatar — tap to view fullscreen; plus icon corner opens uploader */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <Diamond
+              diamondUrl={diamondSrc}
+              size={80}
+              onClick={() => setAvatarFullscreenOpen(true)}
+            />
+            <button
+              onClick={() => uploaderRef.current?.open()}
+              style={{
+                position: 'absolute', bottom: -2, right: -2,
+                width: 22, height: 22, borderRadius: '50%',
+                background: 'var(--bg)', border: '1px solid var(--fg-25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', padding: 0,
+              }}
+            >
+              <Plus size={12} color="var(--fg-65)" />
+            </button>
+          </div>
 
           {/* Name + stats */}
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -241,12 +256,12 @@ export function YouScreen() {
 
       <BottomNav />
 
-      {/* Own avatar fullscreen — "Update profile photo" opens uploader */}
+      {/* Own avatar fullscreen — pencil opens uploader */}
       {user && avatarFullscreenOpen && (
         <AvatarFullscreen
           userId={user.id}
           onClose={() => setAvatarFullscreenOpen(false)}
-          onUpdatePhoto={() => { setAvatarFullscreenOpen(false); setAvatarUploaderOpen(true) }}
+          onUpdatePhoto={() => { setAvatarFullscreenOpen(false); uploaderRef.current?.open() }}
         />
       )}
 
@@ -255,16 +270,16 @@ export function YouScreen() {
         <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
       )}
 
-      {/* Avatar uploader */}
-      {user && avatarUploaderOpen && (
+      {/* Avatar uploader — always mounted so open() is available on first gesture */}
+      {user && (
         <AvatarUploader
+          ref={uploaderRef}
           userId={user.id}
           onDone={(_fullUrl, diamondUrl) => {
             setAvatarPreview(diamondUrl)
-            setAvatarUploaderOpen(false)
             refreshProfile()
           }}
-          onCancel={() => setAvatarUploaderOpen(false)}
+          onCancel={() => {}}
         />
       )}
     </div>
