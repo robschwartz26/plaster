@@ -20,7 +20,23 @@ interface AttendedEvent {
     title: string
     poster_url: string | null
     starts_at: string
+    category: string | null
   }
+}
+
+const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
+  Music:    ['#4c1d95', '#7c3aed'],
+  Drag:     ['#831843', '#ec4899'],
+  Dance:    ['#7c2d12', '#f97316'],
+  Literary: ['#3730a3', '#818cf8'],
+  Art:      ['#365314', '#a3e635'],
+  Film:     ['#0c4a6e', '#38bdf8'],
+  Trivia:   ['#7c2d12', '#fb923c'],
+  Other:    ['#2e1065', '#a855f7'],
+}
+function catGradient(cat: string | null | undefined): string {
+  const [c1, c2] = CATEGORY_GRADIENTS[cat ?? ''] ?? CATEGORY_GRADIENTS.Other
+  return `conic-gradient(from 0deg at 50% 50%, ${c1}, ${c2}, ${c1})`
 }
 
 interface FollowCounts { followers: number; following: number }
@@ -71,7 +87,7 @@ export function YouScreen() {
   async function fetchAttended() {
     if (!user) return
     const { data } = await supabase.from('attendees')
-      .select('event_id, events(id, title, poster_url, starts_at)')
+      .select('event_id, events(id, title, poster_url, starts_at, category)')
       .eq('user_id', user.id).order('created_at', { ascending: false }).limit(24)
     setAttended((data as AttendedEvent[] | null) ?? [])
   }
@@ -244,21 +260,36 @@ export function YouScreen() {
           {searchBusy && <p style={{ fontSize: 13, color: 'var(--fg-30)', margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif' }}>Searching…</p>}
         </div>
 
-        {/* Attended events grid */}
-        {attended.length > 0 && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={sectionLabel}>Attended</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 3 }}>
-              {attended.map(({ event_id, events: ev }) => (
-                <div key={event_id} style={{ aspectRatio: '2/3', background: 'var(--fg-08)', borderRadius: 4, overflow: 'hidden' }}>
-                  {ev?.poster_url
-                    ? <img src={ev.poster_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '100%', background: 'var(--fg-18)' }} />}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Attended events grid — always shown, empty state when nothing */}
+        <div style={{ marginBottom: 24 }}>
+          <p style={sectionLabel}>Attended</p>
+          {attended.length === 0 ? (
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>No attended events yet</p>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                {attended.slice(0, 9).map(({ event_id, events: ev }) => (
+                  <div
+                    key={event_id}
+                    onClick={() => ev && navigate('/', { state: { openEventId: ev.id } })}
+                    style={{ aspectRatio: '2/3', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', position: 'relative', background: catGradient(ev?.category) }}
+                  >
+                    {ev?.poster_url && (
+                      <img
+                        src={ev.poster_url}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              {attended.length > 9 && (
+                <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', textAlign: 'right' }}>see all</p>
+              )}
+            </>
+          )}
+        </div>
 
         <div style={{ height: 'var(--nav-height)' }} />
       </div>

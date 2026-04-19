@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
@@ -9,6 +10,30 @@ interface FollowUser {
   avatar_diamond_url: string | null
   avatar_url: string | null
   bio: string | null
+}
+
+interface AttendedItem {
+  events: {
+    id: string
+    title: string
+    poster_url: string | null
+    category: string | null
+  } | null
+}
+
+const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
+  Music:    ['#4c1d95', '#7c3aed'],
+  Drag:     ['#831843', '#ec4899'],
+  Dance:    ['#7c2d12', '#f97316'],
+  Literary: ['#3730a3', '#818cf8'],
+  Art:      ['#365314', '#a3e635'],
+  Film:     ['#0c4a6e', '#38bdf8'],
+  Trivia:   ['#7c2d12', '#fb923c'],
+  Other:    ['#2e1065', '#a855f7'],
+}
+function catGradient(cat: string | null | undefined): string {
+  const [c1, c2] = CATEGORY_GRADIENTS[cat ?? ''] ?? CATEGORY_GRADIENTS.Other
+  return `conic-gradient(from 0deg at 50% 50%, ${c1}, ${c2}, ${c1})`
 }
 
 interface Props {
@@ -185,6 +210,7 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
       }}>
         {profileUser && (
           <ProfileSubPanel
+            key={profileUser.id}
             user={profileUser}
             counts={profileCounts}
             isSelf={profileUser.id === currentUserId}
@@ -214,7 +240,19 @@ function ProfileSubPanel({ user, counts, isSelf, isFollowing, onFollowToggle, on
   onBack: () => void
   onAvatarTap: () => void
 }) {
-  const [toggling, setToggling] = useState(false)
+  const navigate = useNavigate()
+  const [toggling,      setToggling]      = useState(false)
+  const [attendedItems, setAttendedItems] = useState<AttendedItem[] | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('attendees')
+      .select('events(id, title, poster_url, category)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(9)
+      .then(({ data }) => setAttendedItems((data as AttendedItem[] | null) ?? []))
+  }, [user.id])
 
   async function handleToggle() {
     setToggling(true)
@@ -222,9 +260,11 @@ function ProfileSubPanel({ user, counts, isSelf, isFollowing, onFollowToggle, on
     setToggling(false)
   }
 
+  const events = (attendedItems ?? []).map(r => r.events).filter(Boolean) as NonNullable<AttendedItem['events']>[]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      {/* Back */}
+      {/* Back — pinned */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         paddingTop: 'max(14px, env(safe-area-inset-top))',
@@ -242,49 +282,106 @@ function ProfileSubPanel({ user, counts, isSelf, isFollowing, onFollowToggle, on
         </button>
       </div>
 
-      {/* Identity */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 16px 16px', flexShrink: 0 }}>
-        <Diamond diamondUrl={user.avatar_diamond_url} fallbackUrl={user.avatar_url} size={80} onClick={onAvatarTap} />
-        <p style={{ margin: '14px 0 0', fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, color: 'var(--fg)', textAlign: 'center' }}>
-          @{user.username ?? '—'}
-        </p>
-        {user.bio && (
-          <p style={{ margin: '6px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-55)', textAlign: 'center', lineHeight: 1.4, padding: '0 24px' }}>
-            {user.bio}
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 28, marginTop: 16 }}>
-          {[
-            { label: 'followers', value: counts?.followers ?? '—' },
-            { label: 'following', value: counts?.following ?? '—' },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif', lineHeight: 1 }}>{value}</span>
-              <span style={{ fontSize: 10, color: 'var(--fg-40)', fontFamily: 'Space Grotesk, sans-serif', marginTop: 2 }}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
 
-      {/* Follow button */}
-      {!isSelf && (
-        <div style={{ padding: '0 16px 8px', flexShrink: 0 }}>
-          <button
-            onClick={handleToggle}
-            disabled={toggling}
-            style={{
-              width: '100%', padding: '12px 0', borderRadius: 12,
-              border: isFollowing ? '1.5px solid var(--fg-25)' : 'none',
-              background: isFollowing ? 'transparent' : 'var(--fg)',
-              color: isFollowing ? 'var(--fg-55)' : 'var(--bg)',
-              fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700,
-              cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.6 : 1,
-            }}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </button>
+        {/* Identity */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 16px 16px' }}>
+          <Diamond diamondUrl={user.avatar_diamond_url} fallbackUrl={user.avatar_url} size={80} onClick={onAvatarTap} />
+          <p style={{ margin: '14px 0 0', fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, color: 'var(--fg)', textAlign: 'center' }}>
+            @{user.username ?? '—'}
+          </p>
+          {user.bio && (
+            <p style={{ margin: '6px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-55)', textAlign: 'center', lineHeight: 1.4, padding: '0 24px' }}>
+              {user.bio}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 28, marginTop: 16 }}>
+            {[
+              { label: 'followers', value: counts?.followers ?? '—' },
+              { label: 'following', value: counts?.following ?? '—' },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif', lineHeight: 1 }}>{value}</span>
+                <span style={{ fontSize: 10, color: 'var(--fg-40)', fontFamily: 'Space Grotesk, sans-serif', marginTop: 2 }}>{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      )}
+
+        {/* Follow + Message buttons */}
+        {!isSelf && (
+          <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button
+              onClick={handleToggle}
+              disabled={toggling}
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 12,
+                border: isFollowing ? '1.5px solid var(--fg-25)' : 'none',
+                background: isFollowing ? 'transparent' : 'var(--fg)',
+                color: isFollowing ? 'var(--fg-55)' : 'var(--bg)',
+                fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700,
+                cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.6 : 1,
+              }}
+            >
+              {isFollowing ? 'Following' : 'Follow'}
+            </button>
+            <button
+              onClick={() => navigate('/msg')}
+              // TODO: once MSG has real DB, open/create conversation with viewedUserId
+              style={{
+                width: '100%', padding: '12px 0', borderRadius: 12,
+                border: '1px solid var(--fg-25)', background: 'transparent',
+                color: 'var(--fg-80)',
+                fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              Message
+            </button>
+          </div>
+        )}
+
+        {/* Attended events grid */}
+        <div style={{ padding: '20px 16px 0' }}>
+          <p style={{ margin: '0 0 10px', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+            Attended
+          </p>
+          {attendedItems === null && (
+            <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-30)' }}>Loading…</p>
+          )}
+          {attendedItems !== null && events.length === 0 && (
+            <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-30)' }}>No attended events yet</p>
+          )}
+          {events.length > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4 }}>
+                {events.map(ev => (
+                  <div
+                    key={ev.id}
+                    onClick={() => navigate('/', { state: { openEventId: ev.id } })}
+                    style={{ aspectRatio: '2/3', borderRadius: 4, overflow: 'hidden', cursor: 'pointer', position: 'relative', background: catGradient(ev.category) }}
+                  >
+                    {ev.poster_url && (
+                      <img
+                        src={ev.poster_url}
+                        alt={ev.title}
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              {(attendedItems?.length ?? 0) >= 9 && (
+                <p style={{ margin: '8px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-30)', textAlign: 'right' }}>see all</p>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ height: 32 }} />
+      </div>
     </div>
   )
 }
