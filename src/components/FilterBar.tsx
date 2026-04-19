@@ -76,7 +76,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
   })
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: GAP, height: 34, background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: GAP, height: 'var(--filterbar-height)', background: 'var(--bg)' }}>
 
       {/* Fixed: All + ♥ */}
       <div style={{ display: 'flex', gap: GAP, paddingLeft: 12, flexShrink: 0, background: 'var(--bg)', position: 'relative', zIndex: 10 }}>
