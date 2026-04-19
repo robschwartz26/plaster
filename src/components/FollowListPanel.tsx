@@ -171,27 +171,29 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
             </div>
           ))}
         </div>
+      </div>
 
-        {/* ── Profile sub-panel — slides from LEFT ── */}
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 10,
-          background: 'var(--bg)',
-          display: 'flex', flexDirection: 'column',
-          transform: profileUser ? 'translateX(0)' : 'translateX(-100%)',
-          transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          {profileUser && (
-            <ProfileSubPanel
-              user={profileUser}
-              counts={profileCounts}
-              isSelf={profileUser.id === currentUserId}
-              isFollowing={following.has(profileUser.id)}
-              onFollowToggle={() => onFollowToggle(profileUser.id)}
-              onBack={closeProfile}
-              onAvatarTap={() => setAvatarFsId(profileUser.id)}
-            />
-          )}
-        </div>
+      {/* ── Profile sub-panel — sibling of main panel, slides from LEFT ── */}
+      {/* Must be a sibling (not child) of the main panel so its translateX(-100%)
+          doesn't cancel out the main panel's translateX(100%) when both are closed */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 40,
+        background: 'var(--bg)',
+        display: 'flex', flexDirection: 'column',
+        transform: (open && profileUser) ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+      }}>
+        {profileUser && (
+          <ProfileSubPanel
+            user={profileUser}
+            counts={profileCounts}
+            isSelf={profileUser.id === currentUserId}
+            isFollowing={following.has(profileUser.id)}
+            onFollowToggle={() => onFollowToggle(profileUser.id)}
+            onBack={closeProfile}
+            onAvatarTap={() => setAvatarFsId(profileUser.id)}
+          />
+        )}
       </div>
 
       {avatarFsId && (
