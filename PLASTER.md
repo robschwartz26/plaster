@@ -520,6 +520,32 @@ Hard-won rules and anti-patterns discovered across development sessions.
 
 ---
 
+### Manual beats auto when the platform is unreliable
+**Date:** 2026-04-18
+**Context:** Spent significant time trying to auto-detect and flip front-camera selfies via capture="user" logic. iOS Safari inconsistency made this unreliable across browsers and iOS versions.
+**What we did wrong:** Kept chasing a 'clever' auto-detect solution when the platform kept fighting back. Multiple rebuild prompts, multiple diagnostic attempts.
+**The rule going forward:** When fixing a UX issue on a platform you don't fully control (iOS Safari, Chrome iOS, native file inputs), try a manual user-facing control first (e.g. a Flip button). Users accept one extra tap. Auto-detection that works 90% of the time is worse UX than a reliable manual control that always works. Budget: 2 attempts at 'auto' before switching to manual.
+
+### If a prompt isn't landing the UX intent, rewrite the prompt, not the code
+**Date:** 2026-04-18
+**Context:** First avatar editor rebuild produced technically correct code (full rectangle stored, not diamond-clipped) but missed the UX intent ('user picks an image, then positions a diamond stamp over it'). Warp built to the letter of the prompt, not the spirit.
+**What we did wrong:** Shipped, tested, found UX was off, wrote another fix prompt. Second prompt also partially missed. Only the third — which explicitly described the two-step user flow in plain English at the top before any technical detail — produced the right result.
+**The rule going forward:** For UX-heavy features, the prompt must open with a plain-English description of the user experience, written as a story ('user taps X → sees Y → drags Z → saves'). Technical requirements come after. If Warp produces code that technically matches the requirements but misses the feel, the prompt lacked intent, not detail.
+
+### Iterating on approach vs iterating on numbers — know which you're doing
+**Date:** 2026-04-18
+**Context:** Map pin placement went through four approaches (padding-based → pixel-offset → zoom-change → ratio-based diagonal) before landing. Each approach took a full round-trip.
+**What we did wrong:** Didn't recognize when an approach was fundamentally wrong vs when numbers just needed tuning. Kept tuning numbers on wrong approaches.
+**The rule going forward:** After two failed tunings of an approach, step back and ask 'is this the right approach or the right numbers?' If the issue is that the approach produces wrong-feeling results regardless of values, switch approaches. One telltale: if tuning makes things 'better' but not 'right,' you're iterating on numbers when you should be iterating on approach.
+
+### Imports-from-context bugs show as blank screens
+**Date:** 2026-04-18
+**Context:** New component (FollowListPanel.tsx) rendered a blank YOU screen. Console flagged 'Multiple GoTrueClient instances' warning. Root cause: component imported createClient from @supabase/supabase-js directly instead of the singleton from ~/plaster/src/lib/supabase.ts.
+**What we did wrong:** Initial panic/confusion treated the blank screen as a mystery. The warning was right there pointing to the cause.
+**The rule going forward:** Every new component that talks to Supabase imports the shared singleton supabase from @/lib/supabase — never calls createClient itself. Add a one-line comment rule to any future Warp prompt involving Supabase: 'Import supabase singleton from @/lib/supabase. Do NOT call createClient.'
+
+---
+
 ### Known harmless noise
 
 - **Multiple GoTrueClient instances detected** — harmless warning from Supabase. Likely caused by a component importing createClient directly instead of the singleton. Fix when it becomes relevant.
