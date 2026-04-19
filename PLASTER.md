@@ -1,10 +1,14 @@
-# PLASTER — Full Project Brief
-Paste this at the start of every new Claude session.
+# PLASTER — Complete Project Brief
+**Last updated: April 17, 2026 — Sessions 1–10 complete**
+Read this entire document before touching any code.
 
 ---
 
-## What Is Plaster
-Plaster is a living Portland event poster wall — a beautiful, scrollable city of flyers that treats event art with the respect it deserves, connects people to their city's culture, and builds genuine community around the venues and nights that make Portland worth living in.
+## What Plaster Is
+
+Plaster is a living Portland event poster wall. It is the telephone pole outside the venue, the cork board at the record store, the flyer in your jacket pocket you forgot about until it fell out three days later. Portland's cultural life made visible, beautiful, and shareable.
+
+It is not Eventbrite. It is not a calendar app. It is not Instagram for shows. It is a place where the art of going out — the discovery, the anticipation, the shared excitement, the memory of having been there — lives as a first-class citizen.
 
 ---
 
@@ -12,32 +16,45 @@ Plaster is a living Portland event poster wall — a beautiful, scrollable city 
 - **Live:** https://the-plaster-wall.vercel.app
 - **GitHub:** robschwartz26/plaster
 - **Local dev:** localhost:8081 (`npm run dev` from ~/plaster)
-- **Admin:** /admin (password: Plast3r!PDX#26 stored as VITE_ADMIN_PASSWORD env var)
+- **Admin:** /admin — password: Plast3r!PDX#26
 - **Supabase project:** lhetwgdlpulgnjetuope (us-west-1)
 
 ---
 
 ## Tech Stack
-- **Frontend:** React + TypeScript + Vite + Tailwind + shadcn/ui + Framer Motion
+- **Frontend:** React + TypeScript + Vite + Tailwind
 - **Backend/DB:** Supabase (auth, DB, storage)
-- **Map:** Mapbox GL JS (token: VITE_MAPBOX_TOKEN)
+- **Map:** Mapbox GL JS
 - **Hosting:** Vercel (auto-deploys from GitHub main)
-- **Auth:** Supabase email/password auth
-- **Storage:** Supabase storage buckets: posters (public), avatars (public)
 - **AI:** Claude Vision via Supabase Edge Function (extract-poster)
+- **Storage buckets:** posters (public), avatars (public)
 
 ---
 
 ## Environment Variables
-Set in .env.local and Vercel production:
 ```
 VITE_SUPABASE_URL=https://lhetwgdlpulgnjetuope.supabase.co
 VITE_SUPABASE_ANON_KEY=(set)
 VITE_SUPABASE_SERVICE_KEY=(set)
 VITE_MAPBOX_TOKEN=(set)
 VITE_ADMIN_PASSWORD=Plast3r!PDX#26
-VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY)
+VITE_ANTHROPIC_API_KEY=(set — also Supabase secret ANTHROPIC_API_KEY)
 ```
+
+---
+
+## Navigation — 5 Tabs (LOCKED IN)
+
+**LINE UP · MAP · WALL · VENUES · YOU**
+
+- **LINE UP** — social activity feed + diamond queue of upcoming RSVPs (replaced "Tonight")
+- **MAP** — Mapbox map with venue pins, knurl wheel day scrubber
+- **WALL** — the poster grid (heart of the app)
+- **VENUES** — being replaced with **MSG** (messaging) in next session
+- **YOU** — user profile, attended events, superlatives
+
+Tab name "Tonight" is GONE. It is now "LINE UP". This is permanent.
+Venues tab is being replaced with MSG tab next session.
 
 ---
 
@@ -46,55 +63,84 @@ VITE_ANTHROPIC_API_KEY=(set — also set as Supabase secret ANTHROPIC_API_KEY)
 ### Tables
 - **profiles** — id, username, avatar_url, bio, is_public, interests[], created_at
 - **venues** — id, name, neighborhood, address, location_lat, location_lng, website, instagram, cover_url, description, hours, created_at
-- **events** — id, venue_id, title, category, poster_url, starts_at, view_count, like_count, neighborhood, address, description, is_recurring, recurrence_rule, fill_frame (boolean default false), created_at
+- **events** — id, venue_id, title, category, poster_url, starts_at, ends_at, view_count, like_count, neighborhood, address, description, is_recurring, recurrence_rule, recurrence_group_id (uuid), recurrence_frequency (text), fill_frame (bool default false), focal_x (float default 0.5), focal_y (float default 0.5), poster_offset_y (int default 0), created_at
 - **attendees** — id, event_id, user_id, created_at
 - **event_likes** — id, event_id, user_id, created_at
 - **event_wall_posts** — id, event_id, user_id, content, like_count, created_at
 - **post_likes** — id, post_id, user_id, created_at
 - **follows** — id, follower_id, following_id, status (pending/accepted), created_at
+- **superlatives** — id, user_id, venue_id, title, awarded_at
+- **admin_notifications** — id, type, title, message, event_id, recurrence_group_id, snoozed_until, dismissed (bool), created_at
 
-### RPCs
-- add_view_count(p_event_id, delta)
-- add_like_count(p_event_id, delta)
-- add_post_like_count(p_post_id, delta)
+### RLS
+- Events UPDATE: "Admin can update events" — `USING (true) WITH CHECK (true)` — already applied
+- All standard select/insert/delete policies in place
 
-### RLS Notes
-- Events UPDATE: "Admin can update events" policy already applied — `USING (true) WITH CHECK (true)` — allows crop saves from browser
-- fill_frame and hours columns: run these if not yet applied:
+### Pending SQL (run if columns missing)
 ```sql
 ALTER TABLE events ADD COLUMN IF NOT EXISTS fill_frame boolean DEFAULT false;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS focal_x float DEFAULT 0.5;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS focal_y float DEFAULT 0.5;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS poster_offset_y integer DEFAULT 0;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_group_id uuid;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_frequency text;
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS hours text;
+CREATE TABLE IF NOT EXISTS superlatives (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid REFERENCES profiles(id) ON DELETE CASCADE,
+  venue_id uuid REFERENCES venues(id) ON DELETE SET NULL,
+  title text NOT NULL,
+  awarded_at timestamptz DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS admin_notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  type text NOT NULL,
+  title text NOT NULL,
+  message text NOT NULL,
+  event_id uuid REFERENCES events(id) ON DELETE SET NULL,
+  recurrence_group_id uuid,
+  snoozed_until timestamptz,
+  dismissed boolean DEFAULT false,
+  created_at timestamptz DEFAULT now()
+);
 ```
 
 ---
 
-## Design System (LOCKED IN)
+## Design System (LOCKED IN — DO NOT CHANGE)
 
 ### Colors
 - Night mode (default): background #0c0b0b, text #f0ece3
 - Day mode: background #f0ece3, text #0c0b0b
-- Theme toggle: Swipe "plaster" wordmark RIGHT. Persisted in localStorage.
+- Theme toggle: swipe "plaster" wordmark RIGHT — spring bounce, persisted in localStorage
 - CSS vars: --bg, --fg, --fg-08, --fg-15, --fg-18, --fg-25, --fg-30, --fg-40, --fg-55, --fg-65, --fg-80
+- Accent/button color: #A855F7 (purple) — solid background, white text, no approval needed
 
 ### Typography
-- Playfair Display 900 — wordmark + headings
-- Space Grotesk — UI, body text
-- Barlow Condensed 700/900 — date indicator blocks, chip labels
+- **Playfair Display 900** — wordmark + headings (drama of a poster headline)
+- **Barlow Condensed 700/900** — date blocks, chip labels, nav labels (compressed urgency of a show bill)
+- **Space Grotesk** — UI, body text (friendly, modern, legible)
+These three fonts are not interchangeable. They are Plaster's identity.
 
 ### Hearts
 - Unicode ♥ only — NEVER emoji ❤️ (renders red on iOS)
+- Never red anywhere in the app
+
+### Diamonds
+The diamond shape (a square standing on its tip) is Plaster's signature motif. It appears in:
+- LINE UP queue (upcoming RSVP icons on the right edge)
+- Feed avatars (user/venue/artist identity in the activity feed)
+- Profile pictures throughout the app
+It feels cut, not rendered. Like a marquee, a suit of cards, something on a leather jacket at a show.
+Implementation: `clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)`
+Poster images inside diamonds are always UPRIGHT — the diamond is a mask, not a rotation.
 
 ---
 
-## Navigation (5 Tabs — LOCKED IN)
-Tonight · Map · Wall · Venues · You
+## Wall Screen (src/components/Wall.tsx)
 
----
-
-## Wall Screen
-
-### Poster Cards — Sampled Color Backdrop (DO NOT REMOVE — EVER)
-Core design feature. Every edit to PosterCard.tsx must preserve this hook.
+### Sampled Color Backdrop — DO NOT REMOVE EVER
+This is the most important design feature in the app. Every poster card has a unique atmospheric halo — the poster's own colors bleeding into the space around it. Generated by sampling the 4 corner pixels of each poster image.
 
 ```typescript
 // DO NOT REMOVE — sampled backdrop is core design feature
@@ -128,176 +174,375 @@ function usePosterBackdrop(posterUrl: string | null) {
 }
 ```
 
-In 2-5 col grid card render — must use this pattern:
+In 2-5 col grid — must use this exact pattern:
 ```tsx
 {event.poster_url ? (
   <>
     <div style={{ position: 'absolute', inset: 0, background: sampledBackdrop ?? gradient, transition: 'background 0.3s ease' }} />
-    <img src={event.poster_url} alt={event.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: event.fill_frame ? 'cover' : 'contain', pointerEvents: 'none', userSelect: 'none' }} />
+    <img src={event.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: event.fill_frame ? 'cover' : 'contain', objectPosition: `${(event.focal_x??0.5)*100}% ${(event.focal_y??0.5)*100}%` }} />
   </>
 ) : (
   <div style={{ position: 'absolute', inset: 0, background: gradient }} />
 )}
 ```
 
-### fill_frame
-- true → objectFit: cover (fills card, crops poster edges)
-- false (default) → objectFit: contain (full poster visible, sampled backdrop fills sides)
+### Grid
+- **Default: 5 columns** (changed from 2 — this is permanent)
+- Pinch zoom changes columns 1–5
+- 2px gap, edge to edge
+- No mock events — only real Supabase data. If no events, show empty wall.
+- Tonight events (starts_at is today): 2px line at top of card — `rgba(240,236,227,0.6)` on dark, same on light
 
 ### 1-Column Mode
-- Double tap any poster → jumps to 1-col
-- Swipe RIGHT → info panel → post wall → back to poster (full loop)
-- 60° angle threshold
-- Pinch peek zoom up to 3x
+- Double tap any poster → jumps to 1-col centered on that poster
+- Swipe RIGHT through: Poster → Info panel → Post wall → back to Poster
+- 60° angle swipe threshold
+- Date pill: bottom-right of poster, sharp corners (border-radius: 0), format "WED APR 16", var(--bg)/var(--fg), fully opaque, sits at very bottom of screen
+- Pinch peek zoom up to 3x, springs back on release
+
+### Filter Chips (src/components/FilterBar.tsx) — LOCKED IN
+- **'All' and '♥'** are fixed left anchors inside a solid-background container (var(--bg), z-index 10)
+- They act as a "magic wall" — carousel chips disappear cleanly behind them
+- Category chips: Music, Drag, Dance, Art, Film, Literary, Trivia, Other
+- Chips rendered tripled ([...cats, ...cats, ...cats]) for infinite loop illusion
+- Active chip snaps to RIGHT_MARGIN=16px from right edge of carousel window
+- Snap algorithm: SAFE=1, GAP=6, find nearest chip boundary position, apply `bestOffset - SAFE`
+- `activePosterCategory` prop: in 1-col scroll, highlights matching chip without filtering the wall
+- 'All' chip does NOT highlight when activePosterCategory is active (only manual taps highlight All)
+- Chip sizes and gaps: all 6px — equidistant between All, ♥, and first carousel chip
 
 ---
 
-## Admin Mode (on the Wall)
+## Admin Mode
 
 ### Unlocking
-1. Go to /admin, enter password → sets `sessionStorage.plaster_admin_unlocked = '1'`
-2. Navigate to Wall via bottom nav on /admin (stays unlocked)
-3. "Edit" pill appears in Wall top bar
-4. Tap Edit → isAdminMode = true → ✏️ button on every poster
+- Visit /admin → enter password → sets `sessionStorage.plaster_admin_unlocked = '1'`
+- Wall re-checks on window focus events
+- "Edit" pill appears in Wall top bar
+- Tap Edit → isAdminMode = true → ✏️ button on every poster card
 
-### ✏️ Edit Button
-- 1-col: absolutely positioned bottom-right floating pill outside carousel strip (zIndex 20)
-- 2-5 col: bottom-left of grid card
-- Opens AdminEditModal for that event
+### Edit Button Positions
+- 1-col: absolutely positioned bottom-right, outside carousel strip, zIndex 20
+- 2-5 col: bottom-left of grid card, zIndex 3
 
 ### AdminEditModal (src/components/AdminEditModal.tsx)
-Full-screen overlay. Two modes: crop tool and details editor.
+**Crop tool:**
+- 8 drag handles (20×20 touch targets), dark mask outside crop rect
+- Positioned relative to actual image element via getBoundingClientRect — NOT modal container
+- Live preview canvas (72×108px, 2:3 ratio), updates on every drag
+- Smart snap REMOVED — was broken, caused more problems than it solved
+- Touch events: global touchmove with passive:false + preventDefault when dragging
 
-**Crop Tool:**
-- Full poster with dark mask outside crop rectangle
-- 8 drag handles (20×20 touch targets) — corners + edge midpoints
-- Overlay positioned relative to actual image element (getBoundingClientRect) — NOT modal container
-- Live preview canvas (72×108px, 2:3) updates on every drag with cropped image + sampled backdrop
-- Smart snap: detects solid borders only (near-white avg > 220 OR near-black avg < 30 with low variance). Animates rect. No-border → toast.
-- CORS note: img.crossOrigin = 'anonymous' required. Supabase CDN may block getImageData — smart snap silently fails if so.
+**Fill frame + focal point:**
+- Fill frame toggle + Apply button — saves fill_frame, focal_x, focal_y to DB
+- When fill_frame ON: draggable 160×240 preview card, drag to reposition, updates objectPosition live
+- No imgCacheRef dependency — just a plain img tag in the preview
+
+**Poster position (offset):**
+- Vertical drag on full poster → updates poster_offset_y (-50 to +50)
+- Horizontal drag → poster_offset_x
+- Applied in PosterCard as CSS transform: `translate(x%, y%)`
 
 **Save Crop flow:**
-1. optimizeImage(imageFile, editCrop) → cropped JPEG blob
+1. optimizeImage(imageFile, editCrop) → cropped JPEG blob (max 1200px, JPEG 85%)
 2. Upload to posters bucket → new filename with timestamp
 3. supabase.from('events').update({ poster_url: newUrl }).eq('id', event.id)
-4. onCropSaved(newUrl) → Wall adds ?t=timestamp cache-bust → PosterCard resamples backdrop
+4. onCropSaved(newUrl) → Wall adds ?t=Date.now() cache-bust → PosterCard resamples backdrop
 
 **Undo:**
 - previousUrlRef captures URL before save
-- Undo available 30s after save
-- Wall.handleUndoCrop restores old URL to DB + state
-- 1-col: Confirm ✓ / Undo ↩ pills at bottom of poster panel
+- 30s undo window
+- 1-col: "Confirm ✓" and "Undo ↩" pills at bottom of poster panel
+- Confirm clears undo history, Undo restores previous URL to DB + state
 
 ### cropUtils.ts (src/lib/cropUtils.ts)
 - CropRect — { x, y, width, height } fractional 0–1
-- applyHandleDrag, optimizeImage, sampleCornerColors, detectContentBounds
+- applyHandleDrag, optimizeImage, sampleCornerColors
+- detectContentBounds — can be deleted, smart snap removed
 
 ---
 
-## AI Poster Ingestion (/admin — Import Poster section)
+## AI Poster Ingestion (/admin — Import Poster)
 
 ### Flow
-1. Drop poster image → Supabase Edge Function extract-poster called
-2. Claude Vision extracts: title, venue_name, date, time, address, description, category, confidence, uncertain_fields, crop coordinates
-3. Venue enrichment: DB lookup → Mapbox → AI fallback
-4. Review form pre-fills (⚠ on uncertain fields)
-5. Visual crop tool with smart snap
-6. Preview button — shows simulated 2:3 grid card
-7. Duplicate detection — same title/venue/date → offer to update existing
-8. fill_frame toggle
-9. On confirm: optimizeImage → upload → event record created/updated
+1. Drop poster image (up to 4 images, second zone for extra info)
+2. Calls extract-poster Supabase Edge Function
+3. Claude Vision extracts: title, venue_name, date, time, address, description (editorial voice), category, confidence, uncertain_fields, crop coordinates
+4. Venue enrichment: DB lookup → Mapbox geocoding → AI fallback
+5. Review form pre-fills (⚠ on uncertain fields)
+6. Duplicate detection: same title/venue/date → offer to update existing record
+7. fill_frame toggle + focal point pan preview
+8. **Recurring event toggle:** Weekly / Bi-weekly / Monthly → creates 3 months of occurrences using shared recurrence_group_id
+9. Admin notification created on recurring submit — fires after 3 months to prompt renewal
+10. On submit: optimizeImage → upload to posters bucket → insert/update event record
 
-### Edge Function (supabase/functions/extract-poster/index.ts)
-Required Supabase secrets: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, MAPBOX_TOKEN
+### Edge Function
+Path: supabase/functions/extract-poster/index.ts
+Secrets: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, MAPBOX_TOKEN
 Deploy: `npx supabase functions deploy extract-poster --project-ref lhetwgdlpulgnjetuope`
+Accepts: `{ images: [{base64, mimeType}] }` OR `{ base64, mimeType }` (backward compatible)
 
-### Venue Enrichment
-1. DB lookup (case-insensitive name match) — uses stored address/hours/website/instagram
-2. Mapbox geocoding fallback (relevance > 0.5)
-3. AI fallback for address, hours, website, instagram (flagged uncertain)
+### Editorial Description Prompt
+"Write 2-3 sentences in a warm, culturally informed Portland voice. Lead with what makes this event worth attending. Include one key practical detail woven in naturally. Write like a knowledgeable friend recommending the show, not a list of facts."
+
+### Venue Enrichment (3-tier)
+1. DB lookup (case-insensitive name match) → stored address/hours/website/instagram
+2. Mapbox geocoding (relevance > 0.5)
+3. AI fallback for address/hours/website/instagram (flagged as uncertain)
 Returns address_source: 'db' | 'mapbox' | 'ai' | 'none'
-
-### Auto-neighborhood
-NE→Northeast, SE→Southeast, NW→Northwest, SW→Southwest, N→North
 
 ---
 
 ## Admin Page (/admin)
+
 - Password gate → sessionStorage 'plaster_admin_unlocked' = '1'
-- Bottom nav (same as main app) — Wall tab highlighted — navigate to wall while staying in admin mode
-- Section 1: Add Venue (name, neighborhood, address/geocoding, website, instagram, hours)
-- Section 2: Add Event (venue, poster upload, title, category, date/time, description, recurring)
-- Section 3: Import Poster (full AI ingestion)
+- Bottom nav present (Wall tab highlighted) — can navigate to wall while in admin
+- **Notifications panel** (top of page) — shows admin_notifications where not dismissed and snoozed_until < now()
+  - Recurring check-in: "Extend 3 months" / "Mark as ended" / "Dismiss for now (2 weeks)"
+  - Duplicate venue detection: fuzzy name match clusters, Keep/Merge/Delete UI
+  - Merge venues: repoints all events from duplicate venue_ids to primary, deletes duplicates
+- **Section 1:** Add Venue
+- **Section 2:** Add Event
+- **Section 3:** Import Poster (full AI ingestion)
+
+---
+
+## LINE UP Screen (src/pages/LineUpScreen.tsx)
+
+### What it is
+First tab. The social heartbeat of the app. An activity feed showing what friends, venues, and artists are doing, with a passive stack of diamond-shaped poster icons on the right representing the user's upcoming RSVPs.
+
+### Feed
+Each item: `[diamond avatar] [activity text]`
+No poster thumbnails in feed rows — just avatar + text.
+
+**Diamond avatar sizes by type (visual hierarchy):**
+- **Venue**: 36×36px, paddingLeft 14px — most prominent, flush left
+- **Artist**: 28×28px, paddingLeft 24px — mid-level, slightly indented
+- **Friend**: 22×22px, paddingLeft 36px — most intimate, most indented
+
+**Feed item types (9 types):**
+1. Going — '[name] is going to [event] at [venue]'
+2. Liked — '[name] liked [event]'
+3. Wall post quote — '[name] wrote on the [event] wall: "[quote]"'
+4. Superlative — '[name] was crowned [title] at [venue]'
+5. Past attended — '[name] went to [event] last night'
+6. Venue shout — '[venue]: [short message]'
+7. Artist shout — '[artist]: [short message]'
+8. Group activity — 'Your [group] is going to [event]'
+9. New regular — '[name] is now a Regular at [venue]'
+
+Real poster images from Supabase fill the diamond avatars. Thin divider every 4 items.
+
+### Diamond Queue (right edge)
+- position: absolute, right: 10px, top: 52px, gap: 8px, z-index: 5, pointer-events: none
+- 5 diamonds stacked vertically: 34×34px each
+- clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)
+- Real poster images inside — upright, not rotated
+- Represents user's upcoming RSVPs — feeds from attendees table
+
+### LINE UP Panel (slides from RIGHT)
+- Tap 'LINE UP' text in header → panel slides in from RIGHT (right: -100% → right: 0)
+- Shows user's upcoming RSVPs in chronological order
+- Each row: 36×54px poster thumbnail + title + venue · time + date
+- Tap 'LINE UP ×' to close, slides back right
+- Lives in content area — NEVER covers bottom nav
+- Default state: CLOSED
+
+### Profile Panels (slide from LEFT)
+- Tap any diamond avatar → panel slides in from LEFT (translateX(-100%) → translateX(0))
+- panelStack array — pushing new panels on tap, popping on back arrow
+- Back arrow (← BACK) top of each panel
+- **Venue panel:** venue name, upcoming events list, Follow + Message buttons
+- **Artist panel:** artist name, upcoming shows, Follow + Message buttons
+- **Friend panel:** diamond profile pic, username, followers/following, attended events grid, superlatives pills, Follow + Message buttons
+- NEVER covers bottom nav
+
+### Spatial Logic (LOCKED IN)
+- Things that are YOURS slide from the RIGHT (LINE UP panel = your shows)
+- Other people's worlds slide from the LEFT (profiles = stepping into their world)
+This logic must be maintained throughout the entire app.
+
+### Current State
+- mockFeed hardcoded with real Portland show names
+- mockLineup hardcoded with real shows
+- Real poster images fetched from Supabase for diamonds
+- Profile panels built, need testing/polish
+- Avatar upload bug in YouScreen needs fixing
 
 ---
 
 ## Map Screen
 - Mapbox GL JS, Portland centered (45.5051, -122.6750, zoom 12)
 - Night: dark-v11 / Day: light-v11
-- Knurl wheel day scrubber (machined metal aesthetic, 7 days, momentum drag, snap)
-- Venue pins, radius filter, list mode bottom sheet, category chips
+- Knurl wheel day scrubber: machined metal aesthetic, 7 days, momentum drag, snap
+- Venue pins, radius filter, list mode bottom sheet (two snap points), category chips
+- Session 9 planned: custom pins with poster thumbnails, pin tap → event card popup
+
+---
+
+## YOU Screen (src/pages/YouScreen.tsx)
+- Profile pic (diamond-shaped), username, followers/following counts
+- Attended events wall — poster thumbnails in a grid
+- Superlatives pills
+- Edit profile, Sign out
+- **Known bug:** avatar upload returns 400 — fix the upload path and upsert call
+
+---
+
+## MSG Screen (NEXT SESSION — replaces Venues tab)
+- DMs: one-to-one messaging
+- Groups: named groups (book club, trivia crew, best friends)
+- Send events: embed event cards in messages ("we should go to this")
+- Message button on all profile panels
+- Same messaging accessible from LINE UP profile panels
+
+---
+
+## Real Portland Events in DB (as of Apr 17, 2026)
+- Low Bar Chorale — Showbar
+- Babes in Canyon — Holocene
+- The Wallflowers — Revolution Hall
+- Banff Mountain Film Festival — Holocene
+- Stumpfest XI — Mississippi Studios
+- Small Skies, My Body, Frecks — Holocene
+- Disco Always: A Harry Styles Dance Night — Holocene
+- Jenny Lawson — Revolution Hall
+- Charlie Brown III Quartet — The 1905
+- Laffy Taffy: Freaknik Edition — Holocene
+- Weird Nightmare — Polaris Hall
+- Marshall Crenshaw — Polaris Hall
 
 ---
 
 ## Known Bugs
-- Avatar not displaying on profile — upload works, avatar_url not rendering
-- Onboarding shown every login — should check if username already exists
-- Smart snap CORS — Supabase CDN may block canvas getImageData; configure Storage CORS headers
-- Diagnostic console.logs in AdminEditModal should be removed once stable
-- Crop tool in Admin.tsx import flow not as polished as AdminEditModal
+1. **Avatar upload 400** in YouScreen.tsx — fix storage upload path and upsert
+2. **LINE UP profile panels** — built but need testing, tap diamond to confirm slide-in works
+3. **Onboarding shown every login** — should check if username already exists before showing
+4. **Showbar address wrong** in DB — "Southwest Naito Parkway" is incorrect, needs manual fix
+5. **Diagnostic console.logs** in AdminEditModal — remove once stable
 
 ---
 
-## Completed Sessions
-- **Session 1:** Wall UI — PosterGrid, PosterCard, DateIndicator, FilterBar, BottomNav
-- **Session 2:** Supabase backend integration
-- **Session 3:** Admin page, PWA setup
-- **Session 4:** 5-tab nav, auth, profiles, follows, Tonight tab, Venues tab, event_likes
-- **Session 5:** FlyerCarousel 1-col carousel, swipe fixes
-- **Map Sessions:** Mapbox, venue pins, knurl wheel scrubber, radius filter, list mode
-- **Session 6:** AI poster ingestion, Supabase Edge Function, poster isolation, image optimization, sampled color backdrop
-- **Sessions 7-8:** Admin edit mode on wall (AdminEditModal, crop tool, smart snap, live preview, undo, fill_frame, cropUtils.ts, duplicate detection, venue enrichment, AdminBottomNav)
+## Product Values (Read Before Making Any Decision)
+
+### Anti-extractive design
+Plaster does not harvest attention. No dark patterns. No manufactured anxiety. Every decision asks: does this serve the person using it, or the platform? The platform serves the person. Always.
+
+Ads: tasteful local ads only — between forum posts and on RSVP completion screen. NEVER on the wall. NEVER in chat. NEVER in the LINE UP feed. The wall is sacred.
+
+### The poster as art
+Event posters are one of the last great vernacular art forms. Designed under pressure, printed in hundreds, stapled to poles in the rain, gone in a week. Plaster treats them as the art objects they are. Full bleed. Sampled color backdrops. No UI chrome on the art at high zoom.
+
+### Community over consumption
+The goal is not more ticket sales. The goal is connection — to the city and to the people in it. Joy is the product.
+
+### Local first, always
+Launches in Portland. May grow. Will never lose the texture of a specific place.
+
+### The wall is the thing
+Everything else — map, LINE UP, messaging — orbits the wall. The wall is the heartbeat.
+
+### Night mode is correct, not trendy
+You look at this app in a dark room, on your way to a show, standing outside a venue. Dark is right.
+
+### Analogue texture in a digital space
+Knurl wheel feels machined. Diamonds feel cut. Chips feel like a card index. Date blocks feel like rubber stamps. Every interaction should have weight and materiality.
 
 ---
 
-## Session Roadmap
+## Dev Workflow
+- **Claude Code in Warp:** all file edits
+- **This chat (claude.ai):** planning, design decisions, mockups, prompt writing
+- **PLASTER.md:** shared brain — update at end of every session
+- Admin unlock: /admin → password → sessionStorage → Edit button on wall
+- Deploy: `git push` → Vercel auto-deploys from main
+- DEV button: every new feature must have one, localhost only, hard rule
 
-### Next Session — Clean Up + Bulk Ingest
-- Remove diagnostic console.logs from AdminEditModal
-- Clean up dead/duplicate code from crop iterations
-- Fix CORS on Supabase Storage for smart snap
-- Polish import crop tool to match AdminEditModal quality
-- **Rob drops 50+ real Portland posters to populate the wall**
-
-### Session 9 — Superlatives
-### Session 10 — Tonight Tab fully fleshed
-### Session 11 — Venue Owner Accounts
-
-### Future
-- Outpainting for poster backgrounds (fal.ai) — deferred
-- Capacitor wrapper for iOS App Store (native haptics)
-- Email branding (currently "Supabase Auth")
-
----
-
-## Dev Preview Mode
-Every new feature flow must include a DEV button visible only on localhost. Hard rule. No exceptions.
+```bash
+cd ~/plaster && npm run dev
+# localhost:8081
+# Live: the-plaster-wall.vercel.app
+# Admin: /admin — password Plast3r!PDX#26
+```
 
 ---
 
 ## Founder Context
-Rob Schwartz — Portland OR. Plaster + Swapper. No prior coding background, Claude Code in Warp.
-Swapper: robschwartz26/cosmic-swaps, cosmic-swaps.vercel.app, Supabase fiyoectikcqwpoqacdmm
+Rob Schwartz — Portland OR. First-time founder. Building Plaster + Swapper simultaneously. No prior coding background. Using Claude Code in Warp terminal. Action-first learner.
 
-**Working style:** Action-first. When asked to cat a file — paste RAW OUTPUT, never summarize. Two test accounts: main + "letshavesometea". All credentials in locked Apple Note. DEV button in every new flow. Beta launch: Portland book community first.
+**Swapper:** robschwartz26/cosmic-swaps | cosmic-swaps.vercel.app | Supabase fiyoectikcqwpoqacdmm
+
+**Working style:**
+- Action-first, learns by doing
+- When asked to cat a file: paste RAW OUTPUT, never summarize
+- Two test accounts: main account + "letshavesometea"
+- All credentials in locked Apple Note
+- DEV button in every new feature flow — no exceptions
+- Beta launch: Portland book + music community first
+- Prefers direct instructions, progress acknowledged
 
 ---
 
-## How to Start a New Session
-```bash
-cd ~/plaster && npm run dev
-# localhost:8081 | the-plaster-wall.vercel.app
-# Admin: /admin password Plast3r!PDX#26
-```
+## Lessons Learned
 
-*Last updated: April 14, 2026 — Sessions 6-8 complete*
+Hard-won rules and anti-patterns discovered across development sessions.
+
+### Benign console errors can stay benign
+**Date:** 2026-04-18
+**Context:** Spent 15 minutes chasing a 400 Bad Request on event_wall_posts that was firing every time an event panel opened.
+**What we did wrong:** Treated a red console error as urgent. The app was working fine — the error only broke a post-wall feature we weren't using today. Detoured into migration-vs-schema investigation, got a wrong diagnosis, re-investigated, fixed it.
+**The rule going forward:** If a console error doesn't break anything visible or block today's work, log it in PLASTER.md under 'Known harmless noise' and move on. Chase it only when sitting down to build or test the feature it's touching.
+
+### Always verify live DB state, not migration files
+**Date:** 2026-04-18
+**Context:** Diagnosed an event_wall_posts 400 by reading migration 004. Migration said body column; fix prompt was written around that. Actual live DB had content column. Migration wasn't fully applied.
+**What we did wrong:** Trusted migration files as ground truth for DB schema. They're not — they're intent. The live database is reality.
+**The rule going forward:** Before diagnosing any Supabase REST error, run `SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'X';` in the SQL editor to see the actual live schema. Never assume migration files reflect what's deployed.
+
+### Chrome iOS aggressively caches — Safari is source of truth
+**Date:** 2026-04-18
+**Context:** Multiple moments where a fix appeared to not have shipped. Many were actually shipped, but Chrome iOS was serving stale JavaScript bundles.
+**What we did wrong:** Defaulted to 'Warp missed it' instead of 'my browser is lying to me' when expected changes didn't appear. Wrote follow-up fix prompts for problems that were already fixed.
+**The rule going forward:** When Warp reports a change shipped and it appears not to have, verify by (a) checking the Vercel deployment status and commit message, (b) paste-checking the actual source file contents, and (c) only THEN re-prompting. Treat Safari on a hard refresh as the 'did it ship' oracle — Chrome iOS caching is noise.
+
+### Multi-feature prompts risk drift
+**Date:** 2026-04-18
+**Context:** First avatar rebuild prompt bundled camera mirror, two-file storage, and the editor UX into one session. Result was partial implementation — the UX intent didn't land even though the code technically shipped.
+**What we did wrong:** Packed too many concerns into a single Warp prompt. Warp did each piece mechanically but missed the through-line design intent.
+**The rule going forward:** One prompt = one feature. If a feature touches 3+ files, describe the user-facing behavior in plain English at the top of the prompt so the implementation stays grounded in intent, not implementation details. When a feature genuinely spans multiple files, split into sequential prompts rather than bundling.
+
+### Cleanup sessions are separate from feature sessions
+**Date:** 2026-04-18
+**Context:** Mid-feature-work, Rob asked 'can we clean up the whole file.' Reflex was to say yes.
+**What we did wrong:** (Almost) conflated cleanup with feature work. Cleanups risk behavioral regressions silently; feature sessions have clear success criteria.
+**The rule going forward:** Cleanup, refactor, and dead-code removal each get their own session. Ship the feature first. Cleanup later, with fresh eyes and a clear scope ('remove unused imports' is a session, 'clean up the file' is not).
+
+---
+
+### Known harmless noise
+
+- **Multiple GoTrueClient instances detected** — harmless warning from Supabase. Likely caused by a component importing createClient directly instead of the singleton. Fix when it becomes relevant.
+- **apple-mobile-web-app-capable is deprecated** — iOS meta tag name changed. Replace with mobile-web-app-capable when doing a cleanup pass.
+- **Failed to preventDefault inside passive event listener** — from touch gesture handlers in avatar editor. Cosmetic, doesn't affect behavior.
+
+---
+
+## Current Session — Pick Up Here (Apr 17, 2026)
+
+**Last completed:** LINE UP screen — activity feed (9 item types), diamond queue, LINE UP panel (slides right), profile panels (slide left), real Portland show names, real poster images from Supabase.
+
+**Fix first:**
+1. Avatar upload 400 in YouScreen.tsx — storage upload path broken
+2. Test LINE UP profile panels — tap diamond avatar, confirm panel slides in from left
+
+**Then build:**
+1. Replace Venues tab with MSG tab
+2. MSG screen: DMs + groups + send event cards in messages
+3. YOU screen polish: attended events grid, superlatives
+4. Keep ingesting Portland posters
+
+**Start by reading:**
+- `~/plaster/src/pages/LineUpScreen.tsx`
+- `~/plaster/src/pages/YouScreen.tsx`
+- `~/plaster/src/components/BottomNav.tsx`
