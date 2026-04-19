@@ -72,10 +72,55 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
 
 // ── Recurrence helpers ───────────────────────────────────────
 
-type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly'
+type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'weekdays'
+type OrdinalKey = '1st' | '2nd' | '3rd' | '4th' | 'last'
 
-const FREQ_LABELS: Record<RecurrenceFrequency, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly' }
-const FREQ_COUNTS: Record<RecurrenceFrequency, number> = { weekly: 12, biweekly: 6, monthly: 3 }
+const FREQ_LABELS: Record<RecurrenceFrequency, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly', weekdays: 'Specific days' }
+const FREQ_COUNTS: Record<RecurrenceFrequency, number> = { weekly: 12, biweekly: 6, monthly: 3, weekdays: 0 }
+
+const ORDINAL_LABELS: OrdinalKey[] = ['1st', '2nd', '3rd', '4th', 'last']
+// Mon–Sun labels; indices map to JS Date.getDay() via WEEKDAY_JS
+const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WEEKDAY_JS     = [1, 2, 3, 4, 5, 6, 0] // Mon=1 … Sat=6, Sun=0
+
+function getNthWeekdayOfMonth(year: number, month: number, jsWeekday: number, n: number): Date | null {
+  if (n === -1) {
+    // Last occurrence of this weekday in the month
+    const lastDay = new Date(year, month + 1, 0)
+    const diff = (lastDay.getDay() - jsWeekday + 7) % 7
+    return new Date(year, month, lastDay.getDate() - diff)
+  }
+  // nth occurrence (1-based)
+  const firstDayOfMonth = new Date(year, month, 1)
+  const diff = (jsWeekday - firstDayOfMonth.getDay() + 7) % 7
+  const nthDay = 1 + diff + (n - 1) * 7
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  if (nthDay > daysInMonth) return null
+  return new Date(year, month, nthDay)
+}
+
+function generateWeekdayOccurrences(start: Date, ordinals: Set<OrdinalKey>, weekdays: Set<number>, monthsAhead = 3): Date[] {
+  const dates: Date[] = []
+  const end = new Date(start); end.setMonth(end.getMonth() + monthsAhead)
+  for (let m = 0; m <= monthsAhead; m++) {
+    const ref  = new Date(start.getFullYear(), start.getMonth() + m, 1)
+    const year = ref.getFullYear()
+    const mon  = ref.getMonth()
+    for (const wdIdx of weekdays) {
+      const jsWd = WEEKDAY_JS[wdIdx]
+      for (const ord of ordinals) {
+        const n = ord === 'last' ? -1 : parseInt(ord[0])
+        const d = getNthWeekdayOfMonth(year, mon, jsWd, n)
+        if (d && d >= start && d <= end) dates.push(d)
+      }
+    }
+  }
+  return dates.sort((a, b) => a.getTime() - b.getTime())
+}
+
+function fmtShortDate(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
 
 function generateOccurrenceDates(start: Date, freq: RecurrenceFrequency): Date[] {
   const dates: Date[] = []
@@ -726,6 +771,8 @@ function ImportForm() {
   const [nearDuplicate, setNearDuplicate] = useState<Venue | null>(null)
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('weekly')
+  const [weekdayOrdinals, setWeekdayOrdinals] = useState<Set<OrdinalKey>>(new Set())
+  const [weekdayDays,     setWeekdayDays]     = useState<Set<number>>(new Set())
   const [successCount, setSuccessCount] = useState(1)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
@@ -935,7 +982,18 @@ function ImportForm() {
 
         if (isRecurring) {
           const recurrenceGroupId = crypto.randomUUID()
-          const dates = generateOccurrenceDates(startDate, recurrenceFrequency)
+          let dates: Date[]
+          if (recurrenceFrequency === 'weekdays') {
+            if (weekdayOrdinals.size === 0 || weekdayDays.size === 0) {
+              setPhase('idle'); setErrorMsg('Pick at least one occurrence and one weekday.'); return
+            }
+            dates = generateWeekdayOccurrences(startDate, weekdayOrdinals, weekdayDays)
+          } else {
+            dates = generateOccurrenceDates(startDate, recurrenceFrequency)
+          }
+          if (dates.length === 0) {
+            setPhase('idle'); setErrorMsg('No occurrences found in the 3-month window. Check the start date.'); return
+          }
           const { error: eventError } = await supabaseAdmin.from('events').insert(
             dates.map(d => ({ ...baseRow, starts_at: d.toISOString(), recurrence_group_id: recurrenceGroupId, recurrence_frequency: recurrenceFrequency }))
           )
@@ -943,7 +1001,7 @@ function ImportForm() {
           const lastDate = dates[dates.length - 1]
           const snoozeDate = new Date(lastDate); snoozeDate.setMonth(snoozeDate.getMonth() + 3)
           const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
-          const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : 'monthly'
+          const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : recurrenceFrequency === 'monthly' ? 'monthly' : 'on specific weekdays'
           await supabaseAdmin.from('admin_notifications').insert({
             type: 'recurrence_check',
             title: `Check recurring event: ${form.title}`,
@@ -994,7 +1052,7 @@ function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setSuccessCount(1)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setSuccessCount(1)
   }
 
   // DEV: generate a mock test poster
@@ -1101,7 +1159,7 @@ function ImportForm() {
       <span style={{ fontSize: 40 }}>✓</span>
       <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, color: 'var(--fg)', margin: 0 }}>{successTitle}</p>
       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>
-      {successCount > 1 ? `${successCount} events posted · ${FREQ_LABELS[recurrenceFrequency]} for 3 months` : 'Posted to the wall'}
+      {successCount > 1 ? `${successCount} events posted · ${recurrenceFrequency === 'weekdays' ? 'specific weekdays' : FREQ_LABELS[recurrenceFrequency].toLowerCase()} for 3 months` : 'Posted to the wall'}
     </p>
       <button onClick={reset} style={{ marginTop: 8, padding: '10px 28px', background: '#A855F7', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
         Import Another
@@ -1372,9 +1430,11 @@ function ImportForm() {
               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>Recurring event</span>
             </div>
             {isRecurring && (
-              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {(['weekly', 'biweekly', 'monthly'] as RecurrenceFrequency[]).map(f => (
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                {/* Frequency mode chips */}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {(['weekly', 'biweekly', 'monthly', 'weekdays'] as RecurrenceFrequency[]).map(f => (
                     <button
                       key={f}
                       type="button"
@@ -1385,9 +1445,67 @@ function ImportForm() {
                     </button>
                   ))}
                 </div>
-                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
-                  This will post {FREQ_COUNTS[recurrenceFrequency]} events over the next 3 months ({FREQ_LABELS[recurrenceFrequency]})
-                </p>
+
+                {/* Weekday-mode sub-pickers */}
+                {recurrenceFrequency === 'weekdays' && (() => {
+                  const previewDates = (weekdayOrdinals.size > 0 && weekdayDays.size > 0)
+                    ? (() => { const sd = form.date ? new Date(`${form.date}T${form.time || '20:00'}:00`) : new Date(); return generateWeekdayOccurrences(sd, weekdayOrdinals, weekdayDays) })()
+                    : []
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {/* Ordinal row */}
+                      <div>
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-40)', margin: '0 0 5px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Which occurrence?</p>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {ORDINAL_LABELS.map(ord => {
+                            const active = weekdayOrdinals.has(ord)
+                            return (
+                              <button key={ord} type="button"
+                                onClick={() => setWeekdayOrdinals(prev => { const n = new Set(prev); active ? n.delete(ord) : n.add(ord); return n })}
+                                style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? '#A855F7' : 'var(--fg-18)'}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', color: active ? '#A855F7' : 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}
+                              >{ord}</button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {/* Weekday row */}
+                      <div>
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-40)', margin: '0 0 5px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Which day?</p>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                          {WEEKDAY_LABELS.map((label, idx) => {
+                            const active = weekdayDays.has(idx)
+                            return (
+                              <button key={label} type="button"
+                                onClick={() => setWeekdayDays(prev => { const n = new Set(prev); active ? n.delete(idx) : n.add(idx); return n })}
+                                style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? '#A855F7' : 'var(--fg-18)'}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', color: active ? '#A855F7' : 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}
+                              >{label}</button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {/* Preview */}
+                      {previewDates.length > 0 && (
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
+                          This will post {previewDates.length} event{previewDates.length !== 1 ? 's' : ''} over the next 3 months:{' '}
+                          {previewDates.slice(0, 3).map(fmtShortDate).join(', ')}
+                          {previewDates.length > 3 ? `, and ${previewDates.length - 3} more` : ''}
+                        </p>
+                      )}
+                      {(weekdayOrdinals.size === 0 || weekdayDays.size === 0) && (
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: 0 }}>
+                          Pick at least one occurrence and one weekday to see a preview.
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
+
+                {/* Preview for simple modes */}
+                {recurrenceFrequency !== 'weekdays' && (
+                  <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
+                    This will post {FREQ_COUNTS[recurrenceFrequency]} events over the next 3 months ({FREQ_LABELS[recurrenceFrequency]})
+                  </p>
+                )}
               </div>
             )}
           </div>
