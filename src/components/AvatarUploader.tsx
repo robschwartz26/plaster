@@ -1,11 +1,6 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { createPortal } from 'react-dom'
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseAdmin = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_KEY,
-)
+import { supabase } from '@/lib/supabase'
 
 export interface AvatarUploaderRef {
   open: () => void
@@ -141,8 +136,8 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
     const fullPath    = `${userId}/full.jpg`
 
     const [diamondUp, fullUp] = await Promise.all([
-      supabaseAdmin.storage.from('avatars').upload(diamondPath, diamondBlob, { upsert: true, contentType: 'image/jpeg' }),
-      supabaseAdmin.storage.from('avatars').upload(fullPath,    fullBlob,    { upsert: true, contentType: 'image/jpeg' }),
+      supabase.storage.from('avatars').upload(diamondPath, diamondBlob, { upsert: true, contentType: 'image/jpeg' }),
+      supabase.storage.from('avatars').upload(fullPath,    fullBlob,    { upsert: true, contentType: 'image/jpeg' }),
     ])
 
     if (diamondUp.error || fullUp.error) {
@@ -151,10 +146,10 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
       return
     }
 
-    const diamondUrl = supabaseAdmin.storage.from('avatars').getPublicUrl(diamondPath).data.publicUrl + '?t=' + ts
-    const fullUrl    = supabaseAdmin.storage.from('avatars').getPublicUrl(fullPath).data.publicUrl    + '?t=' + ts
+    const diamondUrl = supabase.storage.from('avatars').getPublicUrl(diamondPath).data.publicUrl + '?t=' + ts
+    const fullUrl    = supabase.storage.from('avatars').getPublicUrl(fullPath).data.publicUrl    + '?t=' + ts
 
-    await supabaseAdmin.from('profiles').update({
+    await supabase.from('profiles').update({
       avatar_url:         diamondUrl,
       avatar_diamond_url: diamondUrl,
       avatar_full_url:    fullUrl,
