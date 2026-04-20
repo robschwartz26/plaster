@@ -571,6 +571,36 @@ Hard-won rules and anti-patterns discovered across development sessions.
 **What we did wrong:** Initial panic/confusion treated the blank screen as a mystery. The warning was right there pointing to the cause.
 **The rule going forward:** Every new component that talks to Supabase imports the shared singleton supabase from @/lib/supabase — never calls createClient itself. Add a one-line comment rule to any future Warp prompt involving Supabase: 'Import supabase singleton from @/lib/supabase. Do NOT call createClient.'
 
+### Test the database directly before blaming the client
+**Date:** 2026-04-19
+**Context:** Spent over an hour chasing a 403 on conversations INSERT. Debugged RLS policies (dropped and recreated), checked client singleton config, verified JWT was in request, re-targeted policies to authenticated role, etc. None of it fixed the issue.
+**What we did wrong:** Assumed the database was correctly configured because policies existed and looked right. Kept trying fixes at the client/RLS policy level without proving the database itself worked under simulated auth conditions.
+**The rule going forward:** When a Supabase RLS error persists through multiple attempts, run a manual test in the SQL editor that simulates an authenticated user via `SELECT set_config('request.jwt.claim.sub', 'USER_UUID', false);` then attempt the failing INSERT directly. If it succeeds, the DB is fine and the bug is in the client→PostgREST request. If it fails, the bug is in the DB/policy layer. This single test saves hours of guessing.
+
+### Warp's diagnoses are hypotheses, not answers
+**Date:** 2026-04-19
+**Context:** Warp repeatedly "found the smoking gun" — infinite recursion, service key client, policy roles. Each time it sounded definitive and each fix worked on its own merit, but none fixed the blocker. Each wrong diagnosis sent us down a detour.
+**What we did wrong:** Treated Warp's confident "here's the root cause" as ground truth instead of as a theory to verify. Fixed each suspect, didn't test, moved on — then discovered the bug was still there.
+**The rule going forward:** When Warp says "found it, this is the cause", read it as "here is one plausible theory." Fix it if the fix is independently correct (like the service key — that was genuinely worth fixing regardless). But before declaring victory, directly verify the bug is gone by reproducing it. Don't chain fixes without intermediate verification.
+
+### For multi-table atomic writes, use SECURITY DEFINER RPC
+**Date:** 2026-04-19
+**Context:** Spent hours fighting RLS policies on conversations, conversation_members, and messages — because creating a conversation means inserting one row into conversations, then two rows into conversation_members, atomically. Every policy combination had edge cases.
+**What we did wrong:** Built the flow as client-side multi-table inserts with per-table RLS. This is fragile — every table's policies must align perfectly, and any client/PostgREST auth flakiness breaks the whole flow.
+**The rule going forward:** For any operation that inserts into 2+ related tables, write a Postgres function with SECURITY DEFINER that performs all inserts atomically. The client calls it via `supabase.rpc('fn_name', { ... })`. The function checks `auth.uid()` itself, then bypasses RLS for the multi-table writes. This is the idiomatic Supabase pattern and sidesteps client-auth edge cases entirely. RLS on individual tables is still useful for reads, but writes that touch multiple tables should go through RPCs.
+
+### Stop running SQL in the wrong editor or pasting into non-empty editors
+**Date:** 2026-04-19
+**Context:** Multiple rounds of SQL errors today came from: running commands in the wrong SQL editor tab, pasting new SQL into an editor that still had old broken SQL, copying from a terminal that inserted invisible ● prompt characters, attempting -- comment text that contained stray chars.
+**What we did wrong:** Rushed through paste operations while tired. Didn't verify the editor was clean before pasting. Didn't verify the target tab before running.
+**The rule going forward:** Before running any SQL in the Supabase editor, (1) open a fresh new query tab, (2) paste, (3) visually verify the first 3 lines match what you intended, (4) run. For critical schema changes, verify with a separate `SELECT column_name FROM information_schema.columns WHERE table_name = 'X'` query after.
+
+### Fatigue is a diagnostic signal
+**Date:** 2026-04-19
+**Context:** The messaging debug session spanned over an hour late at night, after an already-full day of work. Multiple times decisions got sloppier — running wrong SQL, trying fixes without verifying, jumping between theories.
+**What we did wrong:** Pushed through diminishing returns when calling it for the night would have been faster in aggregate (fresh eyes would have found the RPC pattern in 15 minutes, versus the hour+ of tired detours).
+**The rule going forward:** When a debug session passes 45 minutes without resolution AND it's late in the day, stop. Write the current state into PLASTER.md under 'KNOWN BROKEN' with full diagnostics and next steps. Come back fresh. This is an actual rule, not a suggestion — 'one more try when tired' reliably produces the slop we saw tonight.
+
 ---
 
 ### Known harmless noise
