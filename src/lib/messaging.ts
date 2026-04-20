@@ -30,6 +30,9 @@ export async function createOrGetConversation(otherUserId: string): Promise<stri
   }
 
   // Create new
+  const sessionCheck = await supabase.auth.getSession()
+  console.log('[msg-debug] before insert — session exists:', !!sessionCheck.data.session, '— access_token present:', !!sessionCheck.data.session?.access_token, '— user_id:', sessionCheck.data.session?.user?.id)
+
   const { data: newConv, error: convErr } = await supabase
     .from('conversations')
     .insert({})
@@ -37,7 +40,7 @@ export async function createOrGetConversation(otherUserId: string): Promise<stri
     .single()
 
   if (convErr || !newConv) {
-    console.error('Failed to create conversation:', convErr)
+    console.error('[msg-debug] insert failed. user.id was:', user.id, 'convErr:', JSON.stringify(convErr))
     return null
   }
 
