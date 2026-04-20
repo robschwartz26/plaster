@@ -445,6 +445,36 @@ This logic must be maintained throughout the entire app.
 
 ---
 
+## KNOWN BROKEN FEATURES
+
+### Realtime subscriptions failing — WebSocket cannot connect
+**Symptom:** Messages send and persist correctly via REST. Messaging inbox, conversation panels, send/receive all work on refresh. But real-time updates never fire — you must leave and re-enter the conversation to see new messages. Console shows repeating errors: `WebSocket connection to 'wss://lhetwgdlpulgnjetuope.supabase.co/realtime/v1/websocket?...' failed`.
+
+**What is verified working:**
+- `messages` and `conversations` tables are both in the `supabase_realtime` publication (2 tables shown in dashboard)
+- INSERT/UPDATE/DELETE/TRUNCATE all enabled on the publication
+- `REPLICA IDENTITY FULL` set on both tables
+- Subscription code in `MsgScreen.tsx` is structurally correct (fixed inbox subscription churn — `openConvId` removed from deps, moved to ref)
+- User's `access_token` is present on the client at subscription time (verified via debug log)
+- Legacy anon key format (`eyJ...`) in Vercel env vars
+
+**What is unknown / unverified:**
+- Whether the anon key in Vercel matches the current legacy anon key in Supabase (JWT signing key was rotated 7 days ago — may or may not be related)
+- Whether realtime is enabled at project level beyond publication config
+- The actual error message in the WebSocket handshake response (never retrieved — this is the most important unknown)
+
+**Next investigation path (fresh session):**
+1. Open Network tab → filter by `WS` → click the failing WebSocket connection → read the actual rejection reason from the server response headers
+2. Check Supabase dashboard for project-level realtime enable toggle
+3. Verify legacy anon key in Vercel matches current legacy anon key in Supabase dashboard → Settings → API → `anon` `legacy` key
+4. Last resort: email Supabase support with the WebSocket rejection headers — their realtime infrastructure has known issues during JWT key rotations
+
+**Workaround:** Users can leave and re-enter a conversation to see new messages. Not real-time, but functional.
+
+**Priority:** Medium — core messaging works, realtime is a polish feature. Not a beta blocker.
+
+---
+
 ## Product Values (Read Before Making Any Decision)
 
 ### Anti-extractive design
