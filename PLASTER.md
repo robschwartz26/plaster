@@ -472,6 +472,32 @@ Knurl wheel feels machined. Diamonds feel cut. Chips feel like a card index. Dat
 
 ---
 
+## DEPLOYMENT & CACHING CONFIG
+
+### Cache-Control strategy
+**Configured:** 2026-04-19
+
+**What's set:**
+- `vercel.json` forces `Cache-Control: no-cache, no-store, must-revalidate` on three paths:
+  - `/` (root)
+  - `/index.html`
+  - `/manifest.json`
+- All other files (JS bundles, CSS, images, fonts) use Vercel's default caching, which for Vite-built hashed filenames is effectively immutable long-term caching. This is correct because Vite bundles are content-hashed (e.g. `main-D8Hu7bDG.js`) — the URL changes whenever content changes, so stale bundles are impossible.
+
+**Why this is NOT a performance compromise:**
+- `index.html` is ~2KB — fetching it fresh on every page load is trivial
+- All expensive assets (JS bundles, CSS, images) continue to cache normally, long-term
+- This is the industry-standard pattern for SPAs on Vercel — recommended by Vercel's own docs, used by virtually every production React app
+- Without this config, Vercel's edge CDN and browsers would cache `index.html` and continue serving references to OLD bundle filenames, even after new code deploys — which was the "why isn't my change showing up" pain from the 2026-04-19 session
+
+**What to check if this ever seems wrong:**
+- Open Chrome DevTools → Network tab → reload → click `index.html` → verify response headers include `cache-control: no-cache, no-store, must-revalidate`
+- Verify hashed bundles (like `main-*.js`) have a long `cache-control: public, max-age=31536000, immutable` header — this means they're caching correctly and aren't accidentally caught by the no-cache rule
+
+If anyone tells you to "add caching for performance": they probably don't understand that hashed bundles are already cached long-term. The cache headers on `index.html` are NOT the problem — removing them would just bring back the stale-bundle issue.
+
+---
+
 ## Dev Workflow
 - **Claude Code in Warp:** all file edits
 - **This chat (claude.ai):** planning, design decisions, mockups, prompt writing
