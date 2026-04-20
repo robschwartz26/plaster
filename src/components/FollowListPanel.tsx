@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
+import { createOrGetConversation } from '@/lib/messaging'
 
 interface FollowUser {
   id: string
@@ -327,8 +328,10 @@ function ProfileSubPanel({ user, counts, isSelf, isFollowing, onFollowToggle, on
               {isFollowing ? 'Following' : 'Follow'}
             </button>
             <button
-              onClick={() => navigate('/msg')}
-              // TODO: once MSG has real DB, open/create conversation with viewedUserId
+              onClick={async () => {
+                const convId = await createOrGetConversation(user.id)
+                if (convId) navigate('/msg', { state: { openConversationId: convId } })
+              }}
               style={{
                 width: '100%', padding: '12px 0', borderRadius: 12,
                 border: '1px solid var(--fg-25)', background: 'transparent',

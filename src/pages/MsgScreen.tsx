@@ -1,354 +1,483 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
+import { PencilLine } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
-import { PlasterHeader } from '@/components/PlasterHeader'
+import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
+import { Diamond } from '@/components/Diamond'
+import { markConversationRead } from '@/lib/messaging'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface MockConv {
+interface OtherUser {
   id: string
-  name: string
-  isGroup: boolean
-  avatar: string
-  avatar2?: string
-  lastMessage: string
-  timestamp: string
+  username: string | null
+  avatar_diamond_url: string | null
+  avatar_url: string | null
+}
+
+interface ConversationRow {
+  id: string
+  lastMessageAt: string
+  lastReadAt: string
+  otherUser: OtherUser | null
+  lastMessage: { body: string; sender_id: string; created_at: string } | null
   unread: boolean
 }
 
-interface MockMsg {
+interface Message {
   id: string
-  senderId: string
-  content: string | null
-  eventId?: string
-  ts: string
+  sender_id: string
+  body: string
+  created_at: string
 }
-
-interface MockEvent {
-  id: string
-  title: string
-  venue: string
-  starts_at: string
-  poster_url: string | null
-  color: string
-}
-
-// ── Mock data ──────────────────────────────────────────────────────────────
-
-const mockConvs: MockConv[] = [
-  { id: 'c1', name: 'neonrose',   isGroup: false, avatar: '#7c3aed',            lastMessage: 'are you going to Stumpfest?',          timestamp: '2m',  unread: true  },
-  { id: 'c2', name: 'bobbybones', isGroup: false, avatar: '#ec4899',            lastMessage: 'check this show out',                  timestamp: '1h',  unread: false },
-  { id: 'c3', name: 'NE Crew',    isGroup: true,  avatar: '#fb923c', avatar2: '#a3e635', lastMessage: 'drummerboy: I can get us on the list', timestamp: 'Thu', unread: true  },
-]
-
-const mockMsgs: Record<string, MockMsg[]> = {
-  c1: [
-    { id: 'm1', senderId: 'neonrose',   content: 'hey are you going to Stumpfest XI?',          ts: '9:41 AM' },
-    { id: 'm2', senderId: 'me',         content: 'yes! Mississippi Studios on Saturday right?',  ts: '9:43 AM' },
-    { id: 'm3', senderId: 'neonrose',   content: '12 bands, 2 days, all ages — gonna be wild',  ts: '9:44 AM' },
-    { id: 'm4', senderId: 'me',         content: 'are you going to Stumpfest?',                  ts: '9:45 AM' },
-  ],
-  c2: [
-    { id: 'm5', senderId: 'bobbybones', content: 'check this show out 👀',                       ts: '11:20 AM' },
-    { id: 'm6', senderId: 'bobbybones', content: null, eventId: 'ev1',                           ts: '11:20 AM' },
-    { id: 'm7', senderId: 'me',         content: 'omg yes we have to go',                        ts: '11:22 AM' },
-  ],
-  c3: [
-    { id: 'm8',  senderId: 'jazzfan99',  content: "who's coming to Weird Nightmare at Polaris?", ts: 'Thu 8:00 PM' },
-    { id: 'm9',  senderId: 'drummerboy', content: 'I can get us on the list',                    ts: 'Thu 8:15 PM' },
-    { id: 'm10', senderId: 'me',         content: '🙌',                                          ts: 'Thu 8:16 PM' },
-  ],
-}
-
-const mockEventCards: Record<string, MockEvent> = {
-  ev1: { id: 'ev1', title: 'Stumpfest XI', venue: 'Mississippi Studios', starts_at: '2026-04-19T19:00:00', poster_url: null, color: '#3730a3' },
-}
-
-const upcomingEvents: MockEvent[] = [
-  { id: 'ev1', title: 'Stumpfest XI',                  venue: 'Mississippi Studios', starts_at: '2026-04-19T19:00:00', poster_url: null, color: '#3730a3' },
-  { id: 'ev2', title: 'Weird Nightmare',               venue: 'Polaris Hall',        starts_at: '2026-04-22T20:00:00', poster_url: null, color: '#0c4a6e' },
-  { id: 'ev3', title: 'Babes in Canyon',               venue: 'Holocene',            starts_at: '2026-04-26T20:00:00', poster_url: null, color: '#365314' },
-  { id: 'ev4', title: 'Laffy Taffy: Freaknik Edition', venue: 'Holocene',            starts_at: '2026-04-25T22:00:00', poster_url: null, color: '#7c2d12' },
-  { id: 'ev5', title: 'Marshall Crenshaw',             venue: 'Polaris Hall',        starts_at: '2026-04-28T19:30:00', poster_url: null, color: '#1e3a5f' },
-]
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function fmtDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
+function fmtTimeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'now'
+  if (diffMin < 60) return `${diffMin}m`
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return `${diffHr}h`
+  const diffDays = Math.floor(diffMs / 86400000)
+  if (diffDays < 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso).getDay()]
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// ── Sub-components ─────────────────────────────────────────────────────────
-
-function DiamondAvatar({ color, size = 36 }: { color: string; size?: number }) {
-  return (
-    <div style={{
-      width: size,
-      height: size,
-      background: color,
-      clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
-      flexShrink: 0,
-    }} />
-  )
+function fmtMsgTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
-function StackedDiamondAvatar({ color1, color2, size = 36 }: { color1: string; color2: string; size?: number }) {
-  const s = size * 0.72
-  const offset = size * 0.28
-  return (
-    <div style={{ width: size, height: size, position: 'relative', flexShrink: 0 }}>
-      <div style={{ position: 'absolute', left: 0, top: offset * 0.5, width: s, height: s, background: color2, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
-      <div style={{ position: 'absolute', right: 0, bottom: offset * 0.5, width: s, height: s, background: color1, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
-    </div>
-  )
-}
-
-function EventCard({ event, compact = false }: { event: MockEvent; compact?: boolean }) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 10,
-      background: 'var(--fg-08)',
-      borderRadius: 10,
-      padding: compact ? '6px 10px' : '8px 10px',
-      border: '1px solid var(--fg-15)',
-      maxWidth: 240,
-    }}>
-      <div style={{ width: compact ? 30 : 40, height: compact ? 45 : 60, borderRadius: 4, background: event.color, flexShrink: 0, overflow: 'hidden', position: 'relative' }}>
-        {event.poster_url && <img src={event.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {event.title}
-        </p>
-        <p style={{ margin: '2px 0 0', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-          {event.venue}
-        </p>
-        <p style={{ margin: '1px 0 0', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, letterSpacing: '0.06em', color: 'var(--fg-25)' }}>
-          {fmtDate(event.starts_at)}
-        </p>
-      </div>
-    </div>
-  )
+function showTimestampBefore(cur: Message, prev: Message | undefined): boolean {
+  if (!prev) return false
+  return new Date(cur.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function MsgScreen() {
-  useAuth()
-  const [activeConvId, setActiveConvId]   = useState<string | null>(null)
-  const [searchQuery, setSearchQuery]     = useState('')
-  const [messageText, setMessageText]     = useState('')
-  const [localMsgs, setLocalMsgs]         = useState(mockMsgs)
-  const [showEventPicker, setShowEventPicker] = useState(false)
-  const [pendingEvent, setPendingEvent]   = useState<MockEvent | null>(null)
-  const [showCompose, setShowCompose]     = useState(false)
-  const [composeSearch, setComposeSearch] = useState('')
+  const { user } = useAuth()
+  const location = useLocation()
+  const { openConversationId: routeConvId } = (location.state ?? {}) as { openConversationId?: string }
+
+  const [conversations,    setConversations]    = useState<ConversationRow[]>([])
+  const [convLoading,      setConvLoading]      = useState(true)
+  const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
+  const [messages,         setMessages]         = useState<Message[]>([])
+  const [msgLoading,       setMsgLoading]       = useState(false)
+  const [messageText,      setMessageText]      = useState('')
+  const [sending,          setSending]          = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const myConvIdsRef   = useRef<Set<string>>(new Set())
 
-  const activeConv   = mockConvs.find(c => c.id === activeConvId) ?? null
-  const convMsgs     = activeConvId ? (localMsgs[activeConvId] ?? []) : []
-  const filteredConvs = mockConvs.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const openConv = conversations.find(c => c.id === openConvId) ?? null
 
+  // ── Load inbox ──────────────────────────────────────────────────────────
+  const loadInbox = useCallback(async () => {
+    if (!user) return
+    setConvLoading(true)
+
+    // 1. My memberships
+    const { data: memberships } = await supabase
+      .from('conversation_members')
+      .select('conversation_id, last_read_at')
+      .eq('user_id', user.id)
+
+    if (!memberships || memberships.length === 0) {
+      setConversations([])
+      setConvLoading(false)
+      return
+    }
+
+    const convIds = (memberships as { conversation_id: string; last_read_at: string }[])
+      .map(m => m.conversation_id)
+    myConvIdsRef.current = new Set(convIds)
+
+    // 2. Conversations sorted by last_message_at
+    const { data: convRows } = await supabase
+      .from('conversations')
+      .select('id, last_message_at')
+      .in('id', convIds)
+      .order('last_message_at', { ascending: false })
+
+    if (!convRows) { setConvLoading(false); return }
+
+    // 3. All members of all my conversations (excluding me — filtered client-side)
+    const { data: allMembers } = await supabase
+      .from('conversation_members')
+      .select('conversation_id, user_id')
+      .in('conversation_id', convIds)
+      .neq('user_id', user.id)
+
+    // 4. Profiles for those users
+    const otherUserIds = [...new Set((allMembers ?? []).map((m: { user_id: string }) => m.user_id))]
+    const { data: profiles } = otherUserIds.length
+      ? await supabase
+          .from('profiles')
+          .select('id, username, avatar_diamond_url, avatar_url')
+          .in('id', otherUserIds)
+      : { data: [] }
+
+    const profileMap: Record<string, OtherUser> = {}
+    for (const p of (profiles ?? []) as OtherUser[]) profileMap[p.id] = p
+
+    const memberMap: Record<string, string> = {}
+    for (const m of (allMembers ?? []) as { conversation_id: string; user_id: string }[]) {
+      memberMap[m.conversation_id] = m.user_id
+    }
+
+    // 5. Last message per conversation (N parallel fetches — acceptable for v1)
+    const lastMsgResults = await Promise.all(
+      convIds.map(cid =>
+        supabase
+          .from('messages')
+          .select('body, sender_id, created_at')
+          .eq('conversation_id', cid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      )
+    )
+
+    const lastMsgMap: Record<string, { body: string; sender_id: string; created_at: string } | null> = {}
+    convIds.forEach((cid, i) => { lastMsgMap[cid] = (lastMsgResults[i].data as any) ?? null })
+
+    const membershipMap: Record<string, string> = {}
+    for (const m of (memberships as { conversation_id: string; last_read_at: string }[])) {
+      membershipMap[m.conversation_id] = m.last_read_at
+    }
+
+    const rows: ConversationRow[] = (convRows as { id: string; last_message_at: string }[]).map(conv => {
+      const lastReadAt = membershipMap[conv.id] ?? conv.last_message_at
+      const lastMsg = lastMsgMap[conv.id] ?? null
+      const otherUserId = memberMap[conv.id]
+      const unread = lastMsg
+        ? new Date(lastMsg.created_at) > new Date(lastReadAt) && lastMsg.sender_id !== user.id
+        : false
+      return {
+        id: conv.id,
+        lastMessageAt: conv.last_message_at,
+        lastReadAt,
+        otherUser: otherUserId ? (profileMap[otherUserId] ?? null) : null,
+        lastMessage: lastMsg,
+        unread,
+      }
+    })
+
+    setConversations(rows)
+    setConvLoading(false)
+  }, [user])
+
+  useEffect(() => { loadInbox() }, [loadInbox])
+
+  // ── Open conversation ────────────────────────────────────────────────────
+  const openConversation = useCallback(async (convId: string) => {
+    setOpenConvId(convId)
+    setMsgLoading(true)
+    setMessages([])
+
+    const { data } = await supabase
+      .from('messages')
+      .select('id, sender_id, body, created_at')
+      .eq('conversation_id', convId)
+      .order('created_at', { ascending: true })
+
+    setMessages((data ?? []) as Message[])
+    setMsgLoading(false)
+    await markConversationRead(convId)
+
+    // Mark as read in local state
+    setConversations(prev =>
+      prev.map(c => c.id === convId ? { ...c, unread: false, lastReadAt: new Date().toISOString() } : c)
+    )
+  }, [])
+
+  // If routed with a specific conversation, open it once inbox loads
   useEffect(() => {
-    if (activeConvId) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
-  }, [activeConvId])
+    if (routeConvId && !convLoading) {
+      openConversation(routeConvId)
+    }
+  }, [routeConvId, convLoading, openConversation])
+
+  // ── Scroll to bottom ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (openConvId) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
+  }, [openConvId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [localMsgs])
+  }, [messages.length])
+
+  // ── Realtime: conversation open ──────────────────────────────────────────
+  useEffect(() => {
+    if (!openConvId) return
+
+    const channel = supabase
+      .channel(`messages:${openConvId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${openConvId}` },
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages(prev => {
+            if (prev.some(m => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
+          // Update inbox preview
+          setConversations(prev =>
+            prev.map(c => c.id === openConvId
+              ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
+              : c
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [openConvId])
+
+  // ── Realtime: inbox unread badge ─────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return
+
+    const channel = supabase
+      .channel('inbox-watcher')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages' },
+        (payload) => {
+          const msg = payload.new as Message & { conversation_id: string }
+          if (!myConvIdsRef.current.has(msg.conversation_id)) return
+          if (msg.sender_id === user.id) return
+          if (msg.conversation_id === openConvId) return // already reading it
+          setConversations(prev =>
+            prev.map(c => c.id === msg.conversation_id
+              ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
+              : c
+            )
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user, openConvId])
+
+  // ── Send message ─────────────────────────────────────────────────────────
+  async function sendMessage() {
+    if (!messageText.trim() || !openConvId || !user || sending) return
+    const body = messageText.trim()
+    setMessageText('')
+    setSending(true)
+
+    const { error } = await supabase.from('messages').insert({
+      conversation_id: openConvId,
+      sender_id: user.id,
+      body,
+    })
+
+    if (!error) {
+      await supabase
+        .from('conversations')
+        .update({ last_message_at: new Date().toISOString() })
+        .eq('id', openConvId)
+    }
+
+    setSending(false)
+  }
 
   function closeConv() {
-    setActiveConvId(null)
-    setShowEventPicker(false)
-    setPendingEvent(null)
+    setOpenConvId(null)
+    setMessages([])
     setMessageText('')
   }
 
-  function sendMessage() {
-    if (!messageText.trim() && !pendingEvent) return
-    if (!activeConvId) return
-    const newMsg: MockMsg = {
-      id: `m${Date.now()}`,
-      senderId: 'me',
-      content: messageText.trim() || null,
-      eventId: pendingEvent?.id,
-      ts: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
-    }
-    setLocalMsgs(prev => ({ ...prev, [activeConvId]: [...(prev[activeConvId] ?? []), newMsg] }))
-    setMessageText('')
-    setPendingEvent(null)
-    setShowEventPicker(false)
-  }
-
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
 
       <PlasterHeader
         actions={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {import.meta.env.DEV && (
-              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 9, color: '#A855F7', letterSpacing: '0.1em', border: '1px solid #A855F7', borderRadius: 4, padding: '2px 5px' }}>MOCK</span>
-            )}
-            <button
-              onClick={() => setShowCompose(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 4, display: 'flex', alignItems: 'center' }}
-            >
-              <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-            </button>
-          </div>
+          <button
+            style={headerIconBtn()}
+            onClick={() => alert('Start new messages from a user\'s profile')}
+            title="New message"
+          >
+            <PencilLine size={18} />
+          </button>
         }
       />
 
-      {/* Content area — panels are absolute children of this */}
+      {/* Content area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
         {/* ── INBOX ── */}
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
 
-          {/* Quick-access bar */}
-          <div style={{ padding: '0 16px 12px', overflowX: 'auto', flexShrink: 0, scrollbarWidth: 'none' }}>
-            <div style={{ display: 'flex', gap: 16, width: 'max-content' }}>
-              {mockConvs.map(conv => (
-                <button
-                  key={conv.id}
-                  onClick={() => setActiveConvId(conv.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}
-                >
-                  <div style={{ position: 'relative', width: 44, height: 44 }}>
-                    {conv.unread && (
-                      <div style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: '50%', background: '#A855F7', border: '1.5px solid var(--bg)', zIndex: 2 }} />
-                    )}
-                    {conv.isGroup && conv.avatar2
-                      ? <StackedDiamondAvatar color1={conv.avatar} color2={conv.avatar2} size={44} />
-                      : <DiamondAvatar color={conv.avatar} size={44} />
-                    }
-                  </div>
-                  <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-55)', maxWidth: 48, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {conv.name.length > 8 ? conv.name.slice(0, 8) : conv.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Search */}
-          <div style={{ padding: '0 16px 10px', flexShrink: 0 }}>
+          {/* Search (disabled v1) */}
+          <div style={{ padding: '12px 16px 8px', flexShrink: 0 }}>
             <input
               type="text"
               placeholder="Search conversations"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 20, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              disabled
+              style={{
+                width: '100%', padding: '10px 14px', borderRadius: 20,
+                border: '1px solid var(--fg-08)', background: 'var(--fg-08)',
+                color: 'var(--fg-25)', fontFamily: 'Space Grotesk, sans-serif',
+                fontSize: 14, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed',
+              }}
             />
           </div>
 
           {/* Conversation list */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
-            {filteredConvs.map(conv => (
+            {convLoading && (
+              <p style={{ padding: '32px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
+                Loading…
+              </p>
+            )}
+            {!convLoading && conversations.length === 0 && (
+              <p style={{ padding: '40px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
+                No conversations yet — tap Message on someone's profile to start one.
+              </p>
+            )}
+            {conversations.map(conv => (
               <div
                 key={conv.id}
-                onClick={() => setActiveConvId(conv.id)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px 12px 20px', cursor: 'pointer', borderBottom: '1px solid var(--fg-08)', position: 'relative' }}
+                onClick={() => openConversation(conv.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px 12px 20px',
+                  cursor: 'pointer', borderBottom: '1px solid var(--fg-08)',
+                  position: 'relative',
+                }}
               >
                 {conv.unread && (
-                  <div style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', width: 6, height: 6, borderRadius: '50%', background: '#A855F7' }} />
+                  <div style={{
+                    position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                    width: 6, height: 6, borderRadius: '50%', background: '#A855F7',
+                  }} />
                 )}
-                {conv.isGroup && conv.avatar2
-                  ? <StackedDiamondAvatar color1={conv.avatar} color2={conv.avatar2} size={36} />
-                  : <DiamondAvatar color={conv.avatar} size={36} />
-                }
+                <Diamond
+                  diamondUrl={conv.otherUser?.avatar_diamond_url ?? null}
+                  fallbackUrl={conv.otherUser?.avatar_url ?? null}
+                  size={40}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: conv.unread ? 700 : 500, fontSize: 14, color: 'var(--fg)' }}>
-                      {conv.name}
+                    <span style={{
+                      fontFamily: '"Playfair Display", serif',
+                      fontWeight: 700, fontSize: 15,
+                      color: 'var(--fg)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      @{conv.otherUser?.username ?? '—'}
+                      {conv.unread && (
+                        <span style={{
+                          display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                          background: '#A855F7', marginLeft: 6, verticalAlign: 'middle',
+                        }} />
+                      )}
                     </span>
                     <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-30)', flexShrink: 0 }}>
-                      {conv.timestamp}
+                      {conv.lastMessage ? fmtTimeAgo(conv.lastMessage.created_at) : fmtTimeAgo(conv.lastMessageAt)}
                     </span>
                   </div>
-                  <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: conv.unread ? 'var(--fg-65)' : 'var(--fg-30)', fontWeight: conv.unread ? 500 : 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {conv.lastMessage}
+                  <p style={{
+                    margin: '2px 0 0',
+                    fontFamily: 'Space Grotesk, sans-serif', fontSize: 12,
+                    color: conv.unread ? 'var(--fg-65)' : 'var(--fg-30)',
+                    fontWeight: conv.unread ? 500 : 400,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {conv.lastMessage
+                      ? (conv.lastMessage.sender_id === user?.id ? 'You: ' : '') + conv.lastMessage.body
+                      : 'No messages yet'}
                   </p>
                 </div>
               </div>
             ))}
-            {filteredConvs.length === 0 && (
-              <p style={{ padding: '40px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
-                No conversations yet
-              </p>
-            )}
           </div>
         </div>
 
         {/* ── CONVERSATION PANEL (slides in from RIGHT) ── */}
         <div style={{
-          position: 'absolute', inset: 0,
+          position: 'absolute', inset: 0, zIndex: 10,
           background: 'var(--bg)',
-          zIndex: 10,
-          display: 'flex',
-          flexDirection: 'column',
-          transform: activeConv ? 'translateX(0)' : 'translateX(100%)',
+          display: 'flex', flexDirection: 'column',
+          transform: openConvId ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.32s cubic-bezier(0.4,0,0.2,1)',
         }}>
-          {activeConv && (
+          {openConvId && (
             <>
-              {/* Conversation header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
+              {/* Header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '14px 16px 10px', flexShrink: 0,
+                borderBottom: '1px solid var(--fg-08)',
+              }}>
                 <button
                   onClick={closeConv}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: '0 8px 0 0', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--fg-55)', padding: '0 8px 0 0',
+                    fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700,
+                    fontSize: 13, letterSpacing: '0.1em',
+                  }}
                 >← BACK</button>
-                {activeConv.isGroup && activeConv.avatar2
-                  ? <StackedDiamondAvatar color1={activeConv.avatar} color2={activeConv.avatar2} size={30} />
-                  : <DiamondAvatar color={activeConv.avatar} size={30} />
-                }
-                <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>
-                  {activeConv.name}
-                </span>
+                {openConv && (
+                  <>
+                    <Diamond
+                      diamondUrl={openConv.otherUser?.avatar_diamond_url ?? null}
+                      fallbackUrl={openConv.otherUser?.avatar_url ?? null}
+                      size={32}
+                    />
+                    <span style={{
+                      fontFamily: '"Playfair Display", serif', fontWeight: 700,
+                      fontSize: 15, color: 'var(--fg)',
+                    }}>
+                      @{openConv.otherUser?.username ?? '—'}
+                    </span>
+                  </>
+                )}
               </div>
 
-              {/* Message thread */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-                {convMsgs.map((msg, i) => {
-                  const isMine = msg.senderId === 'me'
-                  const prevMsg = convMsgs[i - 1]
-                  const showTs = i === 0 || msg.ts !== prevMsg?.ts
-                  const event = msg.eventId
-                    ? (mockEventCards[msg.eventId] ?? upcomingEvents.find(e => e.id === msg.eventId) ?? null)
-                    : null
-
+              {/* Messages */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {msgLoading && (
+                  <p style={{ textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: '24px 0' }}>
+                    Loading…
+                  </p>
+                )}
+                {!msgLoading && messages.map((msg, i) => {
+                  const isMine = msg.sender_id === user?.id
+                  const prev = messages[i - 1]
                   return (
                     <div key={msg.id}>
-                      {showTs && i > 0 && (
-                        <p style={{ textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 10, color: 'var(--fg-25)', margin: '10px 0 4px', letterSpacing: '0.05em' }}>
-                          {msg.ts}
+                      {showTimestampBefore(msg, prev) && (
+                        <p style={{
+                          textAlign: 'center', margin: '10px 0 4px',
+                          fontFamily: 'Space Grotesk, sans-serif', fontSize: 10,
+                          color: 'var(--fg-25)', letterSpacing: '0.05em',
+                        }}>
+                          {fmtMsgTime(msg.created_at)}
                         </p>
                       )}
                       <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
-                        {event ? (
-                          <EventCard event={event} />
-                        ) : msg.content ? (
-                          <div style={{
-                            maxWidth: '75%',
-                            padding: '9px 14px',
-                            borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                            background: isMine ? '#A855F7' : 'var(--fg-08)',
-                            color: isMine ? '#fff' : 'var(--fg)',
-                            fontFamily: 'Space Grotesk, sans-serif',
-                            fontSize: 14,
-                            lineHeight: 1.4,
-                            wordBreak: 'break-word',
-                          }}>
-                            {msg.content}
-                          </div>
-                        ) : null}
+                        <div style={{
+                          maxWidth: '75%', padding: '9px 14px',
+                          borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                          background: isMine ? '#A855F7' : 'var(--fg-08)',
+                          color: isMine ? '#fff' : 'var(--fg)',
+                          fontFamily: 'Space Grotesk, sans-serif', fontSize: 14,
+                          lineHeight: 1.4, wordBreak: 'break-word',
+                        }}>
+                          {msg.body}
+                        </div>
                       </div>
                     </div>
                   )
@@ -356,100 +485,45 @@ export function MsgScreen() {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Event picker (slides in above input bar) */}
-              {showEventPicker && (
-                <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-18)', background: 'var(--bg)', maxHeight: 220, overflowY: 'auto' }}>
-                  <p style={{ margin: 0, padding: '10px 16px 6px', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-                    Share a show
-                  </p>
-                  {upcomingEvents.map(ev => (
-                    <div
-                      key={ev.id}
-                      onClick={() => { setPendingEvent(ev); setShowEventPicker(false) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', cursor: 'pointer', borderBottom: '1px solid var(--fg-08)' }}
-                    >
-                      <div style={{ width: 28, height: 42, borderRadius: 3, background: ev.color, flexShrink: 0 }} />
-                      <div>
-                        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 13, color: 'var(--fg)' }}>{ev.title}</p>
-                        <p style={{ margin: '2px 0 0', fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>{ev.venue} · {fmtDate(ev.starts_at)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {/* Input bar */}
-              <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-08)', padding: '8px 12px', paddingBottom: 'calc(8px + env(safe-area-inset-bottom))', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {pendingEvent && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <EventCard event={pendingEvent} compact />
-                    <button onClick={() => setPendingEvent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
-                  </div>
-                )}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button
-                    onClick={() => setShowEventPicker(v => !v)}
-                    style={{ background: showEventPicker ? 'var(--fg-15)' : 'none', border: '1px solid var(--fg-15)', borderRadius: 8, cursor: 'pointer', color: 'var(--fg-55)', padding: '6px 8px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
-                  >
-                    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <rect x="3" y="3" width="7" height="10" rx="1" />
-                      <rect x="14" y="3" width="7" height="10" rx="1" />
-                      <rect x="3" y="17" width="18" height="4" rx="1" />
-                    </svg>
-                  </button>
-                  <input
-                    type="text"
-                    placeholder="Message…"
-                    value={messageText}
-                    onChange={e => setMessageText(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
-                    style={{ flex: 1, padding: '10px 14px', borderRadius: 20, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, outline: 'none' }}
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!messageText.trim() && !pendingEvent}
-                    style={{ background: (messageText.trim() || pendingEvent) ? '#A855F7' : 'var(--fg-15)', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: (messageText.trim() || pendingEvent) ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.15s' }}
-                  >
-                    <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2">
-                      <line x1="22" y1="2" x2="11" y2="13" />
-                      <polygon points="22 2 15 22 11 13 2 9 22 2" />
-                    </svg>
-                  </button>
-                </div>
+              <div style={{
+                flexShrink: 0, borderTop: '1px solid var(--fg-08)',
+                padding: '8px 12px',
+                paddingBottom: 'calc(8px + env(safe-area-inset-bottom))',
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <input
+                  type="text"
+                  placeholder="Message…"
+                  value={messageText}
+                  onChange={e => setMessageText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                  style={{
+                    flex: 1, padding: '10px 14px', borderRadius: 20,
+                    border: '1px solid var(--fg-15)', background: 'var(--fg-08)',
+                    color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif',
+                    fontSize: 14, outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!messageText.trim() || sending}
+                  style={{
+                    background: messageText.trim() ? '#A855F7' : 'var(--fg-15)',
+                    border: 'none', borderRadius: '50%', width: 38, height: 38,
+                    cursor: messageText.trim() ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, transition: 'background 0.15s',
+                  }}
+                >
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
               </div>
             </>
           )}
-        </div>
-
-        {/* ── COMPOSE OVERLAY (new conversation) ── */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'var(--bg)',
-          zIndex: 20,
-          display: 'flex',
-          flexDirection: 'column',
-          transform: showCompose ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.32s cubic-bezier(0.4,0,0.2,1)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
-            <button
-              onClick={() => { setShowCompose(false); setComposeSearch('') }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: '0 8px 0 0', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}
-            >← BACK</button>
-            <span style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 18, color: 'var(--fg)' }}>New Message</span>
-          </div>
-          <div style={{ padding: '12px 16px' }}>
-            <input
-              type="text"
-              placeholder="Search @username"
-              value={composeSearch}
-              onChange={e => setComposeSearch(e.target.value)}
-              style={{ width: '100%', padding: '10px 14px', borderRadius: 20, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-          <p style={{ padding: '4px 16px', margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', fontStyle: 'italic' }}>
-            Search for a friend to start a conversation.
-          </p>
         </div>
 
       </div>

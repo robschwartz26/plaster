@@ -6,6 +6,7 @@ import { BottomNav } from '@/components/BottomNav'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
+import { createOrGetConversation } from '@/lib/messaging'
 
 // ── Mock feed ──────────────────────────────────────────────────────────────
 
@@ -323,7 +324,14 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
         <button style={btnPrimary}>Follow</button>
-        <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
+        <button
+          style={btnSecondary}
+          onClick={async () => {
+            if (!profile?.id) return
+            const convId = await createOrGetConversation(profile.id)
+            if (convId) navigate('/msg', { state: { openConversationId: convId } })
+          }}
+        >Message</button>
       </div>
 
       {avatarFullscreenId && (
