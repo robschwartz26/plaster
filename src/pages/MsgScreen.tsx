@@ -70,8 +70,11 @@ export function MsgScreen() {
   const [msgLoading,       setMsgLoading]       = useState(false)
   const [messageText,      setMessageText]      = useState('')
   const [sending,          setSending]          = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const myConvIdsRef   = useRef<Set<string>>(new Set())
+  const messagesEndRef  = useRef<HTMLDivElement>(null)
+  const myConvIdsRef    = useRef<Set<string>>(new Set())
+  const openConvIdRef   = useRef<string | null>(openConvId)
+
+  useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
   const openConv = conversations.find(c => c.id === openConvId) ?? null
 
@@ -253,7 +256,7 @@ export function MsgScreen() {
           const msg = payload.new as Message & { conversation_id: string }
           if (!myConvIdsRef.current.has(msg.conversation_id)) return
           if (msg.sender_id === user.id) return
-          if (msg.conversation_id === openConvId) return // already reading it
+          if (msg.conversation_id === openConvIdRef.current) return // already reading it
           setConversations(prev =>
             prev.map(c => c.id === msg.conversation_id
               ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
@@ -265,7 +268,7 @@ export function MsgScreen() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user, openConvId])
+  }, [user])
 
   // ── Send message ─────────────────────────────────────────────────────────
   async function sendMessage() {
