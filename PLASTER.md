@@ -464,6 +464,7 @@ This logic must be maintained throughout the entire app.
 - The actual error message in the WebSocket handshake response (never retrieved — this is the most important unknown)
 
 **Next investigation path (fresh session):**
+0. **Start here:** Realtime worked easily on Rob's Swapper project. Compare Plaster vs Swapper side-by-side to find the config difference. Specific comparisons: (1) anon key format and age in each project's Vercel env vars, (2) `src/lib/supabase.ts` config, (3) subscription setup in the code, (4) whether each Supabase project's JWT key has been rotated recently. The delta between working Swapper and broken Plaster is the bug.
 1. Open Network tab → filter by `WS` → click the failing WebSocket connection → read the actual rejection reason from the server response headers
 2. Check Supabase dashboard for project-level realtime enable toggle
 3. Verify legacy anon key in Vercel matches current legacy anon key in Supabase dashboard → Settings → API → `anon` `legacy` key
