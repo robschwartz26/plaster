@@ -26,10 +26,10 @@ export function DatePoster({ date }: Props) {
   const monthNum  = String(month).padStart(2, '0')
 
   const night  = theme === 'night'
-  const BG     = night ? '#1a1a1a' : '#F5F1EB'
-  const FG     = night ? '#F5F1EB' : '#1a1a1a'
-  const BAR_BG = night ? '#F5F1EB' : '#1a1a1a'
-  const BAR_FG = night ? '#1a1a1a' : '#F5F1EB'
+  const BG     = night ? '#1a1a1a' : '#f0ece3'
+  const FG     = night ? '#f0ece3' : '#1a1a1a'
+  const BAR_BG = night ? '#f0ece3' : '#1a1a1a'
+  const BAR_FG = night ? '#1a1a1a' : '#f0ece3'
 
   const base: React.CSSProperties = {
     aspectRatio: '2/3',
