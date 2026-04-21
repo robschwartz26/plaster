@@ -10,6 +10,9 @@ export interface FollowVenue {
   address: string | null
   cover_url: string | null
   avatar_url: string | null
+  banner_url: string | null
+  diamond_focal_x: number | null
+  diamond_focal_y: number | null
 }
 
 interface VenueEvent {
@@ -113,9 +116,9 @@ export function VenueSubPanel({ venue, onBack }: Props) {
 
         {/* Banner */}
         <div style={{ width: '100%', aspectRatio: '16/9', background: 'var(--fg-08)', overflow: 'hidden', flexShrink: 0 }}>
-          {venue.cover_url ? (
+          {(venue.banner_url ?? venue.cover_url) ? (
             <img
-              src={venue.cover_url}
+              src={venue.banner_url ?? venue.cover_url!}
               alt={venue.name}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />

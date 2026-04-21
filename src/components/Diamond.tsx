@@ -4,13 +4,18 @@ interface Props {
   size: number
   onClick?: () => void
   altText?: string
+  focalX?: number | null
+  focalY?: number | null
 }
 
-export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText }: Props) {
+export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText, focalX, focalY }: Props) {
   const src = diamondUrl ?? fallbackUrl ?? null
   const half = size / 2
   const inset = size * 0.05
   const pts = `${half},${inset} ${size - inset},${half} ${half},${size - inset} ${inset},${half}`
+  const objectPosition = (focalX != null && focalY != null)
+    ? `${focalX * 100}% ${focalY * 100}%`
+    : 'center'
 
   if (!src) {
     return (
@@ -46,6 +51,7 @@ export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText }: Pro
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           objectFit: 'cover',
+          objectPosition,
           filter: 'blur(16px) brightness(0.7)',
           transform: 'scale(1.3)',
           pointerEvents: 'none',
@@ -58,7 +64,7 @@ export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText }: Pro
         draggable={false}
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', display: 'block',
+          objectFit: 'cover', objectPosition, display: 'block',
           pointerEvents: 'none',
         }}
         onError={e => { e.currentTarget.style.display = 'none' }}

@@ -91,7 +91,7 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
         .order('created_at', { ascending: false }),
       supabase
         .from('venue_follows')
-        .select('venue:venue_id(id, name, neighborhood, address, cover_url, avatar_url)')
+        .select('venue:venue_id(id, name, neighborhood, address, cover_url, avatar_url, banner_url, diamond_focal_x, diamond_focal_y)')
         .eq('user_id', userId)
         .order('created_at', { ascending: false }),
     ])
@@ -223,8 +223,10 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer' }}
                 >
                   <Diamond
-                    diamondUrl={null}
-                    fallbackUrl={venue.avatar_url ?? venue.cover_url}
+                    diamondUrl={venue.banner_url}
+                    fallbackUrl={venue.avatar_url}
+                    focalX={venue.diamond_focal_x}
+                    focalY={venue.diamond_focal_y}
                     size={36}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
