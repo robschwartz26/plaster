@@ -148,6 +148,9 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
+  const [imgState, setImgState] = useState<'loading' | 'loaded' | 'error'>('loading')
+
+  useEffect(() => { setImgState('loading') }, [event.poster_url])
 
   // ── 2-5 col: double-tap → zoom to 1-col ───────────────────────────────
   const lastTap = useRef(0)
@@ -567,22 +570,27 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     >
       {event.poster_url ? (
         <>
-          {/* Backdrop — sampled colors from poster corners, identical at all column counts */}
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: sampledBackdrop ?? gradient,
-            transition: 'background 0.3s ease',
-          }} />
-          {/* Centered poster — contain by default, cover when fill_frame is set */}
+          {/* Layer 1: shimmer while loading, sampled backdrop when loaded, gradient on error */}
+          {imgState === 'loading' ? (
+            <div className="poster-shimmer" style={{ position: 'absolute', inset: 0 }} />
+          ) : imgState === 'error' ? (
+            <div style={{ position: 'absolute', inset: 0, background: gradient }} />
+          ) : (
+            <div style={{ position: 'absolute', inset: 0, background: sampledBackdrop ?? gradient, transition: 'background 0.3s ease' }} />
+          )}
+          {/* Layer 2: poster image — invisible until loaded, hidden on error */}
           <img
             src={event.poster_url}
             alt={event.title}
+            onLoad={() => setImgState('loaded')}
+            onError={() => setImgState('error')}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
               objectFit: event.fill_frame ? 'cover' : 'contain',
               objectPosition: event.fill_frame ? `${(event.focal_x ?? 0.5) * 100}% ${(event.focal_y ?? 0.5) * 100}%` : undefined,
               transform: !event.fill_frame && (event.poster_offset_x || event.poster_offset_y) ? `translate(${event.poster_offset_x ?? 0}%, ${event.poster_offset_y ?? 0}%)` : undefined,
+              opacity: imgState === 'loaded' ? 1 : 0,
               pointerEvents: 'none',
               userSelect: 'none',
             }}
