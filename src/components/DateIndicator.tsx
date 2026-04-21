@@ -1,4 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion'
+import { useTheme } from '@/hooks/useTheme'
 
 export interface EventInfo {
   id: string
@@ -15,6 +16,7 @@ interface Props {
   today: string
   eventInfo?: EventInfo | null // when set, show event details instead of date
   onVenueTap?: (venueId: string) => void
+  atDatePoster?: { month: number } | null // when set (1-col on a DatePoster), show blank bar
 }
 
 function formatDateBlocks(dateStr: string, today: string) {
@@ -58,9 +60,17 @@ const BLOCK_BASE: React.CSSProperties = {
   display: 'inline-block',
 }
 
-export function DateIndicator({ activeDay, today, eventInfo, onVenueTap }: Props) {
+export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDatePoster }: Props) {
+  const { theme } = useTheme()
+  // topbar style months (April=4, October=10) have an inverted top bar that reads
+  // as continuous with the blank bar — same color in both cases, but kept explicit.
+  const isTopbarMonth = atDatePoster ? (atDatePoster.month - 1) % 6 === 3 : false
+  const blankBarColor = isTopbarMonth
+    ? (theme === 'night' ? '#f0ece3' : '#1a1a1a')
+    : (theme === 'night' ? '#f0ece3' : '#1a1a1a')
+
   // Determine which content key to use — drives the cross-fade
-  const contentKey = eventInfo ? `ev:${eventInfo.id}` : activeDay ?? 'none'
+  const contentKey = eventInfo ? `ev:${eventInfo.id}` : atDatePoster ? `dp:${activeDay}` : activeDay ?? 'none'
 
   return (
     <div
@@ -78,7 +88,7 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap }: Props
           transition={{ duration: 0.18 }}
         >
           {eventInfo ? (
-            // ── Event info mode (1-col) ──────────────────────────────
+            // ── Event info mode (1-col, regular poster) ──────────────
             <>
               {/* Left — title · venue · time pills */}
               <div className="flex items-center gap-1.5 overflow-hidden" style={{ flex: 1, minWidth: 0 }}>
@@ -128,6 +138,9 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap }: Props
                 </span>
               </div>
             </>
+          ) : atDatePoster ? (
+            // ── Blank bar mode (1-col, DatePoster at top) ────────────
+            <div style={{ height: 20, width: '100%', borderRadius: 2, background: blankBarColor }} />
           ) : activeDay ? (
             // ── Date mode (2-5 col) ──────────────────────────────────
             (() => {

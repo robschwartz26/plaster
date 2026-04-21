@@ -52,6 +52,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const [activeEventIdx, setActiveEventIdx] = useState(0)
+  const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
@@ -228,6 +229,13 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
       eventIdx = walledIdxToEventIdx[wi] ?? 0
       setActiveEventIdx(eventIdx)
+      const topItem = walledItems[wi]
+      if (topItem?.type === 'date-poster') {
+        const month = parseInt(topItem.date.split('-')[1], 10)
+        setAtDatePoster({ month })
+      } else {
+        setAtDatePoster(null)
+      }
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
@@ -271,6 +279,11 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     setCols(1)
     onOpenEventHandled?.()
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear date-poster overlay state when leaving 1-col view.
+  useEffect(() => {
+    if (cols !== 1) setAtDatePoster(null)
+  }, [cols])
 
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
@@ -318,7 +331,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Date indicator — sticky above scroll area */}
       <div className="shrink-0 z-10" style={{ background: 'var(--bg)' }}>
-        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} onVenueTap={onVenueTap} />
+        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} onVenueTap={onVenueTap} atDatePoster={atDatePoster} />
       </div>
 
       {IS_DEV && (
