@@ -415,6 +415,89 @@ This logic must be maintained throughout the entire app.
 
 ---
 
+## VENUE ADMIN & IMAGERY — PLANNED
+
+### Status as of 2026-04-21
+`banner_url` and `diamond_focal_x` / `diamond_focal_y` columns exist on the `venues` table (migration 005). Diamond rendering from banners with focal-point positioning is wired up in the `Diamond` component (shipped 2026-04-21). The venue banner upload UI has never been built — every venue currently has NULL for `banner_url`. Venue admin management UI does not exist.
+
+---
+
+### Part A — Venue management segment in /admin (PARKED)
+A list view in Admin.tsx showing all venues in the database. Tap a venue → opens that venue's dashboard view. The dashboard is the MVP of what venue owners will eventually use to manage their own pages — for now, the Plaster admin controls it; later, venues authenticate and manage it themselves.
+
+Dashboard should include:
+- Editable venue name, neighborhood, address, description
+- Banner image (upload / replace / view)
+- Diamond image (upload / replace / toggle between custom diamond vs auto-derived from banner)
+- Diamond focal-point positioner (drag UI to set focal_x / focal_y on the banner)
+- List of upcoming events at this venue with basic metadata
+- Social links (instagram, website)
+- Hours
+
+---
+
+### Part B — Banner + diamond upload during event ingest (PARKED)
+In the existing AI ingest flow in Admin.tsx, when an event is being reviewed before save, add two optional drop zones for that event's venue:
+
+**Drop zone 1 — Venue banner photo**
+- Upload/replace the venue's banner image
+- Shows a live preview of how the banner will look on the venue page (full-width hero treatment)
+- On save: uploads to `avatars/venues/{venue_id}-banner.{ext}`, writes URL to `venues.banner_url`
+- Overwrites any existing banner
+
+**Drop zone 2 — Venue diamond photo (optional)**
+- Upload an optional custom diamond image for the venue
+- If left empty: diamond defaults to a center-focal crop of the banner (existing behavior, focal_x=0.5, focal_y=0.5)
+- If filled: stored as a separate image file, and the venue's diamond is rendered from this custom image instead of a banner crop
+- This requires adding an `avatar_diamond_url` column to venues (it does NOT currently exist — verified via live schema query on 2026-04-21)
+
+Both drop zones are optional. Ingest flow must still succeed if neither is touched — just creates the event row as today.
+
+---
+
+### Part C — Custom diamond vs derived-from-banner
+**Schema change required (new migration):**
+```sql
+ALTER TABLE venues ADD COLUMN IF NOT EXISTS avatar_diamond_url text;
+```
+
+**Diamond rendering precedence:**
+1. If `avatar_diamond_url` is set → render the diamond from that image (custom, no focal math needed)
+2. If only `banner_url` is set → render from banner using `diamond_focal_x` / `diamond_focal_y` (current behavior)
+3. If neither is set → dashed-diamond placeholder (current fallback)
+
+**Rule:** When a venue has both a custom diamond and a banner, the custom diamond always wins for diamond contexts (feed rows, map pins, list items, friend panels). The banner is used only for the banner area on VenueSubPanel and full VenueProfile pages.
+
+Update every Diamond call site that currently renders a venue to first check `venue.avatar_diamond_url`, and only fall back to `venue.banner_url` + focal if the custom diamond is absent. The Diamond component itself doesn't change — just the prop values passed into it.
+
+---
+
+### Part D — Focal-point positioner UI
+Accessible from two places:
+1. **Admin venue dashboard (Part A)** — admin can adjust focal for any venue at any time
+2. **Venue's own page, eventually** — lets venues tweak their own focal after authenticating (aspirational, not needed for first ship)
+
+**UI behavior:**
+- Modal or embedded view showing the full banner with a draggable diamond-shaped outline overlay
+- User drags the diamond around the banner to position which region gets cropped
+- On release: saves updated `focal_x` / `focal_y` (fractions 0–1) to the venues row
+- Diamond outline size: roughly 1/4 of the banner's shorter dimension
+
+**Default focal point when no focal set yet:** center (0.5, 0.5). Not random — random focal points would make the same venue look different across screens.
+
+---
+
+### Build order
+When this gets built (likely a dedicated session or mini-milestone):
+1. Migration: add `avatar_diamond_url` column to venues
+2. Update Diamond call sites to check custom diamond first, fall back to banner+focal
+3. Ingest flow: add banner drop zone + diamond drop zone
+4. Admin: venue list + venue dashboard skeleton
+5. Admin: focal-point positioner UI in the venue dashboard
+6. (Later, aspirational): venue-owner auth so venues can manage their own pages
+
+---
+
 ## Known Bugs
 1. **Avatar upload 400** in YouScreen.tsx — fix storage upload path and upsert
 2. **LINE UP profile panels** — built but need testing, tap diamond to confirm slide-in works
