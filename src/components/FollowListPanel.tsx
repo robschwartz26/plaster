@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { createOrGetConversation } from '@/lib/messaging'
+import { VenueSubPanel, type FollowVenue } from '@/components/VenueSubPanel'
 
 interface FollowUser {
   id: string
@@ -48,13 +49,15 @@ interface Props {
 }
 
 export function FollowListPanel({ userId, currentUserId, initialTab, open, onClose, following, onFollowToggle }: Props) {
-  const [tab,           setTab]           = useState<'followers' | 'following'>(initialTab)
-  const [searchQuery,   setSearchQuery]   = useState('')
-  const [followersData, setFollowersData] = useState<FollowUser[] | null>(null)
-  const [followingData, setFollowingData] = useState<FollowUser[] | null>(null)
-  const [profileUser,   setProfileUser]   = useState<FollowUser | null>(null)
-  const [profileCounts, setProfileCounts] = useState<{ followers: number; following: number } | null>(null)
-  const [avatarFsId,    setAvatarFsId]    = useState<string | null>(null)
+  const [tab,             setTab]             = useState<'followers' | 'following'>(initialTab)
+  const [searchQuery,     setSearchQuery]     = useState('')
+  const [followersData,   setFollowersData]   = useState<FollowUser[] | null>(null)
+  const [followingData,   setFollowingData]   = useState<FollowUser[] | null>(null)
+  const [followingVenues, setFollowingVenues] = useState<FollowVenue[] | null>(null)
+  const [profileUser,     setProfileUser]     = useState<FollowUser | null>(null)
+  const [profileCounts,   setProfileCounts]   = useState<{ followers: number; following: number } | null>(null)
+  const [openVenue,       setOpenVenue]       = useState<FollowVenue | null>(null)
+  const [avatarFsId,      setAvatarFsId]      = useState<string | null>(null)
 
   // When opened, sync to the tab that was tapped, reset search
   useEffect(() => {
@@ -79,13 +82,21 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
   }
 
   async function fetchFollowingList() {
-    const { data } = await supabase
-      .from('follows')
-      .select('user:following_id(id, username, avatar_diamond_url, avatar_url, bio)')
-      .eq('follower_id', userId)
-      .eq('status', 'accepted')
-      .order('created_at', { ascending: false })
-    setFollowingData(((data ?? []) as any[]).map(r => r.user).filter(Boolean))
+    const [{ data: people }, { data: venues }] = await Promise.all([
+      supabase
+        .from('follows')
+        .select('user:following_id(id, username, avatar_diamond_url, avatar_url, bio)')
+        .eq('follower_id', userId)
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('venue_follows')
+        .select('venue:venue_id(id, name, neighborhood, address, cover_url, avatar_url)')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false }),
+    ])
+    setFollowingData(((people ?? []) as any[]).map(r => r.user).filter(Boolean))
+    setFollowingVenues(((venues ?? []) as any[]).map(r => r.venue).filter(Boolean))
   }
 
   function openProfile(user: FollowUser) {
@@ -101,7 +112,7 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
   function closeProfile() { setProfileUser(null); setProfileCounts(null) }
 
   const currentList = (tab === 'followers' ? followersData : followingData) ?? []
-  const loading     = tab === 'followers' ? followersData === null : followingData === null
+  const loading     = tab === 'followers' ? followersData === null : (followingData === null || followingVenues === null)
   const needle      = searchQuery.replace(/^@/, '').toLowerCase()
   const filtered    = needle ? currentList.filter(u => u.username?.toLowerCase().includes(needle)) : currentList
 
@@ -164,44 +175,74 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
           ))}
         </div>
 
-        {/* User list */}
+        {/* List */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {loading && (
             <p style={{ margin: 0, padding: '24px 16px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>Loading…</p>
           )}
-          {!loading && filtered.length === 0 && (
-            <p style={{ margin: 0, padding: '24px 16px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
-              {needle ? 'No results' : tab === 'followers' ? 'No followers yet' : 'Not following anyone yet'}
-            </p>
-          )}
-          {filtered.map(user => (
-            <div
-              key={user.id}
-              onClick={() => openProfile(user)}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer' }}
-            >
-              <Diamond diamondUrl={user.avatar_diamond_url} fallbackUrl={user.avatar_url} size={36} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 15, color: 'var(--fg)' }}>
-                  @{user.username ?? '—'}
+
+          {/* Followers tab — flat list */}
+          {!loading && tab === 'followers' && (
+            <>
+              {filtered.length === 0 && (
+                <p style={{ margin: 0, padding: '24px 16px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
+                  {needle ? 'No results' : 'No followers yet'}
                 </p>
-                {user.bio && (
-                  <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {user.bio}
-                  </p>
-                )}
-              </div>
-              <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--fg-25)', flexShrink: 0 }}>
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </div>
-          ))}
+              )}
+              {filtered.map(user => (
+                <UserRow key={user.id} user={user} onTap={() => openProfile(user)} />
+              ))}
+            </>
+          )}
+
+          {/* Following tab — people + venues sections */}
+          {!loading && tab === 'following' && (
+            <>
+              {/* People section */}
+              <SectionHeader label="PEOPLE" count={filtered.length} />
+              {filtered.length === 0 && (
+                <p style={{ margin: 0, padding: '8px 16px 16px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
+                  {needle ? 'No results' : 'Not following anyone yet'}
+                </p>
+              )}
+              {filtered.map(user => (
+                <UserRow key={user.id} user={user} onTap={() => openProfile(user)} />
+              ))}
+
+              {/* Venues section */}
+              <SectionHeader label="VENUES" count={followingVenues?.length ?? 0} />
+              {(followingVenues ?? []).length === 0 && (
+                <p style={{ margin: 0, padding: '8px 16px 16px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
+                  Not following any venues yet
+                </p>
+              )}
+              {(followingVenues ?? []).map(venue => (
+                <div
+                  key={venue.id}
+                  onClick={() => setOpenVenue(venue)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer' }}
+                >
+                  <Diamond
+                    diamondUrl={null}
+                    fallbackUrl={venue.avatar_url ?? venue.cover_url}
+                    size={36}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 15, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {venue.name}
+                    </p>
+                  </div>
+                  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--fg-25)', flexShrink: 0 }}>
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── Profile sub-panel — sibling of main panel, slides from LEFT ── */}
-      {/* Must be a sibling (not child) of the main panel so its translateX(-100%)
-          doesn't cancel out the main panel's translateX(100%) when both are closed */}
+      {/* ── Profile sub-panel — slides from LEFT ── */}
       <div style={{
         position: 'absolute', inset: 0, zIndex: 40,
         background: 'var(--bg)',
@@ -223,10 +264,63 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
         )}
       </div>
 
+      {/* ── Venue sub-panel — slides from LEFT ── */}
+      <div style={{
+        position: 'absolute', inset: 0, zIndex: 40,
+        background: 'var(--bg)',
+        display: 'flex', flexDirection: 'column',
+        transform: (open && openVenue) ? 'translateX(0)' : 'translateX(-100%)',
+        transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+      }}>
+        {openVenue && (
+          <VenueSubPanel
+            key={openVenue.id}
+            venue={openVenue}
+            onBack={() => setOpenVenue(null)}
+          />
+        )}
+      </div>
+
       {avatarFsId && (
         <AvatarFullscreen userId={avatarFsId} onClose={() => setAvatarFsId(null)} />
       )}
     </>
+  )
+}
+
+// ── Small helpers ─────────────────────────────────────────────────────────
+
+function SectionHeader({ label, count }: { label: string; count: number }) {
+  return (
+    <div style={{ padding: '12px 16px 6px', borderBottom: '1px solid var(--fg-08)' }}>
+      <span style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+        {label} · {count}
+      </span>
+    </div>
+  )
+}
+
+function UserRow({ user, onTap }: { user: FollowUser; onTap: () => void }) {
+  return (
+    <div
+      onClick={onTap}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer' }}
+    >
+      <Diamond diamondUrl={user.avatar_diamond_url} fallbackUrl={user.avatar_url} size={36} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 15, color: 'var(--fg)' }}>
+          @{user.username ?? '—'}
+        </p>
+        {user.bio && (
+          <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user.bio}
+          </p>
+        )}
+      </div>
+      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--fg-25)', flexShrink: 0 }}>
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </div>
   )
 }
 
