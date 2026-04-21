@@ -572,7 +572,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         <>
           {/* Layer 1: shimmer while loading, sampled backdrop when loaded, gradient on error */}
           {imgState === 'loading' ? (
-            <div className="poster-shimmer" style={{ position: 'absolute', inset: 0 }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)' }} />
           ) : imgState === 'error' ? (
             <div style={{ position: 'absolute', inset: 0, background: gradient }} />
           ) : (
@@ -600,9 +600,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
       )}
 
-      {new Date(event.starts_at).toDateString() === new Date().toDateString() && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: 'var(--fg)', zIndex: 2 }} />
-      )}
 
       {cols <= 3 && (
         <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
