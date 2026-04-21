@@ -1,7 +1,12 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
+import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
+
+type WallItem =
+  | { type: 'poster'; event: WallEvent; eventIdx: number }
+  | { type: 'date-poster'; date: string }
 
 const IS_DEV = import.meta.env.DEV
 const GAP = 2 // px — only used in 2-5 col grid
@@ -73,6 +78,39 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     }
     return m
   }, [days, grouped])
+
+  const walledItems = useMemo<WallItem[]>(() => {
+    const items: WallItem[] = []
+    allEvents.forEach((event, i) => {
+      const currDate = event.starts_at.slice(0, 10)
+      const prevDate = i > 0 ? allEvents[i - 1].starts_at.slice(0, 10) : null
+      if (prevDate && prevDate !== currDate) {
+        items.push({ type: 'date-poster', date: currDate })
+      }
+      items.push({ type: 'poster', event, eventIdx: i })
+    })
+    return items
+  }, [allEvents])
+
+  // walledItems index → allEvents index (nearest poster at or before that position)
+  const walledIdxToEventIdx = useMemo(() => {
+    const result: number[] = []
+    let last = 0
+    for (const item of walledItems) {
+      if (item.type === 'poster') last = item.eventIdx
+      result.push(last)
+    }
+    return result
+  }, [walledItems])
+
+  // event id → walledItems index (for scroll-to on double-tap / openEventId)
+  const eventIdToWalledIdx = useMemo(() => {
+    const m = new Map<string, number>()
+    walledItems.forEach((item, wi) => {
+      if (item.type === 'poster') m.set(item.event.id, wi)
+    })
+    return m
+  }, [walledItems])
 
   // ── Pinch → column count at all col counts + peek zoom at 1-col ───────
   // Registered once ([] deps). colsRef.current always reflects latest cols.
@@ -174,29 +212,31 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   // ── Scroll → active day ────────────────────────────────────────────
   const handleScroll = useCallback(() => {
     const container = containerRef.current
-    if (!container || allEvents.length === 0) return
+    if (!container || walledItems.length === 0) return
 
     const { scrollTop, clientHeight, clientWidth } = container
-    let centerIndex: number
+    let eventIdx: number
 
     if (cols === 1) {
-      centerIndex = clamp(Math.round(scrollTop / clientHeight), 0, allEvents.length - 1)
-      setActiveEventIdx(centerIndex)
+      const wi = clamp(Math.round(scrollTop / clientHeight), 0, walledItems.length - 1)
+      eventIdx = walledIdxToEventIdx[wi] ?? 0
+      setActiveEventIdx(eventIdx)
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
       const centerRow = Math.floor((scrollTop + clientHeight / 2) / rowHeight)
-      centerIndex = clamp(centerRow * cols, 0, allEvents.length - 1)
+      const wi = clamp(centerRow * cols, 0, walledItems.length - 1)
+      eventIdx = walledIdxToEventIdx[wi] ?? 0
     }
 
-    const ev = allEvents[centerIndex]
+    const ev = allEvents[eventIdx]
     if (!ev) return
     const day = eventDayMap.get(ev.id) ?? days[0]
     if (day !== activeDay) {
       setActiveDay(day)
       onDayChange(day)
     }
-  }, [allEvents, eventDayMap, days, cols, activeDay, onDayChange])
+  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols, activeDay, onDayChange])
 
   useEffect(() => {
     const el = containerRef.current
@@ -209,21 +249,21 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   const pendingScrollIdxRef = useRef<number | null>(null)
 
   function handleDoubleTap(event: WallEvent) {
-    const idx = allEvents.findIndex((e) => e.id === event.id)
-    if (idx === -1) return
-    pendingScrollIdxRef.current = idx
+    const wi = eventIdToWalledIdx.get(event.id)
+    if (wi === undefined) return
+    pendingScrollIdxRef.current = wi
     setCols(1)
   }
 
   // Open a specific event in 1-col mode (e.g. tapped from Map panel).
   useEffect(() => {
-    if (!openEventId || allEvents.length === 0) return
-    const idx = allEvents.findIndex(e => e.id === openEventId)
-    if (idx === -1) return
-    pendingScrollIdxRef.current = idx
+    if (!openEventId || walledItems.length === 0) return
+    const wi = eventIdToWalledIdx.get(openEventId)
+    if (wi === undefined) return
+    pendingScrollIdxRef.current = wi
     setCols(1)
     onOpenEventHandled?.()
-  }, [openEventId, allEvents]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
@@ -307,38 +347,54 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
           // Cards are direct children of the scroll container.
           // height: 100% = the container's clientHeight exactly.
           // No grid wrapper — avoids the auto-height problem.
-          allEvents.map((event, idx) => (
-            <PosterCard
-              key={event.id}
-              event={event}
-              cols={1}
-              activeFilter={activeFilter}
-              isLiked={likedIds.has(event.id)}
-              isActive={idx === activeEventIdx}
-              onLike={onLike}
-              isAdminMode={isAdminMode}
-              onEventSaved={onEventSaved}
-              previousPosterUrl={prevUrlMap?.[event.id]}
-              onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
-              onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
-            />
-          ))
-        ) : (
-          // ── 2-5 col ───────────────────────────────────────────────
-          <div style={gridStyle}>
-            {allEvents.map((event) => (
+          walledItems.map((item) => {
+            if (item.type === 'date-poster') {
+              return (
+                <div key={`d-${item.date}`} style={{ height: '100%', flexShrink: 0, scrollSnapAlign: 'start' }}>
+                  <DatePoster date={item.date} />
+                </div>
+              )
+            }
+            const { event, eventIdx } = item
+            return (
               <PosterCard
-                key={event.id}
+                key={`p-${event.id}`}
                 event={event}
-                cols={cols}
+                cols={1}
                 activeFilter={activeFilter}
                 isLiked={likedIds.has(event.id)}
-                onDoubleTap={handleDoubleTap}
+                isActive={eventIdx === activeEventIdx}
                 onLike={onLike}
                 isAdminMode={isAdminMode}
                 onEventSaved={onEventSaved}
+                previousPosterUrl={prevUrlMap?.[event.id]}
+                onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
+                onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
               />
-            ))}
+            )
+          })
+        ) : (
+          // ── 2-5 col ───────────────────────────────────────────────
+          <div style={gridStyle}>
+            {walledItems.map((item) => {
+              if (item.type === 'date-poster') {
+                return <DatePoster key={`d-${item.date}`} date={item.date} />
+              }
+              const { event } = item
+              return (
+                <PosterCard
+                  key={`p-${event.id}`}
+                  event={event}
+                  cols={cols}
+                  activeFilter={activeFilter}
+                  isLiked={likedIds.has(event.id)}
+                  onDoubleTap={handleDoubleTap}
+                  onLike={onLike}
+                  isAdminMode={isAdminMode}
+                  onEventSaved={onEventSaved}
+                />
+              )
+            })}
             <div style={{ gridColumn: '1 / -1', height: 'var(--nav-height)' }} />
           </div>
         )}
