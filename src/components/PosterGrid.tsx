@@ -79,6 +79,13 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return m
   }, [days, grouped])
 
+  // Reset activeDay to days[0] when the filtered event set changes (filter chip change,
+  // initial load, or scroll back to top where days[0] is already activeDay).
+  useEffect(() => {
+    if (days.length === 0) return
+    if (!days.includes(activeDay)) setActiveDay(days[0])
+  }, [days]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const walledItems = useMemo<WallItem[]>(() => {
     const items: WallItem[] = []
     allEvents.forEach((event, i) => {
@@ -218,14 +225,14 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     let eventIdx: number
 
     if (cols === 1) {
-      const wi = clamp(Math.round(scrollTop / clientHeight), 0, walledItems.length - 1)
+      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
       eventIdx = walledIdxToEventIdx[wi] ?? 0
       setActiveEventIdx(eventIdx)
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
-      const centerRow = Math.floor((scrollTop + clientHeight / 2) / rowHeight)
-      const wi = clamp(centerRow * cols, 0, walledItems.length - 1)
+      const topRow = Math.floor(scrollTop / rowHeight)
+      const wi = clamp(topRow * cols, 0, walledItems.length - 1)
       eventIdx = walledIdxToEventIdx[wi] ?? 0
     }
 
