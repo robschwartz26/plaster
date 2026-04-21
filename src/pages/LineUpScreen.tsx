@@ -8,25 +8,7 @@ import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { createOrGetConversation } from '@/lib/messaging'
 
-// ── Mock feed ──────────────────────────────────────────────────────────────
-
-const mockFeed = [
-  { id: 1,  type: 'friend', avatar: '#7c3aed', name: 'neonrose',           text: 'is going to Low Bar Chorale at Showbar' },
-  { id: 2,  type: 'venue',  avatar: '#0f172a', name: 'Holocene',            text: "Small Skies, My Body & Frecks on the same bill Friday — don't sleep" },
-  { id: 3,  type: 'friend', avatar: '#ec4899', name: 'bobbybones',          text: 'liked Disco Always: A Harry Styles Dance Night' },
-  { id: 4,  type: 'friend', avatar: '#fb923c', name: 'drummerboy',          text: 'is going to Stumpfest XI at Mississippi Studios' },
-  { id: 5,  type: 'friend', avatar: '#a3e635', name: 'jazzfan99',           text: 'went to the Charlie Brown III Quartet at The 1905 last night' },
-  { id: 6,  type: 'artist', avatar: '#818cf8', name: 'The Wallflowers',     text: 'Portland. Revolution Hall. Tonight. See you there.' },
-  { id: 7,  type: 'friend', avatar: '#7dd3fc', name: 'pdxnights',           text: 'wrote on the Banff Mountain Film Festival wall: "the ski BASE jump segment had the whole room holding its breath"' },
-  { id: 8,  type: 'venue',  avatar: '#0f172a', name: 'Revolution Hall',     text: "Jenny Lawson tonight — doors 7pm, show 8pm. We're already crying." },
-  { id: 9,  type: 'friend', avatar: '#f472b6', name: 'glitterqueen',        text: '👑 was crowned Most Likely to Know Every Word at Holocene' },
-  { id: 10, type: 'friend', avatar: '#2dd4bf', name: 'NE crew',             text: 'Your NE crew is going to Weird Nightmare at Polaris Hall' },
-  { id: 11, type: 'friend', avatar: '#f97316', name: 'salsamove',           text: 'is going to Laffy Taffy: Freaknik Edition at Holocene' },
-  { id: 12, type: 'friend', avatar: '#7c3aed', name: 'neonrose',            text: 'is now a Regular at Showbar' },
-  { id: 13, type: 'friend', avatar: '#fb923c', name: 'drummerboy',          text: 'liked Marshall Crenshaw at Polaris Hall' },
-  { id: 14, type: 'friend', avatar: '#a3e635', name: 'jazzfan99',           text: 'is going to Babes in Canyon at Holocene' },
-  { id: 15, type: 'venue',  avatar: '#0f172a', name: 'Mississippi Studios', text: 'Stumpfest XI presale ends tonight — 12 bands, 2 days, all ages' },
-]
+// ── Mock lineup (fallback for personal panel when user has zero RSVPs) ─────
 
 const mockLineup = [
   { id: 'ml1', title: 'Low Bar Chorale',               venue: 'Showbar',             starts_at: '2026-04-18T20:00:00', poster_url: null, color: '#4c1d95' },
@@ -37,24 +19,36 @@ const mockLineup = [
   { id: 'ml6', title: 'Marshall Crenshaw',             venue: 'Polaris Hall',         starts_at: '2026-04-28T19:30:00', poster_url: null, color: '#1e3a5f' },
 ]
 
-const diamondQueue = ['#4c1d95', '#831843', '#0c4a6e', '#365314', '#7c2d12']
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
-interface EventRow   { id: string; title: string; poster_url: string; venue_name: string }
+interface FeedItem {
+  id: string
+  kind: 'rsvp' | 'like' | 'venue_post'
+  actor: {
+    id: string
+    name: string
+    avatar_diamond_url: string | null
+    avatar_url: string | null
+    banner_url: string | null
+    diamond_focal_x: number | null
+    diamond_focal_y: number | null
+    type: 'friend' | 'venue'
+  }
+  event: {
+    id: string
+    title: string
+    starts_at: string
+    poster_url: string | null
+    venue_name: string
+  } | null
+  body: string | null
+  created_at: string
+}
+
 interface LineupItem { id: string; title: string; venue: string; starts_at: string; poster_url: string | null; color: string }
 interface PanelEntry { type: 'venue' | 'artist' | 'friend'; name: string; color: string }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-function matchPoster(item: typeof mockFeed[0], events: EventRow[]): string | null {
-  if (!events.length) return null
-  const needle = (item.name + ' ' + item.text).toLowerCase()
-  for (const ev of events) {
-    if (needle.includes(ev.title.toLowerCase()) || needle.includes(ev.venue_name.toLowerCase())) return ev.poster_url
-  }
-  return null
-}
 
 function fmtTime(iso: string) {
   const d = new Date(iso), h = d.getHours(), m = d.getMinutes(), h12 = h % 12 || 12, ap = h < 12 ? 'am' : 'pm'
@@ -78,7 +72,6 @@ function DiamondImg({ color, posterUrl, size = 28, onTap }: { color: string; pos
   )
 }
 
-// Shared panel header: ← BACK left, name centered
 function PanelHeader({ name, onBack }: { name: string; onBack: () => void }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', position: 'relative' }}>
@@ -128,8 +121,6 @@ function VenuePanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PanelHeader name={venue?.name ?? entry.name} onBack={onBack} />
-
-      {/* Identity block */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
         <DiamondImg color={entry.color} posterUrl={venue?.cover_url ?? null} size={80} />
         <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0', textAlign: 'center' }}>
@@ -144,8 +135,6 @@ function VenuePanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; 
           {evts.length} upcoming {evts.length === 1 ? 'show' : 'shows'}
         </p>
       </div>
-
-      {/* Upcoming events */}
       <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
         {evts.length === 0 && (
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No upcoming events</p>
@@ -162,7 +151,6 @@ function VenuePanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; 
           </div>
         ))}
       </div>
-
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
         <button style={btnPrimary}>Follow</button>
         <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
@@ -186,8 +174,6 @@ function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PanelHeader name={entry.name} onBack={onBack} />
-
-      {/* Identity block */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
         <DiamondImg color={entry.color} posterUrl={null} size={80} />
         <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0', textAlign: 'center' }}>
@@ -200,8 +186,6 @@ function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
           {shows.length} upcoming Portland {shows.length === 1 ? 'show' : 'shows'}
         </p>
       </div>
-
-      {/* Upcoming shows */}
       <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
         {shows.length === 0 && (
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No upcoming Portland shows found</p>
@@ -220,7 +204,6 @@ function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
           </div>
         ))}
       </div>
-
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
         <button style={btnPrimary}>Follow</button>
         <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
@@ -246,8 +229,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
       .then(({ data }) => {
         const p = data?.[0]; if (!p) return
         setProfile(p)
-
-        // Attended posters + count
         supabase.from('attendees').select('events(poster_url, title)').eq('user_id', p.id).limit(12)
           .then(({ data: a }) => {
             if (a) {
@@ -256,16 +237,10 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
               setAttendedCount(items.length)
             }
           })
-
-        // Follower count (people following this user)
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', p.id).eq('status', 'accepted')
           .then(({ count }) => setFollowerCount(count ?? 0))
-
-        // Following count (people this user follows)
         supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', p.id).eq('status', 'accepted')
           .then(({ count }) => setFollowingCount(count ?? 0))
-
-        // Superlatives
         supabase.from('superlatives').select('title').eq('user_id', p.id).limit(6)
           .then(({ data: s }) => { if (s) setSuperlatives((s as any[]).map(r => r.title)) })
       })
@@ -274,8 +249,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PanelHeader name={profile?.username ? `@${profile.username}` : entry.name} onBack={onBack} />
-
-      {/* Identity block */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
         <Diamond
             diamondUrl={profile?.avatar_diamond_url ?? null}
@@ -294,8 +267,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
             {profile.bio}
           </p>
         )}
-
-        {/* Superlatives pills */}
         {superlatives.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, justifyContent: 'center' }}>
             {superlatives.map((s, i) => (
@@ -306,8 +277,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
           </div>
         )}
       </div>
-
-      {/* Attended poster grid */}
       <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
         {posters.length > 0 ? (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, padding: '2px' }}>
@@ -321,7 +290,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No attended events found</p>
         )}
       </div>
-
       <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
         <button style={btnPrimary}>Follow</button>
         <button
@@ -333,7 +301,6 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
           }}
         >Message</button>
       </div>
-
       {avatarFullscreenId && (
         <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
       )}
@@ -345,7 +312,8 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
 export default function LineUpScreen() {
   const { user } = useAuth()
-  const [events,     setEvents]     = useState<EventRow[]>([])
+  const [feed,       setFeed]       = useState<FeedItem[]>([])
+  const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
   const [lineup,     setLineup]     = useState<LineupItem[]>(mockLineup)
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
@@ -354,14 +322,151 @@ export default function LineUpScreen() {
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
   const topPanel  = panelStack[panelStack.length - 1] ?? null
 
+  // ── Real feed fetch ──────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.from('events').select('id, title, poster_url, venues(name)').not('poster_url', 'is', null)
-      .order('starts_at', { ascending: true }).limit(20)
-      .then(({ data }) => {
-        if (data) setEvents(data.map((e: any) => ({ id: e.id, title: e.title, poster_url: e.poster_url, venue_name: e.venues?.name ?? '' })))
-      })
-  }, [])
+    if (!user) return
 
+    async function fetchFeed() {
+      setFeedState('loading')
+      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+
+      // Step A: IDs to query against
+      const [{ data: myFollows }, { data: myVenueFollows }] = await Promise.all([
+        supabase.from('follows').select('following_id').eq('follower_id', user!.id).eq('status', 'accepted'),
+        supabase.from('venue_follows').select('venue_id').eq('user_id', user!.id),
+      ])
+
+      const followedUserIds  = (myFollows ?? []).map((f: any) => f.following_id)
+      const followedVenueIds = (myVenueFollows ?? []).map((v: any) => v.venue_id)
+
+      // Step B: three sources in parallel, skipping empty ID lists
+      const rsvpsPromise = followedUserIds.length
+        ? supabase.from('attendees')
+            .select('id, created_at, user_id, profiles(id, username, avatar_diamond_url, avatar_url), events(id, title, starts_at, poster_url, venue_id, venues(name))')
+            .in('user_id', followedUserIds)
+            .gte('created_at', fourteenDaysAgo)
+            .order('created_at', { ascending: false })
+            .limit(30)
+        : Promise.resolve({ data: [] as any[] })
+
+      const likesPromise = followedUserIds.length
+        ? supabase.from('event_likes')
+            .select('id, created_at, user_id, profiles(id, username, avatar_diamond_url, avatar_url), events(id, title, starts_at, poster_url, venue_id, venues(name))')
+            .in('user_id', followedUserIds)
+            .gte('created_at', fourteenDaysAgo)
+            .order('created_at', { ascending: false })
+            .limit(30)
+        : Promise.resolve({ data: [] as any[] })
+
+      const venuePostsPromise = followedVenueIds.length
+        ? supabase.from('event_wall_posts')
+            .select('id, created_at, body, events(id, title, starts_at, poster_url, venue_id, venues(id, name, avatar_url, banner_url, diamond_focal_x, diamond_focal_y))')
+            .eq('is_venue_post', true)
+            .not('body', 'is', null)
+            .gte('created_at', fourteenDaysAgo)
+            .order('created_at', { ascending: false })
+            .limit(30)
+        : Promise.resolve({ data: [] as any[] })
+
+      const [rsvpsRes, likesRes, venuePostsRes] = await Promise.all([rsvpsPromise, likesPromise, venuePostsPromise])
+
+      // Step C: transform to FeedItem[]
+      const rsvpItems: FeedItem[] = ((rsvpsRes.data ?? []) as any[])
+        .filter(r => r.profiles && r.events)
+        .map(r => ({
+          id: `${r.id}-rsvp`,
+          kind: 'rsvp',
+          actor: {
+            id: r.profiles.id,
+            name: r.profiles.username ?? '',
+            avatar_diamond_url: r.profiles.avatar_diamond_url ?? null,
+            avatar_url: r.profiles.avatar_url ?? null,
+            banner_url: null,
+            diamond_focal_x: null,
+            diamond_focal_y: null,
+            type: 'friend',
+          },
+          event: {
+            id: r.events.id,
+            title: r.events.title,
+            starts_at: r.events.starts_at,
+            poster_url: r.events.poster_url ?? null,
+            venue_name: r.events.venues?.name ?? '',
+          },
+          body: null,
+          created_at: r.created_at,
+        }))
+
+      const likeItems: FeedItem[] = ((likesRes.data ?? []) as any[])
+        .filter(r => r.profiles && r.events)
+        .map(r => ({
+          id: `${r.id}-like`,
+          kind: 'like',
+          actor: {
+            id: r.profiles.id,
+            name: r.profiles.username ?? '',
+            avatar_diamond_url: r.profiles.avatar_diamond_url ?? null,
+            avatar_url: r.profiles.avatar_url ?? null,
+            banner_url: null,
+            diamond_focal_x: null,
+            diamond_focal_y: null,
+            type: 'friend',
+          },
+          event: {
+            id: r.events.id,
+            title: r.events.title,
+            starts_at: r.events.starts_at,
+            poster_url: r.events.poster_url ?? null,
+            venue_name: r.events.venues?.name ?? '',
+          },
+          body: null,
+          created_at: r.created_at,
+        }))
+
+      const venuePostItems: FeedItem[] = ((venuePostsRes.data ?? []) as any[])
+        .filter(r => r.events?.venues && followedVenueIds.includes(r.events.venue_id))
+        .map(r => {
+          const v = r.events.venues
+          return {
+            id: `${r.id}-venue_post`,
+            kind: 'venue_post',
+            actor: {
+              id: v.id,
+              name: v.name ?? '',
+              avatar_diamond_url: null,
+              avatar_url: v.avatar_url ?? null,
+              banner_url: v.banner_url ?? null,
+              diamond_focal_x: v.diamond_focal_x ?? null,
+              diamond_focal_y: v.diamond_focal_y ?? null,
+              type: 'venue',
+            },
+            event: {
+              id: r.events.id,
+              title: r.events.title,
+              starts_at: r.events.starts_at,
+              poster_url: r.events.poster_url ?? null,
+              venue_name: v.name ?? '',
+            },
+            body: r.body ?? null,
+            created_at: r.created_at,
+          }
+        })
+
+      // Step D: merge, sort, dedupe, limit
+      const seen = new Set<string>()
+      const merged = [...rsvpItems, ...likeItems, ...venuePostItems]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true })
+        .slice(0, 50)
+
+      setFeed(merged)
+      setFeedState('ready')
+    }
+
+    fetchFeed()
+  }, [user])
+
+  // ── Personal lineup (real RSVPs, falls back to mock) ─────────────────────
   useEffect(() => {
     if (!user) return
     const now = new Date().toISOString()
@@ -389,26 +494,48 @@ export default function LineUpScreen() {
       {/* Content area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-        {/* Diamond queue (right edge) */}
-        <div style={{ position: 'absolute', right: 10, top: 4, display: 'flex', flexDirection: 'column', gap: 8, zIndex: 5, pointerEvents: 'none' }}>
-          {diamondQueue.map((color, i) => (
-            <DiamondImg key={i} color={color} posterUrl={events[i]?.poster_url ?? null} size={34} />
-          ))}
-        </div>
-
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-          {mockFeed.map((item, i) => (
+          {feedState === 'loading' && (
+            <p style={{ margin: 0, padding: '40px 20px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
+              Loading…
+            </p>
+          )}
+
+          {feedState === 'ready' && feed.length === 0 && (
+            <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 14, color: 'var(--fg-55)', lineHeight: 1.5 }}>
+                Follow venues and people to see their activity here
+              </p>
+              <p style={{ margin: '8px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+                Browse venues on the Map · Find people on your profile
+              </p>
+            </div>
+          )}
+
+          {feedState === 'ready' && feed.map((item, i) => (
             <React.Fragment key={item.id}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 9, paddingBottom: 9, paddingRight: 54, paddingLeft: item.type === 'venue' ? 14 : item.type === 'artist' ? 24 : 36 }}>
-                <DiamondImg
-                  color={item.avatar}
-                  posterUrl={matchPoster(item, events)}
-                  size={item.type === 'venue' ? 36 : item.type === 'artist' ? 28 : 22}
-                  onTap={() => pushPanel({ type: item.type as PanelEntry['type'], name: item.name, color: item.avatar })}
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 16,
+                  paddingLeft: item.actor.type === 'venue' ? 14 : 28,
+                  cursor: 'pointer',
+                }}
+                onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
+              >
+                <Diamond
+                  size={item.actor.type === 'venue' ? 36 : 26}
+                  diamondUrl={item.actor.type === 'venue' ? item.actor.banner_url : item.actor.avatar_diamond_url}
+                  fallbackUrl={item.actor.avatar_url}
+                  focalX={item.actor.diamond_focal_x}
+                  focalY={item.actor.diamond_focal_y}
                 />
                 <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
-                  <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.name}</span> {item.text}
+                  <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.actor.name}</span>
+                  {item.kind === 'rsvp'       && <> is going to {item.event?.title} at {item.event?.venue_name}</>}
+                  {item.kind === 'like'       && <> liked {item.event?.title}</>}
+                  {item.kind === 'venue_post' && <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
                 </div>
               </div>
               {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
