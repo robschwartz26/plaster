@@ -54,6 +54,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
   const pinchRef = useRef<{
@@ -274,6 +275,11 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     }
 
     computeActiveDay()
+
+    // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
+    // Clears on every scroll event and re-sets, so it only fires once motion stops.
+    if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
+    scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
   }, [walledItems, walledIdxToEventIdx, cols, computeActiveDay])
 
   // ── Sync activeDay on mount and when layout/events change ─────────
@@ -285,8 +291,13 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     const el = containerRef.current
     if (!el) return
     el.addEventListener('scroll', handleScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleScroll)
-  }, [handleScroll])
+    el.addEventListener('scrollend', computeActiveDay)
+    return () => {
+      el.removeEventListener('scroll', handleScroll)
+      el.removeEventListener('scrollend', computeActiveDay)
+      if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
+    }
+  }, [handleScroll, computeActiveDay])
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
