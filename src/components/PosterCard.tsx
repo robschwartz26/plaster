@@ -109,27 +109,19 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 function usePosterBackdrop(posterUrl: string | null) {
   const [backdrop, setBackdrop] = useState<string | null>(null)
   useEffect(() => {
-    const tag = posterUrl ? posterUrl.slice(-30) : 'null'
-    console.log(`[BACKDROP] useEffect fired for ${tag}`)
     if (!posterUrl) return
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout> | null = null
-    console.log(`[BACKDROP] creating new Image for ${tag}`)
     const img = new Image()
     img.crossOrigin = 'anonymous'
     const sample = () => {
-      if (cancelled) {
-        console.log(`[BACKDROP] sample() bailed due to cancelled for ${tag}`)
-        return
-      }
-      console.log(`[BACKDROP] sample() invoked for ${tag}, cancelled=${cancelled}, complete=${img.complete}`)
+      if (cancelled) return
       try {
         const SIZE = 40
         const canvas = document.createElement('canvas')
         canvas.width = SIZE; canvas.height = SIZE
         const ctx = canvas.getContext('2d')!
         ctx.drawImage(img, 0, 0, SIZE, SIZE)
-        console.log(`[BACKDROP] drew image to canvas ${tag}`)
         const d = ctx.getImageData(0, 0, SIZE, SIZE).data
         function px(x: number, y: number) {
           const i = (y * SIZE + x) * 4
@@ -140,29 +132,22 @@ function usePosterBackdrop(posterUrl: string | null) {
         const bl = px(2, SIZE-3)
         const br = px(SIZE-3, SIZE-3)
         setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
-        console.log(`[BACKDROP] setBackdrop called with gradient for ${tag}`)
       } catch (err) {
-        console.log(`[BACKDROP] CAUGHT ERROR for ${tag}:`, err)
         if (!cancelled) setBackdrop(null)
       }
     }
     img.onload = sample
-    img.onerror = () => {
-      console.log(`[BACKDROP] onerror fired for ${tag}`)
-      if (!cancelled) setBackdrop(null)
-    }
+    img.onerror = () => { if (!cancelled) setBackdrop(null) }
     img.src = posterUrl
-    console.log(`[BACKDROP] src set, complete=${img.complete}`)
     if (img.complete) {
       timeoutId = setTimeout(sample, 0)
     }
     return () => {
-      console.log(`[BACKDROP] cleanup running for ${tag}`)
       cancelled = true
       if (timeoutId) clearTimeout(timeoutId)
       img.onload = null
       img.onerror = null
-      img.src = ''
+      // Do NOT set img.src = '' — this poisons the browser image cache on iOS Safari
     }
   }, [posterUrl])
   return backdrop
