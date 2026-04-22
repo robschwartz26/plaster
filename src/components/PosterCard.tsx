@@ -112,7 +112,7 @@ function usePosterBackdrop(posterUrl: string | null) {
     if (!posterUrl) return
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => {
+    const sample = () => {
       try {
         const SIZE = 40
         const canvas = document.createElement('canvas')
@@ -131,8 +131,10 @@ function usePosterBackdrop(posterUrl: string | null) {
         setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
       } catch { setBackdrop(null) }
     }
+    img.onload = sample
     img.onerror = () => setBackdrop(null)
     img.src = posterUrl
+    if (img.complete) sample()
   }, [posterUrl])
   return backdrop
 }
