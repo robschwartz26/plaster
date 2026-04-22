@@ -224,36 +224,25 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     if (!container || walledItems.length === 0) return
 
     const { scrollTop, clientHeight, clientWidth } = container
+    let eventIdx: number
 
     if (cols === 1) {
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      const eventIdx = walledIdxToEventIdx[wi] ?? 0
-      const ev = allEvents[eventIdx]
-      if (!ev) return
-      const day = eventDayMap.get(ev.id) ?? days[0]
-      if (day !== activeDay) { setActiveDay(day); onDayChange(day) }
+      eventIdx = walledIdxToEventIdx[wi] ?? 0
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
-      const totalRows = Math.ceil(walledItems.length / cols)
-      const dominantRow = clamp(
-        Math.floor((scrollTop + rowHeight / 2) / rowHeight),
-        0,
-        totalRows - 1,
-      )
+      const topRow = Math.floor(scrollTop / rowHeight)
+      const wi = clamp(topRow * cols, 0, walledItems.length - 1)
+      eventIdx = walledIdxToEventIdx[wi] ?? 0
+    }
 
-      const rowStart = dominantRow * cols
-      const rowEnd = Math.min(rowStart + cols, walledItems.length)
-      const rowItems = walledItems.slice(rowStart, rowEnd)
-
-      const eventDays = rowItems
-        .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
-        .map(item => eventDayMap.get(item.event.id))
-        .filter((d): d is string => !!d)
-
-      if (eventDays.length === 0) return
-      const latestDay = [...eventDays].sort().at(-1)!
-      if (latestDay !== activeDay) { setActiveDay(latestDay); onDayChange(latestDay) }
+    const ev = allEvents[eventIdx]
+    if (!ev) return
+    const day = eventDayMap.get(ev.id) ?? days[0]
+    if (day !== activeDay) {
+      setActiveDay(day)
+      onDayChange(day)
     }
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols, activeDay, onDayChange])
 
