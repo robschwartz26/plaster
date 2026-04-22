@@ -67,7 +67,7 @@ function addDays(dateStr: string, n: number): string {
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
 const WHEEL_H         = 12   // canvas surface height (CSS px)
 const WHEEL_HOUSING_H = 18   // housing height inside control bar (CSS px)
-const WHEEL_ITEM_W   = 72   // px per day slot
+const WHEEL_ITEM_W   = 40   // px per day slot
 const WHEEL_COMP     = 0.70 // scroll→pattern compression
 const WHEEL_P        = 5    // diamond pitch (CSS px)
 
