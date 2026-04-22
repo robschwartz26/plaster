@@ -105,55 +105,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
   )
 }
 
-// DO NOT REMOVE — sampled backdrop is core design feature
-function usePosterBackdrop(posterUrl: string | null) {
-  const [backdrop, setBackdrop] = useState<string | null>(null)
-  useEffect(() => {
-    if (!posterUrl) return
-    let cancelled = false
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    // Do NOT set img.crossOrigin here — it poisons the browser image cache on iOS Safari.
-    // The try/catch below handles the SecurityError that may throw from getImageData
-    // on cross-origin images; sampled backdrop fails gracefully in that case.
-    const img = new Image()
-    const sample = () => {
-      if (cancelled) return
-      try {
-        const SIZE = 40
-        const canvas = document.createElement('canvas')
-        canvas.width = SIZE; canvas.height = SIZE
-        const ctx = canvas.getContext('2d')!
-        ctx.drawImage(img, 0, 0, SIZE, SIZE)
-        const d = ctx.getImageData(0, 0, SIZE, SIZE).data
-        function px(x: number, y: number) {
-          const i = (y * SIZE + x) * 4
-          return `${d[i]},${d[i+1]},${d[i+2]}`
-        }
-        const tl = px(2, 2)
-        const tr = px(SIZE-3, 2)
-        const bl = px(2, SIZE-3)
-        const br = px(SIZE-3, SIZE-3)
-        setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
-      } catch (err) {
-        if (!cancelled) setBackdrop(null)
-      }
-    }
-    img.onload = sample
-    img.onerror = () => { if (!cancelled) setBackdrop(null) }
-    img.src = posterUrl
-    if (img.complete) {
-      timeoutId = setTimeout(sample, 0)
-    }
-    return () => {
-      cancelled = true
-      if (timeoutId) clearTimeout(timeoutId)
-      img.onload = null
-      img.onerror = null
-      // Do NOT set img.src = '' — this poisons the browser image cache on iOS Safari
-    }
-  }, [posterUrl])
-  return backdrop
-}
+
 
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
@@ -163,14 +115,11 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed = activeFilter !== 'All' && !matches
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
-  const sampledBackdrop = usePosterBackdrop(event.poster_url)
 
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
-  const [imgState, setImgState] = useState<'loading' | 'loaded' | 'error'>('loading')
   const [popHeart, setPopHeart] = useState<PickedHeart | null>(null)
 
-  useEffect(() => { setImgState('loading') }, [event.poster_url])
 
   // ── 2-5 col: double-tap → zoom to 1-col ───────────────────────────────
   const lastTap = useRef(0)
@@ -643,21 +592,28 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     >
       {event.poster_url ? (
         <>
-          {/* Layer 1: shimmer while loading, sampled backdrop when loaded, gradient on error */}
-          {imgState === 'loading' ? (
-            <div style={{ position: 'absolute', inset: 0, background: 'var(--bg)' }} />
-          ) : imgState === 'error' ? (
-            <div style={{ position: 'absolute', inset: 0, background: gradient }} />
-          ) : (
-            <div style={{ position: 'absolute', inset: 0, background: sampledBackdrop ?? gradient, transition: 'background 0.3s ease' }} />
+          {/* Blurred backdrop — same poster image, blurred, feels like an extension of the poster */}
+          {event.poster_url && (
+            <img
+              src={event.poster_url}
+              alt=""
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                filter: 'blur(24px)',
+                transform: 'scale(1.15)',
+                zIndex: 0,
+              }}
+            />
           )}
-          {/* Layer 2: poster image — invisible until loaded, hidden on error */}
+          {/* Main poster image */}
           <img
             src={event.poster_url}
-            crossOrigin="anonymous"
             alt={event.title}
-            onLoad={() => setImgState('loaded')}
-            onError={() => setImgState('error')}
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
@@ -667,6 +623,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               opacity: 1,
               pointerEvents: 'none',
               userSelect: 'none',
+              zIndex: 1,
             }}
           />
         </>
