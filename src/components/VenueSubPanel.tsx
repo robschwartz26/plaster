@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { getGradient } from '@/lib/categories'
 
 export interface FollowVenue {
   id: string
@@ -23,18 +24,8 @@ interface VenueEvent {
   category: string | null
 }
 
-const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
-  Music:    ['#4c1d95', '#7c3aed'],
-  Drag:     ['#831843', '#ec4899'],
-  Dance:    ['#7c2d12', '#f97316'],
-  Literary: ['#3730a3', '#818cf8'],
-  Art:      ['#365314', '#a3e635'],
-  Film:     ['#0c4a6e', '#38bdf8'],
-  Trivia:   ['#7c2d12', '#fb923c'],
-  Other:    ['#2e1065', '#a855f7'],
-}
 function catGradient(cat: string | null | undefined): string {
-  const [c1, c2] = CATEGORY_GRADIENTS[cat ?? ''] ?? CATEGORY_GRADIENTS.Other
+  const [c1, c2] = getGradient(cat)
   return `conic-gradient(from 0deg at 50% 50%, ${c1}, ${c2}, ${c1})`
 }
 

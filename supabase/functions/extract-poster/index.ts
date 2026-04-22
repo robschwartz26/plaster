@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
+const CATEGORY_FIELD = `"Live Music or Dance or Comedy or Drag or Jazz or Trivia or Karaoke or Theater or Burlesque or Classical or Film or Art or Literary or Other. Pick the single best category based on the event's primary format. Prefer Live Music for bands and singer-songwriters playing instruments. Prefer Dance for DJ nights and themed dance parties. Prefer Jazz when jazz is the explicit featured genre. Prefer Classical for orchestras, chamber music, or opera. Prefer Comedy for stand-up or sketch. Prefer Theater for plays and musicals. Prefer Drag for drag-focused shows. Prefer Burlesque for burlesque shows specifically. Prefer Karaoke for karaoke nights. Prefer Trivia for pub quiz events. Prefer Film for screenings. Prefer Art for gallery/exhibition events. Prefer Literary for readings and book events. Only use Other if nothing fits."`
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -43,7 +45,7 @@ Return ONLY a JSON object, no markdown, no explanation:
   "time": "HH:MM 24-hour format, empty string if not found",
   "address": "street address if visible, empty string if not",
   "description": "Write 2-3 sentences in a warm, culturally informed Portland voice. Lead with what makes this event worth attending — the artist, the vibe, the occasion. Include one key practical detail (price, age restriction, or door time) woven in naturally. Write like a knowledgeable friend recommending the show, not a list of facts.",
-  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
+  "category": ${CATEGORY_FIELD},
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
   "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
@@ -60,7 +62,7 @@ Return ONLY a JSON object, no markdown, no explanation:
   "time": "HH:MM 24-hour format, empty string if not found",
   "address": "street address if visible, empty string if not",
   "description": "Write 2-3 sentences in a warm, culturally informed Portland voice. Lead with what makes this event worth attending — the artist, the vibe, the occasion. Include one key practical detail (price, age restriction, or door time) woven in naturally. Write like a knowledgeable friend recommending the show, not a list of facts.",
-  "category": "Music or Drag or Dance or Comedy or Art or Film or Literary or Trivia or Other",
+  "category": ${CATEGORY_FIELD},
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
   "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }

@@ -2,10 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '@/lib/cropUtils'
+import { CATEGORIES } from '@/lib/categories'
 
 const IS_DEV = import.meta.env.DEV
-
-const CATEGORIES = ['Music', 'Drag', 'Dance', 'Comedy', 'Art', 'Film', 'Literary', 'Trivia', 'Other']
 
 interface Venue { id: string; name: string; neighborhood?: string }
 
@@ -322,7 +321,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
               onClick={() => setForm(f => ({
                 ...f,
                 title: 'DEV: Neon Wolves',
-                category: 'Music',
+                category: 'Live Music',
                 description: 'With special guests The Static Age. $15 adv / $18 door. All ages.',
               }))}
               style={{ padding: '4px 10px', background: 'rgba(234,179,8,0.12)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 4, color: 'rgba(234,179,8,0.8)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}

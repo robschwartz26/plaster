@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors } from '@/lib/cropUtils'
+import { CATEGORIES, type CategoryName } from '@/lib/categories'
 
 // ── Constants ────────────────────────────────────────────────
 
@@ -17,9 +18,6 @@ const NEIGHBORHOODS = [
   'Division', 'Burnside',
 ]
 
-const CATEGORIES = [
-  'Music', 'Drag', 'Dance', 'Comedy', 'Art', 'Film', 'Literary', 'Trivia', 'Other',
-]
 
 // ── Shared input styles ──────────────────────────────────────
 
@@ -452,7 +450,7 @@ function EventForm({ venues }: { venues: Venue[] }) {
 // ── Import section ───────────────────────────────────────────
 
 type ImportPhase = 'idle' | 'extracting' | 'review' | 'duplicate' | 'uploading' | 'done' | 'error'
-type Category = 'Music' | 'Drag' | 'Dance' | 'Comedy' | 'Art' | 'Film' | 'Literary' | 'Trivia' | 'Other'
+type Category = CategoryName
 
 interface ExtractedEvent {
   title: string
@@ -760,7 +758,7 @@ function ImportForm() {
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [duplicateEvent, setDuplicateEvent] = useState<{ id: string; title: string; poster_url: string | null; starts_at: string } | null>(null)
 
-  const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
+  const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
   const [fillFrame, setFillFrame] = useState(false)
   const [focalX, setFocalX] = useState(0.5)
   const [focalY, setFocalY] = useState(0.5)
@@ -1051,7 +1049,7 @@ function ImportForm() {
 
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
-    setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Music', neighborhood: '', website: '', instagram: '', hours: '' })
+    setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
     setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setSuccessCount(1)
   }
 

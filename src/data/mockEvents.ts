@@ -1,13 +1,5 @@
-export type Category =
-  | 'Music'
-  | 'Drag'
-  | 'Dance'
-  | 'Comedy'
-  | 'Literary'
-  | 'Art'
-  | 'Film'
-  | 'Trivia'
-  | 'Other'
+import { type CategoryName } from '@/lib/categories'
+export type Category = CategoryName
 
 export interface Event {
   id: string

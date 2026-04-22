@@ -8,6 +8,7 @@ import difference from '@turf/difference'
 import { featureCollection } from '@turf/helpers'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { supabase, type DbVenue } from '@/lib/supabase'
+import { CATEGORIES, getGradient } from '@/lib/categories'
 import { useAuth } from '@/contexts/AuthContext'
 import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
@@ -18,7 +19,7 @@ import { DebugOverlay } from '@/components/DebugOverlay'
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 const PORTLAND = { latitude: 45.5051, longitude: -122.6750 }
 
-const CHIPS = ['All', '♥', 'Music', 'Drag', 'Dance', 'Art', 'Film', 'Literary', 'Trivia', 'Other'] as const
+const CHIPS = ['All', '♥', ...CATEGORIES] as const
 const DAY_COUNT = 7
 
 // ── Logarithmic radius scale ──────────────────────────────────────────────────
@@ -394,23 +395,11 @@ function ScrubbingRuler({ centerDayIdx, isVisible, today, dark }: ScrubbingRuler
   )
 }
 
-// ── Category colors ───────────────────────────────────────────────────────────
-const CATEGORY_GRADIENTS: Record<string, [string, string]> = {
-  Music:    ['#4c1d95', '#7c3aed'],
-  Drag:     ['#831843', '#ec4899'],
-  Dance:    ['#7c2d12', '#f97316'],
-  Comedy:   ['#1e3a5f', '#38bdf8'],
-  Literary: ['#3730a3', '#818cf8'],
-  Art:      ['#365314', '#a3e635'],
-  Film:     ['#0c4a6e', '#38bdf8'],
-  Trivia:   ['#7c2d12', '#fb923c'],
-  Other:    ['#2e1065', '#a855f7'],
-}
 function catPinColor(cat: string | null | undefined): string {
-  return (CATEGORY_GRADIENTS[cat ?? ''] ?? CATEGORY_GRADIENTS.Other)[1]
+  return getGradient(cat)[1]
 }
 function catGradient(cat: string | null | undefined): string {
-  const [c1, c2] = CATEGORY_GRADIENTS[cat ?? ''] ?? CATEGORY_GRADIENTS.Other
+  const [c1, c2] = getGradient(cat)
   return `conic-gradient(from 0deg at 50% 50%, ${c1}, ${c2}, ${c1})`
 }
 

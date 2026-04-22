@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react'
+import { CATEGORIES } from '@/lib/categories'
 
-const CATS = ['Music', 'Drag', 'Dance', 'Art', 'Film', 'Literary', 'Trivia', 'Other'] as const
+const CATS = CATEGORIES
 type Cat = typeof CATS[number]
 const TRIPLE_CATS = [...CATS, ...CATS, ...CATS]
 
