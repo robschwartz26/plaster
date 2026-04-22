@@ -300,7 +300,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
 
   // In 1-col snap mode, show the current poster's details in the date bar
   const eventInfo: EventInfo | null =
-    cols === 1 && allEvents[activeEventIdx]
+    cols === 1 && !atDatePoster && allEvents[activeEventIdx]
       ? {
           id: allEvents[activeEventIdx].id,
           title: allEvents[activeEventIdx].title,
