@@ -645,7 +645,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               objectFit: event.fill_frame ? 'cover' : 'contain',
               objectPosition: event.fill_frame ? `${(event.focal_x ?? 0.5) * 100}% ${(event.focal_y ?? 0.5) * 100}%` : undefined,
               transform: !event.fill_frame && (event.poster_offset_x || event.poster_offset_y) ? `translate(${event.poster_offset_x ?? 0}%, ${event.poster_offset_y ?? 0}%)` : undefined,
-              opacity: imgState === 'loaded' ? 1 : 0,
+              opacity: 1,
               pointerEvents: 'none',
               userSelect: 'none',
             }}
