@@ -111,6 +111,7 @@ function usePosterBackdrop(posterUrl: string | null) {
   useEffect(() => {
     if (!posterUrl) return
     let cancelled = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
     const img = new Image()
     img.crossOrigin = 'anonymous'
     const sample = () => {
@@ -136,9 +137,12 @@ function usePosterBackdrop(posterUrl: string | null) {
     img.onload = sample
     img.onerror = () => { if (!cancelled) setBackdrop(null) }
     img.src = posterUrl
-    if (img.complete) sample()
+    if (img.complete) {
+      timeoutId = setTimeout(sample, 0)
+    }
     return () => {
       cancelled = true
+      if (timeoutId) clearTimeout(timeoutId)
       img.onload = null
       img.onerror = null
       img.src = ''
