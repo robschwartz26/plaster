@@ -112,8 +112,10 @@ function usePosterBackdrop(posterUrl: string | null) {
     if (!posterUrl) return
     let cancelled = false
     let timeoutId: ReturnType<typeof setTimeout> | null = null
+    // Do NOT set img.crossOrigin here — it poisons the browser image cache on iOS Safari.
+    // The try/catch below handles the SecurityError that may throw from getImageData
+    // on cross-origin images; sampled backdrop fails gracefully in that case.
     const img = new Image()
-    img.crossOrigin = 'anonymous'
     const sample = () => {
       if (cancelled) return
       try {
