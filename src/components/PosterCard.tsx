@@ -145,7 +145,8 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed = activeFilter !== 'All' && !matches
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
-  const sampledBackdrop = usePosterBackdrop(event.poster_url)
+  usePosterBackdrop(event.poster_url) // DIAGNOSTIC: result discarded to test iOS CORS hypothesis
+  const sampledBackdrop = null
 
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
