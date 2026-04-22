@@ -636,6 +636,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           {/* Layer 2: poster image — invisible until loaded, hidden on error */}
           <img
             src={event.poster_url}
+            crossOrigin="anonymous"
             alt={event.title}
             onLoad={() => setImgState('loaded')}
             onError={() => setImgState('error')}
