@@ -12,6 +12,7 @@ export const CATEGORIES = [
   'Film',
   'Art',
   'Literary',
+  'Spoken',
   'Other',
 ] as const
 
@@ -31,6 +32,7 @@ export const CATEGORY_GRADIENTS: Record<CategoryName, [string, string]> = {
   'Film':       ['#0c4a6e', '#38bdf8'],
   'Art':        ['#365314', '#a3e635'],
   'Literary':   ['#3730a3', '#818cf8'],
+  'Spoken':     ['#44403c', '#d6d3d1'],
   'Other':      ['#2e1065', '#a855f7'],
 }
 
