@@ -3,6 +3,7 @@ import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AdminEditModal } from './AdminEditModal'
+import { pickHeart, type PickedHeart } from '@/lib/pickHeart'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
   const [imgState, setImgState] = useState<'loading' | 'loaded' | 'error'>('loading')
+  const [popHeart, setPopHeart] = useState<PickedHeart | null>(null)
 
   useEffect(() => { setImgState('loading') }, [event.poster_url])
 
@@ -283,7 +285,9 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     startY: 0,
     isHorizontal: null as boolean | null,
     cardW: 0,
+    movedSignificantly: false,
   })
+  const lastTapTimeRef = useRef(0)
 
   useEffect(() => {
     if (cols !== 1) return
@@ -298,6 +302,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         startY: e.touches[0].clientY,
         isHorizontal: null,
         cardW: el.clientWidth,
+        movedSignificantly: false,
       }
       const strip = stripRef.current
       if (strip) strip.style.transition = 'none'
@@ -309,6 +314,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
       const dx = e.touches[0].clientX - s.startX
       const dy = e.touches[0].clientY - s.startY
+
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+        s.movedSignificantly = true
+      }
 
       if (s.isHorizontal === null) {
         s.isHorizontal = Math.abs(dy) <= Math.abs(dx) * TAN60
@@ -334,8 +343,29 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
     const onEnd = (e: TouchEvent) => {
       const s = swipe.current
-      if (!s.active || s.isHorizontal !== true) { s.active = false; return }
-      const dx = e.changedTouches[0].clientX - s.startX
+      if (!s.active) { s.active = false; return }
+
+      const endX = e.changedTouches[0].clientX
+      const endY = e.changedTouches[0].clientY
+      const dx = endX - s.startX
+      const dy = endY - s.startY
+
+      // Double-tap-to-like: only on poster panel (panelIdx 0), no significant movement
+      if (!s.movedSignificantly && Math.abs(dx) < 10 && Math.abs(dy) < 10 && panelIdxRef.current === 0) {
+        const now = Date.now()
+        if (now - lastTapTimeRef.current < 300) {
+          lastTapTimeRef.current = 0
+          if (!isLiked) onLike(event.id)
+          const heart = pickHeart()
+          setPopHeart(heart)
+          setTimeout(() => setPopHeart(null), 700)
+          s.active = false
+          return
+        }
+        lastTapTimeRef.current = now
+      }
+
+      if (s.isHorizontal !== true) { s.active = false; return }
       s.active = false
 
       if (Math.abs(dx) > 50) {
@@ -359,7 +389,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       el.removeEventListener('touchend', onEnd)
       el.removeEventListener('touchcancel', onEnd)
     }
-  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cols, isLiked]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── RSVP ──────────────────────────────────────────────────────────────
   async function toggleAttend() {
@@ -479,6 +509,31 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             {renderPosterContent()}
           </div>
         </div>
+
+        {/* Heart pop overlay — double-tap-to-like */}
+        {popHeart && (
+          <div
+            key={popHeart.src + String(Date.now())}
+            style={{
+              position: 'absolute', inset: 0,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', zIndex: 30,
+            }}
+          >
+            <img
+              src={popHeart.src}
+              alt=""
+              style={{
+                width: popHeart.isSpecial ? '96%' : '55%',
+                height: 'auto',
+                maxHeight: popHeart.isSpecial ? '96%' : '55%',
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 4px 20px rgba(0,0,0,0.6))',
+                animation: 'heartPop 700ms ease-out forwards',
+              }}
+            />
+          </div>
+        )}
 
         {/* Confirm ✓ / Undo ↩ pills — shown in admin mode when a recent crop exists */}
         {isAdminMode && previousPosterUrl && !showEdit && (
