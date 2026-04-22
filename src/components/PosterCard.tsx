@@ -110,9 +110,11 @@ function usePosterBackdrop(posterUrl: string | null) {
   const [backdrop, setBackdrop] = useState<string | null>(null)
   useEffect(() => {
     if (!posterUrl) return
+    let cancelled = false
     const img = new Image()
     img.crossOrigin = 'anonymous'
     const sample = () => {
+      if (cancelled) return
       try {
         const SIZE = 40
         const canvas = document.createElement('canvas')
@@ -129,12 +131,18 @@ function usePosterBackdrop(posterUrl: string | null) {
         const bl = px(2, SIZE-3)
         const br = px(SIZE-3, SIZE-3)
         setBackdrop(`conic-gradient(from 0deg at 50% 50%, rgb(${tl}), rgb(${tr}), rgb(${br}), rgb(${bl}), rgb(${tl}))`)
-      } catch { setBackdrop(null) }
+      } catch { if (!cancelled) setBackdrop(null) }
     }
     img.onload = sample
-    img.onerror = () => setBackdrop(null)
+    img.onerror = () => { if (!cancelled) setBackdrop(null) }
     img.src = posterUrl
     if (img.complete) sample()
+    return () => {
+      cancelled = true
+      img.onload = null
+      img.onerror = null
+      img.src = ''
+    }
   }, [posterUrl])
   return backdrop
 }
