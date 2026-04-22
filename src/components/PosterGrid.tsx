@@ -217,8 +217,8 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // ── Scroll → active day ────────────────────────────────────────────
-  const handleScroll = useCallback(() => {
+  // ── Compute active day from current scroll position ───────────────
+  const computeActiveDay = useCallback(() => {
     const container = containerRef.current
     if (!container || walledItems.length === 0) return
 
@@ -228,14 +228,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     if (cols === 1) {
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
       eventIdx = walledIdxToEventIdx[wi] ?? 0
-      setActiveEventIdx(eventIdx)
-      const topItem = walledItems[wi]
-      if (topItem?.type === 'date-poster') {
-        const month = parseInt(topItem.date.split('-')[1], 10)
-        setAtDatePoster({ month })
-      } else {
-        setAtDatePoster(null)
-      }
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
@@ -252,6 +244,31 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       onDayChange(day)
     }
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols, activeDay, onDayChange])
+
+  // ── Scroll → active day + 1-col-specific state ────────────────────
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current
+    if (!container || walledItems.length === 0) return
+
+    if (cols === 1) {
+      const { scrollTop, clientHeight } = container
+      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
+      setActiveEventIdx(walledIdxToEventIdx[wi] ?? 0)
+      const topItem = walledItems[wi]
+      if (topItem?.type === 'date-poster') {
+        setAtDatePoster({ month: parseInt(topItem.date.split('-')[1], 10) })
+      } else {
+        setAtDatePoster(null)
+      }
+    }
+
+    computeActiveDay()
+  }, [walledItems, walledIdxToEventIdx, cols, computeActiveDay])
+
+  // ── Sync activeDay on mount and when layout/events change ─────────
+  useEffect(() => {
+    computeActiveDay()
+  }, [cols, walledItems.length, allEvents.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const el = containerRef.current
