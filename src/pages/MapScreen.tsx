@@ -691,7 +691,7 @@ export function MapScreen() {
       </div>
 
       {/* ── Date indicator blocks ── */}
-      <DateIndicator mode="date-chip" day={selectedDate} today={today} />
+      <DateIndicator activeDay={selectedDate} today={today} />
 
       {/* ── Map area ── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', minHeight: 0 }}>

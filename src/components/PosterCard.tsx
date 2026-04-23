@@ -575,8 +575,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   // ── 2-5 col: blurred backdrop card ────────────────────────────────────
   return (
     <div
-      data-event-id={event.id}
-      data-event-day={event.starts_at.slice(0, 10)}
       onClick={handleTap}
       style={{
         aspectRatio: '2/3',

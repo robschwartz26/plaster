@@ -1,9 +1,8 @@
-import { useRef, useState, useEffect, useMemo } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
-import { useDateIndicator } from '@/hooks/useDateIndicator'
 
 type WallItem =
   | { type: 'poster'; event: WallEvent; eventIdx: number }
@@ -32,6 +31,7 @@ interface Props {
   activeFilter: string
   today: string
   likedIds: Set<string>
+  onDayChange: (day: string) => void
   onLike: (eventId: string) => void
   onVenueTap?: (venueId: string) => void
   isAdminMode?: boolean
@@ -48,9 +48,15 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
+export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
   const [cols, setCols] = useState(5)
+  const [activeDay, setActiveDay] = useState<string>(today)
+  const activeDayRef = useRef(activeDay)
+  useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
+  const [activeEventIdx, setActiveEventIdx] = useState(0)
+  const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
   const pinchRef = useRef<{
@@ -69,6 +75,21 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
     [days, grouped],
   )
 
+  const eventDayMap = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const day of days) {
+      for (const ev of grouped.get(day) ?? []) m.set(ev.id, day)
+    }
+    return m
+  }, [days, grouped])
+
+  // Reset activeDay to days[0] when the filtered event set changes (filter chip change,
+  // initial load, or scroll back to top where days[0] is already activeDay).
+  useEffect(() => {
+    if (days.length === 0) return
+    if (!days.includes(activeDay)) setActiveDay(days[0])
+  }, [days]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const walledItems = useMemo<WallItem[]>(() => {
     const items: WallItem[] = []
     allEvents.forEach((event, i) => {
@@ -82,6 +103,17 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
     return items
   }, [allEvents])
 
+  // walledItems index → allEvents index (nearest poster at or before that position)
+  const walledIdxToEventIdx = useMemo(() => {
+    const result: number[] = []
+    let last = 0
+    for (const item of walledItems) {
+      if (item.type === 'poster') last = item.eventIdx
+      result.push(last)
+    }
+    return result
+  }, [walledItems])
+
   // event id → walledItems index (for scroll-to on double-tap / openEventId)
   const eventIdToWalledIdx = useMemo(() => {
     const m = new Map<string, number>()
@@ -93,6 +125,8 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
 
   // ── Pinch → column count at all col counts + peek zoom at 1-col ───────
   // Registered once ([] deps). colsRef.current always reflects latest cols.
+  // Spreading (ratio < 1) → fewer cols or peek zoom if already at 1.
+  // Pinching in (ratio > 1) → more cols; cancels any active peek zoom.
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -104,6 +138,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
       const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
       const currentCols = colsRef.current
 
+      // In 1-col mode, grab the visible card's img for potential peek zoom
       let peekImg: HTMLImageElement | null = null
       if (currentCols === 1) {
         const idx = Math.round(el.scrollTop / el.clientHeight)
@@ -128,10 +163,12 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
       e.preventDefault()
       const t0 = e.touches[0], t1 = e.touches[1]
       const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
+      // ratio > 1: pinching in (more cols). ratio < 1: spreading (fewer cols / peek)
       const ratio = p.startDist / dist
       const newCols = clamp(Math.round(p.startCols * ratio), 1, 5)
 
       if (newCols !== p.startCols) {
+        // Col change — cancel peek zoom and drop the stale img ref
         if (p.peekImg) {
           if (p.peeking) {
             p.peekImg.style.transition = 'transform 0.2s ease'
@@ -142,6 +179,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
         }
         setCols(newCols)
       } else if (p.startCols === 1 && p.peekImg) {
+        // Still at 1-col — peek zoom on the active poster
         const scale = Math.min(3, Math.max(1, dist / p.startDist))
         p.peekImg.style.transform = `scale(${scale})`
         p.peeking = scale > 1
@@ -182,41 +220,115 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
-  // ── DOM-reading date indicator — replaces all state-sync date tracking ──
-  const dateIndicator = useDateIndicator(containerRef, cols, walledItems.length)
-
-  // Derive the full event object for event-info mode
-  const activeEvent = useMemo(
-    () => dateIndicator.mode === 'event-info' && dateIndicator.eventId
-      ? (allEvents.find(e => e.id === dateIndicator.eventId) ?? null)
-      : null,
-    [dateIndicator.mode, dateIndicator.eventId, allEvents],
-  )
-
-  // Precomputed once per eventId change — avoids O(n²) per-card findIndex in 1-col render
-  const activeEventIdx = useMemo(
-    () => dateIndicator.eventId
-      ? allEvents.findIndex(e => e.id === dateIndicator.eventId)
-      : -1,
-    [dateIndicator.eventId, allEvents],
-  )
-
-  const eventInfo: EventInfo | null = activeEvent ? {
-    id: activeEvent.id,
-    title: activeEvent.title,
-    venue: activeEvent.venue_name,
-    venue_id: activeEvent.venue_id,
-    startsAt: activeEvent.starts_at,
-    likeCount: activeEvent.like_count,
-    viewCount: activeEvent.view_count,
-  } : null
-
-  // Notify parent of the active poster's category (1-col only; null otherwise)
-  const onActiveCategoryChangeRef = useRef(onActiveCategoryChange)
-  onActiveCategoryChangeRef.current = onActiveCategoryChange
+  // ── Data refs — synced each render so stable callbacks always see fresh values ──
+  // computeActiveDay and handleScroll read exclusively from these refs,
+  // which lets both be useCallback([]) — stable forever, never causing
+  // the scroll listener effect to re-register mid-scroll.
+  const walledItemsRef = useRef(walledItems)
+  const walledIdxToEventIdxRef = useRef(walledIdxToEventIdx)
+  const allEventsRef = useRef(allEvents)
+  const eventDayMapRef = useRef(eventDayMap)
+  const daysRef = useRef(days)
   useEffect(() => {
-    onActiveCategoryChangeRef.current?.(activeEvent?.category ?? null)
-  }, [activeEvent])
+    walledItemsRef.current = walledItems
+    walledIdxToEventIdxRef.current = walledIdxToEventIdx
+    allEventsRef.current = allEvents
+    eventDayMapRef.current = eventDayMap
+    daysRef.current = days
+  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
+
+  // ── Compute active day from current scroll position ───────────────
+  // Empty deps — stable forever. All inputs read from refs above.
+  const computeActiveDay = useCallback(() => {
+    const container = containerRef.current
+    const walledItems = walledItemsRef.current
+    if (!container || walledItems.length === 0) return
+
+    const { scrollTop, clientHeight, clientWidth } = container
+    const cols = colsRef.current
+
+    if (cols === 1) {
+      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
+      const eventIdx = walledIdxToEventIdxRef.current[wi] ?? 0
+      const ev = allEventsRef.current[eventIdx]
+      if (!ev) return
+      const day = eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]
+      if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+    } else {
+      const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
+      const rowHeight = cellWidth * 1.5 + GAP
+      const totalRows = Math.ceil(walledItems.length / cols)
+      const dominantRow = clamp(
+        Math.floor((scrollTop + rowHeight / 2) / rowHeight),
+        0,
+        totalRows - 1,
+      )
+
+      const rowStart = dominantRow * cols
+      const rowEnd = Math.min(rowStart + cols, walledItems.length)
+      const rowItems = walledItems.slice(rowStart, rowEnd)
+
+      const eventDays = rowItems
+        .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
+        .map(item => eventDayMapRef.current.get(item.event.id))
+        .filter((d): d is string => !!d)
+
+      if (eventDays.length === 0) return
+      const latestDay = [...eventDays].sort().at(-1)!
+      if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Scroll → active day + 1-col-specific state ────────────────────
+  // Empty deps — stable forever. Reads layout data from refs.
+  const handleScroll = useCallback(() => {
+    const container = containerRef.current
+    const walledItems = walledItemsRef.current
+    if (!container || walledItems.length === 0) return
+
+    if (colsRef.current === 1) {
+      const { scrollTop, clientHeight } = container
+      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
+      setActiveEventIdx(walledIdxToEventIdxRef.current[wi] ?? 0)
+      const topItem = walledItems[wi]
+      if (topItem?.type === 'date-poster') {
+        setAtDatePoster({ month: parseInt(topItem.date.split('-')[1], 10) })
+      } else {
+        setAtDatePoster(null)
+      }
+    }
+
+    computeActiveDay()
+
+    // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
+    // Clears on every scroll event and re-sets, so it only fires once motion stops.
+    if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
+    scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Sync activeDay on mount and when layout/events change ─────────
+  // Deferred by one rAF + 150ms: lets the new grid layout paint and
+  // inertial scroll settle before reading scrollTop. If cols changes
+  // again within the window the previous raf/timeout are cancelled.
+  useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null
+    const raf = requestAnimationFrame(() => { t = setTimeout(computeActiveDay, 150) })
+    return () => { cancelAnimationFrame(raf); if (t !== null) clearTimeout(t) }
+  }, [cols, walledItems.length, allEvents.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Registers once on mount, removes only on unmount — never mid-scroll.
+  // Safe because handleScroll and computeActiveDay are both stable (empty deps).
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    el.addEventListener('scrollend', computeActiveDay)
+    return () => {
+      el.removeEventListener('scroll', handleScroll)
+      el.removeEventListener('scrollend', computeActiveDay)
+      if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
@@ -238,18 +350,51 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
     onOpenEventHandled?.()
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Clear 1-col-only state when leaving 1-col view.
+  useEffect(() => {
+    if (cols !== 1) {
+      setAtDatePoster(null)
+      setActiveEventIdx(0) // reset — only meaningful in 1-col
+    }
+  }, [cols])
+
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
+  // activeEventIdx is synced here so DateIndicator has correct state before
+  // handleScroll fires — prevents a stale-event flash on first 1-col render.
   useEffect(() => {
     if (cols !== 1 || pendingScrollIdxRef.current === null) return
     const idx = pendingScrollIdxRef.current
     pendingScrollIdxRef.current = null
+    setActiveEventIdx(walledIdxToEventIdxRef.current[idx] ?? 0)
     const container = containerRef.current
     if (!container) return
     requestAnimationFrame(() => {
       container.scrollTop = idx * container.clientHeight
     })
   }, [cols])
+
+  // In 1-col snap mode, show the current poster's details in the date bar
+  const eventInfo: EventInfo | null =
+    cols === 1 && !atDatePoster && allEvents[activeEventIdx]
+      ? {
+          id: allEvents[activeEventIdx].id,
+          title: allEvents[activeEventIdx].title,
+          venue: allEvents[activeEventIdx].venue_name,
+          venue_id: allEvents[activeEventIdx].venue_id,
+          startsAt: allEvents[activeEventIdx].starts_at,
+          likeCount: allEvents[activeEventIdx].like_count,
+          viewCount: allEvents[activeEventIdx].view_count,
+        }
+      : null
+
+  // Notify parent of the active poster's category (1-col only; null otherwise)
+  const onActiveCategoryChangeRef = useRef(onActiveCategoryChange)
+  onActiveCategoryChangeRef.current = onActiveCategoryChange
+  useEffect(() => {
+    const category = cols === 1 ? (allEvents[activeEventIdx]?.category ?? null) : null
+    onActiveCategoryChangeRef.current?.(category)
+  }, [cols, activeEventIdx, allEvents])
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',
@@ -262,14 +407,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Date indicator — sticky above scroll area */}
       <div className="shrink-0 z-10" style={{ background: 'var(--bg)' }}>
-        <DateIndicator
-          mode={dateIndicator.mode}
-          day={dateIndicator.day}
-          eventInfo={eventInfo}
-          datePosterMonth={dateIndicator.datePosterMonth}
-          today={today}
-          onVenueTap={onVenueTap}
-        />
+        <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} onVenueTap={onVenueTap} atDatePoster={atDatePoster} />
       </div>
 
       {IS_DEV && (
@@ -296,11 +434,15 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onLike, onVe
         className="flex-1 overflow-y-auto scroll-momentum"
         style={{
           overscrollBehavior: 'none',
+          // 1-col: snap poster-by-poster. 2-5 col: free scroll.
           scrollSnapType: cols === 1 ? 'y mandatory' : 'none',
         }}
       >
         {cols === 1 ? (
           // ── 1-col ─────────────────────────────────────────────────
+          // Cards are direct children of the scroll container.
+          // height: 100% = the container's clientHeight exactly.
+          // No grid wrapper — avoids the auto-height problem.
           walledItems.map((item) => {
             if (item.type === 'date-poster') {
               return (

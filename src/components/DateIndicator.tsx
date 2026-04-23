@@ -12,12 +12,11 @@ export interface EventInfo {
 }
 
 interface Props {
-  mode: 'event-info' | 'blank-bar' | 'date-chip' | 'none'
-  day: string | null           // "YYYY-MM-DD" — used in date-chip and blank-bar modes
+  activeDay: string | null // "YYYY-MM-DD"
   today: string
-  eventInfo?: EventInfo | null // required when mode === 'event-info'
-  datePosterMonth?: number | null
+  eventInfo?: EventInfo | null // when set, show event details instead of date
   onVenueTap?: (venueId: string) => void
+  atDatePoster?: { month: number } | null // when set (1-col on a DatePoster), show blank bar
 }
 
 function formatDateBlocks(dateStr: string, today: string) {
@@ -61,17 +60,17 @@ const BLOCK_BASE: React.CSSProperties = {
   display: 'inline-block',
 }
 
-export function DateIndicator({ mode, day, today, eventInfo, datePosterMonth, onVenueTap }: Props) {
+export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDatePoster }: Props) {
   const { theme } = useTheme()
-  const isTopbarMonth = datePosterMonth != null ? (datePosterMonth - 1) % 6 === 3 : false
+  // topbar style months (April=4, October=10) have an inverted top bar that reads
+  // as continuous with the blank bar — same color in both cases, but kept explicit.
+  const isTopbarMonth = atDatePoster ? (atDatePoster.month - 1) % 6 === 3 : false
   const blankBarColor = isTopbarMonth
     ? (theme === 'night' ? '#f0ece3' : '#1a1a1a')
     : (theme === 'night' ? '#f0ece3' : '#1a1a1a')
 
-  const contentKey =
-    mode === 'event-info' ? `ev:${eventInfo?.id ?? 'none'}`
-    : mode === 'blank-bar' ? `dp:${day}`
-    : day ?? 'none'
+  // Determine which content key to use — drives the cross-fade
+  const contentKey = eventInfo ? `ev:${eventInfo.id}` : atDatePoster ? `dp:${activeDay}` : activeDay ?? 'none'
 
   return (
     <div
@@ -82,13 +81,13 @@ export function DateIndicator({ mode, day, today, eventInfo, datePosterMonth, on
         <motion.div
           key={contentKey}
           className="flex items-center gap-1.5"
-          style={mode === 'event-info' ? { width: '100%' } : undefined}
+          style={eventInfo ? { width: '100%' } : undefined}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
         >
-          {mode === 'event-info' && eventInfo ? (
+          {eventInfo ? (
             // ── Event info mode (1-col, regular poster) ──────────────
             <>
               {/* Left — title · venue · time pills */}
@@ -139,13 +138,13 @@ export function DateIndicator({ mode, day, today, eventInfo, datePosterMonth, on
                 </span>
               </div>
             </>
-          ) : mode === 'blank-bar' ? (
+          ) : atDatePoster ? (
             // ── Blank bar mode (1-col, DatePoster at top) ────────────
             <div style={{ height: 20, width: '100%', borderRadius: 2, background: blankBarColor }} />
-          ) : mode === 'date-chip' && day ? (
-            // ── Date chip mode (2-5 col) ─────────────────────────────
+          ) : activeDay ? (
+            // ── Date mode (2-5 col) ──────────────────────────────────
             (() => {
-              const d = formatDateBlocks(day, today)
+              const d = formatDateBlocks(activeDay, today)
               return (
                 <>
                   <span

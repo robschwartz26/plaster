@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 .vercel
 supabase/.temp
+CODE_DUMP.md
+plaster-date-identifier-dump.md
+SESSION_NOTES.md
