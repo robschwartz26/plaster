@@ -28,6 +28,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
+  const [venueFormOpen, setVenueFormOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
 
   const fetchVenues = async () => {
@@ -50,9 +51,16 @@ function AdminDashboard() {
             <ImportForm />
           </Section>
 
-          <Section title="Add a Venue">
-            <VenueForm onVenueAdded={fetchVenues} />
-          </Section>
+          <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
+            <button
+              onClick={() => setVenueFormOpen(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: venueFormOpen ? 24 : 0 }}
+            >
+              <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add a Venue</h2>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{venueFormOpen ? '▾' : '▸'}</span>
+            </button>
+            {venueFormOpen && <VenueForm onVenueAdded={fetchVenues} />}
+          </section>
 
           <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
             <button
