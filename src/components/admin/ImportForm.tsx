@@ -417,10 +417,10 @@ export function ImportForm() {
               if (f?.type.startsWith('image/')) { setInfoFile(f); fileToDataURL(f).then(url => setInfoPreview(url)) }
             }}
             onClick={() => infoFileRef.current?.click()}
-            style={{ border: `1px dashed ${infoDragging ? 'var(--fg-40)' : 'var(--fg-18)'}`, borderRadius: 8, padding: '14px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.03)' : 'transparent', transition: 'all 0.15s ease' }}
+            style={{ border: `1px dashed ${infoDragging ? 'var(--fg-55)' : 'var(--fg-25)'}`, borderRadius: 8, padding: '22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
           >
-            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>Extra info image <span style={{ color: 'var(--fg-25)' }}>(optional)</span></p>
-            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-25)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', margin: 0, fontWeight: 600 }}>Extra info image <span style={{ fontWeight: 400, color: 'var(--fg-40)' }}>(optional)</span></p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
           </div>
         )}
         <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
@@ -609,10 +609,10 @@ export function ImportForm() {
                       if (f?.type.startsWith('image/')) handleInfoSet(f)
                     }}
                     onClick={() => infoFileRef.current?.click()}
-                    style={{ border: `1px dashed ${infoDragging ? 'var(--fg-40)' : 'var(--fg-18)'}`, borderRadius: 8, padding: '14px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.03)' : 'transparent', transition: 'all 0.15s ease' }}
+                    style={{ border: `1px dashed ${infoDragging ? 'var(--fg-55)' : 'var(--fg-25)'}`, borderRadius: 8, padding: '22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer', background: infoDragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
                   >
-                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>Extra info image <span style={{ color: 'var(--fg-25)' }}>(optional)</span></p>
-                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-25)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', margin: 0, fontWeight: 600 }}>Extra info image <span style={{ fontWeight: 400, color: 'var(--fg-40)' }}>(optional)</span></p>
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0, textAlign: 'center' }}>Screenshot of event page, ticket site, or Instagram caption</p>
                   </div>
                 )}
                 <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
