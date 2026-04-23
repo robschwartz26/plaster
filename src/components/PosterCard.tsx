@@ -105,8 +105,6 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
   )
 }
 
-
-
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
@@ -593,23 +591,21 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       {event.poster_url ? (
         <>
           {/* Blurred backdrop — same poster image, blurred, feels like an extension of the poster */}
-          {event.poster_url && (
-            <img
-              src={event.poster_url}
-              alt=""
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                inset: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                filter: 'blur(24px)',
-                transform: 'scale(1.15)',
-                zIndex: 0,
-              }}
-            />
-          )}
+          <img
+            src={event.poster_url}
+            alt=""
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'blur(24px)',
+              transform: 'scale(1.15)',
+              zIndex: 0,
+            }}
+          />
           {/* Main poster image */}
           <img
             src={event.poster_url}
@@ -630,7 +626,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: gradient }} />
       )}
-
 
       {cols <= 3 && (
         <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
@@ -746,7 +741,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               {isAttending ? "I'm Going ✓" : "I'll Be There"}
             </button>
           ) : (
-            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-35)', textAlign: 'center' }}>Sign in to RSVP</p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>Sign in to RSVP</p>
           )}
         </div>
       </>
