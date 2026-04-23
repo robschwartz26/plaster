@@ -234,7 +234,10 @@ export function fileToDataURL(file: File): Promise<string> {
 export async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const { data: { session } } = await supabaseAdmin.auth.getSession()
-  const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  if (!session?.access_token) {
+    throw new Error('You must be signed in to extract poster info. Please sign out and sign back in.')
+  }
+  const token = session.access_token
 
   const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-poster`, {
     method: 'POST',
