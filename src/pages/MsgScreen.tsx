@@ -248,7 +248,7 @@ export function MsgScreen() {
     if (!user) return
 
     const channel = supabase
-      .channel('inbox-watcher')
+      .channel(`inbox-watcher:${user.id}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
@@ -257,12 +257,15 @@ export function MsgScreen() {
           if (!myConvIdsRef.current.has(msg.conversation_id)) return
           if (msg.sender_id === user.id) return
           if (msg.conversation_id === openConvIdRef.current) return // already reading it
-          setConversations(prev =>
-            prev.map(c => c.id === msg.conversation_id
+          setConversations(prev => {
+            const updated = prev.map(c => c.id === msg.conversation_id
               ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
               : c
             )
-          )
+            return [...updated].sort((a, b) =>
+              new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime()
+            )
+          })
         }
       )
       .subscribe()
