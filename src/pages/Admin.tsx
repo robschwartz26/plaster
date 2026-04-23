@@ -265,13 +265,13 @@ function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
 interface Venue {
   id: string
   name: string
-  neighborhood?: string
-  address?: string
-  location_lat?: number | null
-  location_lng?: number | null
-  website?: string
-  instagram?: string
-  hours?: string
+  neighborhood: string | null
+  address: string | null
+  location_lat: number | null
+  location_lng: number | null
+  website: string | null
+  instagram: string | null
+  hours: string | null
 }
 
 function EventForm({ venues }: { venues: Venue[] }) {
@@ -853,7 +853,7 @@ function ImportForm() {
       }).eq('id', venueId).then(() => {
         setVenues(prev => prev.map(venue =>
           venue.id === venueId
-            ? { ...venue, location_lat: extracted!.location_lat, location_lng: extracted!.location_lng }
+            ? { ...venue, location_lat: extracted!.location_lat ?? null, location_lng: extracted!.location_lng ?? null }
             : venue
         ))
       })
@@ -1757,7 +1757,7 @@ function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venue[][]; 
     const { data } = await supabaseAdmin.from('events').select('venue_id').in('venue_id', venueIds)
     const counts: Record<string, number> = {}
     venueIds.forEach(id => { counts[id] = 0 })
-    for (const row of data ?? []) counts[row.venue_id] = (counts[row.venue_id] ?? 0) + 1
+    for (const row of data ?? []) if (row.venue_id) counts[row.venue_id] = (counts[row.venue_id] ?? 0) + 1
     setEventCounts(prev => ({ ...prev, ...counts }))
   }
 

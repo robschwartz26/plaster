@@ -1,35 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
 
 // ── Types ────────────────────────────────────────────────────
 
-export interface DbEvent {
-  id: string
-  venue_id: string | null
-  title: string
-  description: string | null
-  category: string | null
-  poster_url: string | null
-  starts_at: string
-  ends_at: string | null
-  is_recurring: boolean
-  recurrence_rule: string | null
-  neighborhood: string | null
-  address: string | null
-  location_lat: number | null
-  location_lng: number | null
-  fill_frame: boolean
-  focal_x: number
-  focal_y: number
-  poster_offset_x: number
-  poster_offset_y: number
-  view_count: number
-  like_count: number
-  created_at: string
+// DbEvent is the generated DB row type extended with the venues join
+export type DbEvent = Database['public']['Tables']['events']['Row'] & {
   venues?: { name: string } | null
 }
 

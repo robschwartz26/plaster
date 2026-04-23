@@ -529,7 +529,9 @@ export function MapScreen() {
       }
       if (Math.abs(lat - lastSaved.lat) > 0.0001 || Math.abs(lng - lastSaved.lng) > 0.0001) {
         lastSaved = { lat, lng }
-        supabase.from('profiles').update({ location_lat: lat, location_lng: lng }).eq('id', user.id)
+        // userLoc is kept in memory only. Previously tried to persist to profiles.location_lat/lng
+        // but those columns don't exist on the profiles table. Leaving in-memory until a real
+        // 'events near me' feature is designed with proper privacy considerations.
       }
     }
     const onError = (err: GeolocationPositionError) => console.warn('[Map] geolocation:', err.message)
