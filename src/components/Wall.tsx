@@ -10,7 +10,6 @@ import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
-
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
@@ -19,19 +18,11 @@ export function Wall() {
   const [events, setEvents] = useState<WallEvent[]>([])
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
-  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('plaster_admin_unlocked') === '1')
   const [isAdminMode, setIsAdminMode] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
-  // Re-check admin flag when tab regains focus (e.g. after visiting /admin)
-  useEffect(() => {
-    const check = () => setIsAdmin(sessionStorage.getItem('plaster_admin_unlocked') === '1')
-    window.addEventListener('focus', check)
-    return () => window.removeEventListener('focus', check)
-  }, [])
-
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null

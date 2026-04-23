@@ -10,6 +10,7 @@ export interface Profile {
   avatar_diamond_url: string | null
   bio: string | null
   is_public: boolean
+  is_admin?: boolean
   interests: string[]
   created_at: string
 }
@@ -18,6 +19,7 @@ interface AuthContextValue {
   user: User | null
   session: Session | null
   profile: Profile | null
+  isAdmin: boolean
   loading: boolean
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -89,8 +91,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  const isAdmin = profile?.is_admin === true
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signUp, signIn, signOut, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   )

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const CATEGORY_FIELD = `"Live Music or Dance or Comedy or Drag or Jazz or Trivia or Karaoke or Theater or Burlesque or Classical or Film or Art or Literary or Spoken or Other. Pick the single best category based on the event's primary format. Prefer Live Music for bands and singer-songwriters playing instruments. Prefer Dance for DJ nights and themed dance parties. Prefer Jazz when jazz is the explicit featured genre. Prefer Classical for orchestras, chamber music, or opera. Prefer Comedy for stand-up or sketch. Prefer Theater for plays and musicals. Prefer Drag for drag-focused shows. Prefer Burlesque for burlesque shows specifically. Prefer Karaoke for karaoke nights. Prefer Trivia for pub quiz events. Prefer Film for screenings. Prefer Art for gallery/exhibition events. Prefer Literary for book clubs, book signings, and events centered on books as objects rather than performance. Prefer Spoken for live podcasts, author talks, storytelling shows, spoken word, and other events where the primary format is people speaking rather than singing or playing music. Only use Other if nothing fits."`
 
@@ -9,6 +10,42 @@ const corsHeaders = {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  // ── JWT + is_admin check ─────────────────────────────────
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+  const token = authHeader.replace('Bearer ', '')
+
+  const supabaseService = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+
+  const { data: { user }, error: authError } = await supabaseService.auth.getUser(token)
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+
+  const { data: profile } = await supabaseService
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.is_admin) {
+    return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
 
   try {
     const body = await req.json()

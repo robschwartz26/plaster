@@ -1,14 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors } from '@/lib/cropUtils'
 import { CATEGORIES, type CategoryName } from '@/lib/categories'
 
 // ── Constants ────────────────────────────────────────────────
 
-const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD as string
-const SESSION_KEY = 'plaster_admin_unlocked'
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 const IS_DEV = window.location.hostname === 'localhost'
 
@@ -176,47 +175,6 @@ interface AdminNotification {
   snoozed_until: string | null
   dismissed: boolean
   created_at: string
-}
-
-// ── Password gate ────────────────────────────────────────────
-
-function PasswordGate({ onUnlock }: { onUnlock: () => void }) {
-  const [value, setValue] = useState('')
-  const [error, setError] = useState(false)
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (value === ADMIN_PASSWORD) {
-      sessionStorage.setItem(SESSION_KEY, '1')
-      onUnlock()
-    } else {
-      setError(true)
-      setValue('')
-    }
-  }
-
-  return (
-    <div style={{ minHeight: '100dvh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ width: '100%', maxWidth: 320 }}>
-        <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 28, fontWeight: 700, color: 'var(--fg)', marginBottom: 8 }}>plaster</p>
-        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', marginBottom: 32, letterSpacing: '0.04em' }}>admin</p>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input
-            type="password"
-            placeholder="Password"
-            value={value}
-            autoFocus
-            onChange={(e) => { setValue(e.target.value); setError(false) }}
-            style={{ ...inputStyle, borderColor: error ? 'rgba(239,68,68,0.6)' : 'var(--fg-18)' }}
-          />
-          {error && <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.8)', margin: 0 }}>Incorrect password.</p>}
-          <button type="submit" style={{ background: '#A855F7', color: '#fff', border: 'none', borderRadius: 6, padding: '12px 0', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer', letterSpacing: '0.04em' }}>
-            Unlock
-          </button>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 // ── Venue form ───────────────────────────────────────────────
@@ -496,13 +454,14 @@ type ExtractPayload =
 
 async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
-  const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  const { data: { session } } = await supabaseAdmin.auth.getSession()
+  const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY as string
 
   const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-poster`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
   })
@@ -1941,7 +1900,30 @@ function AdminDashboard() {
 // ── Entry point ──────────────────────────────────────────────
 
 export function Admin() {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(SESSION_KEY) === '1')
-  if (!unlocked) return <PasswordGate onUnlock={() => setUnlocked(true)} />
+  const { isAdmin, loading } = useAuth()
+  if (loading) return null
+  if (!isAdmin) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        textAlign: 'center',
+        fontFamily: '"Space Grotesk", sans-serif',
+        color: 'var(--fg)',
+        background: 'var(--bg)',
+      }}>
+        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 32, fontWeight: 900, marginBottom: 8 }}>
+          plaster
+        </div>
+        <p style={{ margin: '8px 0', fontSize: 15, maxWidth: 320 }}>
+          This page is for admins only.
+        </p>
+      </div>
+    )
+  }
   return <AdminDashboard />
 }

@@ -132,16 +132,17 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
     const fullBlob = await new Promise<Blob>(res => fullCanvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
 
     const ts = Date.now()
-    const diamondPath = `${userId}/diamond.jpg`
-    const fullPath    = `${userId}/full.jpg`
+    const diamondPath = `${userId}/diamond_${ts}.jpg`
+    const fullPath    = `${userId}/full_${ts}.jpg`
 
     const [diamondUp, fullUp] = await Promise.all([
-      supabase.storage.from('avatars').upload(diamondPath, diamondBlob, { upsert: true, contentType: 'image/jpeg' }),
-      supabase.storage.from('avatars').upload(fullPath,    fullBlob,    { upsert: true, contentType: 'image/jpeg' }),
+      supabase.storage.from('avatars').upload(diamondPath, diamondBlob, { contentType: 'image/jpeg' }),
+      supabase.storage.from('avatars').upload(fullPath,    fullBlob,    { contentType: 'image/jpeg' }),
     ])
 
     if (diamondUp.error || fullUp.error) {
       console.error('[AvatarUploader] upload error', diamondUp.error ?? fullUp.error)
+      alert('Photo upload failed. Please try again.')
       setBusy(false)
       return
     }
