@@ -4,178 +4,19 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors } from '@/lib/cropUtils'
-import { CATEGORIES, type CategoryName } from '@/lib/categories'
-
-// ── Constants ────────────────────────────────────────────────
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
-const IS_DEV = window.location.hostname === 'localhost'
-
-const NEIGHBORHOODS = [
-  'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest',
-  'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
-  'Division', 'Burnside',
-]
-
-
-// ── Shared input styles ──────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'rgba(240,236,227,0.05)',
-  border: '1px solid var(--fg-18)',
-  borderRadius: 6,
-  padding: '10px 12px',
-  color: 'var(--fg)',
-  fontFamily: '"Space Grotesk", sans-serif',
-  fontSize: 14,
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-
-const labelStyle: React.CSSProperties = {
-  display: 'block',
-  fontFamily: '"Space Grotesk", sans-serif',
-  fontSize: 11,
-  fontWeight: 600,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
-  color: 'var(--fg-55)',
-  marginBottom: 6,
-}
-
-const fieldStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 0,
-}
-
-// ── Geocoding ────────────────────────────────────────────────
-
-async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
-  if (!MAPBOX_TOKEN) {
-    console.warn('VITE_MAPBOX_TOKEN not set — skipping geocoding')
-    return null
-  }
-  const query = encodeURIComponent(address + ', Portland, Oregon')
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1&proximity=-122.6784,45.5051`
-  const res = await fetch(url)
-  const data = await res.json()
-  const feature = data.features?.[0]
-  if (!feature) return null
-  const [lng, lat] = feature.geometry.coordinates
-  return { lat, lng }
-}
-
-// ── Recurrence helpers ───────────────────────────────────────
-
-type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'weekdays'
-type OrdinalKey = '1st' | '2nd' | '3rd' | '4th' | 'last'
-
-const FREQ_LABELS: Record<RecurrenceFrequency, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly', weekdays: 'Specific days' }
-const FREQ_COUNTS: Record<RecurrenceFrequency, number> = { weekly: 12, biweekly: 6, monthly: 3, weekdays: 0 }
-
-const ORDINAL_LABELS: OrdinalKey[] = ['1st', '2nd', '3rd', '4th', 'last']
-// Mon–Sun labels; indices map to JS Date.getDay() via WEEKDAY_JS
-const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEKDAY_JS     = [1, 2, 3, 4, 5, 6, 0] // Mon=1 … Sat=6, Sun=0
-
-function getNthWeekdayOfMonth(year: number, month: number, jsWeekday: number, n: number): Date | null {
-  if (n === -1) {
-    // Last occurrence of this weekday in the month
-    const lastDay = new Date(year, month + 1, 0)
-    const diff = (lastDay.getDay() - jsWeekday + 7) % 7
-    return new Date(year, month, lastDay.getDate() - diff)
-  }
-  // nth occurrence (1-based)
-  const firstDayOfMonth = new Date(year, month, 1)
-  const diff = (jsWeekday - firstDayOfMonth.getDay() + 7) % 7
-  const nthDay = 1 + diff + (n - 1) * 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  if (nthDay > daysInMonth) return null
-  return new Date(year, month, nthDay)
-}
-
-function generateWeekdayOccurrences(start: Date, ordinals: Set<OrdinalKey>, weekdays: Set<number>, monthsAhead = 3): Date[] {
-  const dates: Date[] = []
-  const end = new Date(start); end.setMonth(end.getMonth() + monthsAhead)
-  for (let m = 0; m <= monthsAhead; m++) {
-    const ref  = new Date(start.getFullYear(), start.getMonth() + m, 1)
-    const year = ref.getFullYear()
-    const mon  = ref.getMonth()
-    for (const wdIdx of weekdays) {
-      const jsWd = WEEKDAY_JS[wdIdx]
-      for (const ord of ordinals) {
-        const n = ord === 'last' ? -1 : parseInt(ord[0])
-        const d = getNthWeekdayOfMonth(year, mon, jsWd, n)
-        if (d && d >= start && d <= end) dates.push(d)
-      }
-    }
-  }
-  return dates.sort((a, b) => a.getTime() - b.getTime())
-}
-
-function fmtShortDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
-function generateOccurrenceDates(start: Date, freq: RecurrenceFrequency): Date[] {
-  const dates: Date[] = []
-  const end = new Date(start); end.setMonth(end.getMonth() + 3)
-  const cur = new Date(start)
-  while (cur <= end) {
-    dates.push(new Date(cur))
-    if (freq === 'weekly')    cur.setDate(cur.getDate() + 7)
-    else if (freq === 'biweekly') cur.setDate(cur.getDate() + 14)
-    else cur.setMonth(cur.getMonth() + 1)
-  }
-  return dates
-}
-
-// ── Venue duplicate detection ────────────────────────────────
-
-function venueSimilarity(a: string, b: string): number {
-  const norm = (s: string) => s.toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9\s]/g, '').trim()
-  const na = norm(a), nb = norm(b)
-  if (na === nb) return 1
-  if (na.includes(nb) || nb.includes(na)) return 0.9
-  const words = (s: string) => new Set(s.split(/\s+/).filter(w => w.length > 1))
-  const wa = words(na), wb = words(nb)
-  if (wa.size === 0 || wb.size === 0) return 0
-  let overlap = 0
-  for (const w of wa) { if (wb.has(w)) overlap++ }
-  return overlap / Math.max(wa.size, wb.size)
-}
-
-function findDuplicateVenueGroups(venues: Venue[]): Venue[][] {
-  const groups: Venue[][] = []
-  const used = new Set<string>()
-  for (let i = 0; i < venues.length; i++) {
-    if (used.has(venues[i].id)) continue
-    const group = [venues[i]]
-    for (let j = i + 1; j < venues.length; j++) {
-      if (used.has(venues[j].id)) continue
-      if (venueSimilarity(venues[i].name, venues[j].name) > 0.7) {
-        group.push(venues[j]); used.add(venues[j].id)
-      }
-    }
-    if (group.length > 1) { used.add(venues[i].id); groups.push(group) }
-  }
-  return groups
-}
-
-// ── Admin notification types ─────────────────────────────────
-
-interface AdminNotification {
-  id: string
-  type: string
-  title: string
-  message: string
-  recurrence_group_id: string | null
-  snoozed_until: string | null
-  dismissed: boolean
-  created_at: string
-}
+import { CATEGORIES } from '@/lib/categories'
+import {
+  MAPBOX_TOKEN, IS_DEV, NEIGHBORHOODS,
+  FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
+  inputStyle, labelStyle, fieldStyle,
+  geocodeAddress,
+  generateWeekdayOccurrences, fmtShortDate, generateOccurrenceDates,
+  venueSimilarity, findDuplicateVenueGroups,
+  fileToBase64, fileToDataURL, extractEventFromImage,
+  titleSimilarity, neighborhoodFromAddress,
+  type Venue, type AdminNotification, type ExtractedEvent, type ExtractPayload,
+  type ImportPhase, type Category, type RecurrenceFrequency, type OrdinalKey,
+} from '@/components/admin/adminShared'
 
 // ── Venue form ───────────────────────────────────────────────
 
@@ -261,18 +102,6 @@ function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
 }
 
 // ── Event form ───────────────────────────────────────────────
-
-interface Venue {
-  id: string
-  name: string
-  neighborhood: string | null
-  address: string | null
-  location_lat: number | null
-  location_lng: number | null
-  website: string | null
-  instagram: string | null
-  hours: string | null
-}
 
 function EventForm({ venues }: { venues: Venue[] }) {
   const [form, setForm] = useState({ venue_id: '', title: '', category: '', date: '', start_time: '', description: '', is_recurring: false, recurrence_rule: '' })
@@ -403,92 +232,6 @@ function EventForm({ venues }: { venues: Venue[] }) {
       </button>
     </form>
   )
-}
-
-// ── Import section ───────────────────────────────────────────
-
-type ImportPhase = 'idle' | 'extracting' | 'review' | 'duplicate' | 'uploading' | 'done' | 'error'
-type Category = CategoryName
-
-interface ExtractedEvent {
-  title: string
-  venue_name: string
-  date: string
-  time: string
-  address: string
-  description: string
-  category: Category
-  confidence: 'high' | 'medium' | 'low'
-  uncertain_fields: string[]
-  crop?: CropRect
-  location_lat?: number
-  location_lng?: number
-  address_source?: 'db' | 'mapbox' | 'ai' | 'none'
-  website?: string
-  instagram?: string
-  hours?: string
-  existing_poster_url?: string
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-function fileToDataURL(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
-
-type ExtractPayload =
-  | { base64: string; mimeType: string }
-  | { images: { base64: string; mimeType: string }[] }
-
-async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
-  const { data: { session } } = await supabaseAdmin.auth.getSession()
-  const token = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY as string
-
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-poster`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
-  return await response.json() as ExtractedEvent
-}
-
-// ── Utility: title similarity (word-overlap ratio) ──────────
-
-function titleSimilarity(a: string, b: string): number {
-  const words = (s: string) => new Set(s.toLowerCase().split(/\W+/).filter(w => w.length > 2))
-  const wa = words(a), wb = words(b)
-  if (wa.size === 0 || wb.size === 0) return 0
-  return [...wa].filter(w => wb.has(w)).length / Math.max(wa.size, wb.size)
-}
-
-// ── Utility: neighborhood from Portland street address ───────
-
-function neighborhoodFromAddress(address: string): string {
-  const a = address.toUpperCase()
-  if (/\bNE\b/.test(a)) return 'Northeast'
-  if (/\bSE\b/.test(a)) return 'Southeast'
-  if (/\bNW\b/.test(a)) return 'Northwest'
-  if (/\bSW\b/.test(a)) return 'Southwest'
-  if (/\bN\b/.test(a) && !/\bNE\b|\bNW\b/.test(a)) return 'North'
-  return ''
 }
 
 // ── Crop preview modal ────────────────────────────────────────
