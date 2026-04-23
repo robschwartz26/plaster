@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 
 export interface DateIndicatorResult {
   mode: 'event-info' | 'blank-bar' | 'date-chip' | 'none'
@@ -21,44 +21,18 @@ export function useDateIndicator(
     datePosterMonth: null,
   })
 
-  const rafRef = useRef<number | null>(null)
-
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
 
     const read = () => {
-      rafRef.current = null
       const containerRect = container.getBoundingClientRect()
       const viewportTop = containerRect.top
       const viewportBottom = containerRect.bottom
 
-      // ── 1-col: probe the element at the top of the container ──────────────
-      if (cols === 1) {
-        const probeY = viewportTop + (containerRect.height * 0.3)
-        const probeXCenter = containerRect.left + containerRect.width / 2
-        const el = document.elementFromPoint(probeXCenter, probeY) as HTMLElement | null
-        const card = el?.closest('[data-event-id], [data-is-date-poster]') as HTMLElement | null
-
-        if (!card) {
-          setResult({ mode: 'none', day: null, eventId: null, datePosterMonth: null })
-          return
-        }
-
-        if (card.dataset.isDatePoster === 'true') {
-          const day = card.dataset.eventDay ?? null
-          const month = day ? parseInt(day.split('-')[1], 10) : null
-          setResult({ mode: 'blank-bar', day, eventId: null, datePosterMonth: month })
-          return
-        }
-
-        const day = card.dataset.eventDay ?? null
-        const eventId = card.dataset.eventId ?? null
-        setResult({ mode: 'event-info', day, eventId, datePosterMonth: null })
-        return
-      }
-
-      // ── 2-5 col: topmost row >30% visible, rightmost real poster ──────────
+      // ── All col counts: visibility-based row detection ────────────────────
+      // 1-col: one card per row, naturally handled by the same logic.
+      // 2-5 col: multiple cards per row grouped by rowTop.
       const allCards = Array.from(
         container.querySelectorAll<HTMLElement>('[data-event-id], [data-is-date-poster]')
       )
@@ -100,13 +74,27 @@ export function useDateIndicator(
       const realPosters = sortedCards.filter(c => c.dataset.isDatePoster !== 'true')
 
       if (realPosters.length === 0) {
-        // Row is entirely DatePosters — use the first card's day
+        // Row is entirely DatePosters
         const day = sortedCards[0]?.dataset.eventDay ?? null
-        setResult({ mode: 'date-chip', day, eventId: null, datePosterMonth: null })
+        if (cols === 1) {
+          const month = day ? parseInt(day.split('-')[1], 10) : null
+          setResult({ mode: 'blank-bar', day, eventId: null, datePosterMonth: month })
+        } else {
+          setResult({ mode: 'date-chip', day, eventId: null, datePosterMonth: null })
+        }
         return
       }
 
-      // scrollTop === 0: leftmost real poster (tonight row); otherwise: rightmost
+      if (cols === 1) {
+        // 1-col: the single dominant card is the answer
+        const chosenCard = realPosters[0]
+        const day = chosenCard.dataset.eventDay ?? null
+        const eventId = chosenCard.dataset.eventId ?? null
+        setResult({ mode: 'event-info', day, eventId, datePosterMonth: null })
+        return
+      }
+
+      // 2-5 col: scrollTop === 0 → leftmost (tonight row); otherwise → rightmost
       const chosenCard = container.scrollTop === 0
         ? realPosters[0]
         : realPosters[realPosters.length - 1]
@@ -116,20 +104,14 @@ export function useDateIndicator(
       setResult({ mode: 'date-chip', day, eventId, datePosterMonth: null })
     }
 
-    const onScroll = () => {
-      if (rafRef.current !== null) return
-      rafRef.current = requestAnimationFrame(read)
-    }
-
     read()
 
-    container.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
+    container.addEventListener('scroll', read, { passive: true })
+    window.addEventListener('resize', read)
 
     return () => {
-      container.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+      container.removeEventListener('scroll', read)
+      window.removeEventListener('resize', read)
     }
   }, [containerRef, cols, itemsLength]) // eslint-disable-line react-hooks/exhaustive-deps
 
