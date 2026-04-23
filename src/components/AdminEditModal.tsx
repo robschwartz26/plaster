@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '@/lib/cropUtils'
 import { CATEGORIES } from '@/lib/categories'
+import { eventLocalDate, eventLocalTime } from '@/lib/dates'
 
 const IS_DEV = import.meta.env.DEV
 
@@ -71,8 +72,8 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [form, setForm] = useState({
     title: event.title,
     venue_id: event.venue_id ?? '',
-    date: event.starts_at.slice(0, 10),
-    time: event.starts_at.slice(11, 16),
+    date: eventLocalDate(event.starts_at),
+    time: eventLocalTime(event.starts_at),
     category: event.category,
     description: '',
   })

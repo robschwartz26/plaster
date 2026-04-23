@@ -3,6 +3,7 @@ import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
+import { eventLocalDate } from '@/lib/dates'
 
 type WallItem =
   | { type: 'poster'; event: WallEvent; eventIdx: number }
@@ -14,7 +15,7 @@ const GAP = 2 // px — only used in 2-5 col grid
 function groupByDay(events: WallEvent[]): Map<string, WallEvent[]> {
   const map = new Map<string, WallEvent[]>()
   for (const e of events) {
-    const day = e.starts_at.slice(0, 10)
+    const day = eventLocalDate(e.starts_at)
     const list = map.get(day) ?? []
     list.push(e)
     map.set(day, list)
@@ -23,7 +24,7 @@ function groupByDay(events: WallEvent[]): Map<string, WallEvent[]> {
 }
 
 function uniqueDays(events: WallEvent[]): string[] {
-  return [...new Set(events.map((e) => e.starts_at.slice(0, 10)))].sort()
+  return [...new Set(events.map((e) => eventLocalDate(e.starts_at)))].sort()
 }
 
 interface Props {
@@ -93,8 +94,8 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   const walledItems = useMemo<WallItem[]>(() => {
     const items: WallItem[] = []
     allEvents.forEach((event, i) => {
-      const currDate = event.starts_at.slice(0, 10)
-      const prevDate = i > 0 ? allEvents[i - 1].starts_at.slice(0, 10) : null
+      const currDate = eventLocalDate(event.starts_at)
+      const prevDate = i > 0 ? eventLocalDate(allEvents[i - 1].starts_at) : null
       if (prevDate && prevDate !== currDate) {
         items.push({ type: 'date-poster', date: currDate })
       }
