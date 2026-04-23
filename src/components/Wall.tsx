@@ -15,7 +15,6 @@ export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
   const [activePosterCategory, setActivePosterCategory] = useState<string | null>(null)
-  const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>([])
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
@@ -145,7 +144,6 @@ export function Wall() {
         activeFilter={activeFilter}
         today={today}
         likedIds={likedIds}
-        onDayChange={setActiveDay}
         onLike={handleLike}
         onActiveCategoryChange={setActivePosterCategory}
         onVenueTap={handleVenueTap}

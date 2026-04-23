@@ -44,7 +44,7 @@ export function DatePoster({ date }: Props) {
 
   if (styleName === 'split') {
     return (
-      <div style={base}>
+      <div data-is-date-poster="true" data-event-day={date} style={base}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', paddingLeft: '9cqw', paddingBottom: '9cqw' }}>
             <span style={{ fontSize: '45cqw', fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 0.85 }}>{monthNum}</span>
@@ -60,7 +60,7 @@ export function DatePoster({ date }: Props) {
 
   if (styleName === 'stacked') {
     return (
-      <div style={base}>
+      <div data-is-date-poster="true" data-event-day={date} style={base}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', padding: '9cqw', textAlign: 'center' }}>
           <span style={{ fontSize: '48cqw', fontWeight: 900, letterSpacing: '-0.04em', lineHeight: 0.82, textTransform: 'uppercase', marginBottom: '8cqw' }}>{dayAbbr}</span>
           <span style={{ fontSize: '13cqw', fontWeight: 400, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{monthFull} {dayNum}</span>
@@ -71,7 +71,7 @@ export function DatePoster({ date }: Props) {
 
   if (styleName === 'hugenum') {
     return (
-      <div style={base}>
+      <div data-is-date-poster="true" data-event-day={date} style={base}>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '9cqw' }}>
           <span style={{ fontSize: '12cqw', fontWeight: 500, letterSpacing: '0.25em', textTransform: 'uppercase' }}>{dayFull}</span>
           <span style={{ fontSize: '78cqw', fontWeight: 900, letterSpacing: '-0.06em', lineHeight: 0.82, alignSelf: 'flex-end' }}>{dayNum}</span>
@@ -83,7 +83,7 @@ export function DatePoster({ date }: Props) {
 
   if (styleName === 'topbar') {
     return (
-      <div style={base}>
+      <div data-is-date-poster="true" data-event-day={date} style={base}>
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ background: BAR_BG, color: BAR_FG, padding: '8cqw 9cqw', flexShrink: 0 }}>
             <span style={{ fontSize: '15cqw', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase' }}>{dayAbbr} · {monthAbbr}</span>
@@ -98,7 +98,7 @@ export function DatePoster({ date }: Props) {
 
   if (styleName === 'bottomweighted') {
     return (
-      <div style={base}>
+      <div data-is-date-poster="true" data-event-day={date} style={base}>
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', padding: '9cqw' }}>
           <span style={{ fontSize: '14cqw', fontWeight: 700, letterSpacing: '0.15em', textTransform: 'uppercase' }}>{dayFull}</span>
           <div>
@@ -112,7 +112,7 @@ export function DatePoster({ date }: Props) {
 
   // framed
   return (
-    <div style={base}>
+    <div data-is-date-poster="true" data-event-day={date} style={base}>
       <div style={{ position: 'absolute', inset: '8cqw', border: `1px solid ${FG}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '9cqw' }}>
         <span style={{ fontSize: '40cqw', fontWeight: 900, letterSpacing: '-0.03em', lineHeight: 0.85, textTransform: 'uppercase' }}>{dayAbbr}</span>
         <div style={{ width: '26cqw', height: 1, background: FG, margin: '8cqw 0' }} />
