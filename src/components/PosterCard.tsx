@@ -590,9 +590,9 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     >
       {event.poster_url ? (
         <>
-          {/* Blurred backdrop — same poster image, blurred, feels like an extension of the poster */}
+          {/* Blurred backdrop — tiny thumbnail (40px via Supabase render endpoint), blurred to 24px */}
           <img
-            src={event.poster_url}
+            src={event.poster_url.replace('/object/public/', '/render/image/public/') + '?width=40&quality=20'}
             alt=""
             aria-hidden="true"
             style={{
