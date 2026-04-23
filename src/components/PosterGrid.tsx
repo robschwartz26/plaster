@@ -220,19 +220,39 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     return () => el.removeEventListener('wheel', onWheel)
   }, [])
 
+  // ── Data refs — synced each render so stable callbacks always see fresh values ──
+  // computeActiveDay and handleScroll read exclusively from these refs,
+  // which lets both be useCallback([]) — stable forever, never causing
+  // the scroll listener effect to re-register mid-scroll.
+  const walledItemsRef = useRef(walledItems)
+  const walledIdxToEventIdxRef = useRef(walledIdxToEventIdx)
+  const allEventsRef = useRef(allEvents)
+  const eventDayMapRef = useRef(eventDayMap)
+  const daysRef = useRef(days)
+  useEffect(() => {
+    walledItemsRef.current = walledItems
+    walledIdxToEventIdxRef.current = walledIdxToEventIdx
+    allEventsRef.current = allEvents
+    eventDayMapRef.current = eventDayMap
+    daysRef.current = days
+  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
+
   // ── Compute active day from current scroll position ───────────────
+  // Empty deps — stable forever. All inputs read from refs above.
   const computeActiveDay = useCallback(() => {
     const container = containerRef.current
+    const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
     const { scrollTop, clientHeight, clientWidth } = container
+    const cols = colsRef.current
 
     if (cols === 1) {
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      const eventIdx = walledIdxToEventIdx[wi] ?? 0
-      const ev = allEvents[eventIdx]
+      const eventIdx = walledIdxToEventIdxRef.current[wi] ?? 0
+      const ev = allEventsRef.current[eventIdx]
       if (!ev) return
-      const day = eventDayMap.get(ev.id) ?? days[0]
+      const day = eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]
       if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
@@ -250,24 +270,26 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
 
       const eventDays = rowItems
         .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
-        .map(item => eventDayMap.get(item.event.id))
+        .map(item => eventDayMapRef.current.get(item.event.id))
         .filter((d): d is string => !!d)
 
       if (eventDays.length === 0) return
       const latestDay = [...eventDays].sort().at(-1)!
       if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
     }
-  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
+  // Empty deps — stable forever. Reads layout data from refs.
   const handleScroll = useCallback(() => {
     const container = containerRef.current
+    const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
-    if (cols === 1) {
+    if (colsRef.current === 1) {
       const { scrollTop, clientHeight } = container
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      setActiveEventIdx(walledIdxToEventIdx[wi] ?? 0)
+      setActiveEventIdx(walledIdxToEventIdxRef.current[wi] ?? 0)
       const topItem = walledItems[wi]
       if (topItem?.type === 'date-poster') {
         setAtDatePoster({ month: parseInt(topItem.date.split('-')[1], 10) })
@@ -282,13 +304,20 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
     scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
-  }, [walledItems, walledIdxToEventIdx, cols, computeActiveDay])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync activeDay on mount and when layout/events change ─────────
+  // Deferred by one rAF + 150ms: lets the new grid layout paint and
+  // inertial scroll settle before reading scrollTop. If cols changes
+  // again within the window the previous raf/timeout are cancelled.
   useEffect(() => {
-    computeActiveDay()
+    let t: ReturnType<typeof setTimeout> | null = null
+    const raf = requestAnimationFrame(() => { t = setTimeout(computeActiveDay, 150) })
+    return () => { cancelAnimationFrame(raf); if (t !== null) clearTimeout(t) }
   }, [cols, walledItems.length, allEvents.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Registers once on mount, removes only on unmount — never mid-scroll.
+  // Safe because handleScroll and computeActiveDay are both stable (empty deps).
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -299,7 +328,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       el.removeEventListener('scrollend', computeActiveDay)
       if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
     }
-  }, [handleScroll, computeActiveDay])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
