@@ -35,7 +35,7 @@ export function useDateIndicator(
 
       // ── 1-col: probe the element at the top of the container ──────────────
       if (cols === 1) {
-        const probeY = viewportTop + 10
+        const probeY = viewportTop + (containerRect.height * 0.3)
         const probeXCenter = containerRect.left + containerRect.width / 2
         const el = document.elementFromPoint(probeXCenter, probeY) as HTMLElement | null
         const card = el?.closest('[data-event-id], [data-is-date-poster]') as HTMLElement | null
@@ -70,15 +70,17 @@ export function useDateIndicator(
         const rect = card.getBoundingClientRect()
         if (rect.bottom < viewportTop || rect.top > viewportBottom) continue
 
+        const visibleTop = Math.max(rect.top, viewportTop)
+        const visibleBottom = Math.min(rect.bottom, viewportBottom)
+        const visibleHeight = Math.max(0, visibleBottom - visibleTop)
+        const ratio = rect.height > 0 ? visibleHeight / rect.height : 0
+
         const rowTop = Math.round(rect.top)
         const existingRow = rows.find(r => Math.abs(r.topY - rowTop) < 2)
         if (existingRow) {
           existingRow.cards.push(card)
+          if (ratio > existingRow.visibleRatio) existingRow.visibleRatio = ratio
         } else {
-          const visibleTop = Math.max(rect.top, viewportTop)
-          const visibleBottom = Math.min(rect.bottom, viewportBottom)
-          const visibleHeight = Math.max(0, visibleBottom - visibleTop)
-          const ratio = rect.height > 0 ? visibleHeight / rect.height : 0
           rows.push({ topY: rowTop, height: rect.height, visibleRatio: ratio, cards: [card] })
         }
       }
