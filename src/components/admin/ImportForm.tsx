@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
-import { type CropRect, optimizeImage } from '@/lib/cropUtils'
+import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
 import {
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
-  fileToBase64, fileToDataURL, extractEventFromImage,
+  fileToDataURL, extractEventFromImage,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
   generateWeekdayOccurrences, generateOccurrenceDates, fmtShortDate,
   type Venue, type ExtractedEvent, type ExtractPayload,
@@ -69,15 +69,16 @@ export function ImportForm() {
     setPhase('extracting')
     setErrorMsg('')
     try {
-      const [dataURL, posterBase64] = await Promise.all([fileToDataURL(poster), fileToBase64(poster)])
+      const [dataURL, resizedPoster] = await Promise.all([fileToDataURL(poster), resizeForExtraction(poster)])
+      const posterBase64 = await blobToBase64(resizedPoster)
       setImagePreviews([dataURL])
       // If an extra info image is queued, send both to Claude in one call
       const payload: ExtractPayload = infoFile
         ? { images: [
-            { base64: posterBase64, mimeType: poster.type || 'image/jpeg' },
-            { base64: await fileToBase64(infoFile), mimeType: infoFile.type || 'image/jpeg' },
+            { base64: posterBase64, mimeType: 'image/jpeg' },
+            { base64: await blobToBase64(await resizeForExtraction(infoFile)), mimeType: 'image/jpeg' },
           ]}
-        : { base64: posterBase64, mimeType: poster.type || 'image/jpeg' }
+        : { base64: posterBase64, mimeType: 'image/jpeg' }
       const result = await extractEventFromImage(payload)
       setExtracted(result)
       setReuseExistingPoster(!!result.existing_poster_url)
@@ -115,13 +116,13 @@ export function ImportForm() {
     setReExtracting(true)
     try {
       const [posterBase64, infoBase64] = await Promise.all([
-        fileToBase64(imageFiles[0]),
-        fileToBase64(file),
+        resizeForExtraction(imageFiles[0]).then(blobToBase64),
+        resizeForExtraction(file).then(blobToBase64),
       ])
       const payload: ExtractPayload = {
         images: [
-          { base64: posterBase64, mimeType: imageFiles[0].type || 'image/jpeg' },
-          { base64: infoBase64, mimeType: file.type || 'image/jpeg' },
+          { base64: posterBase64, mimeType: 'image/jpeg' },
+          { base64: infoBase64, mimeType: 'image/jpeg' },
         ],
       }
       const result = await extractEventFromImage(payload)

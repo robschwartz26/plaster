@@ -1,5 +1,27 @@
 // Shared image/crop utilities — used by Admin.tsx (import flow) and AdminEditModal.tsx (wall edit)
 
+// Resize an image for AI extraction — stays under Anthropic's ~5 MB per-image limit.
+export async function resizeForExtraction(file: File, maxDim = 1600, quality = 0.8): Promise<Blob> {
+  const bitmap = await createImageBitmap(file)
+  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
+  const w = Math.round(bitmap.width * scale)
+  const h = Math.round(bitmap.height * scale)
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas context unavailable')
+  ctx.drawImage(bitmap, 0, 0, w, h)
+  return await canvas.convertToBlob({ type: 'image/jpeg', quality })
+}
+
+export async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+}
+
 export interface CropRect { x: number; y: number; width: number; height: number }
 export type CropHandle = 'tl' | 'tc' | 'tr' | 'ml' | 'mr' | 'bl' | 'bc' | 'br'
 
