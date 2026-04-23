@@ -56,6 +56,7 @@ export function ImportForm() {
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('weekly')
   const [weekdayOrdinals, setWeekdayOrdinals] = useState<Set<OrdinalKey>>(new Set())
   const [weekdayDays,     setWeekdayDays]     = useState<Set<number>>(new Set())
+  const [extraDates, setExtraDates] = useState<Array<{ date: string; time: string }>>([])
   const [successCount, setSuccessCount] = useState(1)
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
@@ -292,6 +293,18 @@ export function ImportForm() {
             snoozed_until: snoozeDate.toISOString(),
           })
           setSuccessCount(dates.length)
+        } else if (extraDates.length > 0) {
+          const seriesId = crypto.randomUUID()
+          const allRows = [
+            { ...baseRow, starts_at: startDate.toISOString(), recurrence_group_id: seriesId },
+            ...extraDates.map(ed => {
+              const t = ed.time || form.time || '20:00'
+              return { ...baseRow, starts_at: new Date(`${ed.date}T${t}:00`).toISOString(), recurrence_group_id: seriesId }
+            }),
+          ]
+          const { error: eventError } = await supabaseAdmin.from('events').insert(allRows)
+          if (eventError) throw eventError
+          setSuccessCount(allRows.length)
         } else {
           const { error: eventError } = await supabaseAdmin.from('events').insert({ ...baseRow, starts_at: startDate.toISOString() })
           if (eventError) throw eventError
@@ -308,6 +321,13 @@ export function ImportForm() {
 
   const handleSubmit = async () => {
     if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
+
+    // Validate extra dates
+    if (extraDates.length > 0) {
+      if (extraDates.some(ed => !ed.date)) { setErrorMsg('All extra dates must be filled in.'); setPhase('error'); return }
+      const allDates = [form.date, ...extraDates.map(ed => ed.date)]
+      if (new Set(allDates).size !== allDates.length) { setErrorMsg('Duplicate dates found — each date must be unique.'); setPhase('error'); return }
+    }
 
     // Duplicate detection: same venue + date ±1 day + similar title
     if (form.venue_id && form.date) {
@@ -334,7 +354,7 @@ export function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setSuccessCount(1)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1)
   }
 
   // DEV: generate a mock test poster
@@ -688,15 +708,56 @@ export function ImportForm() {
           )}
 
           {/* Date + Time */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div style={fieldStyle}>
-              <label style={{ ...labelStyle, color: isUncertain('date') ? '#facc15' : 'var(--fg-55)' }}>Date {isUncertain('date') && '⚠'} *</label>
-              <input type="date" style={isUncertain('date') ? uncertainInput : inputStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
+              <div style={fieldStyle}>
+                <label style={{ ...labelStyle, color: isUncertain('date') ? '#facc15' : 'var(--fg-55)' }}>Date {isUncertain('date') && '⚠'} *</label>
+                <input type="date" style={isUncertain('date') ? uncertainInput : inputStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                <div style={{ ...fieldStyle, flex: 1 }}>
+                  <label style={{ ...labelStyle, color: isUncertain('time') ? '#facc15' : 'var(--fg-55)' }}>Time {isUncertain('time') && '⚠'}</label>
+                  <input type="time" style={isUncertain('time') ? uncertainInput : inputStyle} value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+                </div>
+                {!isRecurring && (
+                  <button
+                    type="button"
+                    onClick={() => setExtraDates(prev => [...prev, { date: '', time: form.time }])}
+                    title="Add another date"
+                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, lineHeight: 1, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 1 }}
+                  >+</button>
+                )}
+              </div>
             </div>
-            <div style={fieldStyle}>
-              <label style={{ ...labelStyle, color: isUncertain('time') ? '#facc15' : 'var(--fg-55)' }}>Time {isUncertain('time') && '⚠'}</label>
-              <input type="time" style={isUncertain('time') ? uncertainInput : inputStyle} value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
-            </div>
+            {/* Extra date rows */}
+            {extraDates.map((ed, idx) => (
+              <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, alignItems: 'end' }}>
+                <input
+                  type="date"
+                  style={inputStyle}
+                  value={ed.date}
+                  onChange={e => setExtraDates(prev => prev.map((r, i) => i === idx ? { ...r, date: e.target.value } : r))}
+                />
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    style={{ ...inputStyle, flex: 1 }}
+                    value={ed.time}
+                    onChange={e => setExtraDates(prev => prev.map((r, i) => i === idx ? { ...r, time: e.target.value } : r))}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExtraDates(prev => prev.filter((_, i) => i !== idx))}
+                    style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid rgba(239,68,68,0.3)', background: 'transparent', color: 'rgba(239,68,68,0.6)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, lineHeight: 1, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >−</button>
+                </div>
+              </div>
+            ))}
+            {extraDates.length > 0 && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
+                {1 + extraDates.length} dates · same poster, title, and venue for each
+              </p>
+            )}
           </div>
 
           {/* Recurring event */}
@@ -704,7 +765,7 @@ export function ImportForm() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <button
                 type="button"
-                onClick={() => setIsRecurring(v => !v)}
+                onClick={() => { setIsRecurring(v => { if (!v) setExtraDates([]); return !v }); }}
                 style={{ width: 40, height: 22, borderRadius: 11, border: 'none', background: isRecurring ? '#A855F7' : 'var(--fg-18)', position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s ease' }}
               >
                 <span style={{ position: 'absolute', top: 3, left: isRecurring ? 21 : 3, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.2s ease' }} />
