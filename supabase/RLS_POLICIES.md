@@ -1,6 +1,6 @@
 # Plaster RLS Policy Reference
 
-**Last verified against live DB: 2026-04-22**
+**Last verified against live DB: 2026-04-22 (venues updated migration 011, 2026-04-22)**
 
 This document is the authoritative reference for all Row Level Security
 policies on the public schema. Migration files may diverge from live state —
@@ -25,7 +25,7 @@ always trust the live DB (or re-run the query below) when debugging RLS issues.
 | profiles | ✅ | No DELETE policy by design |
 | superlatives | ✅ | SELECT only — writes are service-role only |
 | venue_follows | ✅ | |
-| venues | ✅ | UPDATE requires `created_by` to be set |
+| venues | ✅ | UPDATE/DELETE require `is_admin()` or `created_by` ownership (migration 011) |
 
 ---
 
@@ -322,7 +322,7 @@ intentional — superlatives are awarded by the system, not self-assigned.
 ### venues
 **Purpose:** Venue records — name, neighborhood, address, lat/lng, hours, website, instagram.
 
-**Policies:**
+**Policies (as of migration 011):**
 
 - **`Venues are viewable by everyone`** (`SELECT`, public)
   - Condition: `true`
@@ -333,13 +333,19 @@ intentional — superlatives are awarded by the system, not self-assigned.
   - Intent: Any logged-in user can create a venue. In practice, venue creation only happens
     via the admin form.
 
-- **`Venue creators can update their venues`** (`UPDATE`, public)
-  - Condition: `auth.uid() = created_by`
-  - Intent: Only the user who created the venue can update it.
-  - **Known gap:** The admin form inserts venues using the anon key but the `created_by`
-    column may not always be populated, which would prevent updates via this policy. Admin
-    venue edits currently go direct via the service-role client. Verify `created_by` is
-    set on all venue inserts.
+- **`Venue creator or admin can update venues`** (`UPDATE`, authenticated)
+  - `USING`: `public.is_admin(auth.uid()) OR created_by = auth.uid()`
+  - `WITH CHECK`: same
+  - Intent: Admins can update any venue; the original creator can update their own venue.
+    Replaced the old `Venue creators can update their venues` policy which had no admin
+    escape hatch and no `WITH CHECK`.
+
+- **`Venue creator or admin can delete venues`** (`DELETE`, authenticated)
+  - `USING`: `public.is_admin(auth.uid()) OR created_by = auth.uid()`
+  - Intent: Admins or original creators can delete a venue. Previously no DELETE policy
+    existed — client-side deletes were silently blocked for everyone including admins.
+  - **Note:** `created_by` may be null on venues inserted before this column was tracked.
+    For those rows only admins can update/delete.
 
 ---
 
@@ -361,7 +367,8 @@ intentional — superlatives are awarded by the system, not self-assigned.
    `USING: true` regardless. Private profiles are not yet enforced.
 
 5. **`venues.created_by` may be null** — admin-inserted venues may have no `created_by`,
-   making the venue-owner UPDATE policy a no-op for those rows.
+   making the creator branch of the UPDATE/DELETE policy a no-op for those rows. Admins
+   can still update/delete them via `is_admin()`. Ensure all new venue inserts set `created_by`.
 
 6. **No follower-removal policy on `follows`** — the followed person cannot remove a follower.
    Only the follower can delete the relationship. No block/remove-follower feature yet.
