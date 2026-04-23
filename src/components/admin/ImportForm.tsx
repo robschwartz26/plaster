@@ -195,13 +195,11 @@ export function ImportForm() {
     img.src = src
   }, [imagePreviews[0], extracted?.existing_poster_url])
 
-  // Check for near-duplicate venues whenever selected venue or manual name changes
+  // Only check for near-duplicate venues when the user is typing a new venue name
   useEffect(() => {
-    if (!venues.length) { setNearDuplicate(null); return }
-    const selectedVenue = form.venue_id ? venues.find(v => v.id === form.venue_id) : null
-    const nameToCheck = selectedVenue?.name ?? form.venue_name_manual
-    if (!nameToCheck) { setNearDuplicate(null); return }
-    const near = venues.find(v => v.id !== form.venue_id && venueSimilarity(v.name, nameToCheck) > 0.7)
+    if (form.venue_id || !venues.length) { setNearDuplicate(null); return }
+    if (!form.venue_name_manual) { setNearDuplicate(null); return }
+    const near = venues.find(v => venueSimilarity(v.name, form.venue_name_manual) > 0.7)
     setNearDuplicate(near ?? null)
   }, [form.venue_id, form.venue_name_manual, venues])
 
