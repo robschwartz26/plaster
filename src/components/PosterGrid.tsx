@@ -51,6 +51,8 @@ function clamp(v: number, min: number, max: number) {
 export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
+  const activeDayRef = useRef(activeDay)
+  useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -231,7 +233,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       const ev = allEvents[eventIdx]
       if (!ev) return
       const day = eventDayMap.get(ev.id) ?? days[0]
-      if (day !== activeDay) { setActiveDay(day); onDayChange(day) }
+      if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
       const rowHeight = cellWidth * 1.5 + GAP
@@ -253,9 +255,9 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
 
       if (eventDays.length === 0) return
       const latestDay = [...eventDays].sort().at(-1)!
-      if (latestDay !== activeDay) { setActiveDay(latestDay); onDayChange(latestDay) }
+      if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
     }
-  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols, activeDay, onDayChange])
+  }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days, cols])
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
   const handleScroll = useCallback(() => {
