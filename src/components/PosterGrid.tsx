@@ -350,17 +350,23 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     onOpenEventHandled?.()
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Clear date-poster overlay state when leaving 1-col view.
+  // Clear 1-col-only state when leaving 1-col view.
   useEffect(() => {
-    if (cols !== 1) setAtDatePoster(null)
+    if (cols !== 1) {
+      setAtDatePoster(null)
+      setActiveEventIdx(0) // reset — only meaningful in 1-col
+    }
   }, [cols])
 
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
+  // activeEventIdx is synced here so DateIndicator has correct state before
+  // handleScroll fires — prevents a stale-event flash on first 1-col render.
   useEffect(() => {
     if (cols !== 1 || pendingScrollIdxRef.current === null) return
     const idx = pendingScrollIdxRef.current
     pendingScrollIdxRef.current = null
+    setActiveEventIdx(walledIdxToEventIdxRef.current[idx] ?? 0)
     const container = containerRef.current
     if (!container) return
     requestAnimationFrame(() => {
