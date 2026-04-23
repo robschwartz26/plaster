@@ -28,6 +28,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
+  const [manualFormOpen, setManualFormOpen] = useState(false)
 
   const fetchVenues = async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
@@ -45,17 +46,24 @@ function AdminDashboard() {
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
           <AdminNotifications />
 
+          <Section title="Import Poster">
+            <ImportForm />
+          </Section>
+
           <Section title="Add a Venue">
             <VenueForm onVenueAdded={fetchVenues} />
           </Section>
 
-          <Section title="Add an Event">
-            <EventForm venues={venues} />
-          </Section>
-
-          <Section title="Import Poster">
-            <ImportForm />
-          </Section>
+          <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
+            <button
+              onClick={() => setManualFormOpen(v => !v)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: manualFormOpen ? 24 : 0 }}
+            >
+              <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add an Event</h2>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{manualFormOpen ? '▾' : '▸'}</span>
+            </button>
+            {manualFormOpen && <EventForm venues={venues} />}
+          </section>
 
         </div>
       </div>
