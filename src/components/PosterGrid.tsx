@@ -247,15 +247,12 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     const { scrollTop, clientHeight, clientWidth } = container
     const cols = colsRef.current
 
-    console.log('[DATE]', { caller: 'computeActiveDay', cols, scrollTop, clientHeight })
-
     if (cols === 1) {
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
       const eventIdx = walledIdxToEventIdxRef.current[wi] ?? 0
       const ev = allEventsRef.current[eventIdx]
       if (!ev) return
       const day = eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]
-      console.log('[DATE] 1-col setActiveDay', { day, prev: activeDayRef.current })
       if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
     } else {
       const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
@@ -276,12 +273,8 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
         .map(item => eventDayMapRef.current.get(item.event.id))
         .filter((d): d is string => !!d)
 
-      if (eventDays.length === 0) {
-        console.log('[DATE] multi-col BAIL: no events in dominant row', { rowIdx: dominantRow })
-        return
-      }
+      if (eventDays.length === 0) return
       const latestDay = [...eventDays].sort().at(-1)!
-      console.log('[DATE] multi-col setActiveDay', { latestDay, prev: activeDayRef.current, eventDays: eventDays.length, rowIdx: dominantRow })
       if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -305,16 +298,12 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       }
     }
 
-    console.log('[DATE] handleScroll triggering compute')
     computeActiveDay()
 
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
-    scrollEndFallbackRef.current = setTimeout(() => {
-      console.log('[DATE] 150ms fallback triggering compute')
-      computeActiveDay()
-    }, 150)
+    scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync activeDay on mount and when layout/events change ─────────
@@ -323,7 +312,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
   // again within the window the previous raf/timeout are cancelled.
   useEffect(() => {
     let t: ReturnType<typeof setTimeout> | null = null
-    const raf = requestAnimationFrame(() => { t = setTimeout(() => { console.log('[DATE] cols-change deferred triggering compute', { cols }); computeActiveDay() }, 150) })
+    const raf = requestAnimationFrame(() => { t = setTimeout(computeActiveDay, 150) })
     return () => { cancelAnimationFrame(raf); if (t !== null) clearTimeout(t) }
   }, [cols, walledItems.length, allEvents.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -333,7 +322,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
     const el = containerRef.current
     if (!el) return
     el.addEventListener('scroll', handleScroll, { passive: true })
-    el.addEventListener('scrollend', () => { console.log('[DATE] scrollend triggering compute'); computeActiveDay() })
+    el.addEventListener('scrollend', computeActiveDay)
     return () => {
       el.removeEventListener('scroll', handleScroll)
       el.removeEventListener('scrollend', computeActiveDay)
