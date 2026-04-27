@@ -34,6 +34,11 @@ interface WallPost {
   like_count: number
   created_at: string
   is_venue_post: boolean
+  profiles: {
+    username: string | null
+    avatar_diamond_url: string | null
+    avatar_url: string | null
+  } | null
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -189,7 +194,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
   function fetchPosts() {
     supabase.from('event_wall_posts')
-      .select('id, user_id, body, like_count, created_at, is_venue_post')
+      .select('id, user_id, body, like_count, created_at, is_venue_post, profiles(username, avatar_diamond_url, avatar_url)')
       .eq('event_id', event.id)
       .order('created_at', { ascending: false })
       .limit(30)
@@ -791,19 +796,36 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             </div>
           ) : posts.map((post) => (
             <div key={post.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--fg-15)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg-40)' }}>
-                  {post.user_id.slice(0, 1).toUpperCase()}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, color: 'var(--fg-55)' }}>#{post.user_id.slice(0, 6)}</span>
-                    {post.is_venue_post && (
-                      <span style={{ padding: '1px 5px', borderRadius: 8, background: event.color2 + '33', fontFamily: '"Space Grotesk", sans-serif', fontSize: 8, fontWeight: 700, color: event.color2, textTransform: 'uppercase' }}>venue</span>
-                    )}
-                    <span style={{ marginLeft: 'auto', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)' }}>{timeAgo(post.created_at)}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Diamond avatar */}
+                {post.profiles?.avatar_diamond_url || post.profiles?.avatar_url ? (
+                  <div style={{ width: 26, height: 26, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
+                    <img src={post.profiles.avatar_diamond_url ?? post.profiles.avatar_url ?? ''} aria-hidden draggable={false}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(10px) brightness(0.7)', transform: 'scale(1.3)', pointerEvents: 'none' }} />
+                    <img src={post.profiles.avatar_diamond_url ?? post.profiles.avatar_url ?? ''} alt={post.profiles.username ?? 'avatar'} draggable={false}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
                   </div>
-                  <p style={{ margin: '0 0 6px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-80)', lineHeight: 1.45 }}>{post.body}</p>
+                ) : (
+                  <svg width="26" height="26" viewBox="0 0 26 26" fill="none" style={{ flexShrink: 0, display: 'block' }}>
+                    <polygon points="13,1 25,13 13,25 1,13" fill="var(--fg-15)" stroke="var(--fg-25)" strokeWidth="1" />
+                    <text x="13" y="17" textAnchor="middle" fontFamily='"Space Grotesk", sans-serif' fontSize="9" fill="var(--fg-40)">
+                      {(post.profiles?.username ?? post.user_id).slice(0, 1).toUpperCase()}
+                    </text>
+                  </svg>
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {/* Line 1: @username + comment + timestamp */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 0, marginBottom: 5 }}>
+                    <div style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.45, color: 'var(--fg-80)' }}>
+                      <span style={{ color: 'var(--fg-55)', fontWeight: 700, marginRight: 4 }}>@{post.profiles?.username ?? post.user_id.slice(0, 6)}</span>
+                      {post.is_venue_post && (
+                        <span style={{ padding: '1px 5px', borderRadius: 8, background: event.color2 + '33', fontFamily: '"Space Grotesk", sans-serif', fontSize: 8, fontWeight: 700, color: event.color2, textTransform: 'uppercase', marginRight: 4 }}>venue</span>
+                      )}
+                      {post.body}
+                    </div>
+                    <span style={{ flexShrink: 0, marginLeft: 8, fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)', whiteSpace: 'nowrap', alignSelf: 'flex-start', paddingTop: 1 }}>{timeAgo(post.created_at)}</span>
+                  </div>
+                  {/* Line 2: like button */}
                   <button onClick={() => togglePostLike(post.id)} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', padding: 0, cursor: user ? 'pointer' : 'default', color: likedPostIds.has(post.id) ? event.color2 : 'var(--fg-25)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}>
                     <svg width="10" height="9" viewBox="0 0 24 22" fill={likedPostIds.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
