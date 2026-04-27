@@ -227,6 +227,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
     if (cur === 0) fetchPanelData()
 
+    // Carousel swipe within an event = immediate view
+    if (dwellTimerRef.current) { clearTimeout(dwellTimerRef.current); dwellTimerRef.current = null }
+    registerView()
+
     if (dir === 1) {
       if (cur === 2) {
         loopingRef.current = true
@@ -342,7 +346,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         const now = Date.now()
         if (now - lastTapTimeRef.current < 300) {
           lastTapTimeRef.current = 0
-          if (!isLiked) onLike(event.id)
+          if (!isLiked) {
+            onLike(event.id)
+            registerView()
+          }
           const heart = pickHeart()
           setPopHeart(heart)
           setTimeout(() => setPopHeart(null), 700)
@@ -378,27 +385,26 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     }
   }, [cols, isLiked]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── View tracking ─────────────────────────────────────────────────────
+  // ── View tracking (1-col only) ────────────────────────────────────────
+  // Fires register_event_view on: 3s continuous dwell, carousel swipe, like, wall post.
+  // DB handles 3-hour per-event refractory — repeated calls within window are no-ops.
+  const dwellTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function registerView() {
+    if (cols !== 1) return
+    supabase.rpc('register_event_view', { p_event_id: event.id })
+      .then(({ error }) => { if (error) console.warn('view tracking failed', error) })
+  }
+
+  // Dwell: 3s timer starts when card becomes active in 1-col, resets on new event
   useEffect(() => {
-    if (!cardRef.current || !event?.id) return
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let registered = false
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.intersectionRatio >= 0.5 && !registered) {
-        timer = setTimeout(() => {
-          if (!registered) {
-            registered = true
-            supabase.rpc('register_event_view', { p_event_id: event.id })
-              .then(({ error }) => { if (error) console.warn('view tracking failed', error) })
-          }
-        }, 1000)
-      } else if (entry.intersectionRatio < 0.5 && timer) {
-        clearTimeout(timer); timer = null
-      }
-    }, { threshold: [0, 0.5, 1] })
-    observer.observe(cardRef.current)
-    return () => { observer.disconnect(); if (timer) clearTimeout(timer) }
-  }, [event?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (cols !== 1 || !isActive) {
+      if (dwellTimerRef.current) { clearTimeout(dwellTimerRef.current); dwellTimerRef.current = null }
+      return
+    }
+    dwellTimerRef.current = setTimeout(() => { registerView() }, 3000)
+    return () => { if (dwellTimerRef.current) { clearTimeout(dwellTimerRef.current); dwellTimerRef.current = null } }
+  }, [isActive, event?.id, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── RSVP ──────────────────────────────────────────────────────────────
   async function toggleAttend() {
@@ -437,7 +443,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     const { error } = await supabase.from('event_wall_posts').insert({
       event_id: event.id, user_id: user.id, body: newPostText.trim(),
     })
-    if (!error) { setNewPostText(''); fetchPosts() }
+    if (!error) { setNewPostText(''); fetchPosts(); registerView() }
     setPostLoading(false)
   }
 
@@ -475,6 +481,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           {/* Panel 1: Poster */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
+            <ViewPill count={event.view_count ?? 0} />
             {panelIdx === 0 && (
               <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
                 <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
@@ -672,10 +679,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       )}
 
       {cols <= 3 && (
-        <>
-          <ViewPill count={event.view_count ?? 0} />
-          <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
-        </>
+        <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
       )}
 
       {isAdminMode && (

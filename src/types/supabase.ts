@@ -204,22 +204,22 @@ export type Database = {
       }
       event_views: {
         Row: {
-          created_at: string
           event_id: string
+          id: string
           user_id: string
-          view_date: string
+          viewed_at: string
         }
         Insert: {
-          created_at?: string
           event_id: string
+          id?: string
           user_id: string
-          view_date?: string
+          viewed_at?: string
         }
         Update: {
-          created_at?: string
           event_id?: string
+          id?: string
           user_id?: string
-          view_date?: string
+          viewed_at?: string
         }
         Relationships: [
           {
