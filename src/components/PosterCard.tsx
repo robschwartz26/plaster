@@ -76,28 +76,6 @@ function timeAgo(iso: string): string {
 
 // ── HeartPill (2-5 col) ────────────────────────────────────────────────────
 
-function ViewPill({ count }: { count: number }) {
-  return (
-    <div style={{
-      position: 'absolute', top: 6, right: 42,
-      background: 'rgba(0,0,0,0.52)',
-      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
-      borderRadius: 20, padding: '3px 7px',
-      display: 'flex', alignItems: 'center', gap: 3,
-      color: '#f0ece3',
-      fontFamily: '"Space Grotesk", sans-serif',
-      fontSize: 11, fontWeight: 500, lineHeight: 1,
-      userSelect: 'none', zIndex: 2,
-    }}>
-      <svg width="11" height="8" viewBox="0 0 22 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 8C1 8 4.5 1 11 1s10 7 10 7-3.5 7-10 7S1 8 1 8z" />
-        <circle cx="11" cy="8" r="3" />
-      </svg>
-      {count}
-    </div>
-  )
-}
-
 function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean; onLike: () => void }) {
   return (
     <div
@@ -481,7 +459,6 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
           {/* Panel 1: Poster */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
-            <ViewPill count={event.view_count ?? 0} />
             {panelIdx === 0 && (
               <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
                 <span style={{ fontSize: 18, letterSpacing: '0.25em', color: 'rgba(255,255,255,0.22)', lineHeight: 1, userSelect: 'none' }}>· · ·</span>
