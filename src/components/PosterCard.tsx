@@ -76,6 +76,28 @@ function timeAgo(iso: string): string {
 
 // ── HeartPill (2-5 col) ────────────────────────────────────────────────────
 
+function ViewPill({ count }: { count: number }) {
+  return (
+    <div style={{
+      position: 'absolute', top: 6, right: 42,
+      background: 'rgba(0,0,0,0.52)',
+      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+      borderRadius: 20, padding: '3px 7px',
+      display: 'flex', alignItems: 'center', gap: 3,
+      color: '#f0ece3',
+      fontFamily: '"Space Grotesk", sans-serif',
+      fontSize: 11, fontWeight: 500, lineHeight: 1,
+      userSelect: 'none', zIndex: 2,
+    }}>
+      <svg width="11" height="8" viewBox="0 0 22 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 8C1 8 4.5 1 11 1s10 7 10 7-3.5 7-10 7S1 8 1 8z" />
+        <circle cx="11" cy="8" r="3" />
+      </svg>
+      {count}
+    </div>
+  )
+}
+
 function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean; onLike: () => void }) {
   return (
     <div
@@ -356,6 +378,28 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     }
   }, [cols, isLiked]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── View tracking ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!cardRef.current || !event?.id) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let registered = false
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.intersectionRatio >= 0.5 && !registered) {
+        timer = setTimeout(() => {
+          if (!registered) {
+            registered = true
+            supabase.rpc('register_event_view', { p_event_id: event.id })
+              .then(({ error }) => { if (error) console.warn('view tracking failed', error) })
+          }
+        }, 1000)
+      } else if (entry.intersectionRatio < 0.5 && timer) {
+        clearTimeout(timer); timer = null
+      }
+    }, { threshold: [0, 0.5, 1] })
+    observer.observe(cardRef.current)
+    return () => { observer.disconnect(); if (timer) clearTimeout(timer) }
+  }, [event?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── RSVP ──────────────────────────────────────────────────────────────
   async function toggleAttend() {
     if (!user || attendLoading) return
@@ -628,7 +672,10 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
       )}
 
       {cols <= 3 && (
-        <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
+        <>
+          <ViewPill count={event.view_count ?? 0} />
+          <HeartPill count={event.like_count} isLiked={isLiked} onLike={() => onLike(event.id)} />
+        </>
       )}
 
       {isAdminMode && (

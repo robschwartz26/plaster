@@ -202,6 +202,35 @@ export type Database = {
           },
         ]
       }
+      event_views: {
+        Row: {
+          created_at: string
+          event_id: string
+          user_id: string
+          view_date: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          user_id: string
+          view_date?: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          user_id?: string
+          view_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_views_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_wall_posts: {
         Row: {
           body: string | null
@@ -653,6 +682,7 @@ export type Database = {
         Args: { conv_id: string; uid: string }
         Returns: boolean
       }
+      register_event_view: { Args: { p_event_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
