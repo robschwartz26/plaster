@@ -24,6 +24,14 @@ dist-ssr
 *.sw?
 .vercel
 supabase/.temp
+
+# Capacitor / iOS build artifacts
+ios/App/Pods/
+ios/App/build/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/DerivedData/
+*.xcuserstate
 CODE_DUMP.md
 plaster-date-identifier-dump.md
 plaster-current-dump.md
