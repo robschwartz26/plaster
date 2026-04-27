@@ -391,6 +391,13 @@ export function MsgScreen() {
             />
           </div>
 
+          {/* Shouts section */}
+          {notifications.length > 0 && (
+            <div style={{ padding: '10px 16px 6px', flexShrink: 0 }}>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>shouts</span>
+            </div>
+          )}
+
           {/* Notification card — shows newest unread mention */}
           {notifications.length > 0 && (() => {
             const notif = notifications[0]
@@ -413,7 +420,7 @@ export function MsgScreen() {
                 <Diamond diamondUrl={notif.sender?.avatar_diamond_url ?? null} fallbackUrl={avatarUrl} size={40} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontWeight: 700 }}>{senderName}</span> mentioned you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
+                    <span style={{ fontWeight: 700 }}>{senderName}</span> shouted you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
                   </p>
                   {notif.body_preview && (
                     <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -435,6 +442,12 @@ export function MsgScreen() {
               </div>
             )
           })()}
+
+          {/* Messages section header */}
+          {notifications.length > 0 && <div style={{ height: 1, background: 'var(--fg-15)', flexShrink: 0, margin: '4px 0 0' }} />}
+          <div style={{ padding: '10px 16px 6px', flexShrink: 0 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>messages</span>
+          </div>
 
           {/* Conversation list */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
