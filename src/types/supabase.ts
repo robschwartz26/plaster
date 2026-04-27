@@ -455,6 +455,57 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          body_preview: string | null
+          created_at: string
+          id: string
+          kind: string
+          read_at: string | null
+          recipient_id: string
+          sender_id: string | null
+          target_event_id: string | null
+          target_post_id: string | null
+        }
+        Insert: {
+          body_preview?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          read_at?: string | null
+          recipient_id: string
+          sender_id?: string | null
+          target_event_id?: string | null
+          target_post_id?: string | null
+        }
+        Update: {
+          body_preview?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string | null
+          target_event_id?: string | null
+          target_post_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_target_event_id_fkey"
+            columns: ["target_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_post_id_fkey"
+            columns: ["target_post_id"]
+            isOneToOne: false
+            referencedRelation: "event_wall_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_likes: {
         Row: {
           created_at: string | null
@@ -698,6 +749,10 @@ export type Database = {
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
         Returns: boolean
+      }
+      process_wall_post_mentions: {
+        Args: { p_post_id: string }
+        Returns: number
       }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
     }
