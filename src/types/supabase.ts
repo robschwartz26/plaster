@@ -235,31 +235,40 @@ export type Database = {
         Row: {
           body: string | null
           created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
           event_id: string
           id: string
           image_url: string | null
           is_venue_post: boolean
           like_count: number
+          parent_id: string | null
           user_id: string
         }
         Insert: {
           body?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           event_id: string
           id?: string
           image_url?: string | null
           is_venue_post?: boolean
           like_count?: number
+          parent_id?: string | null
           user_id: string
         }
         Update: {
           body?: string | null
           created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
           event_id?: string
           id?: string
           image_url?: string | null
           is_venue_post?: boolean
           like_count?: number
+          parent_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -268,6 +277,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_wall_posts_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "event_wall_posts"
             referencedColumns: ["id"]
           },
           {
@@ -677,6 +693,7 @@ export type Database = {
         Args: { other_user_id: string }
         Returns: string
       }
+      delete_wall_post: { Args: { p_post_id: string }; Returns: Json }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
