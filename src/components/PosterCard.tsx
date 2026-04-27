@@ -796,7 +796,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             </div>
           ) : posts.map((post) => (
             <div key={post.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
                 {/* Diamond avatar */}
                 {post.profiles?.avatar_diamond_url || post.profiles?.avatar_url ? (
                   <div style={{ width: 26, height: 26, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
@@ -813,7 +813,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                     </text>
                   </svg>
                 )}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
                   {/* Line 1: @username + comment + timestamp */}
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 0, marginBottom: 5 }}>
                     <div style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.45, color: 'var(--fg-80)' }}>
