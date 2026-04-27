@@ -131,7 +131,7 @@ const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
 export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop }: Props) {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const dimmed = activeFilter !== 'All' && !matches
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
@@ -181,6 +181,8 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set())
   const [newPostText, setNewPostText] = useState('')
   const [postLoading, setPostLoading] = useState(false)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyText, setReplyText] = useState('')
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -445,6 +447,24 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     })
     if (!error) { setNewPostText(''); fetchPosts(); registerView() }
     setPostLoading(false)
+  }
+
+  // ── Submit reply ──────────────────────────────────────────────────────
+  async function submitReply(parentId: string) {
+    if (!user || !replyText.trim() || postLoading) return
+    setPostLoading(true)
+    const { error } = await supabase.from('event_wall_posts').insert({
+      event_id: event.id, user_id: user.id, body: replyText.trim(), parent_id: parentId,
+    })
+    if (!error) { setReplyText(''); setReplyingTo(null); fetchPosts() }
+    setPostLoading(false)
+  }
+
+  // ── Delete post ────────────────────────────────────────────────────────
+  async function deletePost(postId: string) {
+    if (!window.confirm('Delete this post?')) return
+    const { error } = await supabase.rpc('delete_wall_post', { p_post_id: postId })
+    if (!error) fetchPosts()
   }
 
   // ── 1-col render ──────────────────────────────────────────────────────
@@ -848,14 +868,32 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                       </div>
                       <span style={{ flexShrink: 0, marginLeft: 8, fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)', whiteSpace: 'nowrap', alignSelf: 'flex-start', paddingTop: 1 }}>{timeAgo(post.created_at)}</span>
                     </div>
-                    {/* Line 2: like button (hidden on tombstones) */}
+                    {/* Line 2: like / reply / delete (hidden on tombstones) */}
                     {!isDeleted && (
-                      <button onClick={() => togglePostLike(post.id)} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', padding: 0, cursor: user ? 'pointer' : 'default', color: likedPostIds.has(post.id) ? event.color2 : 'var(--fg-25)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}>
-                        <svg width="10" height="9" viewBox="0 0 24 22" fill={likedPostIds.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
-                        </svg>
-                        {post.like_count > 0 && post.like_count}
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <button onClick={() => togglePostLike(post.id)} style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'none', border: 'none', padding: 0, cursor: user ? 'pointer' : 'default', color: likedPostIds.has(post.id) ? event.color2 : 'var(--fg-25)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}>
+                          <svg width="10" height="9" viewBox="0 0 24 22" fill={likedPostIds.has(post.id) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
+                          </svg>
+                          {post.like_count > 0 && post.like_count}
+                        </button>
+                        {!isReply && user && (
+                          <button
+                            onClick={() => { setReplyingTo(replyingTo === post.id ? null : post.id); setReplyText('') }}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}
+                          >
+                            reply
+                          </button>
+                        )}
+                        {user && (post.user_id === user.id || isAdmin) && (
+                          <button
+                            onClick={() => deletePost(post.id)}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}
+                          >
+                            delete
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -865,6 +903,26 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             return groupPostsWithReplies(posts).map(post => (
               <div key={post.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
                 {renderPostRow(post)}
+                {replyingTo === post.id && (
+                  <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                    <textarea
+                      autoFocus
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
+                      placeholder={`reply to @${post.profiles?.username ?? post.user_id.slice(0, 6)}…`}
+                      rows={1}
+                      style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '6px 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 32, maxHeight: 72, overflowY: 'auto' }}
+                      onInput={(e) => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 72) + 'px' }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(post.id) } }}
+                    />
+                    <button onClick={() => submitReply(post.id)} disabled={!replyText.trim() || postLoading} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 7, background: replyText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: replyText.trim() ? 'pointer' : 'default' }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                    </button>
+                    <button onClick={() => { setReplyingTo(null); setReplyText('') }} style={{ flexShrink: 0, background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                      cancel
+                    </button>
+                  </div>
+                )}
                 {post.replies.length > 0 && (
                   <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {post.replies.map(reply => renderPostRow(reply, true))}
