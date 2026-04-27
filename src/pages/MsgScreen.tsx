@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { PencilLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -33,6 +33,28 @@ interface Message {
   created_at: string
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────
+
+interface AppNotification {
+  id: string
+  sender_id: string | null
+  kind: string
+  target_event_id: string | null
+  target_post_id: string | null
+  body_preview: string | null
+  read_at: string | null
+  created_at: string
+  sender: {
+    username: string | null
+    avatar_diamond_url: string | null
+    avatar_url: string | null
+  } | null
+  event: {
+    id: string
+    title: string
+  } | null
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function fmtTimeAgo(iso: string): string {
@@ -61,8 +83,10 @@ function showTimestampBefore(cur: Message, prev: Message | undefined): boolean {
 export function MsgScreen() {
   const { user } = useAuth()
   const location = useLocation()
+  const navigate = useNavigate()
   const { openConversationId: routeConvId } = (location.state ?? {}) as { openConversationId?: string }
 
+  const [notifications,    setNotifications]    = useState<AppNotification[]>([])
   const [conversations,    setConversations]    = useState<ConversationRow[]>([])
   const [convLoading,      setConvLoading]      = useState(true)
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
@@ -77,6 +101,34 @@ export function MsgScreen() {
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
   const openConv = conversations.find(c => c.id === openConvId) ?? null
+
+  // ── Notifications ────────────────────────────────────────────────────────
+  const fetchNotifications = useCallback(async () => {
+    if (!user) return
+    const { data, error } = await supabase
+      .from('notifications')
+      .select(`
+        id, sender_id, kind, target_event_id, target_post_id,
+        body_preview, read_at, created_at,
+        sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
+        event:events!target_event_id(id, title)
+      `)
+      .eq('recipient_id', user.id)
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+    if (!error && data) setNotifications(data as AppNotification[])
+  }, [user])
+
+  async function deleteNotification(id: string) {
+    await supabase.from('notifications').delete().eq('id', id)
+    fetchNotifications()
+  }
+
+  async function openNotification(notif: AppNotification) {
+    await supabase.from('notifications').delete().eq('id', notif.id)
+    setNotifications(prev => prev.filter(n => n.id !== notif.id))
+    navigate('/wall', { state: { focusEventId: notif.target_event_id, viewMode: '1col' } })
+  }
 
   // ── Load inbox ──────────────────────────────────────────────────────────
   const loadInbox = useCallback(async () => {
@@ -174,7 +226,7 @@ export function MsgScreen() {
     setConvLoading(false)
   }, [user])
 
-  useEffect(() => { loadInbox() }, [loadInbox])
+  useEffect(() => { loadInbox(); fetchNotifications() }, [loadInbox, fetchNotifications])
 
   // ── Open conversation ────────────────────────────────────────────────────
   const openConversation = useCallback(async (convId: string) => {
@@ -338,6 +390,51 @@ export function MsgScreen() {
               }}
             />
           </div>
+
+          {/* Notification card — shows newest unread mention */}
+          {notifications.length > 0 && (() => {
+            const notif = notifications[0]
+            const senderName = notif.sender?.username ? `@${notif.sender.username}` : 'someone'
+            const eventTitle = notif.event?.title ?? 'a deleted event'
+            const avatarUrl = notif.sender?.avatar_diamond_url ?? notif.sender?.avatar_url ?? null
+            return (
+              <div
+                onClick={() => openNotification(notif)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '12px 16px 12px 20px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--fg-15)',
+                  background: 'var(--fg-08)',
+                  flexShrink: 0,
+                  position: 'relative',
+                }}
+              >
+                <Diamond diamondUrl={notif.sender?.avatar_diamond_url ?? null} fallbackUrl={avatarUrl} size={40} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontWeight: 700 }}>{senderName}</span> mentioned you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
+                  </p>
+                  {notif.body_preview && (
+                    <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      "{notif.body_preview}"
+                    </p>
+                  )}
+                </div>
+                {notifications.length > 1 && (
+                  <div style={{ flexShrink: 0, background: '#A855F7', borderRadius: 10, padding: '2px 7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                    {notifications.length}
+                  </div>
+                )}
+                <button
+                  onClick={e => { e.stopPropagation(); deleteNotification(notif.id) }}
+                  style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })()}
 
           {/* Conversation list */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
