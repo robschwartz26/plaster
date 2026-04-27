@@ -182,6 +182,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
   const [newPostText, setNewPostText] = useState('')
   const [postLoading, setPostLoading] = useState(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const [replyContext, setReplyContext] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
 
   function fetchPanelData() {
@@ -456,7 +457,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
     const { error } = await supabase.from('event_wall_posts').insert({
       event_id: event.id, user_id: user.id, body: replyText.trim(), parent_id: parentId,
     })
-    if (!error) { setReplyText(''); setReplyingTo(null); fetchPosts() }
+    if (!error) { setReplyText(''); setReplyingTo(null); setReplyContext(null); fetchPosts() }
     setPostLoading(false)
   }
 
@@ -832,7 +833,7 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-25)' }}>No notes yet. Be the first.</p>
             </div>
           ) : (() => {
-            const renderPostRow = (post: WallPost, isReply = false) => {
+            const renderPostRow = (post: WallPost, isReply = false, topLevelParentId?: string) => {
               const avatarSize = isReply ? 20 : 26
               const half = avatarSize / 2
               const isDeleted = !!post.deleted_at
@@ -877,9 +878,24 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
                           </svg>
                           {post.like_count > 0 && post.like_count}
                         </button>
-                        {!isReply && user && (
+                        {!isDeleted && user && (
                           <button
-                            onClick={() => { setReplyingTo(replyingTo === post.id ? null : post.id); setReplyText('') }}
+                            onClick={() => {
+                              const targetParentId = topLevelParentId ?? post.id
+                              if (replyingTo === targetParentId && replyContext === post.id) {
+                                setReplyingTo(null)
+                                setReplyContext(null)
+                                setReplyText('')
+                              } else {
+                                setReplyingTo(targetParentId)
+                                setReplyContext(post.id)
+                                if (isReply && post.profiles?.username) {
+                                  setReplyText(`@${post.profiles.username} `)
+                                } else {
+                                  setReplyText('')
+                                }
+                              }
+                            }}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}
                           >
                             reply
@@ -900,32 +916,39 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               )
             }
 
+            const renderReplyInput = (targetParentId: string, _contextPostId: string, placeholderUsername: string) => (
+              <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                <textarea
+                  autoFocus
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
+                  placeholder={`reply to @${placeholderUsername}…`}
+                  rows={1}
+                  style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '6px 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 32, maxHeight: 72, overflowY: 'auto' }}
+                  onInput={(e) => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 72) + 'px' }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(targetParentId) } }}
+                />
+                <button onClick={() => submitReply(targetParentId)} disabled={!replyText.trim() || postLoading} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 7, background: replyText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: replyText.trim() ? 'pointer' : 'default' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                </button>
+                <button onClick={() => { setReplyingTo(null); setReplyContext(null); setReplyText('') }} style={{ flexShrink: 0, background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                  cancel
+                </button>
+              </div>
+            )
+
             return groupPostsWithReplies(posts).map(post => (
               <div key={post.id} style={{ padding: '12px 16px', borderBottom: '1px solid var(--fg-08)' }}>
                 {renderPostRow(post)}
-                {replyingTo === post.id && (
-                  <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                    <textarea
-                      autoFocus
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
-                      placeholder={`reply to @${post.profiles?.username ?? post.user_id.slice(0, 6)}…`}
-                      rows={1}
-                      style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '6px 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 32, maxHeight: 72, overflowY: 'auto' }}
-                      onInput={(e) => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 72) + 'px' }}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(post.id) } }}
-                    />
-                    <button onClick={() => submitReply(post.id)} disabled={!replyText.trim() || postLoading} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 7, background: replyText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: replyText.trim() ? 'pointer' : 'default' }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-                    </button>
-                    <button onClick={() => { setReplyingTo(null); setReplyText('') }} style={{ flexShrink: 0, background: 'none', border: 'none', padding: '0 2px', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
-                      cancel
-                    </button>
-                  </div>
-                )}
-                {post.replies.length > 0 && (
+                {replyContext === post.id && renderReplyInput(post.id, post.id, post.profiles?.username ?? post.user_id.slice(0, 6))}
+                {(post.replies.length > 0 || (replyingTo === post.id && replyContext !== post.id)) && (
                   <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {post.replies.map(reply => renderPostRow(reply, true))}
+                    {post.replies.map(reply => (
+                      <div key={reply.id}>
+                        {renderPostRow(reply, true, post.id)}
+                        {replyContext === reply.id && renderReplyInput(post.id, reply.id, reply.profiles?.username ?? reply.user_id.slice(0, 6))}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
