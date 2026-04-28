@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { PencilLine } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
 import { markConversationRead } from '@/lib/messaging'
@@ -658,7 +657,6 @@ export function MsgScreen() {
 
       </div>
 
-      <BottomNav />
     </div>
   )
 }

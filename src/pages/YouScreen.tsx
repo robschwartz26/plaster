@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { BottomNav } from '@/components/BottomNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
@@ -293,8 +292,6 @@ export function YouScreen() {
 
         <div style={{ height: 'var(--nav-height)' }} />
       </div>
-
-      <BottomNav />
 
       {/* Follow list panel — slides from RIGHT */}
       {user && (

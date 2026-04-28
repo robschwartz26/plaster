@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Wall } from './components/Wall'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { AppLayout } from './components/AppLayout'
 
 // Heavy pages are code-split — loaded only when their route is visited.
 // Admin includes Mapbox; splitting it out significantly reduces initial bundle.
@@ -46,18 +47,24 @@ function AppRoutes() {
   return (
     <Suspense fallback={null}>
       <Routes>
-        <Route path="/auth"       element={<AuthRoute><ErrorBoundary><AuthScreen /></ErrorBoundary></AuthRoute>} />
-        <Route path="/admin"      element={<ErrorBoundary><Admin /></ErrorBoundary>} />
-        <Route path="/onboarding" element={<ProtectedRoute><ErrorBoundary><Onboarding /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/"           element={<ProtectedRoute><ErrorBoundary><Wall /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/tonight"    element={<ProtectedRoute><ErrorBoundary><Tonight /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/lineup"     element={<ProtectedRoute><ErrorBoundary><LineUp /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/map"        element={<ProtectedRoute><ErrorBoundary><MapScreen /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/venues"     element={<ProtectedRoute><ErrorBoundary><VenuesScreen /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/msg"        element={<ProtectedRoute><ErrorBoundary><MsgScreen /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/venue/:id"  element={<ProtectedRoute><ErrorBoundary><VenueProfile /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="/you"        element={<ProtectedRoute><ErrorBoundary><YouScreen /></ErrorBoundary></ProtectedRoute>} />
-        <Route path="*"           element={<Navigate to="/" replace />} />
+        {/* Routes outside the app shell */}
+        <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
+        <Route path="/admin"      element={<Admin />} />
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+
+        {/* App shell with persistent BottomNav */}
+        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+          <Route path="/"          element={<ErrorBoundary><Wall /></ErrorBoundary>} />
+          <Route path="/lineup"    element={<ErrorBoundary><LineUp /></ErrorBoundary>} />
+          <Route path="/map"       element={<ErrorBoundary><MapScreen /></ErrorBoundary>} />
+          <Route path="/msg"       element={<ErrorBoundary><MsgScreen /></ErrorBoundary>} />
+          <Route path="/you"       element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
+          <Route path="/venues"    element={<ErrorBoundary><VenuesScreen /></ErrorBoundary>} />
+          <Route path="/venue/:id" element={<ErrorBoundary><VenueProfile /></ErrorBoundary>} />
+          <Route path="/tonight"   element={<ErrorBoundary><Tonight /></ErrorBoundary>} />
+        </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   )

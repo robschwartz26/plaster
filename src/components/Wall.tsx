@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
-import { BottomNav } from './BottomNav'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 
 import { supabase } from '@/lib/supabase'
@@ -157,7 +156,6 @@ export function Wall() {
         onConfirmCrop={handleConfirmCrop}
       />
 
-      <BottomNav />
     </div>
     </>
   )

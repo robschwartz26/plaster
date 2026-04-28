@@ -10,7 +10,6 @@ import { Search, SlidersHorizontal } from 'lucide-react'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { CATEGORIES, getGradient } from '@/lib/categories'
 import { useAuth } from '@/contexts/AuthContext'
-import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 import { useTheme } from '@/hooks/useTheme'
 import { DateIndicator } from '@/components/DateIndicator'
@@ -966,7 +965,6 @@ export function MapScreen() {
         </span>
       </div>
 
-      <BottomNav />
     </div>
   )
 }

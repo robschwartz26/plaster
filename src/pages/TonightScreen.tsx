@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader } from '@/components/PlasterHeader'
 
 interface TonightEvent {
@@ -178,7 +177,6 @@ export function TonightScreen() {
         <div style={{ height: 'var(--nav-height)' }} />
       </div>
 
-      <BottomNav />
     </div>
   )
 }

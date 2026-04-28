@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { type DbVenue } from '@/lib/supabase'
-import { BottomNav } from '@/components/BottomNav'
 import { PlasterHeader } from '@/components/PlasterHeader'
 
 export function VenuesScreen() {
@@ -46,7 +45,6 @@ export function VenuesScreen() {
         <div style={{ height: 'var(--nav-height)' }} />
       </div>
 
-      <BottomNav />
     </div>
   )
 }

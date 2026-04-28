@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { BottomNav } from '@/components/BottomNav'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -662,7 +661,6 @@ export default function LineUpScreen() {
 
       </div>
 
-      <BottomNav />
     </div>
   )
 }
