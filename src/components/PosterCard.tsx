@@ -3,6 +3,7 @@ import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AdminEditModal } from './AdminEditModal'
+import { MentionInput } from '@/components/MentionInput'
 import { pickHeart, type PickedHeart } from '@/lib/pickHeart'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -918,15 +919,13 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
 
             const renderReplyInput = (targetParentId: string, _contextPostId: string, placeholderUsername: string) => (
               <div style={{ marginTop: 8, paddingLeft: 34, display: 'flex', gap: 6, alignItems: 'flex-end' }}>
-                <textarea
-                  autoFocus
+                <MentionInput
                   value={replyText}
-                  onChange={(e) => setReplyText(e.target.value.slice(0, 280))}
+                  onChange={setReplyText}
+                  onSubmit={() => submitReply(targetParentId)}
                   placeholder={`reply to @${placeholderUsername}…`}
-                  rows={1}
-                  style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '6px 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 32, maxHeight: 72, overflowY: 'auto' }}
-                  onInput={(e) => { const el = e.currentTarget; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 72) + 'px' }}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitReply(targetParentId) } }}
+                  maxLength={280}
+                  autoFocus
                 />
                 <button onClick={() => submitReply(targetParentId)} disabled={!replyText.trim() || postLoading} style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 7, background: replyText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: replyText.trim() ? 'pointer' : 'default' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
@@ -959,17 +958,12 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
         <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-08)', padding: '8px 12px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))', background: 'var(--bg)' }}>
           {user ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-              <textarea
+              <MentionInput
                 value={newPostText}
-                onChange={(e) => setNewPostText(e.target.value.slice(0, 280))}
-                placeholder="Leave a note on the wall…"
-                rows={1}
-                style={{ flex: 1, resize: 'none', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 8, padding: '8px 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, outline: 'none', minHeight: 36, maxHeight: 90, overflowY: 'auto' }}
-                onInput={(e) => {
-                  const el = e.currentTarget
-                  el.style.height = 'auto'
-                  el.style.height = Math.min(el.scrollHeight, 90) + 'px'
-                }}
+                onChange={setNewPostText}
+                onSubmit={submitPost}
+                placeholder="leave a note on the wall…"
+                maxLength={280}
               />
               <button onClick={submitPost} disabled={!newPostText.trim() || postLoading} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 8, background: newPostText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newPostText.trim() ? 'pointer' : 'default' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
