@@ -9,6 +9,7 @@ import { Diamond } from '@/components/Diamond'
 import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowListPanel } from '@/components/FollowListPanel'
+import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -360,6 +361,9 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
             <FollowButton targetUserId={targetUserId} />
           )}
         </div>
+
+        {/* Social diamond row — who this user follows + pending requests (self only) */}
+        <SocialDiamondRow targetUserId={targetUserId} />
 
         {/* Editing panel (self only) */}
         {isSelf && (

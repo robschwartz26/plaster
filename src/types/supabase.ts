@@ -743,6 +743,7 @@ export type Database = {
       list_followers: {
         Args: { target_user_id: string }
         Returns: {
+          account_type: string
           avatar_diamond_url: string
           avatar_url: string
           followed_at: string
@@ -785,6 +786,19 @@ export type Database = {
           avatar_url: string
           has_interacted: boolean
           id: string
+          username: string
+        }[]
+      }
+      social_diamond_row: {
+        Args: { target_user_id: string }
+        Returns: {
+          account_type: string
+          avatar_diamond_url: string
+          avatar_url: string
+          created_at: string
+          follow_row_id: string
+          id: string
+          kind: string
           username: string
         }[]
       }
