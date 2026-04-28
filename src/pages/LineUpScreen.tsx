@@ -47,6 +47,21 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
 }
 
+// Parses body text and wraps @-mentions in a medium-bold span.
+function renderBodyWithMentions(body: string): React.ReactNode {
+  const parts = body.split(/(@[A-Za-z0-9_.]+)/g)
+  return parts.map((part, i) => {
+    if (part.startsWith('@')) {
+      return (
+        <span key={i} style={{ fontWeight: 500, color: 'var(--fg)', fontStyle: 'normal' }}>
+          {part}
+        </span>
+      )
+    }
+    return <React.Fragment key={i}>{part}</React.Fragment>
+  })
+}
+
 const btnPrimary: React.CSSProperties   = { flex: 1, padding: '11px 0', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 6, fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 13, cursor: 'pointer' }
 const btnSecondary: React.CSSProperties = { flex: 1, padding: '11px 0', background: 'transparent', color: 'var(--fg-55)', border: '1px solid var(--fg-18)', borderRadius: 6, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, cursor: 'pointer' }
 
@@ -578,10 +593,24 @@ export default function LineUpScreen() {
                     onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
                     style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
                   >{item.actor.name}</span>
-                  {item.kind === 'rsvp'       && <> is going to {item.event?.title}</>}
-                  {item.kind === 'like'       && <> liked {item.event?.title}</>}
-                  {item.kind === 'venue_post' && <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
-                  {item.kind === 'wall_post'  && <> posted on {item.event?.title}: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
+                  {item.kind === 'rsvp' && (
+                    <> is going to <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
+                  )}
+                  {item.kind === 'like' && (
+                    <> liked <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
+                  )}
+                  {item.kind === 'venue_post' && item.body && (
+                    <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>
+                  )}
+                  {item.kind === 'wall_post' && (
+                    <>
+                      {' posted on '}
+                      <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span>
+                      {item.body && (
+                        <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
               {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
