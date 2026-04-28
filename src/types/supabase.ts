@@ -715,6 +715,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_follow_request: {
+        Args: { follower_user_id: string }
+        Returns: undefined
+      }
       add_like_count: {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
@@ -731,6 +735,10 @@ export type Database = {
       create_or_get_conversation: {
         Args: { other_user_id: string }
         Returns: string
+      }
+      decline_follow_request: {
+        Args: { follower_user_id: string }
+        Returns: undefined
       }
       delete_wall_post: { Args: { p_post_id: string }; Returns: Json }
       follow_status: { Args: { other_user_id: string }; Returns: string }
@@ -802,6 +810,7 @@ export type Database = {
           username: string
         }[]
       }
+      unfollow_user: { Args: { other_user_id: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
