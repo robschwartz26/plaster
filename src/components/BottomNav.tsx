@@ -80,7 +80,7 @@ export function BottomNav() {
     }
 
     const fetchPendingConnects = async () => {
-      const { data, error } = await supabase.rpc('pending_connect_request_count')
+      const { data, error } = await supabase.rpc('pending_follow_request_count')
       if (!cancelled && !error && typeof data === 'number') {
         setPendingConnects(data)
       }
@@ -106,7 +106,7 @@ export function BottomNav() {
 
     const friendshipChannel = supabase
       .channel(`pending-connects-${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `recipient_id=eq.${user.id}` }, () => { fetchPendingConnects() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${user.id}` }, () => { fetchPendingConnects() })
       .subscribe()
 
     return () => {

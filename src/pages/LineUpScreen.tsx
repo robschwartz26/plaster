@@ -367,11 +367,11 @@ export default function LineUpScreen() {
       // Step A: IDs to query against
       const [{ data: myFollows }, { data: myVenueFollows }] = await Promise.all([
         supabase.from('follows').select('following_id').eq('follower_id', user!.id).eq('status', 'accepted'),
-        supabase.from('venue_follows').select('venue_id').eq('user_id', user!.id),
+        supabase.from('follows').select('following_id').eq('follower_id', user!.id).eq('status', 'accepted'),
       ])
 
       const followedUserIds  = (myFollows ?? []).map((f: any) => f.following_id)
-      const followedVenueIds = (myVenueFollows ?? []).map((v: any) => v.venue_id)
+      const followedVenueIds = (myVenueFollows ?? []).map((v: any) => v.following_id)
 
       // Step B: three sources in parallel, skipping empty ID lists
       const rsvpsPromise = followedUserIds.length

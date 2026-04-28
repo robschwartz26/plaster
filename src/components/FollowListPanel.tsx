@@ -90,9 +90,10 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
         .eq('status', 'accepted')
         .order('created_at', { ascending: false }),
       supabase
-        .from('venue_follows')
-        .select('venue:venue_id(id, name, neighborhood, address, cover_url, avatar_url, banner_url, diamond_focal_x, diamond_focal_y)')
-        .eq('user_id', userId)
+        .from('follows')
+        .select('venue:following_id(id, name, neighborhood, address, cover_url, avatar_url, banner_url, diamond_focal_x, diamond_focal_y)')
+        .eq('follower_id', userId)
+        .eq('status', 'accepted')
         .order('created_at', { ascending: false }),
     ])
     setFollowingData(((people ?? []) as any[]).map(r => r.user).filter(Boolean))

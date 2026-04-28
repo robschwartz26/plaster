@@ -55,10 +55,10 @@ export function VenueSubPanel({ venue, onBack }: Props) {
   useEffect(() => {
     if (!user) return
     supabase
-      .from('venue_follows')
+      .from('follows')
       .select('id')
-      .eq('user_id', user.id)
-      .eq('venue_id', venue.id)
+      .eq('follower_id', user.id)
+      .eq('following_id', venue.id)
       .single()
       .then(({ data }) => setIsFollowing(!!data))
   }, [user, venue.id])
@@ -67,10 +67,10 @@ export function VenueSubPanel({ venue, onBack }: Props) {
     if (!user) return
     setToggling(true)
     if (isFollowing) {
-      await supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', venue.id)
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', venue.id)
       setIsFollowing(false)
     } else {
-      await supabase.from('venue_follows').insert({ user_id: user.id, venue_id: venue.id })
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: venue.id, status: 'pending' })
       setIsFollowing(true)
     }
     setToggling(false)

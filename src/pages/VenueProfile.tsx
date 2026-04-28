@@ -40,17 +40,17 @@ export function VenueProfile() {
 
   useEffect(() => {
     if (!user || !id) return
-    supabase.from('venue_follows').select('id').eq('user_id', user.id).eq('venue_id', id).single()
+    supabase.from('follows').select('id').eq('follower_id', user.id).eq('following_id', id).single()
       .then(({ data }) => setIsFollowing(!!data))
   }, [user, id])
 
   async function toggleFollow() {
     if (!user || !id) return
     if (isFollowing) {
-      await supabase.from('venue_follows').delete().eq('user_id', user.id).eq('venue_id', id)
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', id)
       setIsFollowing(false)
     } else {
-      await supabase.from('venue_follows').insert({ user_id: user.id, venue_id: id })
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: id, status: 'pending' })
       setIsFollowing(true)
     }
   }
