@@ -418,46 +418,55 @@ export function MsgScreen() {
             const eventTitle = notif.event?.title ?? 'a deleted event'
             const avatarUrl = notif.sender?.avatar_diamond_url ?? notif.sender?.avatar_url ?? null
             return (
-              <div
-                onClick={() => openNotification(notif)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 16px 12px 20px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid var(--fg-15)',
-                  background: 'var(--fg-08)',
-                  flexShrink: 0,
-                  position: 'relative',
-                }}
-              >
-                <Diamond diamondUrl={notif.sender?.avatar_diamond_url ?? null} fallbackUrl={avatarUrl} size={40} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontWeight: 700 }}>{senderName}</span> shouted you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
-                  </p>
-                  {notif.body_preview && (
-                    <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      "{notif.body_preview}"
-                    </p>
-                  )}
-                </div>
-                {notifications.length > 1 && (
-                  <div style={{ flexShrink: 0, background: '#A855F7', borderRadius: 10, padding: '2px 7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, fontWeight: 700, color: '#fff' }}>
-                    {notifications.length}
+              <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
+                <div style={{ position: 'relative' }}>
+                  <div style={{
+                    position: 'absolute',
+                    top: 4, left: 3, right: -3, bottom: -4,
+                    background: 'var(--fg-15)',
+                    borderRadius: 4,
+                  }} />
+                  <div
+                    onClick={() => openNotification(notif)}
+                    style={{
+                      position: 'relative',
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      background: 'var(--bg)',
+                      border: '0.5px solid var(--fg-15)',
+                      borderRadius: 4,
+                    }}
+                  >
+                    <Diamond diamondUrl={notif.sender?.avatar_diamond_url ?? null} fallbackUrl={avatarUrl} size={40} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <span style={{ fontWeight: 700 }}>{senderName}</span> shouted you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
+                      </p>
+                      {notif.body_preview && (
+                        <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          "{notif.body_preview}"
+                        </p>
+                      )}
+                    </div>
+                    {notifications.length > 1 && (
+                      <div style={{ flexShrink: 0, background: '#A855F7', borderRadius: 10, padding: '2px 7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                        {notifications.length}
+                      </div>
+                    )}
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteNotification(notif.id) }}
+                      style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
                   </div>
-                )}
-                <button
-                  onClick={e => { e.stopPropagation(); deleteNotification(notif.id) }}
-                  style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
-                >
-                  ×
-                </button>
+                </div>
               </div>
             )
           })()}
 
           {/* Messages section header */}
-          {notifications.length > 0 && <div style={{ height: 1, background: 'var(--fg-15)', flexShrink: 0, margin: '4px 0 0' }} />}
           <div style={{ padding: '10px 16px 6px', flexShrink: 0 }}>
             <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>messages</span>
           </div>
