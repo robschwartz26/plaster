@@ -70,7 +70,7 @@ export function VenueSubPanel({ venue, onBack }: Props) {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', venue.id)
       setIsFollowing(false)
     } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: venue.id, status: 'pending' })
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: venue.id })
       setIsFollowing(true)
     }
     setToggling(false)

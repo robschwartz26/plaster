@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -40,33 +40,150 @@ function catGradient(cat: string | null | undefined): string {
 
 interface FollowCounts { followers: number; following: number }
 
+type DisplayProfile = {
+  username: string
+  bio: string | null
+  avatar_url: string | null
+  avatar_diamond_url: string | null
+  is_public: boolean
+}
+
+// ── Follow button (for person profiles) ───────────────────────────────────
+
+type FollowStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'following' | 'self'
+
+function FollowButton({ targetUserId }: { targetUserId: string }) {
+  const { user } = useAuth()
+  const [status,  setStatus]  = useState<FollowStatus | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+
+    function refreshStatus() {
+      supabase.rpc('follow_status', { other_user_id: targetUserId })
+        .then(({ data }) => { if (!cancelled && typeof data === 'string') setStatus(data as FollowStatus) })
+    }
+
+    refreshStatus()
+
+    const channel = supabase
+      .channel(`follow-status-${targetUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${targetUserId}` }, refreshStatus)
+      .subscribe()
+
+    return () => { cancelled = true; supabase.removeChannel(channel) }
+  }, [targetUserId, user?.id])
+
+  if (!user || status === 'self' || status === null) return null
+
+  async function handleClick() {
+    if (loading || !user) return
+    setLoading(true)
+    if (status === 'none') {
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
+      setStatus('pending_outgoing')
+    } else if (status === 'pending_outgoing' || status === 'following') {
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
+      setStatus('none')
+    }
+    setLoading(false)
+  }
+
+  const label = status === 'none' ? 'Follow'
+              : status === 'pending_outgoing' ? 'Pending'
+              : 'Following'
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      style={{
+        flex: 1, padding: '9px 0', borderRadius: 10,
+        border: status !== 'none' ? '1.5px solid var(--fg-25)' : 'none',
+        background: status !== 'none' ? 'transparent' : 'var(--fg)',
+        color: status !== 'none' ? 'var(--fg-55)' : 'var(--bg)',
+        fontFamily: '"Space Grotesk", sans-serif',
+        fontSize: 13, fontWeight: 600,
+        cursor: loading ? 'not-allowed' : 'pointer',
+        opacity: loading ? 0.6 : 1,
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function YouScreen() {
-  const { user, profile, signOut, refreshProfile } = useAuth()
+export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
+  const { username: paramUsername } = useParams<{ username?: string }>()
+  const { user, profile: selfProfile, signOut, refreshProfile } = useAuth()
   const navigate = useNavigate()
 
-  // Profile edit state
+  // ── Resolve which user we're viewing ──────────────────────────────────
+  const [targetUserId, setTargetUserId] = useState<string | null>(propUserId ?? null)
+  const [notFound,     setNotFound]     = useState(false)
+
+  useEffect(() => {
+    if (propUserId) { setTargetUserId(propUserId); return }
+    if (paramUsername) {
+      supabase.from('profiles').select('id').eq('username', paramUsername).single()
+        .then(({ data }) => { if (data) setTargetUserId(data.id); else setNotFound(true) })
+      return
+    }
+    if (user?.id) setTargetUserId(user.id)
+  }, [propUserId, paramUsername, user?.id])
+
+  const isSelf = !!targetUserId && targetUserId === user?.id
+
+  // ── Display profile ────────────────────────────────────────────────────
+  const [displayProfile, setDisplayProfile] = useState<DisplayProfile | null>(null)
+
+  useEffect(() => {
+    if (!targetUserId) return
+    if (isSelf && selfProfile) {
+      setDisplayProfile({
+        username: selfProfile.username ?? user?.email?.split('@')[0] ?? '',
+        bio: selfProfile.bio ?? null,
+        avatar_url: selfProfile.avatar_url ?? null,
+        avatar_diamond_url: selfProfile.avatar_diamond_url ?? null,
+        is_public: selfProfile.is_public ?? true,
+      })
+      return
+    }
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public')
+      .eq('id', targetUserId).single()
+      .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
+  }, [targetUserId, isSelf, selfProfile, user?.email])
+
+  // Profile edit state (self only)
   const [editing,  setEditing]  = useState(false)
-  const [bio,      setBio]      = useState(profile?.bio ?? '')
-  const [isPublic, setIsPublic] = useState(profile?.is_public ?? true)
+  const [bio,      setBio]      = useState(selfProfile?.bio ?? '')
+  const [isPublic, setIsPublic] = useState(selfProfile?.is_public ?? true)
   const [busy,     setBusy]     = useState(false)
+
+  useEffect(() => {
+    setBio(selfProfile?.bio ?? '')
+    setIsPublic(selfProfile?.is_public ?? true)
+  }, [selfProfile?.bio, selfProfile?.is_public])
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
   const [counts,   setCounts]   = useState<FollowCounts>({ followers: 0, following: 0 })
 
-  // Avatar state
+  // Avatar state (self only)
   const uploaderRef = useRef<AvatarUploaderRef>(null)
-  const [avatarPreview,         setAvatarPreview]         = useState<string | null>(null)
-  const [avatarFullscreenOpen,  setAvatarFullscreenOpen]  = useState(false)
-  const [avatarFullscreenId,    setAvatarFullscreenId]    = useState<string | null>(null)
+  const [avatarPreview,        setAvatarPreview]        = useState<string | null>(null)
+  const [avatarFullscreenOpen, setAvatarFullscreenOpen] = useState(false)
+  const [avatarFullscreenId,   setAvatarFullscreenId]   = useState<string | null>(null)
 
   // Follow list panel state
   const [followListOpen, setFollowListOpen] = useState(false)
   const [followListTab,  setFollowListTab]  = useState<'followers' | 'following'>('followers')
 
-  // Search state
+  // Search state (self only)
   const [searchQuery,   setSearchQuery]   = useState('')
   const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatar_url: string | null; avatar_diamond_url: string | null }[]>([])
   const [searchBusy,    setSearchBusy]    = useState(false)
@@ -75,27 +192,29 @@ export function YouScreen() {
   // ── Data fetching ──────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (!user) return
-    setBio(profile?.bio ?? '')
-    setIsPublic(profile?.is_public ?? true)
+    if (!targetUserId) return
     fetchAttended()
     fetchCounts()
+  }, [targetUserId])
+
+  useEffect(() => {
+    if (!user || !isSelf) return
     fetchFollowing()
-  }, [user, profile])
+  }, [user?.id, isSelf])
 
   async function fetchAttended() {
-    if (!user) return
+    if (!targetUserId) return
     const { data } = await supabase.from('attendees')
       .select('event_id, events(id, title, poster_url, starts_at, category)')
-      .eq('user_id', user.id).order('created_at', { ascending: false }).limit(24)
+      .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24)
     setAttended((data as AttendedEvent[] | null) ?? [])
   }
 
   async function fetchCounts() {
-    if (!user) return
+    if (!targetUserId) return
     const [{ count: followers }, { count: fwing }] = await Promise.all([
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', user.id).eq('status', 'accepted'),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id',  user.id).eq('status', 'accepted'),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetUserId).eq('status', 'accepted'),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetUserId).eq('status', 'accepted'),
     ])
     setCounts({ followers: followers ?? 0, following: fwing ?? 0 })
   }
@@ -131,13 +250,13 @@ export function YouScreen() {
     setSearchBusy(false)
   }
 
-  async function toggleFollow(targetId: string, targetIsPublic: boolean) {
+  async function toggleFollow(targetId: string) {
     if (!user) return
     if (following.has(targetId)) {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId)
       setFollowing(prev => { const next = new Set(prev); next.delete(targetId); return next })
     } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId, status: targetIsPublic ? 'accepted' : 'pending' })
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId })
       setFollowing(prev => new Set([...prev, targetId]))
     }
     fetchCounts()
@@ -145,7 +264,23 @@ export function YouScreen() {
 
   // ── Derived ────────────────────────────────────────────────────────────
 
-  const diamondSrc = avatarPreview ?? profile?.avatar_diamond_url ?? profile?.avatar_url ?? null
+  const diamondSrc = isSelf
+    ? (avatarPreview ?? selfProfile?.avatar_diamond_url ?? selfProfile?.avatar_url ?? null)
+    : (displayProfile?.avatar_diamond_url ?? displayProfile?.avatar_url ?? null)
+
+  // ── Early returns ──────────────────────────────────────────────────────
+
+  if (notFound) return (
+    <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--fg-30)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14 }}>User not found</p>
+    </div>
+  )
+
+  if (!targetUserId || !displayProfile) return (
+    <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--fg-30)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14 }}>Loading…</p>
+    </div>
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -159,41 +294,43 @@ export function YouScreen() {
         {/* Profile header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
 
-          {/* Diamond avatar — tap to view fullscreen; plus icon corner opens uploader */}
+          {/* Diamond avatar */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <Diamond
               diamondUrl={diamondSrc}
               size={80}
-              onClick={() => setAvatarFullscreenOpen(true)}
+              onClick={() => isSelf ? setAvatarFullscreenOpen(true) : setAvatarFullscreenId(targetUserId)}
             />
-            <button
-              onClick={() => uploaderRef.current?.open()}
-              style={{
-                position: 'absolute', bottom: -2, right: -2,
-                width: 22, height: 22, borderRadius: '50%',
-                background: 'var(--bg)', border: '1px solid var(--fg-25)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', padding: 0,
-              }}
-            >
-              <Plus size={12} color="var(--fg-65)" />
-            </button>
+            {isSelf && (
+              <button
+                onClick={() => uploaderRef.current?.open()}
+                style={{
+                  position: 'absolute', bottom: -2, right: -2,
+                  width: 22, height: 22, borderRadius: '50%',
+                  background: 'var(--bg)', border: '1px solid var(--fg-25)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                <Plus size={12} color="var(--fg-65)" />
+              </button>
+            )}
           </div>
 
           {/* Name + stats */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2 }}>
-              @{profile?.username ?? user?.email?.split('@')[0]}
+              @{displayProfile.username}
             </p>
-            {profile?.bio && !editing && (
+            {displayProfile.bio && !editing && (
               <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
-                {profile.bio}
+                {displayProfile.bio}
               </p>
             )}
             <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
               {[
-                { label: 'followers', count: counts.followers, tab: 'followers' as const },
-                { label: 'following', count: counts.following, tab: 'following' as const },
+                { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
+                { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
                 { label: 'attended',  count: attended.length,  tab: null },
               ].map(({ label, count, tab }) => (
                 <div
@@ -209,57 +346,67 @@ export function YouScreen() {
           </div>
         </div>
 
-        {/* Edit / sign out row */}
+        {/* Edit / sign out (self) — Follow button (other) */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-          <button onClick={() => setEditing(!editing)} style={outlineBtn}>{editing ? 'Cancel' : 'Edit profile'}</button>
-          <button onClick={() => { signOut(); navigate('/auth', { replace: true }) }} style={{ ...outlineBtn, color: 'var(--fg-40)', borderColor: 'var(--fg-15)' }}>Sign out</button>
+          {isSelf ? (
+            <>
+              <button onClick={() => setEditing(!editing)} style={outlineBtn}>{editing ? 'Cancel' : 'Edit profile'}</button>
+              <button onClick={() => { signOut(); navigate('/auth', { replace: true }) }} style={{ ...outlineBtn, color: 'var(--fg-40)', borderColor: 'var(--fg-15)' }}>Sign out</button>
+            </>
+          ) : (
+            <FollowButton targetUserId={targetUserId} />
+          )}
         </div>
 
-        {/* Editing panel */}
-        <AnimatePresence>
-          {editing && (
-            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', marginBottom: 20 }}>
-              <textarea placeholder="Bio (optional)" value={bio} onChange={e => setBio(e.target.value)} rows={3}
-                style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <span style={{ fontSize: 14, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif' }}>Public profile</span>
-                <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>
-                  <div style={{ position: 'absolute', top: 3, left: isPublic ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--bg)', transition: 'left 200ms ease' }} />
+        {/* Editing panel (self only) */}
+        {isSelf && (
+          <AnimatePresence>
+            {editing && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', marginBottom: 20 }}>
+                <textarea placeholder="Bio (optional)" value={bio} onChange={e => setBio(e.target.value)} rows={3}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <span style={{ fontSize: 14, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif' }}>Public profile</span>
+                  <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>
+                    <div style={{ position: 'absolute', top: 3, left: isPublic ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--bg)', transition: 'left 200ms ease' }} />
+                  </div>
                 </div>
+                <button onClick={saveProfile} disabled={busy} style={saveBtnStyle(busy)}>{busy ? 'Saving…' : 'Save changes'}</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* Find people (self only) */}
+        {isSelf && (
+          <div style={{ marginBottom: 24 }}>
+            <p style={sectionLabel}>Find people</p>
+            <input type="text" placeholder="Search @username" value={searchQuery} onChange={e => searchUsers(e.target.value)}
+              style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: searchResults.length > 0 ? 10 : 0 }} />
+            {searchResults.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                {searchResults.map(u => (
+                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--fg-08)' }}>
+                    <Diamond
+                      diamondUrl={u.avatar_diamond_url}
+                      fallbackUrl={u.avatar_url}
+                      size={38}
+                      onClick={() => setAvatarFullscreenId(u.id)}
+                    />
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif' }}>@{u.username}</span>
+                    <button onClick={() => toggleFollow(u.id)}
+                      style={{ padding: '6px 14px', borderRadius: 20, border: following.has(u.id) ? '1.5px solid var(--fg-25)' : 'none', background: following.has(u.id) ? 'transparent' : 'var(--fg)', color: following.has(u.id) ? 'var(--fg-55)' : 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {following.has(u.id) ? 'Following' : 'Follow'}
+                    </button>
+                  </div>
+                ))}
               </div>
-              <button onClick={saveProfile} disabled={busy} style={saveBtnStyle(busy)}>{busy ? 'Saving…' : 'Save changes'}</button>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+            {searchBusy && <p style={{ fontSize: 13, color: 'var(--fg-30)', margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif' }}>Searching…</p>}
+          </div>
+        )}
 
-        {/* Find people */}
-        <div style={{ marginBottom: 24 }}>
-          <p style={sectionLabel}>Find people</p>
-          <input type="text" placeholder="Search @username" value={searchQuery} onChange={e => searchUsers(e.target.value)}
-            style={{ width: '100%', padding: '11px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box', marginBottom: searchResults.length > 0 ? 10 : 0 }} />
-          {searchResults.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {searchResults.map(u => (
-                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 4px', borderBottom: '1px solid var(--fg-08)' }}>
-                  <Diamond
-                    diamondUrl={u.avatar_diamond_url}
-                    fallbackUrl={u.avatar_url}
-                    size={38}
-                    onClick={() => setAvatarFullscreenId(u.id)}
-                  />
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif' }}>@{u.username}</span>
-                  <button onClick={() => toggleFollow(u.id, true)}
-                    style={{ padding: '6px 14px', borderRadius: 20, border: following.has(u.id) ? '1.5px solid var(--fg-25)' : 'none', background: following.has(u.id) ? 'transparent' : 'var(--fg)', color: following.has(u.id) ? 'var(--fg-55)' : 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                    {following.has(u.id) ? 'Following' : 'Follow'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          {searchBusy && <p style={{ fontSize: 13, color: 'var(--fg-30)', margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif' }}>Searching…</p>}
-        </div>
-
-        {/* Attended events grid — always shown, empty state when nothing */}
+        {/* Attended events grid */}
         <div style={{ marginBottom: 24 }}>
           <p style={sectionLabel}>Attended</p>
           {attended.length === 0 ? (
@@ -293,8 +440,8 @@ export function YouScreen() {
         <div style={{ height: 'var(--nav-height)' }} />
       </div>
 
-      {/* Follow list panel — slides from RIGHT */}
-      {user && (
+      {/* Follow list panel (self only) */}
+      {isSelf && user && (
         <FollowListPanel
           userId={user.id}
           currentUserId={user.id}
@@ -302,12 +449,12 @@ export function YouScreen() {
           open={followListOpen}
           onClose={() => setFollowListOpen(false)}
           following={following}
-          onFollowToggle={async (targetId) => { await toggleFollow(targetId, true) }}
+          onFollowToggle={async (targetId) => { await toggleFollow(targetId) }}
         />
       )}
 
-      {/* Own avatar fullscreen — pencil opens uploader */}
-      {user && avatarFullscreenOpen && (
+      {/* Own avatar fullscreen */}
+      {isSelf && user && avatarFullscreenOpen && (
         <AvatarFullscreen
           userId={user.id}
           onClose={() => setAvatarFullscreenOpen(false)}
@@ -315,13 +462,13 @@ export function YouScreen() {
         />
       )}
 
-      {/* Other user avatar fullscreen viewer */}
+      {/* Other user avatar fullscreen */}
       {avatarFullscreenId && (
         <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
       )}
 
-      {/* Avatar uploader — always mounted so open() is available on first gesture */}
-      {user && (
+      {/* Avatar uploader (self only) */}
+      {isSelf && user && (
         <AvatarUploader
           ref={uploaderRef}
           userId={user.id}

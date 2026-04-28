@@ -399,7 +399,7 @@ export type Database = {
           follower_id: string
           following_id: string
           id?: string
-          status: string
+          status?: string
         }
         Update: {
           accepted_at?: string | null

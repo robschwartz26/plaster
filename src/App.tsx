@@ -58,7 +58,8 @@ function AppRoutes() {
           <Route path="/lineup"    element={<ErrorBoundary><LineUp /></ErrorBoundary>} />
           <Route path="/map"       element={<ErrorBoundary><MapScreen /></ErrorBoundary>} />
           <Route path="/msg"       element={<ErrorBoundary><MsgScreen /></ErrorBoundary>} />
-          <Route path="/you"       element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
+          <Route path="/you"              element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
+          <Route path="/profile/:username" element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
           <Route path="/venues"    element={<ErrorBoundary><VenuesScreen /></ErrorBoundary>} />
           <Route path="/venue/:id" element={<ErrorBoundary><VenueProfile /></ErrorBoundary>} />
           <Route path="/tonight"   element={<ErrorBoundary><Tonight /></ErrorBoundary>} />

@@ -50,7 +50,7 @@ export function VenueProfile() {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', id)
       setIsFollowing(false)
     } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: id, status: 'pending' })
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: id })
       setIsFollowing(true)
     }
   }
