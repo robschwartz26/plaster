@@ -423,6 +423,48 @@ export type Database = {
           },
         ]
       }
+      friendships: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          id: string
+          recipient_id: string
+          requester_id: string
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          recipient_id: string
+          requester_id: string
+          status: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          id?: string
+          recipient_id?: string
+          requester_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friendships_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -754,6 +796,8 @@ export type Database = {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
       }
+      are_connected: { Args: { other_user_id: string }; Returns: boolean }
+      connection_status: { Args: { other_user_id: string }; Returns: string }
       create_or_get_conversation: {
         Args: { other_user_id: string }
         Returns: string
@@ -764,6 +808,28 @@ export type Database = {
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
         Returns: boolean
+      }
+      list_connections: {
+        Args: { target_user_id: string }
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          connected_at: string
+          id: string
+          username: string
+        }[]
+      }
+      pending_connect_request_count: { Args: never; Returns: number }
+      pending_connect_requests: {
+        Args: never
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          created_at: string
+          id: string
+          requester_id: string
+          username: string
+        }[]
       }
       process_wall_post_mentions: {
         Args: { p_post_id: string }
