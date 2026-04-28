@@ -593,6 +593,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          account_type: string
           avatar_diamond_url: string | null
           avatar_full_url: string | null
           avatar_url: string | null
@@ -605,6 +606,7 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          account_type?: string
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
@@ -617,6 +619,7 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          account_type?: string
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
