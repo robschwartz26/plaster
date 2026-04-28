@@ -52,7 +52,7 @@ type DisplayProfile = {
 
 type FollowStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'following' | 'self'
 
-function FollowButton({ targetUserId }: { targetUserId: string }) {
+function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; size?: 'large' | 'small' }) {
   const { user } = useAuth()
   const [status,  setStatus]  = useState<FollowStatus | null>(null)
   const [loading, setLoading] = useState(false)
@@ -100,12 +100,15 @@ function FollowButton({ targetUserId }: { targetUserId: string }) {
       onClick={handleClick}
       disabled={loading}
       style={{
-        flex: 1, padding: '9px 0', borderRadius: 10,
+        ...(size === 'small'
+          ? { padding: '6px 14px', borderRadius: 20, fontSize: 12 }
+          : { flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 13 }
+        ),
         border: status !== 'none' ? '1.5px solid var(--fg-25)' : 'none',
         background: status !== 'none' ? 'transparent' : 'var(--fg)',
         color: status !== 'none' ? 'var(--fg-55)' : 'var(--bg)',
         fontFamily: '"Space Grotesk", sans-serif',
-        fontSize: 13, fontWeight: 600,
+        fontWeight: 600,
         cursor: loading ? 'not-allowed' : 'pointer',
         opacity: loading ? 0.6 : 1,
       }}
@@ -221,7 +224,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   async function fetchFollowing() {
     if (!user) return
-    const { data } = await supabase.from('follows').select('following_id').eq('follower_id', user.id)
+    const { data } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted')
     setFollowing(new Set((data ?? []).map((r: { following_id: string }) => r.following_id)))
   }
 
@@ -394,10 +397,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                       onClick={() => setAvatarFullscreenId(u.id)}
                     />
                     <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif' }}>@{u.username}</span>
-                    <button onClick={() => toggleFollow(u.id)}
-                      style={{ padding: '6px 14px', borderRadius: 20, border: following.has(u.id) ? '1.5px solid var(--fg-25)' : 'none', background: following.has(u.id) ? 'transparent' : 'var(--fg)', color: following.has(u.id) ? 'var(--fg-55)' : 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                      {following.has(u.id) ? 'Following' : 'Follow'}
-                    </button>
+                    <FollowButton targetUserId={u.id} size="small" />
                   </div>
                 ))}
               </div>
