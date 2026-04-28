@@ -101,7 +101,7 @@ export function BottomNav() {
       supabase.removeChannel(msgChannel)
       supabase.removeChannel(memberChannel)
     }
-  }, [user])
+  }, [user?.id])
 
   return (
     <nav
@@ -127,13 +127,14 @@ export function BottomNav() {
             onClick={() => navigate(path)}
             className="flex flex-col items-center gap-1"
             style={{
-              opacity: active ? 1 : 0.3,
               color: 'var(--fg)',
               minWidth: center ? 56 : 44,
             }}
           >
             <div style={{ position: 'relative', display: 'inline-flex' }}>
-              {icon(iconSize)}
+              <div style={{ opacity: active ? 1 : 0.3, display: 'inline-flex' }}>
+                {icon(iconSize)}
+              </div>
               {badgeCount > 0 && (
                 <div style={{
                   position: 'absolute',
@@ -160,7 +161,7 @@ export function BottomNav() {
             </div>
             <span
               className="font-body font-medium uppercase"
-              style={{ fontSize: 9, letterSpacing: '0.08em' }}
+              style={{ fontSize: 9, letterSpacing: '0.08em', opacity: active ? 1 : 0.3 }}
             >
               {label}
             </span>
