@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -59,46 +59,53 @@ function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; 
   const [loading,              setLoading]              = useState(false)
   const [expandedAcceptDecline, setExpandedAcceptDecline] = useState(false)
 
+  const refreshStatus = useCallback(() => {
+    if (!user) return
+    supabase.rpc('follow_status', { other_user_id: targetUserId })
+      .then(({ data }) => {
+        if (typeof data === 'string') {
+          setStatus(data as FollowStatus)
+          if (data !== 'pending_incoming') setExpandedAcceptDecline(false)
+        }
+      })
+  }, [user, targetUserId])
+
   useEffect(() => {
     if (!user) return
-    let cancelled = false
-
-    function refreshStatus() {
-      supabase.rpc('follow_status', { other_user_id: targetUserId })
-        .then(({ data }) => {
-          if (!cancelled && typeof data === 'string') {
-            setStatus(data as FollowStatus)
-            if (data !== 'pending_incoming') setExpandedAcceptDecline(false)
-          }
-        })
-    }
-
     refreshStatus()
 
     const channel = supabase
-      .channel(`follow-status-${targetUserId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${targetUserId}` }, refreshStatus)
+      .channel(`follow-status-${user.id}-${targetUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => refreshStatus())
       .subscribe()
 
-    return () => { cancelled = true; supabase.removeChannel(channel) }
-  }, [targetUserId, user?.id])
+    return () => { supabase.removeChannel(channel) }
+  }, [user, targetUserId, refreshStatus])
 
   if (!user || status === 'self' || status === null) return null
 
   async function handleClick() {
     if (loading || !user) return
+    console.log('[FollowButton] handleClick fired, status:', status, 'targetUserId:', targetUserId)
     setLoading(true)
     if (status === 'none') {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
+      console.log('[FollowButton] inserting follow row')
+      const result = await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
+      console.log('[FollowButton] insert result:', result)
     } else if (status === 'pending_outgoing') {
-      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
+      console.log('[FollowButton] deleting outgoing pending row')
+      const result = await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
+      console.log('[FollowButton] delete result:', result)
     } else if (status === 'following' || status === 'mutual') {
-      await supabase.rpc('unfollow_user', { other_user_id: targetUserId })
+      console.log('[FollowButton] calling unfollow_user RPC')
+      const result = await supabase.rpc('unfollow_user', { other_user_id: targetUserId })
+      console.log('[FollowButton] unfollow result:', result)
     } else if (status === 'pending_incoming') {
       setExpandedAcceptDecline(true)
       setLoading(false)
       return
     }
+    await refreshStatus()
     setLoading(false)
   }
 
@@ -107,6 +114,7 @@ function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; 
     setLoading(true)
     await supabase.rpc('accept_follow_request', { follower_user_id: targetUserId })
     setExpandedAcceptDecline(false)
+    await refreshStatus()
     setLoading(false)
   }
 
@@ -115,6 +123,7 @@ function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; 
     setLoading(true)
     await supabase.rpc('decline_follow_request', { follower_user_id: targetUserId })
     setExpandedAcceptDecline(false)
+    await refreshStatus()
     setLoading(false)
   }
 
