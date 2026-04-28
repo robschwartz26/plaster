@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -11,7 +11,7 @@ import { createOrGetConversation } from '@/lib/messaging'
 
 interface FeedItem {
   id: string
-  kind: 'rsvp' | 'like' | 'venue_post'
+  kind: 'rsvp' | 'like' | 'venue_post' | 'wall_post'
   actor: {
     id: string
     name: string
@@ -357,148 +357,81 @@ export default function LineUpScreen() {
   }
 
   // ── Real feed fetch ──────────────────────────────────────────────────────
-  useEffect(() => {
+  const fetchFeed = useCallback(async () => {
     if (!user) return
+    setFeedState('loading')
 
-    async function fetchFeed() {
-      setFeedState('loading')
-      const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+    const { data, error } = await supabase.rpc('activity_feed', { page_size: 50 })
 
-      // Step A: IDs to query against
-      const [{ data: myFollows }, { data: myVenueFollows }] = await Promise.all([
-        supabase.from('follows').select('following_id').eq('follower_id', user!.id).eq('status', 'accepted'),
-        supabase.from('follows').select('following_id').eq('follower_id', user!.id).eq('status', 'accepted'),
-      ])
-
-      const followedUserIds  = (myFollows ?? []).map((f: any) => f.following_id)
-      const followedVenueIds = (myVenueFollows ?? []).map((v: any) => v.following_id)
-
-      // Step B: three sources in parallel, skipping empty ID lists
-      const rsvpsPromise = followedUserIds.length
-        ? supabase.from('attendees')
-            .select('id, created_at, user_id, profiles(id, username, avatar_diamond_url, avatar_url), events(id, title, starts_at, poster_url, venue_id, venues(name))')
-            .in('user_id', followedUserIds)
-            .gte('created_at', fourteenDaysAgo)
-            .order('created_at', { ascending: false })
-            .limit(30)
-        : Promise.resolve({ data: [] as any[] })
-
-      const likesPromise = followedUserIds.length
-        ? supabase.from('event_likes')
-            .select('id, created_at, user_id, profiles(id, username, avatar_diamond_url, avatar_url), events(id, title, starts_at, poster_url, venue_id, venues(name))')
-            .in('user_id', followedUserIds)
-            .gte('created_at', fourteenDaysAgo)
-            .order('created_at', { ascending: false })
-            .limit(30)
-        : Promise.resolve({ data: [] as any[] })
-
-      const venuePostsPromise = followedVenueIds.length
-        ? supabase.from('event_wall_posts')
-            .select('id, created_at, body, events(id, title, starts_at, poster_url, venue_id, venues(id, name, avatar_url, banner_url, diamond_focal_x, diamond_focal_y))')
-            .eq('is_venue_post', true)
-            .not('body', 'is', null)
-            .gte('created_at', fourteenDaysAgo)
-            .order('created_at', { ascending: false })
-            .limit(30)
-        : Promise.resolve({ data: [] as any[] })
-
-      const [rsvpsRes, likesRes, venuePostsRes] = await Promise.all([rsvpsPromise, likesPromise, venuePostsPromise])
-
-      // Step C: transform to FeedItem[]
-      const rsvpItems: FeedItem[] = ((rsvpsRes.data ?? []) as any[])
-        .filter(r => r.profiles && r.events)
-        .map(r => ({
-          id: `${r.id}-rsvp`,
-          kind: 'rsvp',
-          actor: {
-            id: r.profiles.id,
-            name: r.profiles.username ?? '',
-            avatar_diamond_url: r.profiles.avatar_diamond_url ?? null,
-            avatar_url: r.profiles.avatar_url ?? null,
-            banner_url: null,
-            diamond_focal_x: null,
-            diamond_focal_y: null,
-            type: 'friend',
-          },
-          event: {
-            id: r.events.id,
-            title: r.events.title,
-            starts_at: r.events.starts_at,
-            poster_url: r.events.poster_url ?? null,
-            venue_name: r.events.venues?.name ?? '',
-          },
-          body: null,
-          created_at: r.created_at,
-        }))
-
-      const likeItems: FeedItem[] = ((likesRes.data ?? []) as any[])
-        .filter(r => r.profiles && r.events)
-        .map(r => ({
-          id: `${r.id}-like`,
-          kind: 'like',
-          actor: {
-            id: r.profiles.id,
-            name: r.profiles.username ?? '',
-            avatar_diamond_url: r.profiles.avatar_diamond_url ?? null,
-            avatar_url: r.profiles.avatar_url ?? null,
-            banner_url: null,
-            diamond_focal_x: null,
-            diamond_focal_y: null,
-            type: 'friend',
-          },
-          event: {
-            id: r.events.id,
-            title: r.events.title,
-            starts_at: r.events.starts_at,
-            poster_url: r.events.poster_url ?? null,
-            venue_name: r.events.venues?.name ?? '',
-          },
-          body: null,
-          created_at: r.created_at,
-        }))
-
-      const venuePostItems: FeedItem[] = ((venuePostsRes.data ?? []) as any[])
-        .filter(r => r.events?.venues && followedVenueIds.includes(r.events.venue_id))
-        .map(r => {
-          const v = r.events.venues
-          return {
-            id: `${r.id}-venue_post`,
-            kind: 'venue_post',
-            actor: {
-              id: v.id,
-              name: v.name ?? '',
-              avatar_diamond_url: null,
-              avatar_url: v.avatar_url ?? null,
-              banner_url: v.banner_url ?? null,
-              diamond_focal_x: v.diamond_focal_x ?? null,
-              diamond_focal_y: v.diamond_focal_y ?? null,
-              type: 'venue',
-            },
-            event: {
-              id: r.events.id,
-              title: r.events.title,
-              starts_at: r.events.starts_at,
-              poster_url: r.events.poster_url ?? null,
-              venue_name: v.name ?? '',
-            },
-            body: r.body ?? null,
-            created_at: r.created_at,
-          }
-        })
-
-      // Step D: merge, sort, dedupe, limit
-      const seen = new Set<string>()
-      const merged = [...rsvpItems, ...likeItems, ...venuePostItems]
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .filter(item => { if (seen.has(item.id)) return false; seen.add(item.id); return true })
-        .slice(0, 50)
-
-      setFeed(merged)
+    if (error) {
+      console.error('[LineUpScreen] activity_feed RPC error:', error)
+      setFeed([])
       setFeedState('ready')
+      return
     }
 
-    fetchFeed()
+    if (!Array.isArray(data)) {
+      setFeed([])
+      setFeedState('ready')
+      return
+    }
+
+    // Adapt flat RPC shape to existing nested FeedItem shape so existing render code keeps working
+    const adapted: FeedItem[] = (data as any[]).map(row => ({
+      id: `${row.activity_type}-${row.source_id}`,
+      kind: row.activity_type as FeedItem['kind'],
+      actor: {
+        id: row.actor_id,
+        name: row.actor_username ?? '',
+        avatar_diamond_url: row.actor_avatar_diamond_url ?? null,
+        avatar_url: null,
+        banner_url: null,
+        diamond_focal_x: null,
+        diamond_focal_y: null,
+        // venues and artists both render with the larger diamond at left edge;
+        // persons get the smaller indented diamond. Map account_type to the legacy 'venue'/'friend' divide.
+        type: (row.actor_account_type === 'venue' || row.actor_account_type === 'artist') ? 'venue' : 'friend',
+      },
+      event: row.target_event_id ? {
+        id: row.target_event_id,
+        title: row.target_event_title ?? '',
+        starts_at: row.target_event_starts_at ?? '',
+        poster_url: row.target_event_poster_url ?? null,
+        venue_name: '',
+      } : null,
+      body: row.body_preview ?? null,
+      created_at: row.created_at,
+    }))
+
+    setFeed(adapted)
+    setFeedState('ready')
   }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    fetchFeed()
+
+    // Realtime: refetch when source tables change. Four channels because postgres_changes
+    // doesn't support OR filters, and we care about all four source tables.
+    const channels = [
+      supabase.channel(`lineup-feed-attendees-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendees' }, () => fetchFeed())
+        .subscribe(),
+      supabase.channel(`lineup-feed-wall-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_wall_posts' }, () => fetchFeed())
+        .subscribe(),
+      supabase.channel(`lineup-feed-likes-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_likes' }, () => fetchFeed())
+        .subscribe(),
+      supabase.channel(`lineup-feed-follows-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => fetchFeed())
+        .subscribe(),
+    ]
+
+    return () => {
+      channels.forEach(ch => supabase.removeChannel(ch))
+    }
+  }, [user, fetchFeed])
 
   // ── Personal lineup (real RSVPs, falls back to mock) ─────────────────────
   useEffect(() => {
@@ -521,7 +454,7 @@ export default function LineUpScreen() {
           onClick={() => setPanelOpen(v => !v)}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', color: panelOpen ? 'var(--fg)' : 'var(--fg-40)', textTransform: 'uppercase', transition: 'color 0.2s' }}
         >
-          {panelOpen ? 'LINE UP ×' : 'LINE UP'}
+          {panelOpen ? 'SET LIST ×' : 'SET LIST'}
         </button>
       } />
 
@@ -587,9 +520,10 @@ export default function LineUpScreen() {
                     onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
                     style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
                   >{item.actor.name}</span>
-                  {item.kind === 'rsvp'       && <> is going to {item.event?.title} at {item.event?.venue_name}</>}
+                  {item.kind === 'rsvp'       && <> is going to {item.event?.title}</>}
                   {item.kind === 'like'       && <> liked {item.event?.title}</>}
                   {item.kind === 'venue_post' && <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
+                  {item.kind === 'wall_post'  && <> posted on {item.event?.title}: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
                 </div>
               </div>
               {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
@@ -601,7 +535,7 @@ export default function LineUpScreen() {
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'var(--bg)', zIndex: 10, display: 'flex', flexDirection: 'column', transform: panelOpen ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
             <div>
-              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0 }}>Your Line Up</p>
+              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 14, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg)', margin: 0 }}>Your Set List</p>
               <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{lineup.length} upcoming</p>
             </div>
             <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--fg-40)', padding: '4px 8px', lineHeight: 1 }}>×</button>
