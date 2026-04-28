@@ -54,17 +54,13 @@ export function SocialDiamondRow({ targetUserId }: Props) {
   }, [targetUserId, fetchData])
 
   async function handleAccept(entry: DiamondRowEntry) {
-    console.log('[SocialDiamondRow] handleAccept fired, entry:', entry)
-    const result = await supabase.rpc('accept_follow_request', { follower_user_id: entry.id })
-    console.log('[SocialDiamondRow] accept result:', result)
+    await supabase.rpc('accept_follow_request', { follower_user_id: entry.id })
     setModalEntry(null)
     await fetchData()
   }
 
   async function handleDecline(entry: DiamondRowEntry) {
-    console.log('[SocialDiamondRow] handleDecline fired, entry:', entry)
-    const result = await supabase.rpc('decline_follow_request', { follower_user_id: entry.id })
-    console.log('[SocialDiamondRow] decline result:', result)
+    await supabase.rpc('decline_follow_request', { follower_user_id: entry.id })
     setModalEntry(null)
     await fetchData()
   }

@@ -86,20 +86,13 @@ function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; 
 
   async function handleClick() {
     if (loading || !user) return
-    console.log('[FollowButton] handleClick fired, status:', status, 'targetUserId:', targetUserId)
     setLoading(true)
     if (status === 'none') {
-      console.log('[FollowButton] inserting follow row')
-      const result = await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
-      console.log('[FollowButton] insert result:', result)
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
     } else if (status === 'pending_outgoing') {
-      console.log('[FollowButton] deleting outgoing pending row')
-      const result = await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
-      console.log('[FollowButton] delete result:', result)
+      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
     } else if (status === 'following' || status === 'mutual') {
-      console.log('[FollowButton] calling unfollow_user RPC')
-      const result = await supabase.rpc('unfollow_user', { other_user_id: targetUserId })
-      console.log('[FollowButton] unfollow result:', result)
+      await supabase.rpc('unfollow_user', { other_user_id: targetUserId })
     } else if (status === 'pending_incoming') {
       setExpandedAcceptDecline(true)
       setLoading(false)
