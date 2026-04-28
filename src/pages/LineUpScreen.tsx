@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -85,9 +85,12 @@ function PanelHeader({ name, onBack }: { name: string; onBack: () => void }) {
   )
 }
 
-function LineupRow({ item }: { item: LineupItem }) {
+function LineupRow({ item, highlighted }: { item: LineupItem; highlighted?: boolean }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)' }}>
+    <div
+      data-event-id={item.id}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)', background: highlighted ? 'rgba(255, 220, 180, 0.4)' : 'transparent', transition: 'background 0.4s ease' }}
+    >
       <div style={{ width: 36, height: 54, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: item.color, position: 'relative' }}>
         {item.poster_url && <img src={item.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
       </div>
@@ -308,6 +311,24 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
   )
 }
 
+// ── Calendar helpers ───────────────────────────────────────────────────────
+
+function buildMonthGrid(monthStart: Date): (Date | null)[] {
+  const year = monthStart.getFullYear()
+  const month = monthStart.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  const days: (Date | null)[] = []
+  for (let i = 0; i < firstDay.getDay(); i++) days.push(null)
+  for (let d = 1; d <= lastDay.getDate(); d++) days.push(new Date(year, month, d))
+  while (days.length % 7 !== 0) days.push(null)
+  return days
+}
+
+function toDateKey(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export default function LineUpScreen() {
@@ -317,10 +338,35 @@ export default function LineUpScreen() {
   const [lineup,     setLineup]     = useState<LineupItem[]>(mockLineup)
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
+  const [displayMonth, setDisplayMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
+  const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set())
+  const panelListRef = useRef<HTMLDivElement>(null)
 
   const pushPanel = (e: PanelEntry) => setPanelStack(prev => [...prev, e])
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
   const topPanel  = panelStack[panelStack.length - 1] ?? null
+
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, LineupItem[]>()
+    for (const item of lineup) {
+      const key = toDateKey(new Date(item.starts_at))
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(item)
+    }
+    return map
+  }, [lineup])
+
+  function highlightDate(date: Date) {
+    const events = eventsByDate.get(toDateKey(date)) ?? []
+    setHighlightedEventIds(new Set(events.map(e => e.id)))
+    if (events.length > 0) {
+      setTimeout(() => {
+        const el = panelListRef.current?.querySelector(`[data-event-id="${events[0].id}"]`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 50)
+    }
+    setTimeout(() => setHighlightedEventIds(new Set()), 2000)
+  }
 
   // ── Real feed fetch ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -532,21 +578,27 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 16,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 50,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
-                  cursor: 'pointer',
                 }}
-                onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
               >
-                <Diamond
-                  size={item.actor.type === 'venue' ? 36 : 26}
-                  diamondUrl={item.actor.type === 'venue' ? item.actor.banner_url : item.actor.avatar_diamond_url}
-                  fallbackUrl={item.actor.avatar_url}
-                  focalX={item.actor.diamond_focal_x}
-                  focalY={item.actor.diamond_focal_y}
-                />
+                <div
+                  onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
+                  style={{ cursor: 'pointer', flexShrink: 0 }}
+                >
+                  <Diamond
+                    size={item.actor.type === 'venue' ? 36 : 26}
+                    diamondUrl={item.actor.type === 'venue' ? item.actor.banner_url : item.actor.avatar_diamond_url}
+                    fallbackUrl={item.actor.avatar_url}
+                    focalX={item.actor.diamond_focal_x}
+                    focalY={item.actor.diamond_focal_y}
+                  />
+                </div>
                 <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
-                  <span style={{ color: 'var(--fg)', fontWeight: 600 }}>{item.actor.name}</span>
+                  <span
+                    onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
+                    style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
+                  >{item.actor.name}</span>
                   {item.kind === 'rsvp'       && <> is going to {item.event?.title} at {item.event?.venue_name}</>}
                   {item.kind === 'like'       && <> liked {item.event?.title}</>}
                   {item.kind === 'venue_post' && <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{item.body}</span></>}
@@ -566,8 +618,42 @@ export default function LineUpScreen() {
             </div>
             <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--fg-40)', padding: '4px 8px', lineHeight: 1 }}>×</button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto' }}>
-            {lineup.map(item => <LineupRow key={item.id} item={item} />)}
+          <div ref={panelListRef} style={{ flex: 1, overflowY: 'auto' }}>
+            {lineup.map(item => <LineupRow key={item.id} item={item} highlighted={highlightedEventIds.has(item.id)} />)}
+
+            {/* Calendar */}
+            <div style={{ borderTop: '1px solid var(--fg-15)', padding: '12px 16px' }}>
+              {/* Month nav */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <button onClick={() => setDisplayMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: 'var(--fg-55)' }}>◀</button>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>
+                  {displayMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </span>
+                <button onClick={() => setDisplayMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, fontSize: 16, color: 'var(--fg-55)' }}>▶</button>
+              </div>
+              {/* Weekday headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+                {['S','M','T','W','T','F','S'].map((d, i) => (
+                  <div key={i} style={{ textAlign: 'center', fontSize: 10, color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700 }}>{d}</div>
+                ))}
+              </div>
+              {/* Day cells */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+                {buildMonthGrid(displayMonth).map((day, i) => {
+                  if (!day) return <div key={i} />
+                  const key = toDateKey(day)
+                  const hasEvents = eventsByDate.has(key)
+                  const today = new Date()
+                  const isToday = day.getFullYear() === today.getFullYear() && day.getMonth() === today.getMonth() && day.getDate() === today.getDate()
+                  return (
+                    <button key={i} onClick={() => hasEvents && highlightDate(day)} style={{ aspectRatio: '1', background: 'transparent', border: isToday ? '1px solid var(--fg-55)' : 'none', borderRadius: 6, cursor: hasEvents ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 0, position: 'relative', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: isToday ? 700 : 400 }}>
+                      {day.getDate()}
+                      {hasEvents && <div style={{ position: 'absolute', bottom: 4, width: 4, height: 4, borderRadius: '50%', background: 'var(--fg)' }} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
