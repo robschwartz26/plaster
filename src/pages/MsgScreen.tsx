@@ -226,7 +226,21 @@ export function MsgScreen() {
     setConvLoading(false)
   }, [user])
 
-  useEffect(() => { loadInbox(); fetchNotifications() }, [loadInbox, fetchNotifications])
+  useEffect(() => { loadInbox() }, [loadInbox])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetchNotifications()
+    const notifChannel = supabase
+      .channel(`msgscreen-notifications-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, () => { if (!cancelled) fetchNotifications() })
+      .subscribe()
+    return () => {
+      cancelled = true
+      supabase.removeChannel(notifChannel)
+    }
+  }, [user?.id])
 
   // ── Open conversation ────────────────────────────────────────────────────
   const openConversation = useCallback(async (convId: string) => {
