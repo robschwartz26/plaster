@@ -66,6 +66,7 @@ export function BottomNav() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
+  const [pendingConnects, setPendingConnects] = useState(0)
 
   useEffect(() => {
     if (!user) return
@@ -78,7 +79,15 @@ export function BottomNav() {
       }
     }
 
+    const fetchPendingConnects = async () => {
+      const { data, error } = await supabase.rpc('pending_connect_request_count')
+      if (!cancelled && !error && typeof data === 'number') {
+        setPendingConnects(data)
+      }
+    }
+
     fetchCount()
+    fetchPendingConnects()
 
     const notifChannel = supabase
       .channel(`unread-notifications-${user.id}`)
@@ -95,11 +104,17 @@ export function BottomNav() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `user_id=eq.${user.id}` }, () => { fetchCount() })
       .subscribe()
 
+    const friendshipChannel = supabase
+      .channel(`pending-connects-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'friendships', filter: `recipient_id=eq.${user.id}` }, () => { fetchPendingConnects() })
+      .subscribe()
+
     return () => {
       cancelled = true
       supabase.removeChannel(notifChannel)
       supabase.removeChannel(msgChannel)
       supabase.removeChannel(memberChannel)
+      supabase.removeChannel(friendshipChannel)
     }
   }, [user?.id])
 
@@ -119,7 +134,8 @@ export function BottomNav() {
           : location.pathname.startsWith(path)
         const iconSize = center ? 26 : 20
         const isMSG = path === '/msg'
-        const badgeCount = isMSG && unreadCount > 0 ? unreadCount : 0
+        const isYOU = path === '/you'
+        const badgeCount = isMSG ? unreadCount : isYOU ? pendingConnects : 0
 
         return (
           <button
