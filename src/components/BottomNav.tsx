@@ -70,15 +70,37 @@ export function BottomNav() {
   useEffect(() => {
     if (!user) return
     let cancelled = false
+
     const fetchCount = async () => {
       const { data, error } = await supabase.rpc('get_unread_count')
       if (!cancelled && !error && typeof data === 'number') {
         setUnreadCount(data)
       }
     }
+
     fetchCount()
-    const interval = setInterval(fetchCount, 30000)
-    return () => { cancelled = true; clearInterval(interval) }
+
+    const notifChannel = supabase
+      .channel(`unread-notifications-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, () => { fetchCount() })
+      .subscribe()
+
+    const msgChannel = supabase
+      .channel(`unread-messages-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchCount() })
+      .subscribe()
+
+    const memberChannel = supabase
+      .channel(`unread-member-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'conversation_members', filter: `user_id=eq.${user.id}` }, () => { fetchCount() })
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      supabase.removeChannel(notifChannel)
+      supabase.removeChannel(msgChannel)
+      supabase.removeChannel(memberChannel)
+    }
   }, [user])
 
   return (
