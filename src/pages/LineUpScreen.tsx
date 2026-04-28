@@ -494,6 +494,20 @@ export default function LineUpScreen() {
       {/* Content area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
+        {/* Diamond queue (right edge) */}
+        {lineup.length > 0 && (() => {
+          const queueCount = lineup.length
+          const computedSize = Math.max(8, Math.min(34, Math.floor(400 / queueCount) - 4))
+          const queueGap = Math.max(2, Math.min(8, Math.floor(computedSize / 4)))
+          return (
+            <div style={{ position: 'absolute', right: 10, top: 4, bottom: 4, display: 'flex', flexDirection: 'column', gap: queueGap, zIndex: 5, pointerEvents: 'none', justifyContent: 'flex-start' }}>
+              {lineup.map((item, i) => (
+                <DiamondImg key={item.id ?? i} color={item.color} posterUrl={item.poster_url} size={computedSize} />
+              ))}
+            </div>
+          )
+        })()}
+
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
           {feedState === 'loading' && (
