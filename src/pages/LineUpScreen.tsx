@@ -8,17 +8,6 @@ import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { createOrGetConversation } from '@/lib/messaging'
 
-// ── Mock lineup (fallback for personal panel when user has zero RSVPs) ─────
-
-const mockLineup = [
-  { id: 'ml1', title: 'Low Bar Chorale',               venue: 'Showbar',             starts_at: '2026-04-18T20:00:00', poster_url: null, color: '#4c1d95' },
-  { id: 'ml2', title: 'Stumpfest XI',                  venue: 'Mississippi Studios',  starts_at: '2026-04-19T19:00:00', poster_url: null, color: '#3730a3' },
-  { id: 'ml3', title: 'Weird Nightmare',               venue: 'Polaris Hall',         starts_at: '2026-04-22T20:00:00', poster_url: null, color: '#0c4a6e' },
-  { id: 'ml4', title: 'Laffy Taffy: Freaknik Edition', venue: 'Holocene',             starts_at: '2026-04-25T22:00:00', poster_url: null, color: '#7c2d12' },
-  { id: 'ml5', title: 'Babes in Canyon',               venue: 'Holocene',             starts_at: '2026-04-26T20:00:00', poster_url: null, color: '#365314' },
-  { id: 'ml6', title: 'Marshall Crenshaw',             venue: 'Polaris Hall',         starts_at: '2026-04-28T19:30:00', poster_url: null, color: '#1e3a5f' },
-]
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface FeedItem {
@@ -335,7 +324,7 @@ export default function LineUpScreen() {
   const { user } = useAuth()
   const [feed,       setFeed]       = useState<FeedItem[]>([])
   const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
-  const [lineup,     setLineup]     = useState<LineupItem[]>(mockLineup)
+  const [lineup,     setLineup]     = useState<LineupItem[]>([])
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
   const [displayMonth, setDisplayMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
@@ -521,7 +510,7 @@ export default function LineUpScreen() {
         const items: LineupItem[] = ((data ?? []) as any[]).filter(r => r.events?.starts_at >= now)
           .map(r => { const ev = r.events as any; return { id: r.event_id, title: ev.title ?? 'Event', venue: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color: '#2e1065' } })
           .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-        if (items.length > 0) setLineup(items)
+        setLineup(items)
       })
   }, [user])
 
@@ -619,7 +608,14 @@ export default function LineUpScreen() {
             <button onClick={() => setPanelOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: 'var(--fg-40)', padding: '4px 8px', lineHeight: 1 }}>×</button>
           </div>
           <div ref={panelListRef} style={{ flex: 1, overflowY: 'auto' }}>
-            {lineup.map(item => <LineupRow key={item.id} item={item} highlighted={highlightedEventIds.has(item.id)} />)}
+            {lineup.length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, lineHeight: 1.5 }}>
+                <p style={{ margin: 0 }}>No upcoming shows yet.</p>
+                <p style={{ margin: '8px 0 0', color: 'var(--fg-40)' }}>Tap a poster on the wall to add it to your lineup.</p>
+              </div>
+            ) : (
+              lineup.map(item => <LineupRow key={item.id} item={item} highlighted={highlightedEventIds.has(item.id)} />)
+            )}
 
             {/* Calendar */}
             <div style={{ borderTop: '1px solid var(--fg-15)', padding: '12px 16px' }}>

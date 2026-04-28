@@ -1,23 +1,6 @@
-import { type Event as MockEvent } from '@/data/mockEvents'
 import { type DbEvent } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 import { getGradient } from '@/lib/categories'
-
-export function mockEventToWallEvent(e: MockEvent): WallEvent {
-  return {
-    id: e.id,
-    title: e.title,
-    venue_id: null,
-    venue_name: e.venue_name,
-    starts_at: e.starts_at,
-    category: e.category,
-    poster_url: null,
-    color1: e.color1,
-    color2: e.color2,
-    view_count: 0,
-    like_count: 0,
-  }
-}
 
 export function dbEventToWallEvent(e: DbEvent): WallEvent {
   const cat = e.category ?? 'Other'

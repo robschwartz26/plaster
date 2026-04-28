@@ -27,8 +27,6 @@ export function Wall() {
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
 
-  // Fetch events — real DB events first, mock events fill the rest.
-  // Mock events always show so the wall is never empty.
   const fetchEvents = useCallback(async () => {
     // Show events from up to 6 hours ago so late-night shows
     // that started before midnight don't vanish off the wall.
