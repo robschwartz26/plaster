@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from './Diamond'
@@ -24,63 +24,49 @@ export function SocialDiamondRow({ targetUserId }: Props) {
   const [loading,    setLoading]    = useState(true)
   const [modalEntry, setModalEntry] = useState<DiamondRowEntry | null>(null)
 
+  const fetchData = useCallback(async () => {
+    if (!targetUserId) return
+    const { data, error } = await supabase.rpc('social_diamond_row', { target_user_id: targetUserId })
+    if (!error && Array.isArray(data)) {
+      setEntries(data as DiamondRowEntry[])
+      setModalEntry(prev => {
+        if (!prev) return null
+        if ((data as DiamondRowEntry[])?.some(e => e.follow_row_id === prev.follow_row_id)) return prev
+        return null
+      })
+    }
+    setLoading(false)
+  }, [targetUserId])
+
   useEffect(() => {
     if (!targetUserId) return
-    let cancelled = false
-
-    async function fetchData() {
-      const { data, error } = await supabase.rpc('social_diamond_row', { target_user_id: targetUserId })
-      if (!cancelled) {
-        if (!error && Array.isArray(data)) {
-          setEntries(data as DiamondRowEntry[])
-          setModalEntry(prev => {
-            if (!prev) return null
-            if ((data as DiamondRowEntry[])?.some(e => e.follow_row_id === prev.follow_row_id)) return prev
-            return null
-          })
-        }
-        setLoading(false)
-      }
-    }
-
     fetchData()
 
-    // Two channels because postgres_changes filter doesn't support OR.
-    const followerChannel = supabase
-      .channel(`diamond-row-follower-${targetUserId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'follows',
-        filter: `follower_id=eq.${targetUserId}`,
-      }, fetchData)
-      .subscribe()
-
-    const followingChannel = supabase
-      .channel(`diamond-row-following-${targetUserId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'follows',
-        filter: `following_id=eq.${targetUserId}`,
-      }, fetchData)
+    const channel = supabase
+      .channel(`diamond-row-${targetUserId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `follower_id=eq.${targetUserId}` }, () => { fetchData() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows', filter: `following_id=eq.${targetUserId}` }, () => { fetchData() })
       .subscribe()
 
     return () => {
-      cancelled = true
-      supabase.removeChannel(followerChannel)
-      supabase.removeChannel(followingChannel)
+      supabase.removeChannel(channel)
     }
-  }, [targetUserId])
+  }, [targetUserId, fetchData])
 
   async function handleAccept(entry: DiamondRowEntry) {
-    await supabase.rpc('accept_follow_request', { follower_user_id: entry.id })
+    console.log('[SocialDiamondRow] handleAccept fired, entry:', entry)
+    const result = await supabase.rpc('accept_follow_request', { follower_user_id: entry.id })
+    console.log('[SocialDiamondRow] accept result:', result)
     setModalEntry(null)
+    await fetchData()
   }
 
   async function handleDecline(entry: DiamondRowEntry) {
-    await supabase.rpc('decline_follow_request', { follower_user_id: entry.id })
+    console.log('[SocialDiamondRow] handleDecline fired, entry:', entry)
+    const result = await supabase.rpc('decline_follow_request', { follower_user_id: entry.id })
+    console.log('[SocialDiamondRow] decline result:', result)
     setModalEntry(null)
+    await fetchData()
   }
 
   if (loading || entries.length === 0) return null
