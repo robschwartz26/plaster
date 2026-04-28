@@ -1,4 +1,7 @@
+import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
 
 const NAV_ITEMS = [
   {
@@ -61,6 +64,22 @@ const NAV_ITEMS = [
 export function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    const fetchCount = async () => {
+      const { data, error } = await supabase.rpc('get_unread_count')
+      if (!cancelled && !error && typeof data === 'number') {
+        setUnreadCount(data)
+      }
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 30000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [user])
 
   return (
     <nav
@@ -77,6 +96,8 @@ export function BottomNav() {
           ? location.pathname === '/'
           : location.pathname.startsWith(path)
         const iconSize = center ? 26 : 20
+        const isMSG = path === '/msg'
+        const badgeCount = isMSG && unreadCount > 0 ? unreadCount : 0
 
         return (
           <button
@@ -89,7 +110,32 @@ export function BottomNav() {
               minWidth: center ? 56 : 44,
             }}
           >
-            {icon(iconSize)}
+            <div style={{ position: 'relative', display: 'inline-flex' }}>
+              {icon(iconSize)}
+              {badgeCount > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  top: -3,
+                  right: -7,
+                  background: 'var(--fg)',
+                  color: 'var(--bg)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  lineHeight: 1,
+                  minWidth: 16,
+                  height: 16,
+                  borderRadius: 9,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '0 4px',
+                  pointerEvents: 'none',
+                }}>
+                  {badgeCount > 9 ? '9+' : badgeCount}
+                </div>
+              )}
+            </div>
             <span
               className="font-body font-medium uppercase"
               style={{ fontSize: 9, letterSpacing: '0.08em' }}

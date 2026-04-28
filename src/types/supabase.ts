@@ -759,6 +759,7 @@ export type Database = {
         Returns: string
       }
       delete_wall_post: { Args: { p_post_id: string }; Returns: Json }
+      get_unread_count: { Args: never; Returns: number }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
