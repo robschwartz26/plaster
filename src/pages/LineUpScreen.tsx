@@ -452,9 +452,67 @@ export default function LineUpScreen() {
       <PlasterHeader actions={
         <button
           onClick={() => setPanelOpen(v => !v)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 12, letterSpacing: '0.12em', color: panelOpen ? 'var(--fg)' : 'var(--fg-40)', textTransform: 'uppercase', transition: 'color 0.2s' }}
+          aria-label={panelOpen ? 'Close set list' : 'Open set list'}
+          style={{
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            color: panelOpen ? 'var(--fg)' : 'var(--fg-55)',
+            transition: 'color 0.2s',
+          }}
         >
-          {panelOpen ? 'SET LIST ×' : 'SET LIST'}
+          <span style={{
+            fontFamily: 'Barlow Condensed, sans-serif',
+            fontWeight: 700,
+            fontSize: 12,
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+          }}>
+            SET LIST
+          </span>
+          <span
+            style={{
+              width: 16,
+              height: 14,
+              position: 'relative',
+              display: 'inline-block',
+            }}
+          >
+            {[0, 1, 2, 3].map(i => {
+              const lineHeight = 1.5
+              const gap = 2
+              const defaultTop = i * (lineHeight + gap)
+              const closedStyle: React.CSSProperties = {
+                top: defaultTop,
+                left: 0,
+                width: '100%',
+                opacity: 1,
+                transform: 'rotate(0deg)',
+              }
+              const openStyle: React.CSSProperties =
+                i === 0 ? { top: 6, left: 0, width: '100%', opacity: 1, transform: 'rotate(45deg)' }
+                : i === 3 ? { top: 6, left: 0, width: '100%', opacity: 1, transform: 'rotate(-45deg)' }
+                : { top: defaultTop, left: 0, width: '100%', opacity: 0, transform: 'rotate(0deg)' }
+              const s = panelOpen ? openStyle : closedStyle
+              return (
+                <span
+                  key={i}
+                  style={{
+                    position: 'absolute',
+                    height: lineHeight,
+                    background: 'currentColor',
+                    transformOrigin: 'center',
+                    transition: 'top 0.25s ease, opacity 0.2s ease, transform 0.25s ease',
+                    ...s,
+                  }}
+                />
+              )
+            })}
+          </span>
         </button>
       } />
 
@@ -467,7 +525,7 @@ export default function LineUpScreen() {
           const computedSize = Math.max(8, Math.min(34, Math.floor(400 / queueCount) - 4))
           const queueGap = Math.max(2, Math.min(8, Math.floor(computedSize / 4)))
           return (
-            <div style={{ position: 'absolute', right: 10, top: 4, bottom: 4, display: 'flex', flexDirection: 'column', gap: queueGap, zIndex: 5, pointerEvents: 'none', justifyContent: 'flex-start' }}>
+            <div style={{ position: 'absolute', right: 10, top: 16, bottom: 4, display: 'flex', flexDirection: 'column', gap: queueGap, zIndex: 5, pointerEvents: 'none', justifyContent: 'flex-start' }}>
               {lineup.map((item, i) => (
                 <DiamondImg key={item.id ?? i} color={item.color} posterUrl={item.poster_url} size={computedSize} />
               ))}
