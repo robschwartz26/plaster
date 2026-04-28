@@ -769,6 +769,16 @@ export type Database = {
         Returns: number
       }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
+      search_users: {
+        Args: { p_query: string }
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          has_interacted: boolean
+          id: string
+          username: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
