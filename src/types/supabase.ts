@@ -564,6 +564,7 @@ export type Database = {
           interests: string[]
           is_admin: boolean
           is_public: boolean
+          show_social_publicly: boolean
           username: string | null
         }
         Insert: {
@@ -577,6 +578,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
+          show_social_publicly?: boolean
           username?: string | null
         }
         Update: {
@@ -590,6 +592,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
+          show_social_publicly?: boolean
           username?: string | null
         }
         Relationships: []
