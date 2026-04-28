@@ -127,7 +127,7 @@ export function MsgScreen() {
   async function openNotification(notif: AppNotification) {
     await supabase.from('notifications').delete().eq('id', notif.id)
     setNotifications(prev => prev.filter(n => n.id !== notif.id))
-    navigate('/wall', { state: { focusEventId: notif.target_event_id, viewMode: '1col' } })
+    navigate('/', { state: { openEventId: notif.target_event_id } })
   }
 
   // ── Load inbox ──────────────────────────────────────────────────────────
