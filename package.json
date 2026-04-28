@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "types:gen": "supabase gen types typescript --linked > src/types/supabase.ts",
+    "types:gen": "npx supabase gen types typescript --linked | sed '/^Initialising/d' > src/types/supabase.ts",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
     "ios:sync": "npm run build && npx cap sync ios"
   },
