@@ -39,6 +39,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_likes: {
+        Row: {
+          activity_type: string
+          created_at: string
+          id: string
+          liker_id: string
+          source_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          id?: string
+          liker_id: string
+          source_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          id?: string
+          liker_id?: string
+          source_id?: string
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           created_at: string | null
@@ -719,6 +743,30 @@ export type Database = {
         Args: { follower_user_id: string }
         Returns: undefined
       }
+      activity_feed: {
+        Args: {
+          before_cursor?: string
+          before_round?: number
+          page_size?: number
+        }
+        Returns: {
+          activity_type: string
+          actor_account_type: string
+          actor_avatar_diamond_url: string
+          actor_id: string
+          actor_username: string
+          body_preview: string
+          created_at: string
+          like_count: number
+          round_num: number
+          source_id: string
+          target_event_id: string
+          target_event_poster_url: string
+          target_event_starts_at: string
+          target_event_title: string
+          viewer_has_liked: boolean
+        }[]
+      }
       add_like_count: {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
@@ -747,6 +795,10 @@ export type Database = {
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
         Returns: boolean
+      }
+      like_activity: {
+        Args: { in_activity_type: string; in_source_id: string }
+        Returns: undefined
       }
       list_followers: {
         Args: { target_user_id: string }
@@ -811,6 +863,10 @@ export type Database = {
         }[]
       }
       unfollow_user: { Args: { other_user_id: string }; Returns: undefined }
+      unlike_activity: {
+        Args: { in_activity_type: string; in_source_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
