@@ -1,3 +1,4 @@
+import '@/lib/env' // Validates required env vars at boot. Throws fast if missing.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
