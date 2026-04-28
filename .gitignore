@@ -36,3 +36,6 @@ CODE_DUMP.md
 plaster-date-identifier-dump.md
 plaster-current-dump.md
 SESSION_NOTES.md
+
+# Generated codebase dumps
+scripts/plaster-dump.md
