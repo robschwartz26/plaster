@@ -800,20 +800,24 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             </p>
           )}
 
-          <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
+          {detail && (
+            <>
+              <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
-          {attendeeCount > 0 && (
-            <p style={{ margin: '0 0 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
-              {attendeeCount} {attendeeCount === 1 ? 'person' : 'people'} going
-            </p>
-          )}
+              {attendeeCount > 0 && (
+                <p style={{ margin: '0 0 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+                  {attendeeCount} {attendeeCount === 1 ? 'person' : 'people'} going
+                </p>
+              )}
 
-          {user ? (
-            <button onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
-              {isAttending ? "I'm Going ✓" : "I'll Be There"}
-            </button>
-          ) : (
-            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>Sign in to RSVP</p>
+              {user ? (
+                <button onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
+                  {isAttending ? "I'm Going ✓" : "I'll Be There"}
+                </button>
+              ) : (
+                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>Sign in to RSVP</p>
+              )}
+            </>
           )}
         </div>
       </>
