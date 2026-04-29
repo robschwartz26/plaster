@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus } from 'lucide-react'
+import { Plus, Settings } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AnimatePresence, motion } from 'framer-motion'
-import { PlasterHeader } from '@/components/PlasterHeader'
+import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
+import { SettingsPanel } from '@/components/SettingsPanel'
 import { Diamond } from '@/components/Diamond'
 import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
@@ -251,6 +252,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   // Follow list panel state
   const [followListOpen, setFollowListOpen] = useState(false)
   const [followListTab,  setFollowListTab]  = useState<'followers' | 'following'>('followers')
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   // Search state (self only)
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -355,7 +357,17 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)', position: 'relative' }}>
-      <PlasterHeader />
+      <PlasterHeader
+        actions={
+          <button
+            style={headerIconBtn()}
+            onClick={() => setSettingsOpen(true)}
+            aria-label="Settings"
+          >
+            <Settings size={16} />
+          </button>
+        }
+      />
 
       {/* Scrollable body */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 0' }}>
@@ -548,6 +560,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           onCancel={() => {}}
         />
       )}
+      <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   )
 }

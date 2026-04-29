@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
+import { PreferencesPanel } from './PreferencesPanel'
 
 import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent } from '@/lib/adapters'
@@ -20,6 +21,7 @@ export function Wall() {
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [prefsOpen, setPrefsOpen] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
@@ -132,7 +134,16 @@ export function Wall() {
             >
               <Search size={16} />
             </button>
-            <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
+            <button
+              style={{
+                ...headerIconBtn(),
+                background: prefsOpen ? 'var(--fg-08)' : 'transparent',
+              }}
+              onClick={() => setPrefsOpen(v => !v)}
+              aria-label="Preferences"
+            >
+              <SlidersHorizontal size={16} />
+            </button>
           </div>
         }
       />
@@ -216,6 +227,7 @@ export function Wall() {
       />
 
     </div>
+    <PreferencesPanel open={prefsOpen} onClose={() => setPrefsOpen(false)} context="wall" />
     </>
   )
 }

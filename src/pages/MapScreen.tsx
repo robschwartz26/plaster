@@ -11,6 +11,7 @@ import { supabase, type DbVenue } from '@/lib/supabase'
 import { CATEGORIES, getGradient } from '@/lib/categories'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
+import { PreferencesPanel } from '@/components/PreferencesPanel'
 import { useTheme } from '@/hooks/useTheme'
 import { DateIndicator } from '@/components/DateIndicator'
 import { DebugOverlay } from '@/components/DebugOverlay'
@@ -467,6 +468,7 @@ export function MapScreen() {
   const [selectedVenue, setSelectedVenue] = useState<DbVenue | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
+  const [prefsOpen, setPrefsOpen] = useState(false)
 
   // Fog/circle
   const circleDataRef = useRef<object>(EMPTY_FC)
@@ -687,7 +689,16 @@ export function MapScreen() {
             >
               <Search size={16} />
             </button>
-            <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
+            <button
+              style={{
+                ...headerIconBtn(),
+                background: prefsOpen ? 'var(--fg-08)' : 'transparent',
+              }}
+              onClick={() => setPrefsOpen(v => !v)}
+              aria-label="Preferences"
+            >
+              <SlidersHorizontal size={16} />
+            </button>
           </div>
         }
       />
@@ -1076,6 +1087,7 @@ export function MapScreen() {
         </span>
       </div>
 
+      <PreferencesPanel open={prefsOpen} onClose={() => setPrefsOpen(false)} context="map" />
     </div>
   )
 }
