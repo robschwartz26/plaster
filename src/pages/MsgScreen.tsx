@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { PencilLine } from 'lucide-react'
+import { PencilLine, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
 import { markConversationRead } from '@/lib/messaging'
+import { UserPicker, type PickedUser } from '@/components/UserPicker'
+import { BottomSheet } from '@/components/BottomSheet'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -18,9 +20,10 @@ interface OtherUser {
 
 interface ConversationRow {
   id: string
+  name: string | null
   lastMessageAt: string
   lastReadAt: string
-  otherUser: OtherUser | null
+  members: OtherUser[]
   lastMessage: { body: string; sender_id: string; created_at: string } | null
   unread: boolean
 }
@@ -77,6 +80,15 @@ function showTimestampBefore(cur: Message, prev: Message | undefined): boolean {
   return new Date(cur.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
 }
 
+function getConversationDisplay(conv: ConversationRow): { title: string; isGroup: boolean; primaryUser: OtherUser | null } {
+  if (conv.name) return { title: conv.name, isGroup: true, primaryUser: conv.members[0] ?? null }
+  if (conv.members.length === 0) return { title: '(empty)', isGroup: false, primaryUser: null }
+  if (conv.members.length === 1) return { title: `@${conv.members[0].username ?? 'user'}`, isGroup: false, primaryUser: conv.members[0] }
+  const names = conv.members.slice(0, 3).map(m => `@${m.username ?? 'user'}`).join(', ')
+  const more = conv.members.length > 3 ? `, +${conv.members.length - 3}` : ''
+  return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0] }
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function MsgScreen() {
@@ -96,6 +108,18 @@ export function MsgScreen() {
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   const myConvIdsRef    = useRef<Set<string>>(new Set())
   const openConvIdRef   = useRef<string | null>(openConvId)
+
+  // New chat state
+  const [newChatOpen,       setNewChatOpen]       = useState(false)
+  const [newChatPicked,     setNewChatPicked]     = useState<PickedUser[]>([])
+  const [creatingChat,      setCreatingChat]      = useState(false)
+  const [createChatError,   setCreateChatError]   = useState<string | null>(null)
+
+  // Add people state
+  const [addPeopleOpen,     setAddPeopleOpen]     = useState(false)
+  const [addPeoplePicked,   setAddPeoplePicked]   = useState<PickedUser[]>([])
+  const [addingPeople,      setAddingPeople]      = useState(false)
+  const [addPeopleError,    setAddPeopleError]    = useState<string | null>(null)
 
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
@@ -153,7 +177,7 @@ export function MsgScreen() {
     // 2. Conversations sorted by last_message_at
     const { data: convRows } = await supabase
       .from('conversations')
-      .select('id, last_message_at')
+      .select('id, name, last_message_at')
       .in('id', convIds)
       .order('last_message_at', { ascending: false })
 
@@ -178,12 +202,14 @@ export function MsgScreen() {
     const profileMap: Record<string, OtherUser> = {}
     for (const p of (profiles ?? []) as OtherUser[]) profileMap[p.id] = p
 
-    const memberMap: Record<string, string> = {}
+    // Multi-member map: conversation_id → array of other user IDs
+    const membersByConvId: Record<string, string[]> = {}
     for (const m of (allMembers ?? []) as { conversation_id: string; user_id: string }[]) {
-      memberMap[m.conversation_id] = m.user_id
+      if (!membersByConvId[m.conversation_id]) membersByConvId[m.conversation_id] = []
+      membersByConvId[m.conversation_id].push(m.user_id)
     }
 
-    // 5. Last message per conversation (N parallel fetches — acceptable for v1)
+    // 5. Last message per conversation
     const lastMsgResults = await Promise.all(
       convIds.map(cid =>
         supabase
@@ -204,18 +230,20 @@ export function MsgScreen() {
       membershipMap[m.conversation_id] = m.last_read_at
     }
 
-    const rows: ConversationRow[] = (convRows as { id: string; last_message_at: string }[]).map(conv => {
+    const rows: ConversationRow[] = (convRows as { id: string; name: string | null; last_message_at: string }[]).map(conv => {
       const lastReadAt = membershipMap[conv.id] ?? conv.last_message_at
       const lastMsg = lastMsgMap[conv.id] ?? null
-      const otherUserId = memberMap[conv.id]
+      const memberIds = membersByConvId[conv.id] ?? []
+      const members = memberIds.map(id => profileMap[id]).filter((p): p is OtherUser => !!p)
       const unread = lastMsg
         ? new Date(lastMsg.created_at) > new Date(lastReadAt) && lastMsg.sender_id !== user.id
         : false
       return {
         id: conv.id,
+        name: conv.name,
         lastMessageAt: conv.last_message_at,
         lastReadAt,
-        otherUser: otherUserId ? (profileMap[otherUserId] ?? null) : null,
+        members,
         lastMessage: lastMsg,
         unread,
       }
@@ -257,7 +285,6 @@ export function MsgScreen() {
     setMsgLoading(false)
     await markConversationRead(convId)
 
-    // Mark as read in local state
     setConversations(prev =>
       prev.map(c => c.id === convId ? { ...c, unread: false, lastReadAt: new Date().toISOString() } : c)
     )
@@ -294,7 +321,6 @@ export function MsgScreen() {
             if (prev.some(m => m.id === msg.id)) return prev
             return [...prev, msg]
           })
-          // Update inbox preview
           setConversations(prev =>
             prev.map(c => c.id === openConvId
               ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
@@ -321,7 +347,7 @@ export function MsgScreen() {
           const msg = payload.new as Message & { conversation_id: string }
           if (!myConvIdsRef.current.has(msg.conversation_id)) return
           if (msg.sender_id === user.id) return
-          if (msg.conversation_id === openConvIdRef.current) return // already reading it
+          if (msg.conversation_id === openConvIdRef.current) return
           setConversations(prev => {
             const updated = prev.map(c => c.id === msg.conversation_id
               ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
@@ -367,6 +393,87 @@ export function MsgScreen() {
     setMessageText('')
   }
 
+  // ── Create new chat ───────────────────────────────────────────────────────
+  async function createNewChat() {
+    if (newChatPicked.length === 0 || creatingChat) return
+    setCreatingChat(true)
+    setCreateChatError(null)
+
+    const memberIds = newChatPicked.map(u => u.id)
+
+    // For 1-on-1, reuse an existing 2-person conversation if one exists
+    if (memberIds.length === 1 && user) {
+      const otherId = memberIds[0]
+      const { data: existing } = await supabase
+        .from('conversation_members')
+        .select('conversation_id')
+        .eq('user_id', user.id)
+      if (existing && existing.length > 0) {
+        const myConvIds = existing.map(r => r.conversation_id)
+        const { data: shared } = await supabase
+          .from('conversation_members')
+          .select('conversation_id')
+          .eq('user_id', otherId)
+          .in('conversation_id', myConvIds)
+        if (shared && shared.length > 0) {
+          for (const row of shared) {
+            const { count } = await supabase
+              .from('conversation_members')
+              .select('*', { count: 'exact', head: true })
+              .eq('conversation_id', row.conversation_id)
+            if (count === 2) {
+              setNewChatOpen(false)
+              setNewChatPicked([])
+              setCreatingChat(false)
+              setOpenConvId(row.conversation_id)
+              return
+            }
+          }
+        }
+      }
+    }
+
+    const { data, error } = await supabase.rpc('create_conversation_with_members', {
+      p_member_ids: memberIds,
+      p_name: undefined,
+    })
+
+    if (error) {
+      setCreateChatError(error.message)
+      setCreatingChat(false)
+      return
+    }
+
+    setNewChatOpen(false)
+    setNewChatPicked([])
+    setCreatingChat(false)
+    setOpenConvId(data as string)
+    await loadInbox()
+  }
+
+  // ── Add people to existing chat ───────────────────────────────────────────
+  async function addPeople() {
+    if (!openConvId || addPeoplePicked.length === 0 || addingPeople) return
+    setAddingPeople(true)
+    setAddPeopleError(null)
+
+    const { error } = await supabase.rpc('add_members_to_conversation', {
+      p_conversation_id: openConvId,
+      p_member_ids: addPeoplePicked.map(u => u.id),
+    })
+
+    if (error) {
+      setAddPeopleError(error.message)
+      setAddingPeople(false)
+      return
+    }
+
+    setAddPeopleOpen(false)
+    setAddPeoplePicked([])
+    setAddingPeople(false)
+    await loadInbox()
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -375,8 +482,8 @@ export function MsgScreen() {
         actions={
           <button
             style={headerIconBtn()}
-            onClick={() => alert('Start new messages from a user\'s profile')}
-            title="New message"
+            onClick={() => setNewChatOpen(true)}
+            aria-label="New chat"
           >
             <PencilLine size={18} />
           </button>
@@ -411,7 +518,7 @@ export function MsgScreen() {
             </div>
           )}
 
-          {/* Notification card — shows newest unread mention */}
+          {/* Notification card */}
           {notifications.length > 0 && (() => {
             const notif = notifications[0]
             const senderName = notif.sender?.username ? `@${notif.sender.username}` : 'someone'
@@ -480,65 +587,82 @@ export function MsgScreen() {
             )}
             {!convLoading && conversations.length === 0 && (
               <p style={{ padding: '40px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
-                No conversations yet — tap Message on someone's profile to start one.
+                No conversations yet — tap the pencil icon to start one.
               </p>
             )}
-            {conversations.map(conv => (
-              <div
-                key={conv.id}
-                onClick={() => openConversation(conv.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '12px 16px 12px 20px',
-                  cursor: 'pointer', borderBottom: '1px solid var(--fg-08)',
-                  position: 'relative',
-                }}
-              >
-                {conv.unread && (
-                  <div style={{
-                    position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-                    width: 6, height: 6, borderRadius: '50%', background: '#A855F7',
-                  }} />
-                )}
-                <Diamond
-                  diamondUrl={conv.otherUser?.avatar_diamond_url ?? null}
-                  fallbackUrl={conv.otherUser?.avatar_url ?? null}
-                  size={40}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{
-                      fontFamily: '"Playfair Display", serif',
-                      fontWeight: 700, fontSize: 15,
-                      color: 'var(--fg)',
+            {conversations.map(conv => {
+              const display = getConversationDisplay(conv)
+              return (
+                <div
+                  key={conv.id}
+                  onClick={() => openConversation(conv.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 16px 12px 20px',
+                    cursor: 'pointer', borderBottom: '1px solid var(--fg-08)',
+                    position: 'relative',
+                  }}
+                >
+                  {conv.unread && (
+                    <div style={{
+                      position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                      width: 6, height: 6, borderRadius: '50%', background: '#A855F7',
+                    }} />
+                  )}
+
+                  {/* Avatar — stacked diamonds for groups */}
+                  {display.isGroup && conv.members.length >= 2 ? (
+                    <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0 }}>
+                        <Diamond diamondUrl={conv.members[0]?.avatar_diamond_url ?? null} size={28} />
+                      </div>
+                      <div style={{ position: 'absolute', bottom: 0, right: 0 }}>
+                        <Diamond diamondUrl={conv.members[1]?.avatar_diamond_url ?? null} size={28} />
+                      </div>
+                    </div>
+                  ) : (
+                    <Diamond
+                      diamondUrl={display.primaryUser?.avatar_diamond_url ?? null}
+                      fallbackUrl={display.primaryUser?.avatar_url ?? null}
+                      size={40}
+                    />
+                  )}
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                      <span style={{
+                        fontFamily: '"Playfair Display", serif',
+                        fontWeight: 700, fontSize: 15,
+                        color: 'var(--fg)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {display.title}
+                        {conv.unread && (
+                          <span style={{
+                            display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
+                            background: '#A855F7', marginLeft: 6, verticalAlign: 'middle',
+                          }} />
+                        )}
+                      </span>
+                      <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-30)', flexShrink: 0 }}>
+                        {conv.lastMessage ? fmtTimeAgo(conv.lastMessage.created_at) : fmtTimeAgo(conv.lastMessageAt)}
+                      </span>
+                    </div>
+                    <p style={{
+                      margin: '2px 0 0',
+                      fontFamily: 'Space Grotesk, sans-serif', fontSize: 12,
+                      color: conv.unread ? 'var(--fg-65)' : 'var(--fg-30)',
+                      fontWeight: conv.unread ? 500 : 400,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      @{conv.otherUser?.username ?? '—'}
-                      {conv.unread && (
-                        <span style={{
-                          display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                          background: '#A855F7', marginLeft: 6, verticalAlign: 'middle',
-                        }} />
-                      )}
-                    </span>
-                    <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'var(--fg-30)', flexShrink: 0 }}>
-                      {conv.lastMessage ? fmtTimeAgo(conv.lastMessage.created_at) : fmtTimeAgo(conv.lastMessageAt)}
-                    </span>
+                      {conv.lastMessage
+                        ? (conv.lastMessage.sender_id === user?.id ? 'You: ' : '') + conv.lastMessage.body
+                        : 'No messages yet'}
+                    </p>
                   </div>
-                  <p style={{
-                    margin: '2px 0 0',
-                    fontFamily: 'Space Grotesk, sans-serif', fontSize: 12,
-                    color: conv.unread ? 'var(--fg-65)' : 'var(--fg-30)',
-                    fontWeight: conv.unread ? 500 : 400,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {conv.lastMessage
-                      ? (conv.lastMessage.sender_id === user?.id ? 'You: ' : '') + conv.lastMessage.body
-                      : 'No messages yet'}
-                  </p>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -565,23 +689,52 @@ export function MsgScreen() {
                     color: 'var(--fg-55)', padding: '0 8px 0 0',
                     fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700,
                     fontSize: 13, letterSpacing: '0.1em',
+                    flexShrink: 0,
                   }}
                 >← BACK</button>
-                {openConv && (
-                  <>
-                    <Diamond
-                      diamondUrl={openConv.otherUser?.avatar_diamond_url ?? null}
-                      fallbackUrl={openConv.otherUser?.avatar_url ?? null}
-                      size={32}
-                    />
-                    <span style={{
-                      fontFamily: '"Playfair Display", serif', fontWeight: 700,
-                      fontSize: 15, color: 'var(--fg)',
-                    }}>
-                      @{openConv.otherUser?.username ?? '—'}
-                    </span>
-                  </>
-                )}
+
+                {openConv && (() => {
+                  const display = getConversationDisplay(openConv)
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                      {display.isGroup && openConv.members.length >= 2 ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                          {openConv.members.slice(0, 3).map(m => (
+                            <Diamond key={m.id} diamondUrl={m.avatar_diamond_url} size={28} />
+                          ))}
+                        </div>
+                      ) : (
+                        <Diamond
+                          diamondUrl={display.primaryUser?.avatar_diamond_url ?? null}
+                          fallbackUrl={display.primaryUser?.avatar_url ?? null}
+                          size={36}
+                        />
+                      )}
+                      <span style={{
+                        fontFamily: '"Playfair Display", serif',
+                        fontWeight: 700, fontSize: 16,
+                        color: 'var(--fg)',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        flex: 1, minWidth: 0,
+                      }}>
+                        {display.title}
+                      </span>
+                    </div>
+                  )
+                })()}
+
+                {/* Add people button */}
+                <button
+                  onClick={() => setAddPeopleOpen(true)}
+                  style={{
+                    ...headerIconBtn(),
+                    flexShrink: 0,
+                    marginLeft: 'auto',
+                  }}
+                  aria-label="Add people"
+                >
+                  <Plus size={16} />
+                </button>
               </div>
 
               {/* Messages */}
@@ -665,6 +818,103 @@ export function MsgScreen() {
         </div>
 
       </div>
+
+      {/* ── New chat modal ── */}
+      <BottomSheet
+        open={newChatOpen}
+        onClose={() => {
+          setNewChatOpen(false)
+          setNewChatPicked([])
+          setCreateChatError(null)
+        }}
+        title="New chat"
+      >
+        <p style={{ margin: '0 0 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
+          Pick one or more people to start a chat.
+        </p>
+
+        <UserPicker
+          initialSelected={[]}
+          onChange={setNewChatPicked}
+        />
+
+        {createChatError && (
+          <p style={{ margin: '12px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgb(220,38,38)' }}>
+            {createChatError}
+          </p>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={createNewChat}
+            disabled={newChatPicked.length === 0 || creatingChat}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: 8,
+              border: 'none',
+              background: newChatPicked.length > 0 && !creatingChat ? '#A855F7' : 'var(--fg-15)',
+              color: newChatPicked.length > 0 && !creatingChat ? '#fff' : 'var(--fg-40)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: newChatPicked.length > 0 && !creatingChat ? 'pointer' : 'default',
+            }}
+          >
+            {creatingChat ? 'Creating…' : `Start chat (${newChatPicked.length} ${newChatPicked.length === 1 ? 'person' : 'people'})`}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* ── Add people modal ── */}
+      <BottomSheet
+        open={addPeopleOpen}
+        onClose={() => {
+          setAddPeopleOpen(false)
+          setAddPeoplePicked([])
+          setAddPeopleError(null)
+        }}
+        title="Add people"
+      >
+        <p style={{ margin: '0 0 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
+          {openConv && openConv.members.length > 0
+            ? `Currently in this chat: ${openConv.members.map(m => '@' + (m.username ?? 'user')).join(', ')}`
+            : 'Add people to this conversation.'}
+        </p>
+
+        <UserPicker
+          initialSelected={[]}
+          excludedIds={openConv ? new Set(openConv.members.map(m => m.id)) : undefined}
+          onChange={setAddPeoplePicked}
+        />
+
+        {addPeopleError && (
+          <p style={{ margin: '12px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgb(220,38,38)' }}>
+            {addPeopleError}
+          </p>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          <button
+            onClick={addPeople}
+            disabled={addPeoplePicked.length === 0 || addingPeople}
+            style={{
+              width: '100%',
+              padding: '12px',
+              borderRadius: 8,
+              border: 'none',
+              background: addPeoplePicked.length > 0 && !addingPeople ? '#A855F7' : 'var(--fg-15)',
+              color: addPeoplePicked.length > 0 && !addingPeople ? '#fff' : 'var(--fg-40)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: addPeoplePicked.length > 0 && !addingPeople ? 'pointer' : 'default',
+            }}
+          >
+            {addingPeople ? 'Adding…' : `Add ${addPeoplePicked.length} ${addPeoplePicked.length === 1 ? 'person' : 'people'}`}
+          </button>
+        </div>
+      </BottomSheet>
 
     </div>
   )
