@@ -542,12 +542,12 @@ export function MsgScreen() {
           </div>
         </div>
 
-        {/* ── CONVERSATION PANEL (slides in from RIGHT) ── */}
+        {/* ── CONVERSATION PANEL (slides in from BOTTOM) ── */}
         <div style={{
           position: 'absolute', inset: 0, zIndex: 10,
           background: 'var(--bg)',
           display: 'flex', flexDirection: 'column',
-          transform: openConvId ? 'translateX(0)' : 'translateX(100%)',
+          transform: openConvId ? 'translateY(0)' : 'translateY(100%)',
           transition: 'transform 0.32s cubic-bezier(0.4,0,0.2,1)',
         }}>
           {openConvId && (
