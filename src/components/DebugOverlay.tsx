@@ -1,4 +1,4 @@
-const IS_ENABLED = import.meta.env.DEV || new URLSearchParams(window.location.search).has('debug')
+const IS_ENABLED = new URLSearchParams(window.location.search).has('debug')
 
 interface Props {
   logs: string[]

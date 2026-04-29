@@ -9,7 +9,6 @@ type WallItem =
   | { type: 'poster'; event: WallEvent; eventIdx: number }
   | { type: 'date-poster'; date: string }
 
-const IS_DEV = import.meta.env.DEV
 const GAP = 2 // px — only used in 2-5 col grid
 
 function groupByDay(events: WallEvent[]): Map<string, WallEvent[]> {
@@ -410,24 +409,6 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
       <div className="shrink-0 z-10" style={{ background: 'var(--bg)' }}>
         <DateIndicator activeDay={activeDay} today={today} eventInfo={eventInfo} onVenueTap={onVenueTap} atDatePoster={atDatePoster} />
       </div>
-
-      {IS_DEV && (
-        <button
-          onClick={() => setCols((c) => (c % 5) + 1)}
-          className="fixed bottom-20 right-4 z-50 font-body font-bold"
-          style={{
-            fontSize: 11,
-            letterSpacing: '0.06em',
-            background: 'var(--fg-08)',
-            border: '1px solid var(--fg-25)',
-            color: 'var(--fg)',
-            padding: '6px 10px',
-            borderRadius: 4,
-          }}
-        >
-          {cols}COL
-        </button>
-      )}
 
       {/* Scroll container */}
       <div
