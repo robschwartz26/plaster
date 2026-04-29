@@ -854,6 +854,17 @@ export type Database = {
       }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
       scrub_my_account_data: { Args: never; Returns: boolean }
+      search_my_messages: {
+        Args: { p_query: string }
+        Returns: {
+          body: string
+          conversation_id: string
+          created_at: string
+          message_id: string
+          rank: number
+          sender_id: string
+        }[]
+      }
       search_users: {
         Args: { p_query: string }
         Returns: {
@@ -864,6 +875,8 @@ export type Database = {
           username: string
         }[]
       }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       social_diamond_row: {
         Args: { target_user_id: string }
         Returns: {
