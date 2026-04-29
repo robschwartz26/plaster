@@ -12,6 +12,7 @@ interface Props {
   event: WallEvent
   cols: number
   activeFilter: string
+  searchQuery?: string
   isLiked: boolean
   isActive?: boolean
   onDoubleTap?: (event: WallEvent) => void
@@ -65,6 +66,16 @@ function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): bool
   if (filter === 'All') return true
   if (filter === '♥') return isLiked
   return event.category === filter
+}
+
+function matchesSearch(event: WallEvent, query: string): boolean {
+  if (!query.trim()) return true
+  const q = query.toLowerCase()
+  return (
+    (event.title?.toLowerCase().includes(q) ?? false) ||
+    (event.venue_name?.toLowerCase().includes(q) ?? false) ||
+    (event.category?.toLowerCase().includes(q) ?? false)
+  )
 }
 
 function formatDateTime(iso: string): string {
@@ -131,10 +142,11 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
-  const dimmed = activeFilter !== 'All' && !matches
+  const matchesQuery = matchesSearch(event, searchQuery)
+  const dimmed = (activeFilter !== 'All' && !matches) || (searchQuery.trim() !== '' && !matchesQuery)
   const gradient = `linear-gradient(160deg, ${event.color1} 0%, ${event.color2} 100%)`
 
   const [showEdit, setShowEdit] = useState(false)

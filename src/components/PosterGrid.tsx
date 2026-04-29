@@ -29,6 +29,7 @@ function uniqueDays(events: WallEvent[]): string[] {
 interface Props {
   events: WallEvent[]
   activeFilter: string
+  searchQuery?: string
   today: string
   likedIds: Set<string>
   onDayChange: (day: string) => void
@@ -48,7 +49,7 @@ function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
@@ -440,6 +441,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
                 event={event}
                 cols={1}
                 activeFilter={activeFilter}
+                searchQuery={searchQuery}
                 isLiked={likedIds.has(event.id)}
                 isActive={eventIdx === activeEventIdx}
                 onLike={onLike}
@@ -465,6 +467,7 @@ export function PosterGrid({ events, activeFilter, today, likedIds, onDayChange,
                   event={event}
                   cols={cols}
                   activeFilter={activeFilter}
+                  searchQuery={searchQuery}
                   isLiked={likedIds.has(event.id)}
                   onDoubleTap={handleDoubleTap}
                   onLike={onLike}

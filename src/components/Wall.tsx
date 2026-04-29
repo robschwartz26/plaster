@@ -18,6 +18,8 @@ export function Wall() {
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
   const [isAdminMode, setIsAdminMode] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
@@ -120,17 +122,74 @@ export function Wall() {
                 {isAdminMode ? 'Done' : 'Edit'}
               </button>
             )}
-            <button style={headerIconBtn()}><Search size={16} /></button>
+            <button
+              style={{
+                ...headerIconBtn(),
+                background: searchOpen ? 'var(--fg-08)' : 'transparent',
+              }}
+              onClick={() => setSearchOpen(v => !v)}
+              aria-label={searchOpen ? 'Close search' : 'Open search'}
+            >
+              <Search size={16} />
+            </button>
             <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
           </div>
         }
       />
+
+      {searchOpen && (
+        <div style={{
+          flexShrink: 0,
+          padding: '8px 16px 4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          borderBottom: '1px solid var(--fg-08)',
+          background: 'var(--bg)',
+        }}>
+          <input
+            type="text"
+            autoFocus
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search events, venues, categories…"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--fg-15)',
+              background: 'var(--fg-08)',
+              color: 'var(--fg)',
+              fontFamily: 'Space Grotesk, sans-serif',
+              fontSize: 14,
+              outline: 'none',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--fg-55)',
+                fontFamily: 'Space Grotesk, sans-serif',
+                fontSize: 13,
+                padding: '4px 8px',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
 
       <PosterGrid
         events={events}
         activeFilter={activeFilter}
+        searchQuery={searchQuery}
         today={today}
         likedIds={likedIds}
         onDayChange={setActiveDay}
