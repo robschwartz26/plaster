@@ -35,6 +35,15 @@ interface Message {
   created_at: string
 }
 
+interface MessageSearchHit {
+  message_id: string
+  conversation_id: string
+  sender_id: string
+  body: string
+  created_at: string
+  rank: number
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface AppNotification {
@@ -89,6 +98,50 @@ function getConversationDisplay(conv: ConversationRow): { title: string; isGroup
   return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0] }
 }
 
+// Build a snippet centered on the matched query with surrounding context.
+function buildSnippet(body: string, query: string, contextChars = 30): {
+  text: string
+  matchStart: number
+  matchEnd: number
+  hasLeadingEllipsis: boolean
+  hasTrailingEllipsis: boolean
+} {
+  const q = query.toLowerCase()
+  const haystack = body.toLowerCase()
+  const matchIdx = haystack.indexOf(q)
+  if (matchIdx === -1) {
+    return { text: body.slice(0, 80), matchStart: -1, matchEnd: -1, hasLeadingEllipsis: false, hasTrailingEllipsis: body.length > 80 }
+  }
+  const matchEnd = matchIdx + query.length
+  const sliceStart = Math.max(0, matchIdx - contextChars)
+  const sliceEnd = Math.min(body.length, matchEnd + contextChars)
+  return {
+    text: body.slice(sliceStart, sliceEnd),
+    matchStart: matchIdx - sliceStart,
+    matchEnd: matchEnd - sliceStart,
+    hasLeadingEllipsis: sliceStart > 0,
+    hasTrailingEllipsis: sliceEnd < body.length,
+  }
+}
+
+function HighlightedSnippet({ body, query }: { body: string; query: string }) {
+  if (!query) return <>{body.slice(0, 80)}{body.length > 80 ? '…' : ''}</>
+  const { text, matchStart, matchEnd, hasLeadingEllipsis, hasTrailingEllipsis } = buildSnippet(body, query)
+  if (matchStart === -1) return <>{text}{hasTrailingEllipsis ? '…' : ''}</>
+  const before = text.slice(0, matchStart)
+  const match  = text.slice(matchStart, matchEnd)
+  const after  = text.slice(matchEnd)
+  return (
+    <>
+      {hasLeadingEllipsis && '…'}
+      {before}
+      <span style={{ color: '#A855F7', fontWeight: 600 }}>{match}</span>
+      {after}
+      {hasTrailingEllipsis && '…'}
+    </>
+  )
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function MsgScreen() {
@@ -121,9 +174,33 @@ export function MsgScreen() {
   const [addingPeople,      setAddingPeople]      = useState(false)
   const [addPeopleError,    setAddPeopleError]    = useState<string | null>(null)
 
+  // Search state
+  const [searchQuery,        setSearchQuery]        = useState('')
+  const [messageHits,        setMessageHits]        = useState<MessageSearchHit[]>([])
+  const [searchingMessages,  setSearchingMessages]  = useState(false)
+  const messageSearchDebounceRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const realtimeRefetchDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSearchedQueryRef        = useRef<string>('')
+
+  // Scroll-to-message state
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
+  const messageRefs               = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const suppressNextAutoScrollRef = useRef(false)
+
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
   const openConv = conversations.find(c => c.id === openConvId) ?? null
+
+  // Filtered conversations — computed inline, no effect needed
+  const filteredConversations = (() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return conversations
+    return conversations.filter(conv => {
+      if (conv.name && conv.name.toLowerCase().includes(q)) return true
+      if (conv.members.some(m => m.username && m.username.toLowerCase().includes(q))) return true
+      return false
+    })
+  })()
 
   // ── Notifications ────────────────────────────────────────────────────────
   const fetchNotifications = useCallback(async () => {
@@ -290,6 +367,30 @@ export function MsgScreen() {
     )
   }, [])
 
+  // Navigate from search hit to a specific message
+  async function openConversationAtMessage(convId: string, messageId: string) {
+    suppressNextAutoScrollRef.current = true
+
+    if (openConvId === convId) {
+      scrollToAndHighlight(messageId)
+      return
+    }
+
+    await openConversation(convId)
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => scrollToAndHighlight(messageId))
+    })
+  }
+
+  function scrollToAndHighlight(messageId: string) {
+    const el = messageRefs.current.get(messageId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+    setHighlightedMessageId(messageId)
+    setTimeout(() => setHighlightedMessageId(null), 1800)
+  }
+
   // If routed with a specific conversation, open it once inbox loads
   useEffect(() => {
     if (routeConvId && !convLoading) {
@@ -297,12 +398,21 @@ export function MsgScreen() {
     }
   }, [routeConvId, convLoading, openConversation])
 
-  // ── Scroll to bottom ─────────────────────────────────────────────────────
+  // ── Scroll to bottom — suppressed when navigating from search ────────────
   useEffect(() => {
-    if (openConvId) setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 60)
+    if (openConvId) {
+      setTimeout(() => {
+        if (suppressNextAutoScrollRef.current) return
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 60)
+    }
   }, [openConvId])
 
   useEffect(() => {
+    if (suppressNextAutoScrollRef.current) {
+      suppressNextAutoScrollRef.current = false
+      return
+    }
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
@@ -357,12 +467,56 @@ export function MsgScreen() {
               new Date(b.lastMessageAt ?? 0).getTime() - new Date(a.lastMessageAt ?? 0).getTime()
             )
           })
+          // Re-run message search if user has an active query — debounced to avoid spam
+          const currentQuery = lastSearchedQueryRef.current
+          if (currentQuery && currentQuery.length >= 3) {
+            if (realtimeRefetchDebounceRef.current) clearTimeout(realtimeRefetchDebounceRef.current)
+            realtimeRefetchDebounceRef.current = setTimeout(async () => {
+              const { data, error } = await supabase.rpc('search_my_messages', { p_query: currentQuery })
+              if (error || !Array.isArray(data)) return
+              setMessageHits(data as MessageSearchHit[])
+            }, 500)
+          }
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
   }, [user])
+
+  // ── Debounced message search ─────────────────────────────────────────────
+  useEffect(() => {
+    if (messageSearchDebounceRef.current) clearTimeout(messageSearchDebounceRef.current)
+    const q = searchQuery.trim()
+    if (q.length < 3) {
+      setMessageHits([])
+      setSearchingMessages(false)
+      lastSearchedQueryRef.current = ''
+      return
+    }
+    setSearchingMessages(true)
+    messageSearchDebounceRef.current = setTimeout(async () => {
+      const { data, error } = await supabase.rpc('search_my_messages', { p_query: q })
+      setSearchingMessages(false)
+      if (error || !Array.isArray(data)) {
+        setMessageHits([])
+        return
+      }
+      setMessageHits(data as MessageSearchHit[])
+      lastSearchedQueryRef.current = q
+    }, 250)
+    return () => { if (messageSearchDebounceRef.current) clearTimeout(messageSearchDebounceRef.current) }
+  }, [searchQuery])
+
+  // ── Cleanup stale message refs ───────────────────────────────────────────
+  useEffect(() => {
+    const validIds = new Set(messages.map(m => m.id))
+    for (const id of Array.from(messageRefs.current.keys())) {
+      if (!validIds.has(id)) {
+        messageRefs.current.delete(id)
+      }
+    }
+  }, [messages])
 
   // ── Send message ─────────────────────────────────────────────────────────
   async function sendMessage() {
@@ -496,17 +650,18 @@ export function MsgScreen() {
         {/* ── INBOX ── */}
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
 
-          {/* Search (disabled v1) */}
+          {/* Search */}
           <div style={{ padding: '12px 16px 8px', flexShrink: 0 }}>
             <input
               type="text"
-              placeholder="Search conversations"
-              disabled
+              placeholder="Search conversations and messages"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
               style={{
                 width: '100%', padding: '10px 14px', borderRadius: 20,
-                border: '1px solid var(--fg-08)', background: 'var(--fg-08)',
-                color: 'var(--fg-25)', fontFamily: 'Space Grotesk, sans-serif',
-                fontSize: 14, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed',
+                border: '1px solid var(--fg-15)', background: 'var(--fg-08)',
+                color: 'var(--fg)', fontFamily: 'Space Grotesk, sans-serif',
+                fontSize: 14, outline: 'none', boxSizing: 'border-box',
               }}
             />
           </div>
@@ -573,24 +728,33 @@ export function MsgScreen() {
             )
           })()}
 
-          {/* Messages section header */}
-          <div style={{ padding: '10px 16px 6px', flexShrink: 0 }}>
-            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>messages</span>
-          </div>
-
-          {/* Conversation list */}
+          {/* Scrollable conversation + message results */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
+
             {convLoading && (
               <p style={{ padding: '32px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
                 Loading…
               </p>
             )}
-            {!convLoading && conversations.length === 0 && (
+
+            {/* Section header — "messages" normally, "people & chats" when searching */}
+            {!convLoading && (
+              <div style={{ padding: '10px 16px 6px' }}>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+                  {searchQuery.trim().length >= 1 ? 'people & chats' : 'messages'}
+                </span>
+              </div>
+            )}
+
+            {/* Empty state when no conversations */}
+            {!convLoading && conversations.length === 0 && !searchQuery && (
               <p style={{ padding: '40px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
                 No conversations yet — tap the pencil icon to start one.
               </p>
             )}
-            {conversations.map(conv => {
+
+            {/* Conversation rows */}
+            {filteredConversations.map(conv => {
               const display = getConversationDisplay(conv)
               return (
                 <div
@@ -663,6 +827,70 @@ export function MsgScreen() {
                 </div>
               )
             })}
+
+            {/* Section header for message hits */}
+            {searchQuery.trim().length >= 3 && messageHits.length > 0 && (
+              <div style={{ padding: '14px 16px 6px' }}>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+                  messages
+                </span>
+              </div>
+            )}
+
+            {/* Message search hits */}
+            {searchQuery.trim().length >= 3 && messageHits.map(hit => {
+              const conv = conversations.find(c => c.id === hit.conversation_id)
+              const display = conv ? getConversationDisplay(conv) : null
+              const sender = conv?.members.find(m => m.id === hit.sender_id) ?? null
+              const isFromMe = hit.sender_id === user?.id
+              const senderLabel = isFromMe ? 'You' : sender?.username ? `@${sender.username}` : 'someone'
+              return (
+                <div
+                  key={hit.message_id}
+                  onClick={() => openConversationAtMessage(hit.conversation_id, hit.message_id)}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12,
+                    padding: '12px 16px',
+                    cursor: 'pointer', borderBottom: '1px solid var(--fg-08)',
+                  }}
+                >
+                  <Diamond
+                    diamondUrl={sender?.avatar_diamond_url ?? null}
+                    fallbackUrl={sender?.avatar_url ?? null}
+                    size={36}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {senderLabel}
+                        {display && <span style={{ fontWeight: 400, color: 'var(--fg-40)' }}> · {display.title}</span>}
+                      </span>
+                      <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', flexShrink: 0 }}>
+                        {fmtTimeAgo(hit.created_at)}
+                      </span>
+                    </div>
+                    <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>
+                      <HighlightedSnippet body={hit.body} query={searchQuery.trim()} />
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Searching indicator */}
+            {searchingMessages && messageHits.length === 0 && searchQuery.trim().length >= 3 && (
+              <div style={{ padding: '20px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-30)' }}>
+                Searching messages…
+              </div>
+            )}
+
+            {/* No results at all */}
+            {!searchingMessages && searchQuery.trim().length >= 3 && filteredConversations.length === 0 && messageHits.length === 0 && (
+              <p style={{ padding: '40px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>
+                No matches.
+              </p>
+            )}
+
           </div>
         </div>
 
@@ -747,8 +975,12 @@ export function MsgScreen() {
                 {!msgLoading && messages.map((msg, i) => {
                   const isMine = msg.sender_id === user?.id
                   const prev = messages[i - 1]
+                  const isHighlighted = highlightedMessageId === msg.id
                   return (
-                    <div key={msg.id}>
+                    <div
+                      key={msg.id}
+                      ref={el => { messageRefs.current.set(msg.id, el) }}
+                    >
                       {showTimestampBefore(msg, prev) && (
                         <p style={{
                           textAlign: 'center', margin: '10px 0 4px',
@@ -766,6 +998,8 @@ export function MsgScreen() {
                           color: isMine ? '#fff' : 'var(--fg)',
                           fontFamily: 'Space Grotesk, sans-serif', fontSize: 14,
                           lineHeight: 1.4, wordBreak: 'break-word',
+                          boxShadow: isHighlighted ? '0 0 0 4px rgba(168, 85, 247, 0.35)' : '0 0 0 0 rgba(168, 85, 247, 0)',
+                          transition: 'box-shadow 0.4s ease',
                         }}>
                           {msg.body}
                         </div>
