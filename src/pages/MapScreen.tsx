@@ -1,5 +1,5 @@
 import 'mapbox-gl/dist/mapbox-gl.css'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Map, { Marker } from 'react-map-gl/mapbox'
 import { motion } from 'framer-motion'
@@ -465,6 +465,8 @@ export function MapScreen() {
   const [eventsByVenue, setEventsByVenue] = useState<Record<string, VenueEvent[]>>({})
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set())
   const [selectedVenue, setSelectedVenue] = useState<DbVenue | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
 
   // Fog/circle
   const circleDataRef = useRef<object>(EMPTY_FC)
@@ -639,6 +641,25 @@ export function MapScreen() {
 
   const selectedVenueEvents = selectedVenue ? (eventsByVenue[selectedVenue.id] ?? []) : []
 
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return [] as Array<{ event: VenueEvent; venue: DbVenue }>
+    const results: Array<{ event: VenueEvent; venue: DbVenue }> = []
+    for (const venue of venues) {
+      const venueEvents = eventsByVenue[venue.id] ?? []
+      for (const ev of venueEvents) {
+        const matches =
+          (ev.title?.toLowerCase().includes(q) ?? false) ||
+          (venue.name?.toLowerCase().includes(q) ?? false) ||
+          (ev.category?.toLowerCase().includes(q) ?? false)
+        if (matches) {
+          results.push({ event: ev, venue })
+        }
+      }
+    }
+    return results
+  }, [searchQuery, venues, eventsByVenue])
+
   const adjacentVenues = selectedVenue
     ? visibleVenues
         .filter(v => v.id !== selectedVenue.id && venueMatchesFilter(v.id))
@@ -656,11 +677,67 @@ export function MapScreen() {
       <PlasterHeader
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button style={headerIconBtn()}><Search size={16} /></button>
+            <button
+              style={{
+                ...headerIconBtn(),
+                background: searchOpen ? 'var(--fg-08)' : 'transparent',
+              }}
+              onClick={() => setSearchOpen(v => !v)}
+              aria-label={searchOpen ? 'Close search' : 'Open search'}
+            >
+              <Search size={16} />
+            </button>
             <button style={headerIconBtn()}><SlidersHorizontal size={16} /></button>
           </div>
         }
       />
+
+      {searchOpen && (
+        <div style={{
+          flexShrink: 0,
+          padding: '8px 16px 4px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          borderBottom: '1px solid var(--fg-08)',
+          background: 'var(--bg)',
+        }}>
+          <input
+            type="text"
+            autoFocus
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search events on this day…"
+            style={{
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 6,
+              border: '1px solid var(--fg-15)',
+              background: 'var(--fg-08)',
+              color: 'var(--fg)',
+              fontFamily: 'Space Grotesk, sans-serif',
+              fontSize: 14,
+              outline: 'none',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--fg-55)',
+                fontFamily: 'Space Grotesk, sans-serif',
+                fontSize: 13,
+                padding: '4px 8px',
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Filter chips ── */}
       <div
@@ -776,7 +853,7 @@ export function MapScreen() {
             background: 'var(--bg)',
             borderRadius: '12px 0 0 0',
             display: 'flex', flexDirection: 'column',
-            transform: selectedVenue ? 'translateY(0)' : 'translateY(100%)',
+            transform: (selectedVenue || (searchOpen && searchQuery.trim() !== '')) ? 'translateY(0)' : 'translateY(100%)',
             transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
             overflow: 'hidden',
             boxShadow: '-4px -4px 24px rgba(0,0,0,0.35)',
@@ -789,7 +866,41 @@ export function MapScreen() {
 
           {/* Scrollable content */}
           <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
-            {selectedVenue && (
+            {searchOpen && searchQuery.trim() !== '' ? (
+              <>
+                <div style={{ padding: '8px 16px 10px' }}>
+                  <p style={{ margin: 0, fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>
+                    {searchResults.length === 0 ? 'No matches' : `${searchResults.length} ${searchResults.length === 1 ? 'match' : 'matches'}`} {dayIdx === 0 ? 'tonight' : 'this day'}
+                  </p>
+                </div>
+
+                {searchResults.length === 0 ? (
+                  <p style={{ margin: 0, padding: '8px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
+                    Try a different search or change the day.
+                  </p>
+                ) : (
+                  searchResults.map(({ event: ev, venue }, i) => {
+                    const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                    const bg = catGradient(ev.category)
+                    return (
+                      <button
+                        key={ev.id}
+                        onClick={() => navigate('/', { state: { openEventId: ev.id } })}
+                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
+                      >
+                        <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
+                          {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
+                          <p style={{ margin: '3px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{venue.name} · {timeStr}</p>
+                        </div>
+                      </button>
+                    )
+                  })
+                )}
+              </>
+            ) : selectedVenue ? (
               <>
                 {/* ── Featured venue ── */}
                 <div style={{ padding: '8px 16px 10px' }}>
@@ -861,7 +972,7 @@ export function MapScreen() {
                   )
                 })}
               </>
-            )}
+            ) : null}
           </div>
         </div>
 
