@@ -67,8 +67,10 @@ export function SocialDiamondRow({ targetUserId }: Props) {
 
   if (loading || entries.length === 0) return null
 
+  const anyPending = entries.some(e => e.kind === 'pending_incoming')
+
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 12 }}>
       <div
         className="hide-scrollbar"
         style={{
@@ -137,28 +139,30 @@ export function SocialDiamondRow({ targetUserId }: Props) {
                 </span>
               </div>
 
-              {/* Pending button or invisible placeholder for layout consistency */}
-              <div style={{ width: '100%', height: 24, marginTop: 2 }}>
-                {isPending && (
-                  <button
-                    onClick={() => setModalEntry(entry)}
-                    style={{
-                      width: '100%',
-                      padding: '3px 0',
-                      borderRadius: 12,
-                      border: '1px solid var(--fg-25)',
-                      background: 'transparent',
-                      color: 'var(--fg-55)',
-                      fontFamily: '"Space Grotesk", sans-serif',
-                      fontSize: 10,
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    Pending
-                  </button>
-                )}
-              </div>
+              {/* Pending button — placeholder only rendered when row has at least one pending */}
+              {anyPending && (
+                <div style={{ width: '100%', height: 24, marginTop: 2 }}>
+                  {isPending && (
+                    <button
+                      onClick={() => setModalEntry(entry)}
+                      style={{
+                        width: '100%',
+                        padding: '3px 0',
+                        borderRadius: 12,
+                        border: '1px solid var(--fg-25)',
+                        background: 'transparent',
+                        color: 'var(--fg-55)',
+                        fontFamily: '"Space Grotesk", sans-serif',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Pending
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
