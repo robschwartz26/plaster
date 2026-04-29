@@ -785,23 +785,23 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
             </span>
           </div>
 
-          {detail?.address && (
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0, marginTop: 1 }}>
-                <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
-              </svg>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>{detail.address}</span>
-            </div>
-          )}
-
-          {detail?.description && (
-            <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
-              {detail.description}
-            </p>
-          )}
-
-          {detail && (
+          {detail ? (
             <>
+              {detail.address && (
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0, marginTop: 1 }}>
+                    <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+                  </svg>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>{detail.address}</span>
+                </div>
+              )}
+
+              {detail.description && (
+                <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+                  {detail.description}
+                </p>
+              )}
+
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
               {attendeeCount > 0 && (
@@ -817,6 +817,24 @@ export function PosterCard({ event, cols, activeFilter, isLiked, isActive, onDou
               ) : (
                 <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>Sign in to RSVP</p>
               )}
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+                <div style={{ height: 13, width: '70%', background: 'var(--fg-08)', borderRadius: 3 }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
+                <div style={{ height: 13, width: '95%', background: 'var(--fg-08)', borderRadius: 3 }} />
+                <div style={{ height: 13, width: '88%', background: 'var(--fg-08)', borderRadius: 3 }} />
+                <div style={{ height: 13, width: '92%', background: 'var(--fg-08)', borderRadius: 3 }} />
+                <div style={{ height: 13, width: '60%', background: 'var(--fg-08)', borderRadius: 3 }} />
+              </div>
+
+              <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
+
+              <div style={{ height: 12, width: '40%', background: 'var(--fg-08)', borderRadius: 3, marginBottom: 14 }} />
+
+              <div style={{ width: '100%', height: 44, background: 'var(--fg-08)', borderRadius: 10 }} />
             </>
           )}
         </div>
