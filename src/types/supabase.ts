@@ -175,18 +175,24 @@ export type Database = {
       conversations: {
         Row: {
           created_at: string
+          created_by: string | null
           id: string
           last_message_at: string
+          name: string | null
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           id?: string
           last_message_at?: string
+          name?: string | null
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           id?: string
           last_message_at?: string
+          name?: string | null
         }
         Relationships: []
       }
@@ -771,6 +777,10 @@ export type Database = {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
       }
+      add_members_to_conversation: {
+        Args: { p_conversation_id: string; p_member_ids: string[] }
+        Returns: number
+      }
       add_post_like_count: {
         Args: { delta: number; p_post_id: string }
         Returns: undefined
@@ -780,6 +790,10 @@ export type Database = {
         Returns: undefined
       }
       are_mutual_follows: { Args: { other_user_id: string }; Returns: boolean }
+      create_conversation_with_members: {
+        Args: { p_member_ids: string[]; p_name?: string }
+        Returns: string
+      }
       create_or_get_conversation: {
         Args: { other_user_id: string }
         Returns: string
