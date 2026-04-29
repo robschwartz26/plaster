@@ -839,6 +839,7 @@ export type Database = {
         Returns: number
       }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
+      scrub_my_account_data: { Args: never; Returns: boolean }
       search_users: {
         Args: { p_query: string }
         Returns: {
