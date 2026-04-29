@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { CATEGORIES } from '@/lib/categories'
 
 const CATS = CATEGORIES
@@ -19,15 +19,39 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
 
+  const [offset, setOffset]       = useState(0)
+  const [animating, setAnimating] = useState(true)
+
+  const oneCopyWidthRef    = useRef(0)
+  const dragStartXRef      = useRef<number | null>(null)
+  const dragStartOffsetRef = useRef(0)
+  const draggedRef         = useRef(false)
+  const DRAG_THRESHOLD     = 5
+
+  // Measure one copy width and seed offset to middle copy
+  useEffect(() => {
+    const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
+    if (chipEls.length < TRIPLE_CATS.length) return
+
+    let copyWidth = 0
+    for (let i = 0; i < CATS.length; i++) {
+      copyWidth += chipEls[i].offsetWidth + GAP
+    }
+    oneCopyWidthRef.current = copyWidth
+
+    setAnimating(false)
+    setOffset(-copyWidth)
+    requestAnimationFrame(() => setAnimating(true))
+  }, [])
+
   const snapToCategory = useCallback((cat: string) => {
     const catIdx = CATS.indexOf(cat as Cat)
     if (catIdx === -1) return
 
     requestAnimationFrame(() => {
-      const track   = trackRef.current
       const sa      = scrollAreaRef.current
       const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
-      if (!track || !sa || chipEls.length < TRIPLE_CATS.length) return
+      if (!sa || chipEls.length < TRIPLE_CATS.length) return
 
       // Build left-edge positions for every chip
       const positions: number[] = [0]
@@ -50,9 +74,9 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
         if (d < bestDist) { bestDist = d; bestOffset = positions[i] }
       }
 
-      // 1px safe margin so chip border never clips
       const finalOffset = bestOffset - SAFE
-      track.style.transform = `translateX(${-Math.max(-SAFE, finalOffset)}px)`
+      setAnimating(true)
+      setOffset(-Math.max(-SAFE, finalOffset))
     })
   }, [])
 
@@ -61,6 +85,68 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
     if (!activePosterCategory) return
     snapToCategory(activePosterCategory)
   }, [activePosterCategory, snapToCategory])
+
+  function wrapIfNeeded(currentOffset: number) {
+    const copyW = oneCopyWidthRef.current
+    if (copyW === 0) return currentOffset
+
+    let wrapped = currentOffset
+    if (wrapped > -copyW * 0.5) {
+      wrapped -= copyW
+    } else if (wrapped < -copyW * 1.5) {
+      wrapped += copyW
+    }
+    return wrapped
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    dragStartXRef.current      = e.clientX
+    dragStartOffsetRef.current = offset
+    draggedRef.current         = false
+    setAnimating(false)
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (dragStartXRef.current === null) return
+    const dx = e.clientX - dragStartXRef.current
+
+    if (!draggedRef.current && Math.abs(dx) > DRAG_THRESHOLD) {
+      draggedRef.current = true
+      e.currentTarget.setPointerCapture(e.pointerId)
+    }
+
+    if (draggedRef.current) {
+      setOffset(dragStartOffsetRef.current + dx)
+    }
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    if (dragStartXRef.current === null) return
+    const wasDragging = draggedRef.current
+    dragStartXRef.current = null
+
+    if (wasDragging) {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      }
+      const wrapped = wrapIfNeeded(offset)
+      if (wrapped !== offset) {
+        setAnimating(false)
+        setOffset(wrapped)
+        requestAnimationFrame(() => setAnimating(true))
+      }
+      e.preventDefault()
+    }
+  }
+
+  function onChipClick(cat: Cat) {
+    if (draggedRef.current) return
+    if (cat === active) {
+      onChange('All')
+    } else {
+      onChange(cat)
+    }
+  }
 
   const chipStyle = (highlighted: boolean, isHeart?: boolean): React.CSSProperties => ({
     fontSize: isHeart ? 12 : 9,
@@ -84,7 +170,13 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
         {(['All', '♥'] as const).map(chip => (
           <button
             key={chip}
-            onClick={() => onChange(chip)}
+            onClick={() => {
+              if (chip === active) {
+                onChange('All')
+              } else {
+                onChange(chip)
+              }
+            }}
             className="font-body font-medium"
             style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
@@ -94,13 +186,29 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
       </div>
 
       {/* Carousel */}
-      <div ref={scrollAreaRef} style={{ flex: 1, overflow: 'hidden', height: '100%', display: 'flex', alignItems: 'center' }}>
+      <div
+        ref={scrollAreaRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        style={{
+          flex: 1,
+          overflow: 'hidden',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          touchAction: 'pan-y',
+          cursor: 'grab',
+        }}
+      >
         <div
           ref={trackRef}
           style={{
             display: 'flex',
             gap: GAP,
-            transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)',
+            transform: `translateX(${offset}px)`,
+            transition: animating ? 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' : 'none',
             willChange: 'transform',
           }}
         >
@@ -110,7 +218,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
               <button
                 key={`${cat}-${i}`}
                 ref={el => { chipElsRef.current[i] = el }}
-                onClick={() => { onChange(cat); snapToCategory(cat) }}
+                onClick={() => onChipClick(cat)}
                 className="font-body font-medium"
                 style={chipStyle(highlighted)}
               >
