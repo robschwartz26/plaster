@@ -6,6 +6,10 @@ Do not fix these during the refactor — extract code only, no logic changes.
 
 The bottom nav inside AdminDashboard hard-codes tab labels that may not match the current navigation (e.g. "Tonight" → "LINE UP", "Venues" → "MSG"). Fix after refactor is complete.
 
+## reportGifShare — 400 on POST to /gifs/:slug/share
+
+`reportGifShare()` in `src/lib/klipy.ts` returns 400. Silent (caught by `.catch(() => {})`), doesn't block sends. KLIPY attribution telemetry only — payload shape needs fixing before production approval. Followup with KLIPY docs.
+
 ## ImportForm — double venue fetch
 
 ImportForm fetches the venues list from Supabase on its own mount. AdminDashboard also fetches venues at the top level. This means two identical queries run on every import form load. Consolidate into a single fetch with prop-drilling or shared context after refactor is complete.
