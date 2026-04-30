@@ -81,27 +81,24 @@ function DiamondImg({ color, posterUrl, size = 28, onTap }: { color: string; pos
   )
 }
 
-function ActivityHeart({ count, isLiked, onToggle }: { count: number; isLiked: boolean; onToggle: () => void }) {
+function ActivityHeart({ isLiked, onToggle }: { isLiked: boolean; onToggle: () => void }) {
   return (
     <div
       onClick={(e) => { e.stopPropagation(); onToggle() }}
       style={{
-        display: 'flex', alignItems: 'center', gap: 4,
-        padding: '4px 6px',
+        display: 'inline-flex', alignItems: 'center',
+        padding: '4px 4px',
         cursor: 'pointer',
         userSelect: 'none',
         color: isLiked ? '#A855F7' : 'var(--fg-40)',
-        fontFamily: '"Space Grotesk", sans-serif',
-        fontSize: 11, fontWeight: 500, lineHeight: 1,
         flexShrink: 0,
       }}
     >
-      <svg width="13" height="12" viewBox="0 0 24 22"
+      <svg width="14" height="13" viewBox="0 0 24 22"
         fill={isLiked ? 'currentColor' : 'none'}
         stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
       </svg>
-      {count > 0 && <span>{count}</span>}
     </div>
   )
 }
@@ -635,7 +632,7 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 12,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 50,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
                 }}
               >
@@ -685,7 +682,6 @@ export default function LineUpScreen() {
                 </div>
                 {item.kind !== 'like' && (
                   <ActivityHeart
-                    count={item.likeCount}
                     isLiked={item.viewerHasLiked}
                     onToggle={() => toggleActivityLike(item)}
                   />
