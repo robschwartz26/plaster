@@ -34,6 +34,9 @@ interface FeedItem {
   media_url: string | null
   media_type: string | null
   created_at: string
+  sourceId: string
+  likeCount: number
+  viewerHasLiked: boolean
 }
 
 interface LineupItem { id: string; title: string; venue: string; starts_at: string; poster_url: string | null; color: string }
@@ -74,6 +77,31 @@ function DiamondImg({ color, posterUrl, size = 28, onTap }: { color: string; pos
   return (
     <div onClick={onTap} style={{ width: size, height: size, background: color, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', flexShrink: 0, overflow: 'hidden', position: 'relative', cursor: onTap ? 'pointer' : 'default' }}>
       {posterUrl && <img src={posterUrl} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} draggable={false} />}
+    </div>
+  )
+}
+
+function ActivityHeart({ count, isLiked, onToggle }: { count: number; isLiked: boolean; onToggle: () => void }) {
+  return (
+    <div
+      onClick={(e) => { e.stopPropagation(); onToggle() }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        padding: '4px 6px',
+        cursor: 'pointer',
+        userSelect: 'none',
+        color: isLiked ? '#A855F7' : 'var(--fg-40)',
+        fontFamily: '"Space Grotesk", sans-serif',
+        fontSize: 11, fontWeight: 500, lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      <svg width="13" height="12" viewBox="0 0 24 22"
+        fill={isLiked ? 'currentColor' : 'none'}
+        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
+      </svg>
+      {count > 0 && <span>{count}</span>}
     </div>
   )
 }
@@ -350,6 +378,33 @@ export default function LineUpScreen() {
 
   const pushPanel = (e: PanelEntry) => setPanelStack(prev => [...prev, e])
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
+
+  async function toggleActivityLike(item: FeedItem) {
+    if (item.kind === 'like') return
+    if (!user) return
+
+    const newLiked = !item.viewerHasLiked
+    const delta = newLiked ? 1 : -1
+
+    setFeed(prev => prev.map(f =>
+      f.id === item.id
+        ? { ...f, viewerHasLiked: newLiked, likeCount: Math.max(0, f.likeCount + delta) }
+        : f
+    ))
+
+    const { error } = newLiked
+      ? await supabase.rpc('like_activity',   { in_activity_type: item.kind, in_source_id: item.sourceId })
+      : await supabase.rpc('unlike_activity', { in_activity_type: item.kind, in_source_id: item.sourceId })
+
+    if (error) {
+      setFeed(prev => prev.map(f =>
+        f.id === item.id
+          ? { ...f, viewerHasLiked: item.viewerHasLiked, likeCount: item.likeCount }
+          : f
+      ))
+      console.error('toggleActivityLike failed:', error)
+    }
+  }
   const topPanel  = panelStack[panelStack.length - 1] ?? null
 
   const eventsByDate = useMemo(() => {
@@ -421,6 +476,9 @@ export default function LineUpScreen() {
       media_url: row.media_url ?? null,
       media_type: row.media_type ?? null,
       created_at: row.created_at,
+      sourceId: row.source_id,
+      likeCount: row.like_count ?? 0,
+      viewerHasLiked: row.viewer_has_liked ?? false,
     }))
 
     setFeed(adapted)
@@ -577,7 +635,7 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 50,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 12,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
                 }}
               >
@@ -625,6 +683,13 @@ export default function LineUpScreen() {
                     </>
                   )}
                 </div>
+                {item.kind !== 'like' && (
+                  <ActivityHeart
+                    count={item.likeCount}
+                    isLiked={item.viewerHasLiked}
+                    onToggle={() => toggleActivityLike(item)}
+                  />
+                )}
               </div>
               {(i + 1) % 4 === 0 && <div style={{ height: 1, background: 'rgba(128,128,128,0.15)', margin: '0 14px' }} />}
             </React.Fragment>
