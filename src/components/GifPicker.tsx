@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 interface Props {
   open: boolean
-  onSelect: (gif: SelectedGif) => void
+  onSelect: (gif: SelectedGif, query: string) => void
   onClose: () => void
 }
 
@@ -103,7 +103,7 @@ export function GifPicker({ open, onSelect, onClose }: Props) {
               return (
                 <button
                   key={gif.id}
-                  onClick={() => onSelect(gifToSelected(gif))}
+                  onClick={() => onSelect(gifToSelected(gif), query.trim())}
                   style={{
                     padding: 0, border: 'none',
                     background: gif.blur_preview ? `url(${gif.blur_preview})` : 'var(--fg-08)',

@@ -206,6 +206,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [replyText, setReplyText] = useState('')
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
+  const [pendingGifQuery, setPendingGifQuery] = useState<string>('')
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -466,7 +467,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (!user || (!newPostText.trim() && !pendingGif) || postLoading) return
     setPostLoading(true)
     const gif = pendingGif
+    const gifQuery = pendingGifQuery
     setPendingGif(null)
+    setPendingGifQuery('')
     setGifPickerOpen(false)
     const trimmedText = newPostText.trim()
     const insertRow = {
@@ -483,7 +486,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     }
     const { error } = await supabase.from('event_wall_posts').insert(insertRow)
     if (!error) {
-      if (gif) reportGifShare(gif.sourceId, user.id)
+      if (gif) reportGifShare(gif.sourceId, user.id, gifQuery)
       setNewPostText('')
       fetchPosts()
       registerView()
@@ -1058,7 +1061,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               {/* GIF picker for wall posts */}
               <GifPicker
                 open={gifPickerOpen}
-                onSelect={gif => { setPendingGif(gif); setGifPickerOpen(false) }}
+                onSelect={(gif, q) => { setPendingGif(gif); setPendingGifQuery(q); setGifPickerOpen(false) }}
                 onClose={() => setGifPickerOpen(false)}
               />
             </>

@@ -197,6 +197,7 @@ export function MsgScreen() {
   // GIF state
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
+  const [pendingGifQuery, setPendingGifQuery] = useState<string>('')
 
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
@@ -536,7 +537,9 @@ export function MsgScreen() {
     if ((!body && !pendingGif) || !openConvId || !user || sending) return
     setMessageText('')
     const gif = pendingGif
+    const gifQuery = pendingGifQuery
     setPendingGif(null)
+    setPendingGifQuery('')
     setGifPickerOpen(false)
     setSending(true)
 
@@ -556,7 +559,7 @@ export function MsgScreen() {
     const { error } = await supabase.from('messages').insert(insertRow)
 
     if (!error) {
-      if (gif) reportGifShare(gif.sourceId, user.id)
+      if (gif) reportGifShare(gif.sourceId, user.id, gifQuery)
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
@@ -1140,7 +1143,7 @@ export function MsgScreen() {
               {/* GIF picker overlay */}
               <GifPicker
                 open={gifPickerOpen}
-                onSelect={gif => { setPendingGif(gif); setGifPickerOpen(false) }}
+                onSelect={(gif, q) => { setPendingGif(gif); setPendingGifQuery(q); setGifPickerOpen(false) }}
                 onClose={() => setGifPickerOpen(false)}
               />
             </>

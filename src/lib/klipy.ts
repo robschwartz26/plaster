@@ -102,10 +102,16 @@ export function gifToSelected(gif: KlipyGif): SelectedGif {
 }
 
 // Klipy "share" event — best-effort fire-and-forget when user actually picks/sends a GIF
-export function reportGifShare(gifSlug: string, customUserId?: string): void {
-  if (!gifSlug) return
-  const params = new URLSearchParams()
-  if (customUserId) params.set('customer_id', customUserId)
-  fetch(`${BASE}/${API_KEY}/gifs/${gifSlug}/share?${params.toString()}`, { method: 'POST' })
-    .catch(() => { /* silent */ })
+// Spec: POST /api/v1/{app_key}/gifs/share/{slug}
+//   Body: { customer_id: string (required), q?: string (optional, leave empty for trending picks) }
+export function reportGifShare(gifSlug: string, customUserId?: string, query?: string): void {
+  if (!gifSlug || !API_KEY) return
+  const body: Record<string, string> = {}
+  if (customUserId) body.customer_id = customUserId
+  if (query) body.q = query
+  fetch(`${BASE}/${API_KEY}/gifs/share/${gifSlug}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).catch(() => { /* silent */ })
 }
