@@ -6,6 +6,7 @@ import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { createOrGetConversation } from '@/lib/messaging'
+import { GifMessage } from '@/components/GifMessage'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ interface FeedItem {
     venue_name: string
   } | null
   body: string | null
+  media_url: string | null
+  media_type: string | null
   created_at: string
 }
 
@@ -415,6 +418,8 @@ export default function LineUpScreen() {
         venue_name: '',
       } : null,
       body: row.body_preview ?? null,
+      media_url: row.media_url ?? null,
+      media_type: row.media_type ?? null,
       created_at: row.created_at,
     }))
 
@@ -599,8 +604,13 @@ export default function LineUpScreen() {
                   {item.kind === 'like' && (
                     <> liked <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
                   )}
-                  {item.kind === 'venue_post' && item.body && (
-                    <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>
+                  {item.kind === 'venue_post' && (
+                    <>
+                      {item.body && <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>}
+                      {item.media_url && item.media_type === 'gif' && (
+                        <div style={{ marginTop: 4 }}><GifMessage url={item.media_url} maxWidth={140} /></div>
+                      )}
+                    </>
                   )}
                   {item.kind === 'wall_post' && (
                     <>
@@ -608,6 +618,9 @@ export default function LineUpScreen() {
                       <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span>
                       {item.body && (
                         <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>
+                      )}
+                      {item.media_url && item.media_type === 'gif' && (
+                        <div style={{ marginTop: 4 }}><GifMessage url={item.media_url} maxWidth={140} /></div>
                       )}
                     </>
                   )}

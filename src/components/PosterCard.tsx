@@ -5,6 +5,9 @@ import { useAuth } from '@/contexts/AuthContext'
 import { AdminEditModal } from './AdminEditModal'
 import { MentionInput } from '@/components/MentionInput'
 import { pickHeart, type PickedHeart } from '@/lib/pickHeart'
+import { GifPicker } from '@/components/GifPicker'
+import { GifMessage } from '@/components/GifMessage'
+import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -38,6 +41,10 @@ interface WallPost {
   is_venue_post: boolean
   parent_id: string | null
   deleted_at: string | null
+  media_url?: string | null
+  media_type?: string | null
+  media_width?: number | null
+  media_height?: number | null
   profiles: {
     username: string | null
     avatar_diamond_url: string | null
@@ -197,6 +204,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyContext, setReplyContext] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
+  const [gifPickerOpen, setGifPickerOpen] = useState(false)
+  const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -227,7 +236,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   function fetchPosts() {
     supabase.from('event_wall_posts')
-      .select('id, user_id, body, like_count, created_at, is_venue_post, parent_id, deleted_at, profiles(username, avatar_diamond_url, avatar_url)')
+      .select('id, user_id, body, like_count, created_at, is_venue_post, parent_id, deleted_at, media_url, media_type, media_width, media_height, profiles(username, avatar_diamond_url, avatar_url)')
       .eq('event_id', event.id)
       .order('created_at', { ascending: false })
       .limit(30)
@@ -454,12 +463,31 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── Submit post ────────────────────────────────────────────────────────
   async function submitPost() {
-    if (!user || !newPostText.trim() || postLoading) return
+    if (!user || (!newPostText.trim() && !pendingGif) || postLoading) return
     setPostLoading(true)
-    const { error } = await supabase.from('event_wall_posts').insert({
-      event_id: event.id, user_id: user.id, body: newPostText.trim(),
-    })
-    if (!error) { setNewPostText(''); fetchPosts(); registerView() }
+    const gif = pendingGif
+    setPendingGif(null)
+    setGifPickerOpen(false)
+    const trimmedText = newPostText.trim()
+    const insertRow = {
+      event_id: event.id,
+      user_id: user.id,
+      body: trimmedText ? trimmedText : null,
+      ...(gif ? {
+        media_url: gif.url,
+        media_type: 'gif',
+        media_width: gif.width,
+        media_height: gif.height,
+        media_source_id: gif.sourceId,
+      } : {}),
+    }
+    const { error } = await supabase.from('event_wall_posts').insert(insertRow)
+    if (!error) {
+      if (gif) reportGifShare(gif.sourceId, user.id)
+      setNewPostText('')
+      fetchPosts()
+      registerView()
+    }
     setPostLoading(false)
   }
 
@@ -901,6 +929,11 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                         {isDeleted
                           ? <span style={{ color: 'var(--fg-25)', fontStyle: 'italic' }}>[deleted]</span>
                           : post.body}
+                        {!isDeleted && post.media_url && post.media_type === 'gif' && (
+                          <div style={{ marginTop: 4 }}>
+                            <GifMessage url={post.media_url} width={post.media_width} height={post.media_height} maxWidth={160} />
+                          </div>
+                        )}
                       </div>
                       <span style={{ flexShrink: 0, marginLeft: 8, fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-25)', whiteSpace: 'nowrap', alignSelf: 'flex-start', paddingTop: 1 }}>{timeAgo(post.created_at)}</span>
                     </div>
@@ -989,22 +1022,46 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           })()}
         </div>
 
-        <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-08)', padding: '8px 12px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))', background: 'var(--bg)' }}>
+        <div style={{ flexShrink: 0, borderTop: '1px solid var(--fg-08)', padding: '8px 12px', paddingBottom: 'max(8px, env(safe-area-inset-bottom))', background: 'var(--bg)', position: 'relative' }}>
           {user ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
-              <MentionInput
-                value={newPostText}
-                onChange={setNewPostText}
-                onSubmit={submitPost}
-                placeholder="leave a note on the wall…"
-                maxLength={280}
+            <>
+              {/* Pending GIF preview */}
+              {pendingGif && (
+                <div style={{ marginBottom: 6, position: 'relative', display: 'inline-block' }}>
+                  <GifMessage url={pendingGif.url} width={pendingGif.width} height={pendingGif.height} maxWidth={100} />
+                  <button
+                    onClick={() => setPendingGif(null)}
+                    style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'var(--fg-55)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg)', fontSize: 10, fontWeight: 700 }}
+                  >×</button>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end' }}>
+                {/* GIF button */}
+                <button
+                  onClick={() => setGifPickerOpen(v => !v)}
+                  style={{ flexShrink: 0, background: gifPickerOpen ? event.color2 : 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 6, padding: '0 6px', height: 36, cursor: 'pointer', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.04em', color: gifPickerOpen ? '#fff' : 'var(--fg-55)' }}
+                  aria-label="GIF"
+                >GIF</button>
+                <MentionInput
+                  value={newPostText}
+                  onChange={setNewPostText}
+                  onSubmit={submitPost}
+                  placeholder="leave a note on the wall…"
+                  maxLength={280}
+                />
+                <button onClick={submitPost} disabled={(!newPostText.trim() && !pendingGif) || postLoading} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 8, background: (newPostText.trim() || pendingGif) ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: (newPostText.trim() || pendingGif) ? 'pointer' : 'default' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                </button>
+              </div>
+              {/* GIF picker for wall posts */}
+              <GifPicker
+                open={gifPickerOpen}
+                onSelect={gif => { setPendingGif(gif); setGifPickerOpen(false) }}
+                onClose={() => setGifPickerOpen(false)}
               />
-              <button onClick={submitPost} disabled={!newPostText.trim() || postLoading} style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 8, background: newPostText.trim() ? event.color2 : 'var(--fg-15)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: newPostText.trim() ? 'pointer' : 'default' }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
-                </svg>
-              </button>
-            </div>
+            </>
           ) : (
             <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-30)', textAlign: 'center', padding: '2px 0' }}>Sign in to leave a note</p>
           )}

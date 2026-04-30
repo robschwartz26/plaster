@@ -8,6 +8,9 @@ import { Diamond } from '@/components/Diamond'
 import { markConversationRead } from '@/lib/messaging'
 import { UserPicker, type PickedUser } from '@/components/UserPicker'
 import { BottomSheet } from '@/components/BottomSheet'
+import { GifPicker } from '@/components/GifPicker'
+import { GifMessage } from '@/components/GifMessage'
+import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -24,15 +27,19 @@ interface ConversationRow {
   lastMessageAt: string
   lastReadAt: string
   members: OtherUser[]
-  lastMessage: { body: string; sender_id: string; created_at: string } | null
+  lastMessage: { body: string | null; sender_id: string; created_at: string; media_type?: string | null } | null
   unread: boolean
 }
 
 interface Message {
   id: string
   sender_id: string
-  body: string
+  body: string | null
   created_at: string
+  media_url?: string | null
+  media_type?: string | null
+  media_width?: number | null
+  media_height?: number | null
 }
 
 interface MessageSearchHit {
@@ -187,6 +194,10 @@ export function MsgScreen() {
   const messageRefs               = useRef<Map<string, HTMLDivElement | null>>(new Map())
   const suppressNextAutoScrollRef = useRef(false)
 
+  // GIF state
+  const [gifPickerOpen, setGifPickerOpen] = useState(false)
+  const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
+
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
   const openConv = conversations.find(c => c.id === openConvId) ?? null
@@ -291,7 +302,7 @@ export function MsgScreen() {
       convIds.map(cid =>
         supabase
           .from('messages')
-          .select('body, sender_id, created_at')
+          .select('body, sender_id, created_at, media_type')
           .eq('conversation_id', cid)
           .order('created_at', { ascending: false })
           .limit(1)
@@ -299,8 +310,9 @@ export function MsgScreen() {
       )
     )
 
-    const lastMsgMap: Record<string, { body: string; sender_id: string; created_at: string } | null> = {}
-    convIds.forEach((cid, i) => { lastMsgMap[cid] = (lastMsgResults[i].data as any) ?? null })
+    type LastMsgRow = { body: string | null; sender_id: string; created_at: string; media_type: string | null }
+    const lastMsgMap: Record<string, LastMsgRow | null> = {}
+    convIds.forEach((cid, i) => { lastMsgMap[cid] = (lastMsgResults[i].data as LastMsgRow | null) ?? null })
 
     const membershipMap: Record<string, string> = {}
     for (const m of (memberships as { conversation_id: string; last_read_at: string }[])) {
@@ -354,7 +366,7 @@ export function MsgScreen() {
 
     const { data } = await supabase
       .from('messages')
-      .select('id, sender_id, body, created_at')
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
@@ -433,7 +445,7 @@ export function MsgScreen() {
           })
           setConversations(prev =>
             prev.map(c => c.id === openConvId
-              ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
+              ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
               : c
             )
           )
@@ -460,7 +472,7 @@ export function MsgScreen() {
           if (msg.conversation_id === openConvIdRef.current) return
           setConversations(prev => {
             const updated = prev.map(c => c.id === msg.conversation_id
-              ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at }, lastMessageAt: msg.created_at }
+              ? { ...c, unread: true, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
               : c
             )
             return [...updated].sort((a, b) =>
@@ -520,18 +532,31 @@ export function MsgScreen() {
 
   // ── Send message ─────────────────────────────────────────────────────────
   async function sendMessage() {
-    if (!messageText.trim() || !openConvId || !user || sending) return
     const body = messageText.trim()
+    if ((!body && !pendingGif) || !openConvId || !user || sending) return
     setMessageText('')
+    const gif = pendingGif
+    setPendingGif(null)
+    setGifPickerOpen(false)
     setSending(true)
 
-    const { error } = await supabase.from('messages').insert({
+    const insertRow = {
       conversation_id: openConvId,
       sender_id: user.id,
-      body,
-    })
+      body: body ? body : null,
+      ...(gif ? {
+        media_url: gif.url,
+        media_type: 'gif',
+        media_width: gif.width,
+        media_height: gif.height,
+        media_source_id: gif.sourceId,
+      } : {}),
+    }
+
+    const { error } = await supabase.from('messages').insert(insertRow)
 
     if (!error) {
+      if (gif) reportGifShare(gif.sourceId, user.id)
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
@@ -820,7 +845,11 @@ export function MsgScreen() {
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
                       {conv.lastMessage
-                        ? (conv.lastMessage.sender_id === user?.id ? 'You: ' : '') + conv.lastMessage.body
+                        ? (conv.lastMessage.sender_id === user?.id ? 'You: ' : '') + (
+                            conv.lastMessage.media_type === 'gif' && !conv.lastMessage.body
+                              ? 'sent a GIF'
+                              : (conv.lastMessage.body || 'sent a GIF')
+                          )
                         : 'No messages yet'}
                     </p>
                   </div>
@@ -991,18 +1020,40 @@ export function MsgScreen() {
                         </p>
                       )}
                       <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
-                        <div style={{
-                          maxWidth: '75%', padding: '9px 14px',
-                          borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                          background: isMine ? '#A855F7' : 'var(--fg-08)',
-                          color: isMine ? '#fff' : 'var(--fg)',
-                          fontFamily: 'Space Grotesk, sans-serif', fontSize: 14,
-                          lineHeight: 1.4, wordBreak: 'break-word',
-                          boxShadow: isHighlighted ? '0 0 0 4px rgba(168, 85, 247, 0.35)' : '0 0 0 0 rgba(168, 85, 247, 0)',
-                          transition: 'box-shadow 0.4s ease',
-                        }}>
-                          {msg.body}
-                        </div>
+                        {msg.media_url && msg.media_type === 'gif' ? (
+                          <div style={{
+                            display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', gap: 4,
+                            boxShadow: isHighlighted ? '0 0 0 4px rgba(168, 85, 247, 0.35)' : undefined,
+                            borderRadius: 8, transition: 'box-shadow 0.4s ease',
+                          }}>
+                            <GifMessage url={msg.media_url} width={msg.media_width} height={msg.media_height} maxWidth={200} />
+                            {msg.body && (
+                              <div style={{
+                                maxWidth: '75%', padding: '9px 14px',
+                                borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                                background: isMine ? '#A855F7' : 'var(--fg-08)',
+                                color: isMine ? '#fff' : 'var(--fg)',
+                                fontFamily: 'Space Grotesk, sans-serif', fontSize: 14,
+                                lineHeight: 1.4, wordBreak: 'break-word',
+                              }}>
+                                {msg.body}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{
+                            maxWidth: '75%', padding: '9px 14px',
+                            borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                            background: isMine ? '#A855F7' : 'var(--fg-08)',
+                            color: isMine ? '#fff' : 'var(--fg)',
+                            fontFamily: 'Space Grotesk, sans-serif', fontSize: 14,
+                            lineHeight: 1.4, wordBreak: 'break-word',
+                            boxShadow: isHighlighted ? '0 0 0 4px rgba(168, 85, 247, 0.35)' : '0 0 0 0 rgba(168, 85, 247, 0)',
+                            transition: 'box-shadow 0.4s ease',
+                          }}>
+                            {msg.body}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -1010,13 +1061,51 @@ export function MsgScreen() {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Pending GIF preview */}
+              {pendingGif && (
+                <div style={{
+                  flexShrink: 0, padding: '6px 12px 0',
+                  display: 'flex', alignItems: 'flex-end', gap: 8,
+                }}>
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <GifMessage url={pendingGif.url} width={pendingGif.width} height={pendingGif.height} maxWidth={120} />
+                    <button
+                      onClick={() => setPendingGif(null)}
+                      style={{
+                        position: 'absolute', top: -6, right: -6,
+                        width: 18, height: 18, borderRadius: '50%',
+                        background: 'var(--fg-55)', border: 'none', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--bg)', fontSize: 11, fontWeight: 700, lineHeight: 1,
+                      }}
+                    >×</button>
+                  </div>
+                </div>
+              )}
+
               {/* Input bar */}
               <div style={{
                 flexShrink: 0, borderTop: '1px solid var(--fg-08)',
                 padding: '8px 12px',
                 paddingBottom: 'calc(8px + env(safe-area-inset-bottom))',
                 display: 'flex', alignItems: 'center', gap: 8,
+                position: 'relative',
               }}>
+                {/* GIF button */}
+                <button
+                  onClick={() => setGifPickerOpen(v => !v)}
+                  style={{
+                    flexShrink: 0, background: gifPickerOpen ? '#A855F7' : 'var(--fg-08)',
+                    border: '1px solid var(--fg-15)', borderRadius: 8,
+                    width: 34, height: 34, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700,
+                    fontSize: 11, letterSpacing: '0.04em',
+                    color: gifPickerOpen ? '#fff' : 'var(--fg-55)',
+                  }}
+                  aria-label="GIF"
+                >GIF</button>
+
                 <input
                   type="text"
                   placeholder="Message…"
@@ -1032,11 +1121,11 @@ export function MsgScreen() {
                 />
                 <button
                   onClick={sendMessage}
-                  disabled={!messageText.trim() || sending}
+                  disabled={(!messageText.trim() && !pendingGif) || sending}
                   style={{
-                    background: messageText.trim() ? '#A855F7' : 'var(--fg-15)',
+                    background: (messageText.trim() || pendingGif) ? '#A855F7' : 'var(--fg-15)',
                     border: 'none', borderRadius: '50%', width: 38, height: 38,
-                    cursor: messageText.trim() ? 'pointer' : 'default',
+                    cursor: (messageText.trim() || pendingGif) ? 'pointer' : 'default',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexShrink: 0, transition: 'background 0.15s',
                   }}
@@ -1047,6 +1136,13 @@ export function MsgScreen() {
                   </svg>
                 </button>
               </div>
+
+              {/* GIF picker overlay */}
+              <GifPicker
+                open={gifPickerOpen}
+                onSelect={gif => { setPendingGif(gif); setGifPickerOpen(false) }}
+                onClose={() => setGifPickerOpen(false)}
+              />
             </>
           )}
         </div>
