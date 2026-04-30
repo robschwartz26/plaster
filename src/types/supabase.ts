@@ -272,6 +272,11 @@ export type Database = {
           image_url: string | null
           is_venue_post: boolean
           like_count: number
+          media_height: number | null
+          media_source_id: string | null
+          media_type: string | null
+          media_url: string | null
+          media_width: number | null
           parent_id: string | null
           user_id: string
         }
@@ -285,6 +290,11 @@ export type Database = {
           image_url?: string | null
           is_venue_post?: boolean
           like_count?: number
+          media_height?: number | null
+          media_source_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          media_width?: number | null
           parent_id?: string | null
           user_id: string
         }
@@ -298,6 +308,11 @@ export type Database = {
           image_url?: string | null
           is_venue_post?: boolean
           like_count?: number
+          media_height?: number | null
+          media_source_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          media_width?: number | null
           parent_id?: string | null
           user_id?: string
         }
@@ -458,24 +473,39 @@ export type Database = {
       }
       messages: {
         Row: {
-          body: string
+          body: string | null
           conversation_id: string
           created_at: string
           id: string
+          media_height: number | null
+          media_source_id: string | null
+          media_type: string | null
+          media_url: string | null
+          media_width: number | null
           sender_id: string
         }
         Insert: {
-          body: string
+          body?: string | null
           conversation_id: string
           created_at?: string
           id?: string
+          media_height?: number | null
+          media_source_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          media_width?: number | null
           sender_id: string
         }
         Update: {
-          body?: string
+          body?: string | null
           conversation_id?: string
           created_at?: string
           id?: string
+          media_height?: number | null
+          media_source_id?: string | null
+          media_type?: string | null
+          media_url?: string | null
+          media_width?: number | null
           sender_id?: string
         }
         Relationships: [
@@ -764,6 +794,8 @@ export type Database = {
           body_preview: string
           created_at: string
           like_count: number
+          media_type: string
+          media_url: string
           round_num: number
           source_id: string
           target_event_id: string
