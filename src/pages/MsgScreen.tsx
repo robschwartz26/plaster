@@ -70,6 +70,7 @@ interface AppNotification {
   event: {
     id: string
     title: string
+    starts_at: string
   } | null
 }
 
@@ -85,6 +86,20 @@ function fmtTimeAgo(iso: string): string {
   const diffDays = Math.floor(diffMs / 86400000)
   if (diffDays < 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][new Date(iso).getDay()]
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+function isEventEnded(startsAt: string | undefined | null): boolean {
+  if (!startsAt) return false
+  const eventDate = new Date(startsAt)
+  const eventDayEnd = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate(), 23, 59, 59)
+  return Date.now() > eventDayEnd.getTime()
+}
+
+function fmtEndedDate(startsAt: string): string {
+  const d = new Date(startsAt)
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}/${dd}`
 }
 
 function fmtMsgTime(iso: string): string {
@@ -193,6 +208,7 @@ export function MsgScreen() {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
   const messageRefs               = useRef<Map<string, HTMLDivElement | null>>(new Map())
   const suppressNextAutoScrollRef = useRef(false)
+  const initialScrollDoneRef = useRef(false)
 
   // GIF state
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
@@ -223,7 +239,7 @@ export function MsgScreen() {
         id, sender_id, kind, target_event_id, target_post_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
-        event:events!target_event_id(id, title)
+        event:events!target_event_id(id, title, starts_at)
       `)
       .eq('recipient_id', user.id)
       .is('read_at', null)
@@ -239,7 +255,12 @@ export function MsgScreen() {
   async function openNotification(notif: AppNotification) {
     await supabase.from('notifications').delete().eq('id', notif.id)
     setNotifications(prev => prev.filter(n => n.id !== notif.id))
-    navigate('/', { state: { openEventId: notif.target_event_id } })
+
+    if (isEventEnded(notif.event?.starts_at)) return
+
+    if (notif.target_event_id) {
+      navigate('/', { state: { openEventId: notif.target_event_id } })
+    }
   }
 
   // ── Load inbox ──────────────────────────────────────────────────────────
@@ -411,14 +432,9 @@ export function MsgScreen() {
     }
   }, [routeConvId, convLoading, openConversation])
 
-  // ── Scroll to bottom — suppressed when navigating from search ────────────
+  // ── Reset initial-scroll flag when conversation changes ──────────────────
   useEffect(() => {
-    if (openConvId) {
-      setTimeout(() => {
-        if (suppressNextAutoScrollRef.current) return
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }, 60)
-    }
+    initialScrollDoneRef.current = false
   }, [openConvId])
 
   useEffect(() => {
@@ -426,8 +442,15 @@ export function MsgScreen() {
       suppressNextAutoScrollRef.current = false
       return
     }
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages.length])
+    if (!openConvId || msgLoading || messages.length === 0) return
+
+    const behavior: ScrollBehavior = initialScrollDoneRef.current ? 'smooth' : 'auto'
+
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
+      initialScrollDoneRef.current = true
+    })
+  }, [messages.length, openConvId, msgLoading])
 
   // ── Realtime: conversation open ──────────────────────────────────────────
   useEffect(() => {
@@ -737,6 +760,22 @@ export function MsgScreen() {
                         <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           "{notif.body_preview}"
                         </p>
+                      )}
+                      {isEventEnded(notif.event?.starts_at) && notif.event?.starts_at && (
+                        <div style={{
+                          display: 'inline-block',
+                          marginTop: 4,
+                          padding: '2px 8px',
+                          borderRadius: 10,
+                          background: 'rgba(168, 85, 247, 0.12)',
+                          color: '#A855F7',
+                          fontFamily: '"Space Grotesk", sans-serif',
+                          fontSize: 10,
+                          fontWeight: 600,
+                          letterSpacing: '0.02em',
+                        }}>
+                          Ended {fmtEndedDate(notif.event.starts_at)}
+                        </div>
                       )}
                     </div>
                     {notifications.length > 1 && (
