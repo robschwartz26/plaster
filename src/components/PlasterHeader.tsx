@@ -18,6 +18,7 @@ export function headerIconBtn(active = false): React.CSSProperties {
 interface Props {
   /** Custom right-side content. Defaults to Search + Filter icons. */
   actions?: React.ReactNode
+  leftAction?: React.ReactNode
 }
 
 /**
@@ -28,7 +29,7 @@ interface Props {
  *
  * Handles env(safe-area-inset-top) automatically.
  */
-export function PlasterHeader({ actions }: Props) {
+export function PlasterHeader({ actions, leftAction }: Props) {
   const { toggle } = useTheme()
   const x = useMotionValue(0)
 
@@ -36,14 +37,16 @@ export function PlasterHeader({ actions }: Props) {
     <div
       className="shrink-0 flex items-center justify-between px-4"
       style={{
-        height: 58,
-        paddingTop: 'max(12px, env(safe-area-inset-top))',
-        paddingBottom: 10,
+        minHeight: 58,
+        paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
+        paddingBottom: 12,
         background: 'var(--bg)',
       }}
     >
       {/* Wordmark — swipe right to toggle theme */}
-      <motion.span
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {leftAction}
+        <motion.span
         style={{
           x,
           fontSize: 26, fontWeight: 900,
@@ -59,11 +62,12 @@ export function PlasterHeader({ actions }: Props) {
           animate(x, 0, { type: 'spring', stiffness: 500, damping: 22 })
         }}
       >
-        plaster
-      </motion.span>
+          plaster
+        </motion.span>
+      </div>
 
       {/* Right-side actions */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32 }}>
         {actions ?? (
           <>
             <button style={headerIconBtn()}><Search size={16} /></button>

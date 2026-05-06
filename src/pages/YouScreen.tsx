@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Plus, Settings } from 'lucide-react'
+import { Plus, Settings, ArrowLeft } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -358,6 +358,17 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)', position: 'relative' }}>
       <PlasterHeader
+        leftAction={
+          !isSelf ? (
+            <button
+              style={headerIconBtn()}
+              onClick={() => navigate(-1)}
+              aria-label="Back"
+            >
+              <ArrowLeft size={16} />
+            </button>
+          ) : undefined
+        }
         actions={
           <button
             style={headerIconBtn()}

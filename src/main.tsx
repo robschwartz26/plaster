@@ -3,6 +3,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { Capacitor } from '@capacitor/core'
+import { Keyboard } from '@capacitor/keyboard'
+
+if (Capacitor.isNativePlatform()) {
+  Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => { /* silent */ })
+}
 
 // Block native browser pinch-zoom everywhere except the poster grid,
 // which manages its own non-passive pinch listener with preventDefault.
