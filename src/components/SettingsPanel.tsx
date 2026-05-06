@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
+import { PrivacyPanel } from './PrivacyPanel'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -18,6 +19,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const { user, signOut } = useAuth()
   const [showSocial, setShowSocial] = useState<boolean>(true)
   const [savingPrivacy, setSavingPrivacy] = useState(false)
+  const [privacyOpen, setPrivacyOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -80,6 +82,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   }
 
   return (
+    <>
     <BottomSheet open={open} onClose={onClose} title="Settings">
       <SettingRow
         label="Night theme"
@@ -95,6 +98,43 @@ export function SettingsPanel({ open, onClose }: Props) {
         onToggle={togglePrivacy}
         disabled={savingPrivacy}
       />
+
+      <button
+        onClick={() => setPrivacyOpen(true)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 0',
+          background: 'none',
+          border: 'none',
+          borderBottom: '1px solid var(--fg-08)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{
+            margin: 0,
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 14, fontWeight: 600, color: 'var(--fg)',
+          }}>
+            Privacy
+          </p>
+          <p style={{
+            margin: '2px 0 0',
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 12, color: 'var(--fg-55)',
+          }}>
+            Manage blocked and muted users
+          </p>
+        </div>
+        <span style={{
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 16, color: 'var(--fg-40)',
+        }}>›</span>
+      </button>
 
       <div style={{ height: 24 }} />
 
@@ -204,6 +244,8 @@ export function SettingsPanel({ open, onClose }: Props) {
         </div>
       )}
     </BottomSheet>
+    <PrivacyPanel open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+    </>
   )
 }
 
