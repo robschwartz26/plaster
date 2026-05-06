@@ -32,9 +32,9 @@ export function useUserBlocks() {
     }
     setBlockedIds(new Set((data ?? []).map(r => r.blocked_id as string)))
     setLoading(false)
-  }, [user])
+  }, [user?.id])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refresh() }, [user?.id])
 
   const block = useCallback(async (targetId: string) => {
     if (!user) return { error: new Error('not authenticated') }
@@ -47,7 +47,7 @@ export function useUserBlocks() {
     }
     setBlockedIds(prev => new Set(prev).add(targetId))
     return { error: null }
-  }, [user])
+  }, [user?.id])
 
   const unblock = useCallback(async (targetId: string) => {
     if (!user) return { error: new Error('not authenticated') }
@@ -66,7 +66,7 @@ export function useUserBlocks() {
       return next
     })
     return { error: null }
-  }, [user])
+  }, [user?.id])
 
   const isBlocked = useCallback((targetId: string) => blockedIds.has(targetId), [blockedIds])
 

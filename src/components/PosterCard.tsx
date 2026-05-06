@@ -1005,7 +1005,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                             reply
                           </button>
                         )}
-                        {user && post.user_id !== user.id && !isAdmin && (
+                        {user && post.user_id !== user.id && (
                           <button
                             onClick={() => setReportingPost({ id: post.id, userId: post.user_id })}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}

@@ -27,9 +27,9 @@ export function useUserMutes() {
     }
     setMutedIds(new Set((data ?? []).map(r => r.muted_id as string)))
     setLoading(false)
-  }, [user])
+  }, [user?.id])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => { refresh() }, [user?.id])
 
   const mute = useCallback(async (targetId: string) => {
     if (!user) return { error: new Error('not authenticated') }
@@ -42,7 +42,7 @@ export function useUserMutes() {
     }
     setMutedIds(prev => new Set(prev).add(targetId))
     return { error: null }
-  }, [user])
+  }, [user?.id])
 
   const unmute = useCallback(async (targetId: string) => {
     if (!user) return { error: new Error('not authenticated') }
@@ -61,7 +61,7 @@ export function useUserMutes() {
       return next
     })
     return { error: null }
-  }, [user])
+  }, [user?.id])
 
   const isMuted = useCallback((targetId: string) => mutedIds.has(targetId), [mutedIds])
 
