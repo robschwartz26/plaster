@@ -7,6 +7,7 @@ import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { createOrGetConversation } from '@/lib/messaging'
 import { GifMessage } from '@/components/GifMessage'
+import { UserActionsMenu } from '@/components/UserActionsMenu'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ function ActivityHeart({ isLiked, onToggle }: { isLiked: boolean; onToggle: () =
   )
 }
 
-function PanelHeader({ name, onBack }: { name: string; onBack: () => void }) {
+function PanelHeader({ name, onBack, rightAction }: { name: string; onBack: () => void; rightAction?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', position: 'relative' }}>
       <button onClick={onBack} style={{ position: 'absolute', left: 16, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', color: 'var(--fg-55)', padding: 0 }}>
@@ -112,6 +113,11 @@ function PanelHeader({ name, onBack }: { name: string; onBack: () => void }) {
       <span style={{ flex: 1, textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 60px' }}>
         {name}
       </span>
+      {rightAction && (
+        <div style={{ position: 'absolute', right: 16 }}>
+          {rightAction}
+        </div>
+      )}
     </div>
   )
 }
@@ -250,6 +256,7 @@ function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
 function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; onPush: (e: PanelEntry) => void }) {
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
   const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
   const [profile,        setProfile]        = useState<any>(null)
   const [posters,        setPosters]        = useState<{ url: string; title: string }[]>([])
@@ -282,7 +289,18 @@ function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader name={profile?.username ? `@${profile.username}` : entry.name} onBack={onBack} />
+      <PanelHeader
+        name={profile?.username ? `@${profile.username}` : entry.name}
+        onBack={onBack}
+        rightAction={profile?.id && profile.id !== currentUser?.id ? (
+          <UserActionsMenu
+            targetUserId={profile.id}
+            targetUsername={profile.username ?? null}
+            onActionComplete={onBack}
+            variant="inline"
+          />
+        ) : undefined}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
         <Diamond
             diamondUrl={profile?.avatar_diamond_url ?? null}

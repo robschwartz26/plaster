@@ -8,6 +8,7 @@ import { pickHeart, type PickedHeart } from '@/lib/pickHeart'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
+import { ReportContentSheet } from '@/components/ReportContentSheet'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
   const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
   const [pendingGifQuery, setPendingGifQuery] = useState<string>('')
+  const [reportingPost, setReportingPost] = useState<{ id: string; userId: string } | null>(null)
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -706,6 +708,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             onUndo={() => onUndoCrop?.()}
           />
         )}
+
+        <ReportContentSheet
+          open={!!reportingPost}
+          targetKind="wall_post"
+          targetId={reportingPost?.id ?? ''}
+          targetUserId={reportingPost?.userId ?? ''}
+          onClose={() => setReportingPost(null)}
+        />
       </div>
     )
   }
@@ -993,6 +1003,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}
                           >
                             reply
+                          </button>
+                        )}
+                        {user && post.user_id !== user.id && !isAdmin && (
+                          <button
+                            onClick={() => setReportingPost({ id: post.id, userId: post.user_id })}
+                            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}
+                          >
+                            report
                           </button>
                         )}
                         {user && (post.user_id === user.id || isAdmin) && (

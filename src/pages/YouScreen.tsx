@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, Settings, ArrowLeft } from 'lucide-react'
+import { UserActionsMenu } from '@/components/UserActionsMenu'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -371,13 +372,21 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           ) : undefined
         }
         actions={
-          <button
-            style={headerIconBtn()}
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-          >
-            <Settings size={16} />
-          </button>
+          isSelf ? (
+            <button
+              style={headerIconBtn()}
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+            >
+              <Settings size={16} />
+            </button>
+          ) : targetUserId ? (
+            <UserActionsMenu
+              targetUserId={targetUserId}
+              targetUsername={displayProfile?.username ?? null}
+              onActionComplete={() => navigate(-1)}
+            />
+          ) : null
         }
       />
 

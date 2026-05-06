@@ -12,6 +12,7 @@ import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
+import { ReportContentSheet } from '@/components/ReportContentSheet'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -222,9 +223,10 @@ export function MsgScreen() {
   // Conversation dismiss state
   const [dismissConfirmId, setDismissConfirmId] = useState<string | null>(null)
 
-  // Message long-press / delete state
-  const [msgContextMenu, setMsgContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  // Message long-press / delete / report state
+  const [msgContextMenu, setMsgContextMenu] = useState<{ id: string; senderId: string; x: number; y: number } | null>(null)
   const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState<string | null>(null)
+  const [reportingMessage, setReportingMessage] = useState<{ id: string; senderId: string } | null>(null)
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
@@ -736,10 +738,10 @@ export function MsgScreen() {
 
   // ── Delete message ────────────────────────────────────────────────────────
   function startLongPress(e: React.TouchEvent, msg: Message) {
-    if (msg.sender_id !== user?.id || msg.deleted_at) return
+    if (msg.deleted_at) return
     const touch = e.touches[0]
     longPressTimerRef.current = setTimeout(() => {
-      setMsgContextMenu({ id: msg.id, x: touch.clientX, y: touch.clientY })
+      setMsgContextMenu({ id: msg.id, senderId: msg.sender_id, x: touch.clientX, y: touch.clientY })
     }, 500)
   }
 
@@ -1410,17 +1412,31 @@ export function MsgScreen() {
               zIndex: 201,
             }}
           >
-            <button
-              onClick={() => { setDeleteConfirmMsgId(msgContextMenu.id); setMsgContextMenu(null) }}
-              style={{
-                display: 'block', width: '100%', padding: '14px 20px',
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
-                color: '#ef4444', fontWeight: 600, textAlign: 'left',
-              }}
-            >
-              Delete message
-            </button>
+            {msgContextMenu.senderId === user?.id ? (
+              <button
+                onClick={() => { setDeleteConfirmMsgId(msgContextMenu.id); setMsgContextMenu(null) }}
+                style={{
+                  display: 'block', width: '100%', padding: '14px 20px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                  color: '#ef4444', fontWeight: 600, textAlign: 'left',
+                }}
+              >
+                Delete message
+              </button>
+            ) : (
+              <button
+                onClick={() => { setReportingMessage({ id: msgContextMenu.id, senderId: msgContextMenu.senderId }); setMsgContextMenu(null) }}
+                style={{
+                  display: 'block', width: '100%', padding: '14px 20px',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                  color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                }}
+              >
+                Report message
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1527,6 +1543,14 @@ export function MsgScreen() {
           </button>
         </div>
       </BottomSheet>
+
+      <ReportContentSheet
+        open={!!reportingMessage}
+        targetKind="message"
+        targetId={reportingMessage?.id ?? ''}
+        targetUserId={reportingMessage?.senderId ?? ''}
+        onClose={() => setReportingMessage(null)}
+      />
 
     </div>
   )
