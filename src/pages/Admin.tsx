@@ -16,10 +16,23 @@ import {
 
 // ── Section wrapper ──────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
   return (
     <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
-      <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: '0 0 24px 0' }}>{title}</h2>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, margin: '0 0 24px 0' }}>
+        <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>{title}</h2>
+        {badge && (
+          <span style={{
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 12, fontWeight: 600,
+            color: '#dc2626',
+            background: 'rgba(239,68,68,0.12)',
+            padding: '3px 10px',
+            borderRadius: 999,
+            letterSpacing: '0.02em',
+          }}>{badge}</span>
+        )}
+      </div>
       {children}
     </section>
   )
@@ -31,13 +44,22 @@ function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
   const [venueFormOpen, setVenueFormOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
+  const [openReportCount, setOpenReportCount] = useState<number>(0)
 
   const fetchVenues = async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
     if (data) setVenues(data)
   }
 
-  useEffect(() => { fetchVenues() }, [])
+  const fetchOpenReportCount = async () => {
+    const { count } = await supabaseAdmin
+      .from('content_reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'open')
+    setOpenReportCount(count ?? 0)
+  }
+
+  useEffect(() => { fetchVenues(); fetchOpenReportCount() }, [])
 
   return (
     <div style={{ height: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -48,8 +70,11 @@ function AdminDashboard() {
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
           <AdminNotifications />
 
-          <Section title="Reports">
-            <AdminReports />
+          <Section
+            title="Reports"
+            badge={openReportCount > 0 ? `${openReportCount} open` : undefined}
+          >
+            <AdminReports onReportsChanged={fetchOpenReportCount} />
           </Section>
 
           <Section title="Import Poster">

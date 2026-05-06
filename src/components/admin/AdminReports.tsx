@@ -36,7 +36,11 @@ const REASON_LABELS: Record<string, string> = {
   other: 'Other',
 }
 
-export function AdminReports() {
+interface Props {
+  onReportsChanged?: () => void
+}
+
+export function AdminReports({ onReportsChanged }: Props = {}) {
   const [reports, setReports] = useState<ReportRow[]>([])
   const [filter, setFilter] = useState<Status>('open')
   const [loading, setLoading] = useState(true)
@@ -120,7 +124,8 @@ export function AdminReports() {
 
     setReports(rows)
     setLoading(false)
-  }, [filter])
+    onReportsChanged?.()
+  }, [filter, onReportsChanged])
 
   useEffect(() => { fetchReports() }, [fetchReports])
 
