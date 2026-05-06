@@ -6,6 +6,7 @@ import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueForm } from '@/components/admin/VenueForm'
 import { EventForm } from '@/components/admin/EventForm'
 import { AdminNotifications } from '@/components/admin/AdminNotifications'
+import { AdminReports } from '@/components/admin/AdminReports'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
 import {
@@ -46,6 +47,10 @@ function AdminDashboard() {
 
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
           <AdminNotifications />
+
+          <Section title="Reports">
+            <AdminReports />
+          </Section>
 
           <Section title="Import Poster">
             <ImportForm />
