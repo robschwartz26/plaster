@@ -11,6 +11,7 @@ import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploa
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
+import { createOrGetConversation } from '@/lib/messaging'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -438,7 +439,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           </div>
         </div>
 
-        {/* Edit / sign out (self) — Follow button (other) */}
+        {/* Edit / sign out (self) — Follow + Message buttons (other) */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
           {isSelf ? (
             <>
@@ -446,7 +447,19 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <button onClick={() => { signOut(); navigate('/auth', { replace: true }) }} style={{ ...outlineBtn, color: 'var(--fg-40)', borderColor: 'var(--fg-15)' }}>Sign out</button>
             </>
           ) : (
-            <FollowButton targetUserId={targetUserId} />
+            <>
+              <FollowButton targetUserId={targetUserId} />
+              <button
+                style={outlineBtn}
+                onClick={async () => {
+                  if (!targetUserId) return
+                  const convId = await createOrGetConversation(targetUserId)
+                  if (convId) navigate('/msg', { state: { openConversationId: convId } })
+                }}
+              >
+                Message
+              </button>
+            </>
           )}
         </div>
 
