@@ -11,6 +11,7 @@ import { BottomSheet } from '@/components/BottomSheet'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
+import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ interface Message {
   media_type?: string | null
   media_width?: number | null
   media_height?: number | null
+  deleted_at?: string | null
 }
 
 interface MessageSearchHit {
@@ -217,6 +219,14 @@ export function MsgScreen() {
   const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
   const [pendingGifQuery, setPendingGifQuery] = useState<string>('')
 
+  // Conversation dismiss state
+  const [dismissConfirmId, setDismissConfirmId] = useState<string | null>(null)
+
+  // Message long-press / delete state
+  const [msgContextMenu, setMsgContextMenu] = useState<{ id: string; x: number; y: number } | null>(null)
+  const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState<string | null>(null)
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => { openConvIdRef.current = openConvId }, [openConvId])
 
   const openConv = conversations.find(c => c.id === openConvId) ?? null
@@ -270,11 +280,12 @@ export function MsgScreen() {
     if (!user) return
     setConvLoading(true)
 
-    // 1. My memberships
+    // 1. My memberships (exclude dismissed conversations)
     const { data: memberships } = await supabase
       .from('conversation_members')
       .select('conversation_id, last_read_at')
       .eq('user_id', user.id)
+      .is('deleted_at', null)
 
     if (!memberships || memberships.length === 0) {
       setConversations([])
@@ -390,7 +401,7 @@ export function MsgScreen() {
 
     const { data } = await supabase
       .from('messages')
-      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height')
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, deleted_at')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
@@ -715,6 +726,34 @@ export function MsgScreen() {
     await loadInbox()
   }
 
+  // ── Dismiss conversation ─────────────────────────────────────────────────
+  async function confirmDismiss(convId: string) {
+    setDismissConfirmId(null)
+    await supabase.rpc('dismiss_conversation', { p_conversation_id: convId })
+    setConversations(prev => prev.filter(c => c.id !== convId))
+    if (openConvId === convId) closeConv()
+  }
+
+  // ── Delete message ────────────────────────────────────────────────────────
+  function startLongPress(e: React.TouchEvent, msg: Message) {
+    if (msg.sender_id !== user?.id || msg.deleted_at) return
+    const touch = e.touches[0]
+    longPressTimerRef.current = setTimeout(() => {
+      setMsgContextMenu({ id: msg.id, x: touch.clientX, y: touch.clientY })
+    }, 500)
+  }
+
+  function cancelLongPress() {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current)
+  }
+
+  async function confirmDeleteMessage(msgId: string) {
+    setDeleteConfirmMsgId(null)
+    setMsgContextMenu(null)
+    await supabase.rpc('soft_delete_message', { p_message_id: msgId })
+    setMessages(prev => prev.map(m => m.id === msgId ? { ...m, deleted_at: new Date().toISOString() } : m))
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -859,9 +898,8 @@ export function MsgScreen() {
             {/* Conversation rows */}
             {filteredConversations.map(conv => {
               const display = getConversationDisplay(conv)
-              return (
+              const rowContent = (
                 <div
-                  key={conv.id}
                   onClick={() => openConversation(conv.id)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 12,
@@ -932,6 +970,14 @@ export function MsgScreen() {
                     </p>
                   </div>
                 </div>
+              )
+              return (
+                <SwipeableConversationRow
+                  key={conv.id}
+                  onDismiss={() => setDismissConfirmId(conv.id)}
+                >
+                  {rowContent}
+                </SwipeableConversationRow>
               )
             })}
 
@@ -1084,10 +1130,14 @@ export function MsgScreen() {
                   const isMine = msg.sender_id === user?.id
                   const prev = messages[i - 1]
                   const isHighlighted = highlightedMessageId === msg.id
+                  const isDeleted = !!msg.deleted_at
                   return (
                     <div
                       key={msg.id}
                       ref={el => { messageRefs.current.set(msg.id, el) }}
+                      onTouchStart={e => startLongPress(e, msg)}
+                      onTouchEnd={cancelLongPress}
+                      onTouchMove={cancelLongPress}
                     >
                       {showTimestampBefore(msg, prev) && (
                         <p style={{
@@ -1099,7 +1149,18 @@ export function MsgScreen() {
                         </p>
                       )}
                       <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: 2 }}>
-                        {msg.media_url && msg.media_type === 'gif' ? (
+                        {isDeleted ? (
+                          <div style={{
+                            maxWidth: '75%', padding: '9px 14px',
+                            borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                            border: '1px solid var(--fg-15)',
+                            color: 'var(--fg-30)',
+                            fontFamily: 'Space Grotesk, sans-serif', fontSize: 13,
+                            fontStyle: 'italic', lineHeight: 1.4,
+                          }}>
+                            Message deleted
+                          </div>
+                        ) : msg.media_url && msg.media_type === 'gif' ? (
                           <div style={{
                             display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', gap: 4,
                             boxShadow: isHighlighted ? '0 0 0 4px rgba(168, 85, 247, 0.35)' : undefined,
@@ -1275,6 +1336,147 @@ export function MsgScreen() {
           </button>
         </div>
       </BottomSheet>
+
+      {/* ── Dismiss conversation confirm ── */}
+      {dismissConfirmId && (
+        <div
+          onClick={() => setDismissConfirmId(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-end',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              background: 'var(--bg)',
+              borderTop: '1px solid var(--fg-15)',
+              borderRadius: '16px 16px 0 0',
+              padding: '24px 20px calc(24px + env(safe-area-inset-bottom))',
+              display: 'flex', flexDirection: 'column', gap: 12,
+            }}
+          >
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>
+              Dismiss this conversation?
+            </p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
+              It will be hidden from your inbox. If someone sends a new message, it will reappear.
+            </p>
+            <button
+              onClick={() => confirmDismiss(dismissConfirmId)}
+              style={{
+                padding: '13px', borderRadius: 10, border: 'none',
+                background: '#ef4444', color: '#fff',
+                fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={() => setDismissConfirmId(null)}
+              style={{
+                padding: '13px', borderRadius: 10, border: '1px solid var(--fg-15)',
+                background: 'none', color: 'var(--fg)',
+                fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Message long-press context menu ── */}
+      {msgContextMenu && (
+        <div
+          onClick={() => setMsgContextMenu(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position: 'fixed',
+              top: Math.min(msgContextMenu.y + 8, window.innerHeight - 120),
+              left: Math.min(msgContextMenu.x, window.innerWidth - 160),
+              background: 'var(--bg)',
+              border: '1px solid var(--fg-15)',
+              borderRadius: 10,
+              overflow: 'hidden',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
+              zIndex: 201,
+            }}
+          >
+            <button
+              onClick={() => { setDeleteConfirmMsgId(msgContextMenu.id); setMsgContextMenu(null) }}
+              style={{
+                display: 'block', width: '100%', padding: '14px 20px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                color: '#ef4444', fontWeight: 600, textAlign: 'left',
+              }}
+            >
+              Delete message
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete message confirm ── */}
+      {deleteConfirmMsgId && (
+        <div
+          onClick={() => setDeleteConfirmMsgId(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 200,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-end',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%',
+              background: 'var(--bg)',
+              borderTop: '1px solid var(--fg-15)',
+              borderRadius: '16px 16px 0 0',
+              padding: '24px 20px calc(24px + env(safe-area-inset-bottom))',
+              display: 'flex', flexDirection: 'column', gap: 12,
+            }}
+          >
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 600, color: 'var(--fg)' }}>
+              Delete this message?
+            </p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
+              Everyone will see "Message deleted." This can't be undone.
+            </p>
+            <button
+              onClick={() => confirmDeleteMessage(deleteConfirmMsgId)}
+              style={{
+                padding: '13px', borderRadius: 10, border: 'none',
+                background: '#ef4444', color: '#fff',
+                fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setDeleteConfirmMsgId(null)}
+              style={{
+                padding: '13px', borderRadius: 10, border: '1px solid var(--fg-15)',
+                background: 'none', color: 'var(--fg)',
+                fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Add people modal ── */}
       <BottomSheet
