@@ -17,6 +17,7 @@ const VenueProfile = lazy(() => import('./pages/VenueProfile').then(m => ({ defa
 const Tonight      = lazy(() => import('./pages/TonightScreen').then(m => ({ default: m.TonightScreen })))
 const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })))
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -50,6 +51,7 @@ function AppRoutes() {
         {/* Routes outside the app shell */}
         <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
         <Route path="/admin"      element={<Admin />} />
+        <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         {/* App shell with persistent BottomNav */}
