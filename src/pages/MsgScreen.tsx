@@ -180,7 +180,9 @@ export function MsgScreen() {
   const [msgLoading,       setMsgLoading]       = useState(false)
   const [messageText,      setMessageText]      = useState('')
   const [sending,          setSending]          = useState(false)
-  const messagesEndRef  = useRef<HTMLDivElement>(null)
+  const messagesEndRef       = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const messagesInnerRef     = useRef<HTMLDivElement>(null)
   const myConvIdsRef    = useRef<Set<string>>(new Set())
   const openConvIdRef   = useRef<string | null>(openConvId)
 
@@ -444,13 +446,47 @@ export function MsgScreen() {
     }
     if (!openConvId || msgLoading || messages.length === 0) return
 
-    const behavior: ScrollBehavior = initialScrollDoneRef.current ? 'smooth' : 'auto'
+    const container = messagesContainerRef.current
+    if (!container) return
 
+    const isInitialScroll = !initialScrollDoneRef.current
+
+    // Double rAF: first to commit DOM, second to commit layout. iOS WebKit
+    // sometimes reports stale scrollHeight inside a single rAF after a
+    // setMessages/setMsgLoading batch. Two frames guarantees layout has
+    // settled before we measure.
     requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior, block: 'end' })
-      initialScrollDoneRef.current = true
+      requestAnimationFrame(() => {
+        if (isInitialScroll) {
+          // 999999 gets clamped to actual max scrollTop — avoids measuring
+          // scrollHeight on a flex container, which WebKit gets wrong.
+          container.scrollTop = 999999
+        } else {
+          container.scrollTo({ top: 999999, behavior: 'smooth' })
+        }
+
+        initialScrollDoneRef.current = true
+      })
     })
   }, [messages.length, openConvId, msgLoading])
+
+  // ── Re-scroll when images/GIFs load and expand content ───────────────────
+  // ResizeObserver on the inner message wrapper fires whenever content height
+  // changes (e.g. GIF finishes loading). If the user is within 200px of the
+  // bottom, snap down — otherwise leave them where they are (reading history).
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    const inner = messagesInnerRef.current
+    if (!container || !inner) return
+    const observer = new ResizeObserver(() => {
+      const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+      if (distanceFromBottom < 200) {
+        container.scrollTop = 999999
+      }
+    })
+    observer.observe(inner)
+    return () => observer.disconnect()
+  }, [openConvId, messages.length])
 
   // ── Realtime: conversation open ──────────────────────────────────────────
   useEffect(() => {
@@ -1037,7 +1073,8 @@ export function MsgScreen() {
               </div>
 
               {/* Messages */}
-              <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <div ref={messagesInnerRef} style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
                 {msgLoading && (
                   <p style={{ textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: '24px 0' }}>
                     Loading…
@@ -1101,6 +1138,7 @@ export function MsgScreen() {
                   )
                 })}
                 <div ref={messagesEndRef} />
+                </div>
               </div>
 
               {/* Pending GIF preview */}
