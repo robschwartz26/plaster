@@ -327,6 +327,21 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
     const onMove = (e: TouchEvent) => {
       const s = swipe.current
+
+      // If a second finger lands during a swipe, abort and snap back —
+      // user is starting a pinch.
+      if (e.touches.length !== 1) {
+        if (s.active) {
+          s.active = false
+          const strip = stripRef.current
+          if (strip) {
+            strip.style.transition = 'transform 0.2s ease'
+            strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+          }
+        }
+        return
+      }
+
       if (!s.active) return
 
       const dx = e.touches[0].clientX - s.startX
@@ -360,6 +375,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
     const onEnd = (e: TouchEvent) => {
       const s = swipe.current
+
+      // If other fingers are still down, the pinch isn't fully ended yet —
+      // bail without committing a swipe.
+      if (e.touches.length > 0) {
+        s.active = false
+        return
+      }
+
       if (!s.active) { s.active = false; return }
 
       const endX = e.changedTouches[0].clientX
