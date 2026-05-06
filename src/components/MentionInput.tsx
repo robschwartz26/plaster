@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
+import { useUserBlocks } from '@/hooks/useUserBlocks'
+import { useUserMutes } from '@/hooks/useUserMutes'
 
 interface MentionUser {
   id: string
@@ -36,6 +38,8 @@ export function MentionInput({
   const [showDropdown, setShowDropdown] = useState(false)
   const [activeMentionStart, setActiveMentionStart] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const { blockedIds } = useUserBlocks()
+  const { mutedIds } = useUserMutes()
 
   // Detect @-mention as user types: find the most recent '@' before the cursor
   // that isn't preceded by a non-whitespace char (so emails like 'a@b.com' don't trigger).
@@ -86,7 +90,10 @@ export function MentionInput({
     const fetchSuggestions = async () => {
       const { data, error } = await supabase.rpc('search_users', { p_query: searchQuery })
       if (cancelled) return
-      if (!error && data) setSuggestions(data as MentionUser[])
+      if (!error && data) {
+        const filtered = (data as MentionUser[]).filter(u => !blockedIds.has(u.id) && !mutedIds.has(u.id))
+        setSuggestions(filtered)
+      }
     }
     fetchSuggestions()
     return () => { cancelled = true }

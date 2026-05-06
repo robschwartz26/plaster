@@ -8,6 +8,8 @@ import { PlasterHeader } from '@/components/PlasterHeader'
 import { createOrGetConversation } from '@/lib/messaging'
 import { GifMessage } from '@/components/GifMessage'
 import { UserActionsMenu } from '@/components/UserActionsMenu'
+import { useUserBlocks } from '@/hooks/useUserBlocks'
+import { useUserMutes } from '@/hooks/useUserMutes'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -382,6 +384,8 @@ function toDateKey(d: Date) {
 
 export default function LineUpScreen() {
   const { user } = useAuth()
+  const { blockedIds } = useUserBlocks()
+  const { mutedIds } = useUserMutes()
   const [feed,       setFeed]       = useState<FeedItem[]>([])
   const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
   const [lineup,     setLineup]     = useState<LineupItem[]>([])
@@ -464,8 +468,14 @@ export default function LineUpScreen() {
       return
     }
 
+    // Filter out blocked + muted actors. RLS doesn't apply to SECURITY DEFINER RPCs,
+    // so we filter client-side. blockedIds / mutedIds are managed by useUserBlocks/Mutes.
+    const filtered = (data as any[]).filter(row =>
+      !blockedIds.has(row.actor_id) && !mutedIds.has(row.actor_id)
+    )
+
     // Adapt flat RPC shape to existing nested FeedItem shape so existing render code keeps working
-    const adapted: FeedItem[] = (data as any[]).map(row => ({
+    const adapted: FeedItem[] = filtered.map(row => ({
       id: `${row.activity_type}-${row.source_id}`,
       kind: row.activity_type as FeedItem['kind'],
       actor: {
@@ -498,7 +508,7 @@ export default function LineUpScreen() {
 
     setFeed(adapted)
     setFeedState('ready')
-  }, [user])
+  }, [user, blockedIds, mutedIds])
 
   useEffect(() => {
     if (!user) return

@@ -18,6 +18,7 @@ const Tonight      = lazy(() => import('./pages/TonightScreen').then(m => ({ def
 const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })))
+const TermsOfUse    = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })))
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -52,6 +53,7 @@ function AppRoutes() {
         <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
         <Route path="/admin"      element={<Admin />} />
         <Route path="/privacy"    element={<PrivacyPolicy />} />
+        <Route path="/terms"      element={<TermsOfUse />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         {/* App shell with persistent BottomNav */}

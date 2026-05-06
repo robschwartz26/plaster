@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from './Diamond'
+import { useUserBlocks } from '@/hooks/useUserBlocks'
+import { useUserMutes } from '@/hooks/useUserMutes'
 
 type DiamondRowEntry = {
   id: string
@@ -23,20 +25,25 @@ export function SocialDiamondRow({ targetUserId }: Props) {
   const [entries,    setEntries]    = useState<DiamondRowEntry[]>([])
   const [loading,    setLoading]    = useState(true)
   const [modalEntry, setModalEntry] = useState<DiamondRowEntry | null>(null)
+  const { blockedIds } = useUserBlocks()
+  const { mutedIds } = useUserMutes()
 
   const fetchData = useCallback(async () => {
     if (!targetUserId) return
     const { data, error } = await supabase.rpc('social_diamond_row', { target_user_id: targetUserId })
     if (!error && Array.isArray(data)) {
-      setEntries(data as DiamondRowEntry[])
+      const filtered = (data as DiamondRowEntry[]).filter(entry =>
+        !blockedIds.has(entry.id) && !mutedIds.has(entry.id)
+      )
+      setEntries(filtered)
       setModalEntry(prev => {
         if (!prev) return null
-        if ((data as DiamondRowEntry[])?.some(e => e.follow_row_id === prev.follow_row_id)) return prev
+        if (filtered.some(e => e.follow_row_id === prev.follow_row_id)) return prev
         return null
       })
     }
     setLoading(false)
-  }, [targetUserId])
+  }, [targetUserId, blockedIds, mutedIds])
 
   useEffect(() => {
     if (!targetUserId) return

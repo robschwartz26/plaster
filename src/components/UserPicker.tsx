@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from './Diamond'
+import { useUserBlocks } from '@/hooks/useUserBlocks'
+import { useUserMutes } from '@/hooks/useUserMutes'
 
 export interface PickedUser {
   id: string
@@ -22,6 +24,8 @@ export function UserPicker({ initialSelected = [], excludedIds, onChange, placeh
   const [selected, setSelected] = useState<PickedUser[]>(initialSelected)
   const [searching, setSearching] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { blockedIds } = useUserBlocks()
+  const { mutedIds } = useUserMutes()
 
   useEffect(() => {
     onChange(selected)
@@ -43,7 +47,7 @@ export function UserPicker({ initialSelected = [], excludedIds, onChange, placeh
       }
       const selectedIds = new Set(selected.map(s => s.id))
       const filtered = (data as any[])
-        .filter(u => !selectedIds.has(u.id) && !(excludedIds?.has(u.id)))
+        .filter(u => !selectedIds.has(u.id) && !(excludedIds?.has(u.id)) && !blockedIds.has(u.id) && !mutedIds.has(u.id))
         .map(u => ({
           id: u.id,
           username: u.username,

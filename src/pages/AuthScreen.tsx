@@ -10,6 +10,7 @@ export function AuthScreen() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [agreedToTerms, setAgreedToTerms] = useState(false)
   const { signIn, signUp } = useAuth()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -21,6 +22,10 @@ export function AuthScreen() {
         const { error } = await signIn(email, password)
         if (error) { setError(error.message); return }
       } else {
+        if (!agreedToTerms) {
+          setError('Please agree to the Terms of Use and Privacy Policy to continue.')
+          return
+        }
         const { error } = await signUp(email, password)
         if (error) { setError(error.message); return }
       }
@@ -113,6 +118,53 @@ export function AuthScreen() {
           style={inputStyle}
         />
 
+        {tab === 'signup' && (
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: 10,
+              padding: '6px 4px 0',
+              cursor: 'pointer',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 12,
+              color: 'var(--fg-65)',
+              lineHeight: 1.4,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={e => setAgreedToTerms(e.target.checked)}
+              style={{
+                marginTop: 2,
+                width: 16,
+                height: 16,
+                cursor: 'pointer',
+                accentColor: '#A855F7',
+                flexShrink: 0,
+              }}
+            />
+            <span>
+              I agree to the{' '}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#A855F7', textDecoration: 'underline' }}
+              >Terms of Use</a>
+              {' '}and{' '}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#A855F7', textDecoration: 'underline' }}
+              >Privacy Policy</a>.
+              I will not post objectionable content.
+            </span>
+          </label>
+        )}
+
         {error && (
           <p style={{ color: '#f87171', fontSize: 13, margin: 0, textAlign: 'center' }}>
             {error}
@@ -121,7 +173,7 @@ export function AuthScreen() {
 
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || (tab === 'signup' && !agreedToTerms)}
           style={{
             marginTop: 4,
             padding: '14px 0',
@@ -132,8 +184,8 @@ export function AuthScreen() {
             fontFamily: '"Space Grotesk", sans-serif',
             fontSize: 15,
             fontWeight: 700,
-            cursor: busy ? 'not-allowed' : 'pointer',
-            opacity: busy ? 0.6 : 1,
+            cursor: (busy || (tab === 'signup' && !agreedToTerms)) ? 'not-allowed' : 'pointer',
+            opacity: (busy || (tab === 'signup' && !agreedToTerms)) ? 0.5 : 1,
             transition: 'opacity 150ms ease',
           }}
         >
