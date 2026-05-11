@@ -547,7 +547,7 @@ export default function LineUpScreen() {
           .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         setLineup(items)
       })
-  }, [user])
+  }, [user?.id])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>

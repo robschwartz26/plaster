@@ -40,7 +40,7 @@ export function TonightScreen() {
     } else {
       setLoading(false)
     }
-  }, [user])
+  }, [user?.id])
 
   async function fetchTonightEvents() {
     const { data } = await supabase

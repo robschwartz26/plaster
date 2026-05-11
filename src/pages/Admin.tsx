@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -46,18 +46,18 @@ function AdminDashboard() {
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
 
-  const fetchVenues = async () => {
+  const fetchVenues = useCallback(async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
     if (data) setVenues(data)
-  }
+  }, [])
 
-  const fetchOpenReportCount = async () => {
+  const fetchOpenReportCount = useCallback(async () => {
     const { count } = await supabaseAdmin
       .from('content_reports')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'open')
     setOpenReportCount(count ?? 0)
-  }
+  }, [])
 
   useEffect(() => { fetchVenues(); fetchOpenReportCount() }, [])
 

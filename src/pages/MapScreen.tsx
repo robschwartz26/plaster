@@ -541,7 +541,7 @@ export function MapScreen() {
     navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: true, maximumAge: 0 })
     const wid = navigator.geolocation.watchPosition(onSuccess, onError, { enableHighAccuracy: true, maximumAge: 30000 })
     return () => navigator.geolocation.clearWatch(wid)
-  }, [user])
+  }, [user?.id])
 
   // ── Load venues (once) ────────────────────────────────────────────────────
   useEffect(() => {
@@ -554,7 +554,7 @@ export function MapScreen() {
     if (!user) return
     supabase.from('event_likes').select('event_id').eq('user_id', user.id)
       .then(({ data }) => setLikedEventIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id))))
-  }, [user])
+  }, [user?.id])
 
   // ── Load events for selected day ──────────────────────────────────────────
   useEffect(() => {

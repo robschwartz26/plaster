@@ -259,7 +259,7 @@ export function MsgScreen() {
       .is('read_at', null)
       .order('created_at', { ascending: false })
     if (!error && data) setNotifications(data as AppNotification[])
-  }, [user])
+  }, [user?.id])
 
   async function deleteNotification(id: string) {
     await supabase.from('notifications').delete().eq('id', id)
@@ -377,7 +377,7 @@ export function MsgScreen() {
 
     setConversations(rows)
     setConvLoading(false)
-  }, [user])
+  }, [user?.id])
 
   useEffect(() => { loadInbox() }, [loadInbox])
 
@@ -567,7 +567,7 @@ export function MsgScreen() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user])
+  }, [user?.id])
 
   // ── Debounced message search ─────────────────────────────────────────────
   useEffect(() => {

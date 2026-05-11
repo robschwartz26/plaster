@@ -16,7 +16,7 @@ export function SuspendedBanner() {
       .then(({ data }) => {
         setSuspended(!!data?.is_suspended)
       })
-  }, [user])
+  }, [user?.id])
 
   if (!suspended) return null
 

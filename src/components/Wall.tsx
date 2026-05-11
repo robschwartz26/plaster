@@ -58,7 +58,7 @@ export function Wall() {
       .then(({ data }) => {
         setLikedIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)))
       })
-  }, [user])
+  }, [user?.id])
 
   async function handleLike(eventId: string) {
     if (!user) return
