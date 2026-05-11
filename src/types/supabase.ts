@@ -143,21 +143,69 @@ export type Database = {
           },
         ]
       }
+      content_reports: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          reason: string
+          reporter_id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          target_id: string
+          target_kind: string
+          target_user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason: string
+          reporter_id: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id: string
+          target_kind: string
+          target_user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          reason?: string
+          reporter_id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          target_id?: string
+          target_kind?: string
+          target_user_id?: string
+        }
+        Relationships: []
+      }
       conversation_members: {
         Row: {
           conversation_id: string
+          deleted_at: string | null
           joined_at: string
           last_read_at: string
           user_id: string
         }
         Insert: {
           conversation_id: string
+          deleted_at?: string | null
           joined_at?: string
           last_read_at?: string
           user_id: string
         }
         Update: {
           conversation_id?: string
+          deleted_at?: string | null
           joined_at?: string
           last_read_at?: string
           user_id?: string
@@ -476,6 +524,7 @@ export type Database = {
           body: string | null
           conversation_id: string
           created_at: string
+          deleted_at: string | null
           id: string
           media_height: number | null
           media_source_id: string | null
@@ -488,6 +537,7 @@ export type Database = {
           body?: string | null
           conversation_id: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
@@ -500,6 +550,7 @@ export type Database = {
           body?: string | null
           conversation_id?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
@@ -624,6 +675,7 @@ export type Database = {
           interests: string[]
           is_admin: boolean
           is_public: boolean
+          is_suspended: boolean
           show_social_publicly: boolean
           username: string | null
         }
@@ -638,6 +690,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
+          is_suspended?: boolean
           show_social_publicly?: boolean
           username?: string | null
         }
@@ -652,6 +705,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
+          is_suspended?: boolean
           show_social_publicly?: boolean
           username?: string | null
         }
@@ -695,6 +749,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_mutes: {
+        Row: {
+          created_at: string
+          muted_id: string
+          muter_id: string
+        }
+        Insert: {
+          created_at?: string
+          muted_id: string
+          muter_id: string
+        }
+        Update: {
+          created_at?: string
+          muted_id?: string
+          muter_id?: string
+        }
+        Relationships: []
       }
       venues: {
         Row: {
@@ -821,6 +911,20 @@ export type Database = {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
       }
+      admin_resolve_report: {
+        Args: {
+          p_action: string
+          p_admin_notes?: string
+          p_report_id: string
+          p_warning_message?: string
+        }
+        Returns: Json
+      }
+      admin_set_report_reviewing: {
+        Args: { p_report_id: string }
+        Returns: undefined
+      }
+      admin_unsuspend_user: { Args: { p_user_id: string }; Returns: undefined }
       are_mutual_follows: { Args: { other_user_id: string }; Returns: boolean }
       create_conversation_with_members: {
         Args: { p_member_ids: string[]; p_name?: string }
@@ -835,11 +939,24 @@ export type Database = {
         Returns: undefined
       }
       delete_wall_post: { Args: { p_post_id: string }; Returns: Json }
+      dismiss_conversation: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       follow_status: { Args: { other_user_id: string }; Returns: string }
       get_unread_count: { Args: never; Returns: number }
       is_admin: { Args: { user_id: string }; Returns: boolean }
+      is_blocked_either_way: {
+        Args: { target_id: string; viewer_id: string }
+        Returns: boolean
+      }
+      is_caller_suspended: { Args: never; Returns: boolean }
       is_conversation_member: {
         Args: { conv_id: string; uid: string }
+        Returns: boolean
+      }
+      is_muted_by: {
+        Args: { target_id: string; viewer_id: string }
         Returns: boolean
       }
       like_activity: {
@@ -865,6 +982,17 @@ export type Database = {
           avatar_url: string
           followed_at: string
           id: string
+          username: string
+        }[]
+      }
+      list_my_blocks_and_mutes: {
+        Args: never
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          created_at: string
+          id: string
+          kind: string
           username: string
         }[]
       }
@@ -921,6 +1049,10 @@ export type Database = {
           kind: string
           username: string
         }[]
+      }
+      soft_delete_message: {
+        Args: { p_message_id: string }
+        Returns: undefined
       }
       unfollow_user: { Args: { other_user_id: string }; Returns: undefined }
       unlike_activity: {

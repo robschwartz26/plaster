@@ -105,7 +105,7 @@ export function AdminReports({ onReportsChanged }: Props = {}) {
       ((messagesResult.data ?? []) as ContentLite[]).map(m => [m.id, m])
     )
 
-    const rows: ReportRow[] = rawReports.map(r => {
+    const rows: ReportRow[] = (rawReports as any[]).map(r => {
       const reporter = profileMap.get(r.reporter_id)
       const targetUser = profileMap.get(r.target_user_id)
       let content: ContentLite | undefined
@@ -269,7 +269,7 @@ function ReportDrawer({
     if (action === 'warn_user') {
       args.p_warning_message = warningMessage.trim() || null
     }
-    const { error } = await supabase.rpc('admin_resolve_report', args)
+    const { error } = await supabase.rpc('admin_resolve_report', args as any)
     setSubmitting(false)
     if (error) {
       console.error('[AdminReports] resolve failed', error)

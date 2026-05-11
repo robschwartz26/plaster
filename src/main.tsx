@@ -27,3 +27,8 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+
+// Hide native splash as soon as the React tree is mounted
+import('@capacitor/splash-screen').then(({ SplashScreen }) => {
+  SplashScreen.hide({ fadeOutDuration: 300 }).catch(() => {/* no-op when web */})
+})

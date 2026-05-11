@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Wall } from './components/Wall'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppLayout } from './components/AppLayout'
+import { SplashAnimation } from './components/SplashAnimation'
 
 // Heavy pages are code-split — loaded only when their route is visited.
 // Admin includes Mapbox; splitting it out significantly reduces initial bundle.
@@ -79,6 +80,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <SplashAnimation />
         <AppRoutes />
       </AuthProvider>
     </BrowserRouter>
