@@ -114,7 +114,7 @@ export function TonightScreen() {
         {!user && !loading && (
           <div style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
             <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, color: 'var(--fg-65)', textAlign: 'center', lineHeight: 1.5 }}>
-              Sign in to see friend activity and save your RSVPs
+              Sign in to see friend activity and save your plans
             </p>
             <button
               onClick={() => navigate('/auth')}

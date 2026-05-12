@@ -5,6 +5,7 @@ import { Wall } from './components/Wall'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { AppLayout } from './components/AppLayout'
 import { SplashAnimation } from './components/SplashAnimation'
+import { usePushNotifications } from './hooks/usePushNotifications'
 
 // Heavy pages are code-split — loaded only when their route is visited.
 // Admin includes Mapbox; splitting it out significantly reduces initial bundle.
@@ -47,6 +48,7 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
 
 
 function AppRoutes() {
+  usePushNotifications()
   return (
     <Suspense fallback={null}>
       <Routes>

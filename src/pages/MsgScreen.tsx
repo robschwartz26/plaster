@@ -105,14 +105,14 @@ function fmtEndedDate(startsAt: string): string {
   return `${mm}/${dd}`
 }
 
-function notifCopy(notif: AppNotification): JSX.Element {
+function notifCopy(notif: AppNotification) {
   const senderNode = notif.sender?.username
     ? <span style={{ fontWeight: 700 }}>@{notif.sender.username}</span>
     : <span style={{ fontWeight: 700 }}>someone</span>
   const eventNode = <span style={{ fontWeight: 700 }}>{notif.event?.title ?? 'an event'}</span>
   switch (notif.kind) {
     case 'mention': return <>{senderNode} mentioned you on {eventNode}</>
-    case 'activity_like:rsvp': return <>{senderNode} liked your RSVP to {eventNode}</>
+    case 'activity_like:rsvp': return <>{senderNode} likes that you're going to {eventNode}</>
     case 'activity_like:wall_post': return <>{senderNode} liked your post on {eventNode}</>
     case 'activity_like:venue_post': return <>{senderNode} liked your post</>
     case 'warning': return <>You received a warning from the Plaster team</>
@@ -121,7 +121,7 @@ function notifCopy(notif: AppNotification): JSX.Element {
         ? <>{senderNode} followed you</>
         : <>{senderNode} wants to follow you</>
     case 'follow_accepted': return <>you're following {senderNode}</>
-    case 'reply': return <>{senderNode} replied to your post on {eventNode}</>
+    case 'reply': return <>{senderNode} replied to you on {eventNode}</>
     case 'message': return <>{senderNode} sent you a message</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }

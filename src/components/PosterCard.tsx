@@ -891,7 +891,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   {isAttending ? "I'm Going ✓" : "I'll Be There"}
                 </button>
               ) : (
-                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>Sign in to RSVP</p>
+                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>sign in to say you're going</p>
               )}
             </>
           ) : (

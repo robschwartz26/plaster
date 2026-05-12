@@ -175,7 +175,7 @@ export function SettingsPanel({ open, onClose }: Props) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.5 }}>
-            This permanently deletes your account, RSVPs, and activity. Your wall posts will be anonymized. This cannot be undone.
+            This permanently deletes your account, plans, and activity. Your wall posts will be anonymized. This cannot be undone.
           </p>
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
             Type <strong style={{ color: 'var(--fg)' }}>DELETE</strong> to confirm:
