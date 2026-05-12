@@ -105,6 +105,28 @@ function fmtEndedDate(startsAt: string): string {
   return `${mm}/${dd}`
 }
 
+function notifCopy(notif: AppNotification): JSX.Element {
+  const senderNode = notif.sender?.username
+    ? <span style={{ fontWeight: 700 }}>@{notif.sender.username}</span>
+    : <span style={{ fontWeight: 700 }}>someone</span>
+  const eventNode = <span style={{ fontWeight: 700 }}>{notif.event?.title ?? 'an event'}</span>
+  switch (notif.kind) {
+    case 'mention': return <>{senderNode} mentioned you on {eventNode}</>
+    case 'activity_like:rsvp': return <>{senderNode} liked your RSVP to {eventNode}</>
+    case 'activity_like:wall_post': return <>{senderNode} liked your post on {eventNode}</>
+    case 'activity_like:venue_post': return <>{senderNode} liked your post</>
+    case 'warning': return <>You received a warning from the Plaster team</>
+    case 'follow':
+      return notif.body_preview === 'accepted'
+        ? <>{senderNode} followed you</>
+        : <>{senderNode} wants to follow you</>
+    case 'follow_accepted': return <>you're following {senderNode}</>
+    case 'reply': return <>{senderNode} replied to your post on {eventNode}</>
+    case 'message': return <>{senderNode} sent you a message</>
+    default: return <>{senderNode} shouted you on {eventNode}</>
+  }
+}
+
 function fmtMsgTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
@@ -261,19 +283,39 @@ export function MsgScreen() {
     if (!error && data) setNotifications(data as AppNotification[])
   }, [user?.id])
 
-  async function deleteNotification(id: string) {
-    await supabase.from('notifications').delete().eq('id', id)
-    fetchNotifications()
+  async function markNotificationRead(id: string) {
+    await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id)
+    setNotifications(prev => prev.filter(n => n.id !== id))
+  }
+
+  async function markAllNotificationsRead() {
+    if (!user) return
+    await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .eq('recipient_id', user.id)
+      .is('read_at', null)
+    setNotifications([])
   }
 
   async function openNotification(notif: AppNotification) {
-    await supabase.from('notifications').delete().eq('id', notif.id)
-    setNotifications(prev => prev.filter(n => n.id !== notif.id))
-
-    if (isEventEnded(notif.event?.starts_at)) return
-
-    if (notif.target_event_id) {
-      navigate('/', { state: { openEventId: notif.target_event_id } })
+    await markNotificationRead(notif.id)
+    switch (notif.kind) {
+      case 'follow':
+        navigate('/you')
+        return
+      case 'follow_accepted':
+        if (notif.sender?.username) {
+          navigate(`/profile/${notif.sender.username}`)
+        }
+        return
+      case 'warning':
+      case 'message':
+        return
+      default:
+        if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
+          navigate('/', { state: { openEventId: notif.target_event_id } })
+        }
     }
   }
 
@@ -796,81 +838,78 @@ export function MsgScreen() {
 
           {/* Shouts section */}
           {notifications.length > 0 && (
-            <div style={{ padding: '10px 16px 6px', flexShrink: 0 }}>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>shouts</span>
+            <div style={{ padding: '10px 16px 6px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+                shouts{notifications.length > 1 ? ` (${notifications.length})` : ''}
+              </span>
+              {notifications.length > 1 && (
+                <button
+                  onClick={markAllNotificationsRead}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', padding: 0 }}
+                >
+                  mark all read
+                </button>
+              )}
             </div>
           )}
 
-          {/* Notification card */}
-          {notifications.length > 0 && (() => {
-            const notif = notifications[0]
-            const senderName = notif.sender?.username ? `@${notif.sender.username}` : 'someone'
-            const eventTitle = notif.event?.title ?? 'a deleted event'
-            const avatarUrl = notif.sender?.avatar_diamond_url ?? notif.sender?.avatar_url ?? null
-            return (
-              <div style={{ padding: '0 16px 12px', flexShrink: 0 }}>
-                <div style={{ position: 'relative' }}>
-                  <div style={{
-                    position: 'absolute',
-                    top: 4, left: 3, right: -3, bottom: -4,
-                    background: 'var(--fg-15)',
+          {/* Notification cards */}
+          {notifications.map(notif => (
+            <div key={notif.id} style={{ padding: '0 16px 10px', flexShrink: 0 }}>
+              <div style={{ position: 'relative' }}>
+                <div style={{
+                  position: 'absolute',
+                  top: 4, left: 3, right: -3, bottom: -4,
+                  background: 'var(--fg-15)',
+                  borderRadius: 4,
+                }} />
+                <div
+                  onClick={() => openNotification(notif)}
+                  style={{
+                    position: 'relative',
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 14px',
+                    cursor: 'pointer',
+                    background: 'var(--bg)',
+                    border: '0.5px solid var(--fg-15)',
                     borderRadius: 4,
-                  }} />
-                  <div
-                    onClick={() => openNotification(notif)}
-                    style={{
-                      position: 'relative',
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      padding: '12px 14px',
-                      cursor: 'pointer',
-                      background: 'var(--bg)',
-                      border: '0.5px solid var(--fg-15)',
-                      borderRadius: 4,
-                    }}
-                  >
-                    <Diamond diamondUrl={notif.sender?.avatar_diamond_url ?? null} fallbackUrl={avatarUrl} size={40} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        <span style={{ fontWeight: 700 }}>{senderName}</span> shouted you on <span style={{ fontWeight: 700 }}>{eventTitle}</span>
+                  }}
+                >
+                  <Diamond
+                    diamondUrl={notif.sender?.avatar_diamond_url ?? null}
+                    fallbackUrl={notif.sender?.avatar_url ?? null}
+                    size={40}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {notifCopy(notif)}
+                    </p>
+                    {notif.body_preview && (
+                      <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        "{notif.body_preview}"
                       </p>
-                      {notif.body_preview && (
-                        <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          "{notif.body_preview}"
-                        </p>
-                      )}
-                      {isEventEnded(notif.event?.starts_at) && notif.event?.starts_at && (
-                        <div style={{
-                          display: 'inline-block',
-                          marginTop: 4,
-                          padding: '2px 8px',
-                          borderRadius: 10,
-                          background: 'rgba(168, 85, 247, 0.12)',
-                          color: '#A855F7',
-                          fontFamily: '"Space Grotesk", sans-serif',
-                          fontSize: 10,
-                          fontWeight: 600,
-                          letterSpacing: '0.02em',
-                        }}>
-                          Ended {fmtEndedDate(notif.event.starts_at)}
-                        </div>
-                      )}
-                    </div>
-                    {notifications.length > 1 && (
-                      <div style={{ flexShrink: 0, background: '#A855F7', borderRadius: 10, padding: '2px 7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, fontWeight: 700, color: '#fff' }}>
-                        {notifications.length}
+                    )}
+                    {isEventEnded(notif.event?.starts_at) && notif.event?.starts_at && (
+                      <div style={{
+                        display: 'inline-block', marginTop: 4, padding: '2px 8px',
+                        borderRadius: 10, background: 'rgba(168, 85, 247, 0.12)',
+                        color: '#A855F7', fontFamily: '"Space Grotesk", sans-serif',
+                        fontSize: 10, fontWeight: 600, letterSpacing: '0.02em',
+                      }}>
+                        Ended {fmtEndedDate(notif.event.starts_at)}
                       </div>
                     )}
-                    <button
-                      onClick={e => { e.stopPropagation(); deleteNotification(notif.id) }}
-                      style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
-                    >
-                      ×
-                    </button>
                   </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); markNotificationRead(notif.id) }}
+                    style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
                 </div>
               </div>
-            )
-          })()}
+            </div>
+          ))}
 
           {/* Scrollable conversation + message results */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
