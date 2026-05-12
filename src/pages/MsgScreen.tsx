@@ -884,7 +884,7 @@ export function MsgScreen() {
                     <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {notifCopy(notif)}
                     </p>
-                    {notif.body_preview && (
+                    {notif.body_preview && notif.kind !== 'follow' && (
                       <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         "{notif.body_preview}"
                       </p>
