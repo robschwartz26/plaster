@@ -37,5 +37,10 @@ plaster-date-identifier-dump.md
 plaster-current-dump.md
 SESSION_NOTES.md
 
-# Generated codebase dumps
+# Code dumps for AI assistance (keep in ~/plaster-scratch/ instead)
+PLASTER_CODE_DUMP.md
+plaster-dump.md
+plaster_dump.md
+*-code-dump.md
+*-dump.md
 scripts/plaster-dump.md
