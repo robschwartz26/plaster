@@ -57,7 +57,7 @@ Hi @${username},
 
 Your Plaster ${accountType} account has been approved. You're all set.
 
-Open Plaster: https://the-plaster-wall.vercel.app
+Open Plaster: https://plasterthewall.com
 
 —
 The Plaster team
@@ -69,7 +69,7 @@ The Plaster team
   <p style="margin: 0 0 16px; color: #555;">Hi @${escapeHtml(username)},</p>
   <p style="margin: 0 0 16px;">Your Plaster <strong>${escapeHtml(accountType)}</strong> account has been approved. You're all set.</p>
   <p style="margin: 24px 0;">
-    <a href="https://the-plaster-wall.vercel.app" style="display: inline-block; padding: 12px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Open Plaster</a>
+    <a href="https://plasterthewall.com" style="display: inline-block; padding: 12px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Open Plaster</a>
   </p>
   <p style="margin: 32px 0 0; color: #999; font-size: 12px;">— The Plaster team</p>
 </div>

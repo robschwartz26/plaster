@@ -72,7 +72,7 @@ USER ID        ${record.id}
 SIGNED UP      ${created}
 
 Review and approve/decline at:
-https://the-plaster-wall.vercel.app/admin
+https://plasterthewall.com/admin
 
 —
 This is an automated alert from Plaster.
@@ -91,7 +91,7 @@ This is an automated alert from Plaster.
   </table>
 
   <p style="margin: 24px 0 0;">
-    <a href="https://the-plaster-wall.vercel.app/admin" style="display: inline-block; padding: 12px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Review in admin dashboard</a>
+    <a href="https://plasterthewall.com/admin" style="display: inline-block; padding: 12px 20px; background: #111; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600;">Review in admin dashboard</a>
   </p>
 
   <p style="margin: 32px 0 0; color: #999; font-size: 12px;">
