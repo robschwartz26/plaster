@@ -5,6 +5,7 @@ import { Diamond } from '@/components/Diamond'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { createOrGetConversation } from '@/lib/messaging'
 import { VenueSubPanel, type FollowVenue } from '@/components/VenueSubPanel'
+import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 
 interface FollowUser {
   id: string
@@ -12,6 +13,7 @@ interface FollowUser {
   avatar_diamond_url: string | null
   avatar_url: string | null
   bio: string | null
+  account_type: string | null
 }
 
 interface AttendedItem {
@@ -74,7 +76,7 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
   async function fetchFollowers() {
     const { data } = await supabase
       .from('follows')
-      .select('user:follower_id(id, username, avatar_diamond_url, avatar_url, bio)')
+      .select('user:follower_id(id, username, avatar_diamond_url, avatar_url, bio, account_type)')
       .eq('following_id', userId)
       .eq('status', 'accepted')
       .order('created_at', { ascending: false })
@@ -85,7 +87,7 @@ export function FollowListPanel({ userId, currentUserId, initialTab, open, onClo
     const [{ data: people }, { data: venues }] = await Promise.all([
       supabase
         .from('follows')
-        .select('user:following_id(id, username, avatar_diamond_url, avatar_url, bio)')
+        .select('user:following_id(id, username, avatar_diamond_url, avatar_url, bio, account_type)')
         .eq('follower_id', userId)
         .eq('status', 'accepted')
         .order('created_at', { ascending: false }),
@@ -311,8 +313,9 @@ function UserRow({ user, onTap }: { user: FollowUser; onTap: () => void }) {
     >
       <Diamond diamondUrl={user.avatar_diamond_url} fallbackUrl={user.avatar_url} size={36} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 15, color: 'var(--fg)' }}>
-          @{user.username ?? '—'}
+        <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 15, color: 'var(--fg)', display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span>@{user.username ?? '—'}</span>
+          <AccountTypeBadge accountType={user.account_type} />
         </p>
         {user.bio && (
           <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

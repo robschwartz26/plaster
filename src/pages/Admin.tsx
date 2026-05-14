@@ -7,6 +7,7 @@ import { VenueForm } from '@/components/admin/VenueForm'
 import { EventForm } from '@/components/admin/EventForm'
 import { AdminNotifications } from '@/components/admin/AdminNotifications'
 import { AdminReports } from '@/components/admin/AdminReports'
+import { AdminVARequests } from '@/components/admin/AdminVARequests'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
 import {
@@ -45,6 +46,7 @@ function AdminDashboard() {
   const [venueFormOpen, setVenueFormOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
+  const [pendingVACount, setPendingVACount] = useState<number>(0)
 
   const fetchVenues = useCallback(async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
@@ -75,6 +77,13 @@ function AdminDashboard() {
             badge={openReportCount > 0 ? `${openReportCount} open` : undefined}
           >
             <AdminReports onReportsChanged={fetchOpenReportCount} />
+          </Section>
+
+          <Section
+            title="VA Requests"
+            badge={pendingVACount > 0 ? `${pendingVACount} pending` : undefined}
+          >
+            <AdminVARequests onCountChange={setPendingVACount} />
           </Section>
 
           <Section title="Import Poster">

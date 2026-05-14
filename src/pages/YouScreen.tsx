@@ -13,6 +13,7 @@ import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
+import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ type DisplayProfile = {
   avatar_url: string | null
   avatar_diamond_url: string | null
   is_public: boolean
+  account_type: string | null
 }
 
 // ── Follow button (for person profiles) ───────────────────────────────────
@@ -222,10 +224,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         avatar_url: selfProfile.avatar_url ?? null,
         avatar_diamond_url: selfProfile.avatar_diamond_url ?? null,
         is_public: selfProfile.is_public ?? true,
+        account_type: selfProfile.account_type ?? null,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -278,13 +281,36 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   useEffect(() => {
     if (!user?.id || !isSelf) { setPendingAccountType(null); return }
+
     supabase
       .from('profiles')
       .select('pending_account_type')
       .eq('id', user.id)
       .single()
       .then(({ data }) => { setPendingAccountType(data?.pending_account_type ?? null) })
-  }, [user?.id, isSelf])
+
+    // Realtime: when admin approves/declines, profile row UPDATEs.
+    // Banner clears instantly without page reload.
+    const channel = supabase
+      .channel(`profile-pending-${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${user.id}`,
+      }, async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('pending_account_type')
+          .eq('id', user.id)
+          .single()
+        setPendingAccountType(data?.pending_account_type ?? null)
+        refreshProfile()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user?.id, isSelf, refreshProfile])
 
   async function fetchAttended() {
     if (!targetUserId) return
@@ -432,8 +458,9 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
           {/* Name + stats */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2 }}>
-              @{displayProfile.username}
+            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+              <span>@{displayProfile.username}</span>
+              <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
             </p>
             {displayProfile.bio && !editing && (
               <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>

@@ -123,6 +123,8 @@ function notifCopy(notif: AppNotification) {
     case 'follow_accepted': return <>you're following {senderNode}</>
     case 'reply': return <>{senderNode} replied to you on {eventNode}</>
     case 'message': return <>{senderNode} sent you a message</>
+    case 'va_approved': return <>Your {notif.body_preview ?? 'account'} account has been approved 🎉</>
+    case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -308,6 +310,10 @@ export function MsgScreen() {
         if (notif.sender?.username) {
           navigate(`/profile/${notif.sender.username}`)
         }
+        return
+      case 'va_approved':
+      case 'va_declined':
+        navigate('/you')
         return
       case 'warning':
       case 'message':

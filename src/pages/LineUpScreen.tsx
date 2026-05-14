@@ -10,6 +10,7 @@ import { GifMessage } from '@/components/GifMessage'
 import { UserActionsMenu } from '@/components/UserActionsMenu'
 import { useUserBlocks } from '@/hooks/useUserBlocks'
 import { useUserMutes } from '@/hooks/useUserMutes'
+import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ interface FeedItem {
     diamond_focal_x: number | null
     diamond_focal_y: number | null
     type: 'friend' | 'venue'
+    account_type: string | null
   }
   event: {
     id: string
@@ -489,6 +491,7 @@ export default function LineUpScreen() {
         // venues and artists both render with the larger diamond at left edge;
         // persons get the smaller indented diamond. Map account_type to the legacy 'venue'/'friend' divide.
         type: (row.actor_account_type === 'venue' || row.actor_account_type === 'artist') ? 'venue' : 'friend',
+        account_type: row.actor_account_type ?? null,
       },
       event: row.target_event_id ? {
         id: row.target_event_id,
@@ -677,10 +680,15 @@ export default function LineUpScreen() {
                   />
                 </div>
                 <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
-                  <span
-                    onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
-                    style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
-                  >{item.actor.name}</span>
+                  <>
+                    <span
+                      onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
+                      style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
+                    >{item.actor.name}</span>
+                    {item.actor.account_type && item.actor.account_type !== 'person' && (
+                      <>{' '}<AccountTypeBadge accountType={item.actor.account_type} /></>
+                    )}
+                  </>
                   {item.kind === 'rsvp' && (
                     <> is going to <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
                   )}

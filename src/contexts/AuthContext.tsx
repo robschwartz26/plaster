@@ -13,6 +13,8 @@ export interface Profile {
   is_admin?: boolean
   interests: string[]
   created_at: string
+  account_type: string | null
+  pending_account_type: string | null
 }
 
 interface AuthContextValue {
