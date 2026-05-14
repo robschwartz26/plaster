@@ -706,6 +706,7 @@ export type Database = {
           is_admin: boolean
           is_public: boolean
           is_suspended: boolean
+          pending_account_type: string | null
           show_social_publicly: boolean
           username: string | null
         }
@@ -721,6 +722,7 @@ export type Database = {
           is_admin?: boolean
           is_public?: boolean
           is_suspended?: boolean
+          pending_account_type?: string | null
           show_social_publicly?: boolean
           username?: string | null
         }
@@ -736,6 +738,7 @@ export type Database = {
           is_admin?: boolean
           is_public?: boolean
           is_suspended?: boolean
+          pending_account_type?: string | null
           show_social_publicly?: boolean
           username?: string | null
         }
@@ -939,6 +942,14 @@ export type Database = {
       }
       add_view_count: {
         Args: { delta: number; p_event_id: string }
+        Returns: undefined
+      }
+      admin_approve_va_request: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      admin_decline_va_request: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
       admin_resolve_report: {

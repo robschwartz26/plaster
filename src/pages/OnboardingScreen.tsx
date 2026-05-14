@@ -11,12 +11,13 @@ const INTERESTS = [
   'Food & Drink', 'Sports', 'Community', 'Outdoors', 'Tech',
 ]
 
-type Step = 'username' | 'avatar' | 'interests'
+type Step = 'username' | 'account_type' | 'avatar' | 'interests'
 
 export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('username')
   const [username, setUsername] = useState('')
   const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [accountChoice, setAccountChoice] = useState<'person' | 'artist' | 'venue' | null>(null)
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [interests, setInterests] = useState<string[]>([])
@@ -45,10 +46,32 @@ export function OnboardingScreen() {
       setUsernameError(error.code === '23505' ? 'Username taken — try another' : error.message)
       return
     }
+    setStep('account_type')
+  }
+
+  // ── Step 2: account type ──────────────────────────────────────
+  async function submitAccountType() {
+    if (!user || !accountChoice) return
+    setBusy(true)
+
+    // For VA choices, set pending_account_type. account_type stays 'person' until admin approves.
+    if (accountChoice === 'artist' || accountChoice === 'venue') {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ pending_account_type: accountChoice })
+        .eq('id', user.id)
+      if (error) {
+        console.error('[Onboarding] pending_account_type update failed:', error.message)
+        // Non-fatal: continue to next step. User can re-request via support if it doesn't take.
+      }
+    }
+    // For 'person', no DB write needed — account_type already defaults to 'person'
+
+    setBusy(false)
     setStep('avatar')
   }
 
-  // ── Step 2: avatar ───────────────────────────────────────────
+  // ── Step 3: avatar ───────────────────────────────────────────
   async function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -84,7 +107,7 @@ export function OnboardingScreen() {
     setStep('interests')
   }
 
-  // ── Step 3: interests ────────────────────────────────────────
+  // ── Step 4: interests ────────────────────────────────────────
   function toggleInterest(interest: string) {
     setInterests((prev) =>
       prev.includes(interest) ? prev.filter((i) => i !== interest) : [...prev, interest]
@@ -114,7 +137,7 @@ export function OnboardingScreen() {
 
       {/* Step counter */}
       <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
-        step {step === 'username' ? 1 : step === 'avatar' ? 2 : 3} of 3
+        step {step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 4
       </p>
 
       {/* Centered content */}
@@ -135,6 +158,44 @@ export function OnboardingScreen() {
           />
           {usernameError && <p style={errorStyle}>{usernameError}</p>}
           <button onClick={submitUsername} disabled={busy} style={btnStyle(busy)}>
+            {busy ? '…' : 'Continue'}
+          </button>
+        </div>
+      )}
+
+      {step === 'account_type' && (
+        <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 style={headingStyle}>What kind of account is this?</h2>
+
+          <button
+            onClick={() => setAccountChoice('person')}
+            style={accountCardStyle(accountChoice === 'person')}
+          >
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>Personal</div>
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', marginTop: 4 }}>For fans and friends</div>
+          </button>
+
+          <button
+            onClick={() => setAccountChoice('artist')}
+            style={accountCardStyle(accountChoice === 'artist')}
+          >
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>Artist</div>
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', marginTop: 4 }}>For bands, solo artists, performers</div>
+          </button>
+
+          <button
+            onClick={() => setAccountChoice('venue')}
+            style={accountCardStyle(accountChoice === 'venue')}
+          >
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>Venue</div>
+            <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', marginTop: 4 }}>For bars, clubs, event spaces</div>
+          </button>
+
+          <button
+            onClick={submitAccountType}
+            disabled={busy || !accountChoice}
+            style={{ ...btnStyle(busy), marginTop: 8, opacity: (busy || !accountChoice) ? 0.5 : 1 }}
+          >
             {busy ? '…' : 'Continue'}
           </button>
         </div>
@@ -245,5 +306,21 @@ function btnStyle(busy: boolean): React.CSSProperties {
     cursor: busy ? 'not-allowed' : 'pointer',
     opacity: busy ? 0.6 : 1,
     transition: 'opacity 150ms ease',
+  }
+}
+
+function accountCardStyle(selected: boolean): React.CSSProperties {
+  return {
+    width: '100%',
+    padding: '16px 18px',
+    borderRadius: 12,
+    border: `1.5px solid ${selected ? 'var(--fg)' : 'var(--fg-18)'}`,
+    background: selected ? 'var(--fg-08)' : 'transparent',
+    color: 'var(--fg)',
+    fontFamily: '"Space Grotesk", sans-serif',
+    textAlign: 'left' as const,
+    cursor: 'pointer',
+    transition: 'all 150ms ease',
+    display: 'block',
   }
 }

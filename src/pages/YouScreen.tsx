@@ -255,6 +255,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [followListOpen, setFollowListOpen] = useState(false)
   const [followListTab,  setFollowListTab]  = useState<'followers' | 'following'>('followers')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [pendingAccountType, setPendingAccountType] = useState<string | null>(null)
 
   // Search state (self only)
   const [searchQuery,   setSearchQuery]   = useState('')
@@ -273,6 +274,16 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   useEffect(() => {
     if (!user || !isSelf) return
     fetchFollowing()
+  }, [user?.id, isSelf])
+
+  useEffect(() => {
+    if (!user?.id || !isSelf) { setPendingAccountType(null); return }
+    supabase
+      .from('profiles')
+      .select('pending_account_type')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => { setPendingAccountType(data?.pending_account_type ?? null) })
   }, [user?.id, isSelf])
 
   async function fetchAttended() {
@@ -447,6 +458,36 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
             </div>
           </div>
         </div>
+
+        {isSelf && pendingAccountType && (
+          <div style={{
+            margin: '0 0 14px',
+            padding: '12px 16px',
+            background: 'rgba(234, 179, 8, 0.08)',
+            border: '1px solid rgba(234, 179, 8, 0.35)',
+            borderRadius: 8,
+          }}>
+            <p style={{
+              margin: 0,
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--fg)',
+              lineHeight: 1.4,
+            }}>
+              Your {pendingAccountType} application is being reviewed
+            </p>
+            <p style={{
+              margin: '4px 0 0',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 12,
+              color: 'var(--fg-55)',
+              lineHeight: 1.5,
+            }}>
+              We'll update your account when an admin approves it. This usually takes a day or two.
+            </p>
+          </div>
+        )}
 
         {/* Edit / sign out (self) — Follow + Message buttons (other) */}
         <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>

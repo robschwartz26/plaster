@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 
 type Tab = 'signin' | 'signup'
+
+const RESEND_COOLDOWN = 60
 
 export function AuthScreen() {
   const [tab, setTab] = useState<Tab>('signin')
@@ -11,7 +13,24 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { signIn, signUp } = useAuth()
+
+  useEffect(() => {
+    return () => { if (cooldownRef.current) clearInterval(cooldownRef.current) }
+  }, [])
+
+  function startCooldown() {
+    setResendCooldown(RESEND_COOLDOWN)
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((n) => {
+        if (n <= 1) { clearInterval(cooldownRef.current!); return 0 }
+        return n - 1
+      })
+    }, 1000)
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,12 +47,25 @@ export function AuthScreen() {
         }
         const { error } = await signUp(email, password)
         if (error) { setError(error.message); return }
+        setEmailSent(true)
+        startCooldown()
       }
       // Don't navigate here — AuthRoute reads the actual profile and decides:
       //   username set   → Wall (/)
       //   username empty → Onboarding (/onboarding)
-      // This prevents returning users who accidentally hit "Sign up" from
-      // being sent back through onboarding.
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResend() {
+    if (resendCooldown > 0 || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { error } = await signUp(email, password)
+      if (error) { setError(error.message); return }
+      startCooldown()
     } finally {
       setBusy(false)
     }
@@ -52,6 +84,58 @@ export function AuthScreen() {
 
       {/* Centered content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
+
+      {emailSent ? (
+        <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, lineHeight: 1 }}>✉️</div>
+          <h2 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--fg)' }}>
+            Check your email
+          </h2>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+            We sent a confirmation link to<br />
+            <strong style={{ color: 'var(--fg)' }}>{email}</strong>.<br />
+            Tap it to confirm and enter Plaster.
+          </p>
+          {error && (
+            <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{error}</p>
+          )}
+          <button
+            onClick={handleResend}
+            disabled={resendCooldown > 0 || busy}
+            style={{
+              marginTop: 8,
+              padding: '13px 0',
+              width: '100%',
+              borderRadius: 14,
+              border: '1.5px solid var(--fg-25)',
+              background: 'transparent',
+              color: resendCooldown > 0 ? 'var(--fg-40)' : 'var(--fg)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: resendCooldown > 0 || busy ? 'not-allowed' : 'pointer',
+              transition: 'color 150ms ease',
+            }}
+          >
+            {busy ? '…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn't get it? Resend"}
+          </button>
+          <button
+            onClick={() => { setEmailSent(false); setError(null) }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--fg-40)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 13,
+              cursor: 'pointer',
+              padding: '4px 0',
+            }}
+          >
+            Use a different email
+          </button>
+        </div>
+      ) : (
+        <>
 
       {/* Tab toggle */}
       <div
@@ -192,6 +276,8 @@ export function AuthScreen() {
           {busy ? '…' : tab === 'signin' ? 'Sign in' : 'Create account'}
         </button>
       </form>
+        </>
+      )}
       </div>
     </div>
   )

@@ -22,7 +22,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
 
 const ALERT_EMAIL = 'plasterpdx@gmail.com'
-const FROM_EMAIL = 'Plaster Alerts <onboarding@resend.dev>'
+const FROM_EMAIL = 'Plaster Alerts <noreply@plasterthewall.com>'
 
 const REASON_LABELS: Record<string, string> = {
   spam: 'Spam',
