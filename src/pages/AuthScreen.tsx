@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 
@@ -12,6 +13,7 @@ export function AuthScreen() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [resendCooldown, setResendCooldown] = useState(0)
@@ -192,15 +194,38 @@ export function AuthScreen() {
           autoComplete="email"
           style={inputStyle}
         />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          autoComplete={tab === 'signin' ? 'current-password' : 'new-password'}
-          style={inputStyle}
-        />
+        <div style={{ position: 'relative', width: '100%' }}>
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete={tab === 'signin' ? 'current-password' : 'new-password'}
+            style={{ ...inputStyle, paddingRight: 44 }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(s => !s)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            style={{
+              position: 'absolute',
+              right: 12,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              background: 'none',
+              border: 'none',
+              padding: 6,
+              cursor: 'pointer',
+              color: 'var(--fg-55)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </div>
 
         {tab === 'signup' && (
           <label
