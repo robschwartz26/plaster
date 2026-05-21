@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'plaster',
   webDir: 'dist',
   ios: {
-    contentInset: 'always',
+    contentInset: 'never',
     allowsInlineMediaPlayback: true,
   },
   plugins: {

@@ -5,9 +5,11 @@ import './index.css'
 import App from './App.tsx'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
+import { StatusBar } from '@capacitor/status-bar'
 
 if (Capacitor.isNativePlatform()) {
   Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => { /* silent */ })
+  StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
 }
 
 // Block native browser pinch-zoom everywhere except the poster grid,
