@@ -10,11 +10,12 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 400,
+      launchShowDuration: 0,
       launchAutoHide: true,
       launchFadeOutDuration: 0,
       backgroundColor: '#0a0a0a',
       showSpinner: false,
+      iosSplashResourceName: 'Splash',
     },
   },
 };

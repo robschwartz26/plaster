@@ -1,20 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 
-/**
- * SplashAnimation
- *
- * Theme-aware splash with genuine CSS fade-in and fade-out.
- *
- * The fade-in works by:
- *   1. First paint: image rendered at opacity 0 with transition already set
- *   2. requestAnimationFrame: opacity set to 1 → browser animates the change
- *
- * Without the rAF, React sets opacity and transition in the same render so the
- * browser sees them as the initial state and doesn't animate.
- *
- * Background matches the user's current theme so the entrance reads correctly
- * in both day (cream) and night (near-black) modes.
- */
+const SPLASH_IMAGES = [
+  '/newsplash-1.png',
+  '/newsplash-2.png',
+  '/newsplash-3.png',
+  '/newsplash-4.png',
+  '/newsplash-5.png',
+  '/newsplash-6.png',
+]
+
+function randomSplash(): string {
+  return SPLASH_IMAGES[Math.floor(Math.random() * SPLASH_IMAGES.length)]
+}
 
 const FADE_IN_MS  = 600
 const HOLD_MS     = 1500
@@ -24,6 +21,8 @@ export function SplashAnimation() {
   const [opacity, setOpacity] = useState(0)
   const [done, setDone]       = useState(false)
   const isFadingOut           = useRef(false)
+  // Pick once on mount so it doesn't re-roll mid-animation
+  const splashSrc             = useRef(randomSplash())
 
   const bg = document.documentElement.getAttribute('data-theme') === 'day'
     ? '#f0ece3'
@@ -72,8 +71,9 @@ export function SplashAnimation() {
       }}
     >
       <img
-        src="/new-splash.png"
+        src={splashSrc.current}
         alt=""
+        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/newsplash-1.png' }}
         style={{
           position: 'absolute',
           inset: 0,
