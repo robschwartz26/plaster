@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -7,6 +7,7 @@ import { Diamond } from '@/components/Diamond'
 import { hashPhone, hashEmail } from '@/lib/contactHash'
 import { pickFromCamera, pickFromLibrary, type PickImageOutcome } from '@/lib/pickImage'
 import { CameraDeniedSheet } from '@/components/CameraDeniedSheet'
+import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
@@ -20,8 +21,8 @@ export function OnboardingScreen() {
   const [username, setUsername] = useState('')
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [accountChoice, setAccountChoice] = useState<'person' | 'artist' | 'venue' | null>(null)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const uploaderRef = useRef<AvatarUploaderRef>(null)
   const [interests, setInterests] = useState<string[]>([])
   const [phone, setPhone] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
@@ -76,14 +77,9 @@ export function OnboardingScreen() {
   }
 
   // ── Step 3: avatar ───────────────────────────────────────────
-  function applyPickedFile(file: File) {
-    setAvatarFile(file)
-    setAvatarPreview(URL.createObjectURL(file))
-  }
-
   function handlePickOutcome(outcome: PickImageOutcome) {
     if (outcome.status === 'success') {
-      applyPickedFile(outcome.file)
+      uploaderRef.current?.openWith(outcome.file)
     } else if (outcome.status === 'denied') {
       setDeniedWhich(outcome.which)
     } else if (outcome.status === 'error') {
@@ -100,28 +96,8 @@ export function OnboardingScreen() {
     handlePickOutcome(await pickFromLibrary())
   }
 
-  async function submitAvatar() {
-    if (!user) return
-    if (avatarFile) {
-      setBusy(true)
-      const ext = avatarFile.name.split('.').pop()
-      const path = `${user.id}/avatar.${ext}`
-      const { error: uploadErr } = await supabase.storage
-        .from('avatars')
-        .upload(path, avatarFile, { upsert: true })
-      if (uploadErr) {
-        console.error('[Onboarding] avatar upload failed:', uploadErr.message)
-      } else {
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
-        console.log('[Onboarding] avatar publicUrl:', publicUrl)
-        const { error: updateErr } = await supabase
-          .from('profiles')
-          .update({ avatar_url: publicUrl })
-          .eq('id', user.id)
-        if (updateErr) console.error('[Onboarding] profile avatar_url update failed:', updateErr.message)
-      }
-      setBusy(false)
-    }
+  function submitAvatar() {
+    // AvatarUploader handles upload + profile write in onDone; just advance
     setStep('interests')
   }
 
@@ -282,8 +258,8 @@ export function OnboardingScreen() {
                 Choose from Library
               </button>
             </div>
-            <button onClick={submitAvatar} disabled={busy} style={btnStyle(busy)}>
-              {busy ? 'Uploading…' : avatarPreview ? 'Save & continue' : 'Skip'}
+            <button onClick={submitAvatar} style={btnStyle(false)}>
+              {avatarPreview ? 'Continue' : 'Skip'}
             </button>
           </div>
         </div>
@@ -368,6 +344,18 @@ export function OnboardingScreen() {
         onClose={() => setDeniedWhich(null)}
         onChooseLibrary={deniedWhich === 'camera' ? () => { setDeniedWhich(null); chooseFromLibrary() } : undefined}
       />
+
+      {user && (
+        <AvatarUploader
+          ref={uploaderRef}
+          userId={user.id}
+          onDone={(_fullUrl, diamondUrl) => {
+            setAvatarPreview(diamondUrl)
+            refreshProfile()
+          }}
+          onCancel={() => {}}
+        />
+      )}
     </div>
   )
 }

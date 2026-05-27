@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 
 export interface AvatarUploaderRef {
   open: () => void
+  openWith: (file: File) => void
 }
 
 interface Props {
@@ -39,6 +40,11 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
   // Expose open() so parents can trigger file picker directly (in response to user gesture)
   useImperativeHandle(ref, () => ({
     open: () => fileRef.current?.click(),
+    openWith: (file: File) => {
+      if (rawSrc) URL.revokeObjectURL(rawSrc)
+      setRawSrc(URL.createObjectURL(file))
+      setPanX(0); setPanY(0); setScale(1)
+    },
   }))
 
   // Non-passive touchmove to allow preventDefault during drag
