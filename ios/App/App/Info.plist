@@ -51,5 +51,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Plaster uses your camera so you can take a profile photo and capture moments to share.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Plaster needs access to your photo library so you can choose a profile photo and add photos to posts.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Plaster saves photos to your library when you choose to download them.</string>
 </dict>
 </plist>

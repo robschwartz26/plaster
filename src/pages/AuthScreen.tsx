@@ -16,9 +16,10 @@ export function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
+  const [otp, setOtp] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, verifySignupOtp } = useAuth()
 
   useEffect(() => {
     return () => { if (cooldownRef.current) clearInterval(cooldownRef.current) }
@@ -60,6 +61,19 @@ export function AuthScreen() {
     }
   }
 
+  async function handleVerify() {
+    if (otp.length < 4 || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { error } = await verifySignupOtp(email, otp)
+      if (error) { setError(error.message); return }
+      // success: onAuthStateChange picks up the session → AuthRoute → onboarding
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleResend() {
     if (resendCooldown > 0 || busy) return
     setError(null)
@@ -94,18 +108,53 @@ export function AuthScreen() {
             Check your email
           </h2>
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.6 }}>
-            We sent a confirmation link to<br />
+            We sent a confirmation code to<br />
             <strong style={{ color: 'var(--fg)' }}>{email}</strong>.<br />
-            Tap it to confirm and enter Plaster.
+            Enter it below to confirm your account.
           </p>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={10}
+            placeholder="Enter code"
+            value={otp}
+            onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 10)); setError(null) }}
+            style={{
+              ...inputStyle,
+              textAlign: 'center',
+              fontSize: 22,
+              letterSpacing: '0.3em',
+              fontWeight: 700,
+            }}
+          />
           {error && (
             <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{error}</p>
           )}
           <button
+            onClick={handleVerify}
+            disabled={busy || otp.length < 4}
+            style={{
+              width: '100%',
+              padding: '14px 0',
+              borderRadius: 14,
+              border: 'none',
+              background: 'var(--fg)',
+              color: 'var(--bg)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 15,
+              fontWeight: 700,
+              cursor: busy || otp.length < 4 ? 'not-allowed' : 'pointer',
+              opacity: busy || otp.length < 4 ? 0.5 : 1,
+              transition: 'opacity 150ms ease',
+            }}
+          >
+            {busy ? '…' : 'Confirm'}
+          </button>
+          <button
             onClick={handleResend}
             disabled={resendCooldown > 0 || busy}
             style={{
-              marginTop: 8,
               padding: '13px 0',
               width: '100%',
               borderRadius: 14,
@@ -119,10 +168,10 @@ export function AuthScreen() {
               transition: 'color 150ms ease',
             }}
           >
-            {busy ? '…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn't get it? Resend"}
+            {busy ? '…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn't get it? Resend code"}
           </button>
           <button
-            onClick={() => { setEmailSent(false); setError(null) }}
+            onClick={() => { setEmailSent(false); setOtp(''); setError(null) }}
             style={{
               background: 'none',
               border: 'none',

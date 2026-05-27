@@ -27,6 +27,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
+  verifySignupOtp: (email: string, token: string) => Promise<{ error: Error | null }>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -93,10 +94,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  async function verifySignupOtp(email: string, token: string) {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'signup' })
+    return { error: error as Error | null }
+  }
+
   const isAdmin = profile?.is_admin === true
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signUp, signIn, signOut, refreshProfile }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
       {children}
     </AuthContext.Provider>
   )
