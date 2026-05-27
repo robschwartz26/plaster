@@ -5,13 +5,14 @@ import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { flipImageHorizontally } from '@/lib/imageUtils'
 import { Diamond } from '@/components/Diamond'
+import { hashPhone, hashEmail } from '@/lib/contactHash'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
   'Food & Drink', 'Sports', 'Community', 'Outdoors', 'Tech',
 ]
 
-type Step = 'username' | 'account_type' | 'avatar' | 'interests'
+type Step = 'username' | 'account_type' | 'avatar' | 'interests' | 'phone'
 
 export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('username')
@@ -21,6 +22,8 @@ export function OnboardingScreen() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [interests, setInterests] = useState<string[]>([])
+  const [phone, setPhone] = useState('')
+  const [phoneError, setPhoneError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
   const { user, refreshProfile } = useAuth()
@@ -118,8 +121,38 @@ export function OnboardingScreen() {
     if (!user) return
     setBusy(true)
     await supabase.from('profiles').update({ interests }).eq('id', user.id)
-    await refreshProfile()
     setBusy(false)
+    setStep('phone')
+  }
+
+  // ── Step 5: phone ────────────────────────────────────────────
+  async function submitPhone() {
+    if (!user) return
+    const ph = await hashPhone(phone)
+    if (ph === null) { setPhoneError('Enter a valid phone number'); return }
+    const eh = user.email ? await hashEmail(user.email) : null
+    setBusy(true)
+    try {
+      await supabase.from('profiles').update({
+        phone_hash: ph,
+        ...(eh ? { email_hash: eh } : {}),
+      }).eq('id', user.id)
+      await refreshProfile()
+      navigate('/', { replace: true })
+    } catch (err) {
+      console.error('[Onboarding] submitPhone failed:', err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function skipPhone() {
+    if (!user) return
+    const eh = user.email ? await hashEmail(user.email) : null
+    if (eh) {
+      await supabase.from('profiles').update({ email_hash: eh }).eq('id', user.id)
+    }
+    await refreshProfile()
     navigate('/', { replace: true })
   }
 
@@ -137,7 +170,7 @@ export function OnboardingScreen() {
 
       {/* Step counter */}
       <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
-        step {step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 4
+        step {step === 'phone' ? 5 : step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 5
       </p>
 
       {/* Centered content */}
@@ -255,7 +288,45 @@ export function OnboardingScreen() {
             })}
           </div>
           <button onClick={submitInterests} disabled={busy} style={{ ...btnStyle(busy), marginTop: 8 }}>
-            {busy ? '…' : interests.length > 0 ? 'Finish' : 'Skip'}
+            {busy ? '…' : interests.length > 0 ? 'Continue' : 'Skip'}
+          </button>
+        </div>
+      )}
+
+      {step === 'phone' && (
+        <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 style={headingStyle}>Find your friends on Plaster</h2>
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, lineHeight: 1.5, color: 'var(--fg-55)', textAlign: 'center', margin: '0 0 8px' }}>
+            <strong style={{ color: 'var(--fg)', fontWeight: 700 }}>We don't sell phone, email, contacts, or personal info — ever. Period.</strong>{' '}
+            Not to advertisers, marketers, or spammers. No exceptions, no fine print. We use it for one thing only: helping you find your friends on Plaster. Don't want to? Skip it — you can always add it later.
+          </p>
+          <input
+            type="tel"
+            inputMode="tel"
+            placeholder="Phone number"
+            value={phone}
+            onChange={(e) => { setPhone(e.target.value); setPhoneError(null) }}
+            style={inputStyle}
+          />
+          {phoneError && <p style={errorStyle}>{phoneError}</p>}
+          <button onClick={submitPhone} disabled={busy} style={btnStyle(busy)}>
+            {busy ? '…' : 'Continue'}
+          </button>
+          <button
+            onClick={skipPhone}
+            disabled={busy}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--fg-55)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 14,
+              padding: '10px',
+              cursor: 'pointer',
+              marginTop: 4,
+            }}
+          >
+            Skip for now
           </button>
         </div>
       )}

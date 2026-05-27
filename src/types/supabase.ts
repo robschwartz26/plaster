@@ -701,12 +701,14 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           created_at: string
+          email_hash: string | null
           id: string
           interests: string[]
           is_admin: boolean
           is_public: boolean
           is_suspended: boolean
           pending_account_type: string | null
+          phone_hash: string | null
           show_social_publicly: boolean
           username: string | null
         }
@@ -717,12 +719,14 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email_hash?: string | null
           id: string
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
+          phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
         }
@@ -733,12 +737,14 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           created_at?: string
+          email_hash?: string | null
           id?: string
           interests?: string[]
           is_admin?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
+          phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
         }
