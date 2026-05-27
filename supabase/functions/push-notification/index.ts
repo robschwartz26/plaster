@@ -20,7 +20,8 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.1/mod.ts'
 
-const APNS_HOST = 'https://api.push.apple.com'
+const APNS_PROD    = 'https://api.push.apple.com'
+const APNS_SANDBOX = 'https://api.development.push.apple.com'
 
 interface NotificationRow {
   id: string
@@ -153,9 +154,8 @@ serve(async (req) => {
 
     const jwt = await makeApnsJwt(apnsKeyId, apnsTeamId, apnsPrivateKey)
 
-    const results: any[] = []
-    for (const t of tokens as DeviceToken[]) {
-      const res = await fetch(`${APNS_HOST}/3/device/${t.token}`, {
+    const sendToApns = async (host: string, deviceToken: string): Promise<{ status: number; body: string }> => {
+      const res = await fetch(`${host}/3/device/${deviceToken}`, {
         method: 'POST',
         headers: {
           'authorization': `bearer ${jwt}`,
@@ -166,19 +166,35 @@ serve(async (req) => {
         },
         body: JSON.stringify(apnsPayload),
       })
+      const body = res.status !== 200 ? await res.text() : ''
+      return { status: res.status, body }
+    }
 
-      const status = res.status
-      let errBody: string | null = null
+    const results: any[] = []
+    for (const t of tokens as DeviceToken[]) {
+      const short = t.token.slice(0, 8) + '...'
+
+      // Try production first
+      let { status, body: errBody } = await sendToApns(APNS_PROD, t.token)
+      console.log(`[push] prod → ${short}: ${status}${errBody ? ' ' + errBody : ''}`)
+
+      // BadDeviceToken on prod means this is a sandbox token — retry on sandbox
+      if (status === 400 && errBody.includes('BadDeviceToken')) {
+        console.log(`[push] BadDeviceToken on prod, retrying sandbox → ${short}`)
+        ;({ status, body: errBody } = await sendToApns(APNS_SANDBOX, t.token))
+        console.log(`[push] sandbox → ${short}: ${status}${errBody ? ' ' + errBody : ''}`)
+      }
+
       if (status !== 200) {
-        errBody = await res.text()
-        console.error(`[push] APNS ${status} for token ${t.token.slice(0, 8)}...: ${errBody}`)
-        // APNS 410 means the token is permanently invalid — clean it up
+        console.error(`[push] final failure ${status} for ${short}: ${errBody}`)
+        // 410 = token permanently invalid on both endpoints — clean it up
         if (status === 410) {
           await admin.from('device_tokens').delete().eq('token', t.token)
-          console.log(`[push] removed expired token ${t.token.slice(0, 8)}...`)
+          console.log(`[push] removed expired token ${short}`)
         }
       }
-      results.push({ token: t.token.slice(0, 8) + '...', status, error: errBody })
+
+      results.push({ token: short, status, error: errBody || null })
     }
 
     return new Response(JSON.stringify({ ok: true, results }), { status: 200 })
