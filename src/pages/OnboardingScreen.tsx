@@ -1,11 +1,12 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
-import { flipImageHorizontally } from '@/lib/imageUtils'
 import { Diamond } from '@/components/Diamond'
 import { hashPhone, hashEmail } from '@/lib/contactHash'
+import { pickFromCamera, pickFromLibrary, type PickImageOutcome } from '@/lib/pickImage'
+import { CameraDeniedSheet } from '@/components/CameraDeniedSheet'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
@@ -24,8 +25,8 @@ export function OnboardingScreen() {
   const [interests, setInterests] = useState<string[]>([])
   const [phone, setPhone] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
+  const [deniedWhich, setDeniedWhich] = useState<'camera' | 'photos' | null>(null)
   const [busy, setBusy] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
   const { user, refreshProfile } = useAuth()
   const navigate = useNavigate()
 
@@ -75,14 +76,28 @@ export function OnboardingScreen() {
   }
 
   // ── Step 3: avatar ───────────────────────────────────────────
-  async function pickFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    // Mirror front-camera captures to match what the user saw in the live preview
-    const isFrontCamera = e.target.getAttribute('capture') === 'user'
-    const source = isFrontCamera ? await flipImageHorizontally(file) : file
-    setAvatarFile(new File([source], file.name, { type: file.type }))
-    setAvatarPreview(URL.createObjectURL(source))
+  function applyPickedFile(file: File) {
+    setAvatarFile(file)
+    setAvatarPreview(URL.createObjectURL(file))
+  }
+
+  function handlePickOutcome(outcome: PickImageOutcome) {
+    if (outcome.status === 'success') {
+      applyPickedFile(outcome.file)
+    } else if (outcome.status === 'denied') {
+      setDeniedWhich(outcome.which)
+    } else if (outcome.status === 'error') {
+      console.error('[Onboarding] pick image error:', outcome.message)
+    }
+    // 'cancelled' → do nothing
+  }
+
+  async function takePhoto() {
+    handlePickOutcome(await pickFromCamera())
+  }
+
+  async function chooseFromLibrary() {
+    handlePickOutcome(await pickFromLibrary())
   }
 
   async function submitAvatar() {
@@ -237,7 +252,7 @@ export function OnboardingScreen() {
       {step === 'avatar' && (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
           <h2 style={headingStyle}>Add a photo</h2>
-          <div onClick={() => fileRef.current?.click()} style={{ cursor: 'pointer' }}>
+          <div>
             {avatarPreview
               ? <Diamond diamondUrl={avatarPreview} size={100} />
               : (
@@ -250,8 +265,23 @@ export function OnboardingScreen() {
               )
             }
           </div>
-          <input ref={fileRef} type="file" accept="image/*" onChange={pickFile} style={{ display: 'none' }} />
           <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={takePhoto}
+                disabled={busy}
+                style={outlineBtnStyle(busy)}
+              >
+                Take Photo
+              </button>
+              <button
+                onClick={chooseFromLibrary}
+                disabled={busy}
+                style={outlineBtnStyle(busy)}
+              >
+                Choose from Library
+              </button>
+            </div>
             <button onClick={submitAvatar} disabled={busy} style={btnStyle(busy)}>
               {busy ? 'Uploading…' : avatarPreview ? 'Save & continue' : 'Skip'}
             </button>
@@ -331,6 +361,13 @@ export function OnboardingScreen() {
         </div>
       )}
       </div>
+
+      <CameraDeniedSheet
+        open={deniedWhich !== null}
+        which={deniedWhich ?? 'camera'}
+        onClose={() => setDeniedWhich(null)}
+        onChooseLibrary={deniedWhich === 'camera' ? () => { setDeniedWhich(null); chooseFromLibrary() } : undefined}
+      />
     </div>
   )
 }
@@ -376,6 +413,22 @@ function btnStyle(busy: boolean): React.CSSProperties {
     fontWeight: 700,
     cursor: busy ? 'not-allowed' : 'pointer',
     opacity: busy ? 0.6 : 1,
+    transition: 'opacity 150ms ease',
+  }
+}
+
+function outlineBtnStyle(busy: boolean): React.CSSProperties {
+  return {
+    flex: 1,
+    padding: '13px 0',
+    borderRadius: 14,
+    border: '1.5px solid var(--fg-25)',
+    background: 'transparent',
+    color: busy ? 'var(--fg-40)' : 'var(--fg)',
+    fontFamily: '"Space Grotesk", sans-serif',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: busy ? 'not-allowed' : 'pointer',
     transition: 'opacity 150ms ease',
   }
 }
