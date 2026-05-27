@@ -247,6 +247,9 @@ export function MsgScreen() {
   // Conversation dismiss state
   const [dismissConfirmId, setDismissConfirmId] = useState<string | null>(null)
 
+  // Shouts expand/collapse
+  const [shoutsExpanded, setShoutsExpanded] = useState(false)
+
   // Message long-press / delete / report state
   const [msgContextMenu, setMsgContextMenu] = useState<{ id: string; senderId: string; x: number; y: number } | null>(null)
   const [deleteConfirmMsgId, setDeleteConfirmMsgId] = useState<string | null>(null)
@@ -842,9 +845,12 @@ export function MsgScreen() {
             />
           </div>
 
+          {/* Single scroll area — shouts + conversations together */}
+          <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+
           {/* Shouts section */}
           {notifications.length > 0 && (
-            <div style={{ padding: '10px 16px 6px', flexShrink: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '10px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
                 shouts{notifications.length > 1 ? ` (${notifications.length})` : ''}
               </span>
@@ -859,9 +865,9 @@ export function MsgScreen() {
             </div>
           )}
 
-          {/* Notification cards */}
-          {notifications.map(notif => (
-            <div key={notif.id} style={{ padding: '0 16px 10px', flexShrink: 0 }}>
+          {/* Notification cards — capped at 5 unless expanded */}
+          {(shoutsExpanded ? notifications : notifications.slice(0, 5)).map(notif => (
+            <div key={notif.id} style={{ padding: '0 16px 10px' }}>
               <div style={{ position: 'relative' }}>
                 <div style={{
                   position: 'absolute',
@@ -917,8 +923,20 @@ export function MsgScreen() {
             </div>
           ))}
 
-          {/* Scrollable conversation + message results */}
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          {/* See more / show less */}
+          {notifications.length > 5 && (
+            <button
+              onClick={() => setShoutsExpanded(v => !v)}
+              style={{
+                display: 'block', width: '100%', padding: '2px 16px 12px',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 11,
+                color: 'var(--fg-40)', textAlign: 'left',
+              }}
+            >
+              {shoutsExpanded ? 'show less' : `see ${notifications.length - 5} more`}
+            </button>
+          )}
 
             {convLoading && (
               <p style={{ padding: '32px 16px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: 0 }}>

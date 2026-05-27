@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 
 interface Props {
   open: boolean
@@ -8,6 +8,19 @@ interface Props {
 }
 
 export function BottomSheet({ open, onClose, title, children }: Props) {
+  // Keep children mounted during the slide-out animation, then unmount.
+  // This prevents closed-sheet inputs from firing autoFocus on mount.
+  const [renderChildren, setRenderChildren] = useState(open)
+
+  useEffect(() => {
+    if (open) {
+      setRenderChildren(true)
+    } else {
+      const t = setTimeout(() => setRenderChildren(false), 350)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -91,7 +104,7 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
-          {children}
+          {renderChildren ? children : null}
         </div>
       </div>
     </>
