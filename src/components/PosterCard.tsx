@@ -8,6 +8,7 @@ import { pickHeart, type PickedHeart } from '@/lib/pickHeart'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
+import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -511,7 +512,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     }
     const { error } = await supabase.from('event_wall_posts').insert(insertRow)
     if (!error) {
-      if (gif) reportGifShare(gif.sourceId, user.id, gifQuery)
+      if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
       setNewPostText('')
       fetchPosts()
       registerView()

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { searchGifs, trendingGifs, gifToSelected, type KlipyGif, type SelectedGif } from '@/lib/klipy'
-import { useAuth } from '@/contexts/AuthContext'
+import { getKlipyId } from '@/lib/klipyId'
 
 interface Props {
   open: boolean
@@ -9,7 +9,6 @@ interface Props {
 }
 
 export function GifPicker({ open, onSelect, onClose }: Props) {
-  const { user } = useAuth()
   const [query, setQuery] = useState('')
   const [gifs, setGifs] = useState<KlipyGif[]>([])
   const [loading, setLoading] = useState(false)
@@ -19,11 +18,11 @@ export function GifPicker({ open, onSelect, onClose }: Props) {
   useEffect(() => {
     if (!open) { setQuery(''); return }
     setLoading(true)
-    trendingGifs(1, 30, user?.id)
+    trendingGifs(1, 30, getKlipyId())
       .then(res => { setGifs(res.data ?? []); setLoading(false) })
       .catch(() => { setGifs([]); setLoading(false) })
     setTimeout(() => inputRef.current?.focus(), 80)
-  }, [open, user])
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -31,19 +30,19 @@ export function GifPicker({ open, onSelect, onClose }: Props) {
     const q = query.trim()
     if (!q) {
       setLoading(true)
-      trendingGifs(1, 30, user?.id)
+      trendingGifs(1, 30, getKlipyId())
         .then(res => { setGifs(res.data ?? []); setLoading(false) })
         .catch(() => { setGifs([]); setLoading(false) })
       return
     }
     setLoading(true)
     debounceRef.current = setTimeout(() => {
-      searchGifs(q, 1, 30, user?.id)
+      searchGifs(q, 1, 30, getKlipyId())
         .then(res => { setGifs(res.data ?? []); setLoading(false) })
         .catch(() => { setGifs([]); setLoading(false) })
     }, 350)
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query, open, user])
+  }, [query, open])
 
   if (!open) return null
 

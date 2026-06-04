@@ -11,6 +11,7 @@ import { BottomSheet } from '@/components/BottomSheet'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
+import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 
@@ -125,6 +126,7 @@ function notifCopy(notif: AppNotification) {
     case 'message': return <>{senderNode} sent you a message</>
     case 'va_approved': return <>Your {notif.body_preview ?? 'account'} account has been approved 🎉</>
     case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
+    case 'show_reminder': return <>Show today: {eventNode}</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -682,7 +684,7 @@ export function MsgScreen() {
     const { error } = await supabase.from('messages').insert(insertRow)
 
     if (!error) {
-      if (gif) reportGifShare(gif.sourceId, user.id, gifQuery)
+      if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
       await supabase
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
