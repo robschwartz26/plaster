@@ -32,8 +32,8 @@ export function SuspendedBanner() {
       textAlign: 'center',
     }}>
       <strong>Your account is suspended.</strong> You can still browse Plaster, but you can't post, message, or like until your account is reinstated. Contact{' '}
-      <a href="mailto:plasterpdx@gmail.com" style={{ color: '#78350f', textDecoration: 'underline' }}>
-        plasterpdx@gmail.com
+      <a href="mailto:support@plasterthewall.com" style={{ color: '#78350f', textDecoration: 'underline' }}>
+        support@plasterthewall.com
       </a>
       {' '}with questions.
     </div>

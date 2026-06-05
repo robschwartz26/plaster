@@ -9,8 +9,8 @@
  * mechanism for users to acknowledge agreement before using.
  */
 
-const EFFECTIVE_DATE = 'May 6, 2026'
-const CONTACT_EMAIL = 'plasterpdx@gmail.com'
+const EFFECTIVE_DATE = 'June 4, 2026'
+const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
   return (

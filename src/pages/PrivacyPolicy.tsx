@@ -6,8 +6,8 @@
  * practices or features change. Do NOT add features that don't exist.
  */
 
-const EFFECTIVE_DATE = 'May 6, 2026'
-const CONTACT_EMAIL = 'plasterpdx@gmail.com'
+const EFFECTIVE_DATE = 'June 4, 2026'
+const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function PrivacyPolicy() {
   return (
@@ -79,19 +79,44 @@ export function PrivacyPolicy() {
 
       <h3 style={h3}>Location</h3>
       <p>
-        On the Map screen, Plaster requests permission to use your device's
-        location to show you events near you. We <strong>do not store</strong>{' '}
-        your location on our servers. Your location stays on your device and
-        is used only to position the map. You can deny location permission
-        and still use the rest of the app.
+        Plaster uses your location to show venues and events near you. When
+        you use a nearby feature (such as the venue proximity list), your
+        approximate coordinates are sent to our server in real time solely
+        to return nearby results — they are <strong>not stored</strong>,{' '}
+        <strong>not linked to your account</strong>, and never used for
+        advertising. General map browsing uses your location only on your
+        device to center the map. You can deny location permission at any
+        time and still use the rest of the app.
+      </p>
+
+      <h3 style={h3}>Your details for discovery</h3>
+      <p>
+        When you sign up you can optionally provide your phone number so
+        friends who have your number can find you on Plaster. Your phone
+        number is hashed on your device (SHA-256) and only the hash is
+        stored — we never store your actual phone number. Your email address
+        is hashed the same way for matching purposes. You can skip this step
+        entirely.
+      </p>
+
+      <h3 style={h3}>Find Friends (contact matching)</h3>
+      <p>
+        Plaster's optional Find Friends feature can show you which people
+        you already know are on Plaster. If you grant contacts permission,
+        all phone numbers and email addresses in your address book are
+        hashed on your device before anything leaves your phone. Only the
+        hashed values are sent to our server, used to find matching Plaster
+        accounts, and then immediately discarded. We never receive, store,
+        or process your actual contacts or any personally identifying
+        information from them. This feature is optional and can be skipped.
       </p>
 
       <h3 style={h3}>What we do not collect</h3>
       <p>Plaster does not collect:</p>
       <ul style={ul}>
-        <li>Your phone number or real name</li>
+        <li>Your real name</li>
         <li>Your date of birth or age</li>
-        <li>Your contacts, photos library, or calendar</li>
+        <li>Your photos library or calendar</li>
         <li>
           Information from third-party advertising networks or analytics
           services (we don't use any)
@@ -143,6 +168,12 @@ export function PrivacyPolicy() {
         <li>
           <strong>KLIPY</strong> — provides the GIF picker. When you search for or
           send a GIF, your search query and the GIF you choose are processed by KLIPY.
+          An anonymous identifier (not linked to your Plaster account) is sent with
+          GIF searches.
+        </li>
+        <li>
+          <strong>Anthropic</strong> — used on our servers to help process public
+          event posters. No personal user data is sent for this.
         </li>
       </ul>
 
@@ -173,8 +204,11 @@ export function PrivacyPolicy() {
       <p>
         You can edit your profile, change your privacy settings, or delete
         your account from the You tab in the app. Deleting your account
-        permanently removes your profile, posts, messages, and other personal
-        content from our active database within 30 days.
+        permanently removes your profile, messages, and activity from our
+        active database within 30 days. Public wall posts you have written
+        are anonymized — your name and avatar are detached from them — rather
+        than deleted. Some information may persist in encrypted backups for a
+        limited time before being permanently erased.
       </p>
 
       <h3 style={h3}>Block, mute, and report</h3>
@@ -267,9 +301,10 @@ export function PrivacyPolicy() {
       <h2 style={h2}>Data retention</h2>
       <p>
         We keep your information for as long as your account is active. When
-        you delete your account, we remove your personal information from
-        our active database within 30 days. Some information may persist in
-        encrypted backups for a limited time before being permanently erased.
+        you delete your account, we remove your personal information from our
+        active database within 30 days. Public wall posts are anonymized
+        rather than deleted. Some information may persist in encrypted backups
+        for a limited time before being permanently erased.
       </p>
 
       <h2 style={h2}>International data transfers</h2>
