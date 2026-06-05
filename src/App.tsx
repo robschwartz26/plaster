@@ -21,6 +21,7 @@ const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })))
 const TermsOfUse    = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })))
+const Staff         = lazy(() => import('./pages/StaffScreen').then(m => ({ default: m.StaffScreen })))
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,7 @@ function AppRoutes() {
         {/* Routes outside the app shell */}
         <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
         <Route path="/admin"      element={<Admin />} />
+        <Route path="/staff"      element={<ProtectedRoute><Staff /></ProtectedRoute>} />
         <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/terms"      element={<TermsOfUse />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />

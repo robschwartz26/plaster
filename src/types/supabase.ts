@@ -450,6 +450,10 @@ export type Database = {
           sold_out_report_count: number
           show_times: string[] | null
           starts_at: string
+          status: string
+          created_by: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
           title: string
           venue_id: string | null
           view_count: number
@@ -479,6 +483,10 @@ export type Database = {
           sold_out_report_count?: number
           show_times?: string[] | null
           starts_at: string
+          status?: string
+          created_by?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
           title: string
           venue_id?: string | null
           view_count?: number
@@ -508,6 +516,10 @@ export type Database = {
           sold_out_report_count?: number
           show_times?: string[] | null
           starts_at?: string
+          status?: string
+          created_by?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
           title?: string
           venue_id?: string | null
           view_count?: number
@@ -722,6 +734,7 @@ export type Database = {
           id: string
           interests: string[]
           is_admin: boolean
+          is_ingester: boolean
           is_public: boolean
           is_suspended: boolean
           pending_account_type: string | null
@@ -743,6 +756,7 @@ export type Database = {
           id: string
           interests?: string[]
           is_admin?: boolean
+          is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
@@ -764,6 +778,7 @@ export type Database = {
           id?: string
           interests?: string[]
           is_admin?: boolean
+          is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
@@ -1049,6 +1064,7 @@ export type Database = {
         Returns: { id: string; username: string; avatar_diamond_url: string | null; avatar_url: string | null; account_type: string; matched_phone_hash: string | null; matched_email_hash: string | null }[]
       }
       get_unread_count: { Args: never; Returns: number }
+      can_ingest: { Args: { user_id: string }; Returns: boolean }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
         Args: { target_id: string; viewer_id: string }

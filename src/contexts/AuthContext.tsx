@@ -11,6 +11,7 @@ export interface Profile {
   bio: string | null
   is_public: boolean
   is_admin?: boolean
+  is_ingester?: boolean
   interests: string[]
   created_at: string
   account_type: string | null
@@ -22,6 +23,7 @@ interface AuthContextValue {
   session: Session | null
   profile: Profile | null
   isAdmin: boolean
+  canIngest: boolean
   loading: boolean
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -100,9 +102,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = profile?.is_admin === true
+  const canIngest = (profile?.is_admin || profile?.is_ingester) === true
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, canIngest, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
       {children}
     </AuthContext.Provider>
   )

@@ -36,11 +36,11 @@ serve(async (req) => {
 
   const { data: profile } = await supabaseService
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, is_ingester')
     .eq('id', user.id)
     .single()
 
-  if (!profile?.is_admin) {
+  if (!profile?.is_admin && !profile?.is_ingester) {
     return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },

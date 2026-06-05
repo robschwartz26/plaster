@@ -48,7 +48,7 @@ async function fileFromDrop(e: React.DragEvent): Promise<File | null> {
   return new File([bytes], `dropped-${Date.now()}.${ext}`, { type: mimeType })
 }
 
-export function ImportForm() {
+export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) {
   const [venues, setVenues] = useState<Venue[]>([])
 
   useEffect(() => {
@@ -96,6 +96,7 @@ export function ImportForm() {
   const [reExtracting, setReExtracting] = useState(false)
   const [reuseExistingPoster, setReuseExistingPoster] = useState(false)
   const [nearDuplicate, setNearDuplicate] = useState<Venue | null>(null)
+  const [venueMismatch, setVenueMismatch] = useState<string | null>(null)
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('weekly')
   const [weekdayOrdinals, setWeekdayOrdinals] = useState<Set<OrdinalKey>>(new Set())
@@ -133,7 +134,7 @@ export function ImportForm() {
       setForm({
         title: result.title,
         venue_id: match?.id ?? '',
-        venue_name_manual: match ? '' : result.venue_name,
+        venue_name_manual: (staffMode || match) ? '' : result.venue_name,
         date: result.date,
         time: result.time,
         address: match?.address || result.address,
@@ -144,6 +145,9 @@ export function ImportForm() {
         instagram: match?.instagram || result.instagram || '',
         hours: match?.hours || result.hours || '',
       })
+      if (staffMode) {
+        setVenueMismatch(!match && result.venue_name ? result.venue_name : null)
+      }
       setPhase('review')
     } catch (e) {
       setErrorMsg(String(e)); setPhase('error')
@@ -173,13 +177,17 @@ export function ImportForm() {
       setReuseExistingPoster(!!result.existing_poster_url)
       setSoldOut(result.sold_out ?? soldOut)
       const match = findVenueMatch(venues, result.venue_name)
+      if (staffMode) {
+        const freshName = result.venue_name?.trim()
+        if (freshName) setVenueMismatch(!match ? result.venue_name : null)
+      }
       setForm(f => {
         const freshName = result.venue_name?.trim()
         let venue_id = f.venue_id
         let venue_name_manual = f.venue_name_manual
         if (freshName) {
           if (match) { venue_id = match.id; venue_name_manual = '' }
-          else { venue_id = ''; venue_name_manual = freshName }
+          else { venue_id = ''; venue_name_manual = staffMode ? '' : freshName }
         }
         const resolvedMatch = venue_id ? venues.find(v => v.id === venue_id) : undefined
         return {
@@ -220,6 +228,7 @@ export function ImportForm() {
   }, [])
 
   const handleVenueChange = (venueId: string) => {
+    if (venueId) setVenueMismatch(null)
     const v = venues.find(v => v.id === venueId)
     setForm(f => ({
       ...f,
@@ -314,7 +323,7 @@ export function ImportForm() {
         if (error) throw error
       } else {
         let venue_id = form.venue_id
-        if (!venue_id && form.venue_name_manual) {
+        if (!staffMode && !venue_id && form.venue_name_manual) {
           const { data: newVenue, error: venueError } = await supabaseAdmin.from('venues').insert({
             name: form.venue_name_manual,
             neighborhood: form.neighborhood || 'Portland',
@@ -366,13 +375,15 @@ export function ImportForm() {
           const snoozeDate = new Date(lastDate); snoozeDate.setMonth(snoozeDate.getMonth() + 3)
           const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
           const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : recurrenceFrequency === 'monthly' ? 'monthly' : 'on specific weekdays'
-          await supabaseAdmin.from('admin_notifications').insert({
-            type: 'recurrence_check',
-            title: `Check recurring event: ${form.title}`,
-            message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
-            recurrence_group_id: recurrenceGroupId,
-            snoozed_until: snoozeDate.toISOString(),
-          })
+          if (!staffMode) {
+            await supabaseAdmin.from('admin_notifications').insert({
+              type: 'recurrence_check',
+              title: `Check recurring event: ${form.title}`,
+              message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
+              recurrence_group_id: recurrenceGroupId,
+              snoozed_until: snoozeDate.toISOString(),
+            })
+          }
           setSuccessCount(dates.length)
         } else if (extraDates.length > 0) {
           // Group all occurrences by calendar date — same date = multiple show times
@@ -415,6 +426,7 @@ export function ImportForm() {
 
   const handleSubmit = async () => {
     if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
+    if (staffMode && !form.venue_id) { setErrorMsg('Please select a venue before submitting.'); setPhase('error'); return }
 
     // Validate extra dates
     if (extraDates.length > 0) {
@@ -447,7 +459,7 @@ export function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
   }
 
   // DEV: generate a mock test poster
@@ -614,8 +626,10 @@ export function ImportForm() {
       <span style={{ fontSize: 40 }}>✓</span>
       <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, color: 'var(--fg)', margin: 0 }}>{successTitle}</p>
       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>
-      {successCount > 1 ? `${successCount} events posted · ${recurrenceFrequency === 'weekdays' ? 'specific weekdays' : FREQ_LABELS[recurrenceFrequency].toLowerCase()} for 3 months` : 'Posted to the wall'}
-    </p>
+        {successCount > 1
+          ? `${successCount} events ${staffMode ? 'submitted for review' : 'posted'} · ${recurrenceFrequency === 'weekdays' ? 'specific weekdays' : FREQ_LABELS[recurrenceFrequency].toLowerCase()} for 3 months`
+          : staffMode ? 'Submitted for review' : 'Posted to the wall'}
+      </p>
       <button onClick={reset} style={{ marginTop: 8, padding: '10px 28px', background: '#A855F7', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
         Import Another
       </button>
@@ -836,16 +850,24 @@ export function ImportForm() {
           <div style={fieldStyle}>
             <label style={{ ...labelStyle, color: isUncertain('venue_name') ? '#facc15' : 'var(--fg-55)' }}>Venue {isUncertain('venue_name') && '⚠'} *</label>
             <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.venue_id} onChange={e => handleVenueChange(e.target.value)}>
-              <option value="">— New venue —</option>
+              {staffMode
+                ? <option value="" disabled>— Select a venue —</option>
+                : <option value="">— New venue —</option>
+              }
               {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
             {form.venue_id && !nearDuplicate && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>existing venue · address &amp; details auto-filled</p>
             )}
-            {!form.venue_id && (
+            {venueMismatch && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)', margin: '6px 0 0 0' }}>
+                ⚠ "{venueMismatch}" isn't on the venue list — please select the correct venue.
+              </p>
+            )}
+            {!staffMode && !form.venue_id && (
               <input style={{ ...inputStyle, marginTop: 8 }} value={form.venue_name_manual} onChange={e => setForm(f => ({ ...f, venue_name_manual: e.target.value }))} placeholder="New venue name (will be created)" />
             )}
-            {nearDuplicate && (
+            {!staffMode && nearDuplicate && (
               <div style={{ marginTop: 8, padding: '10px 12px', border: '1px solid rgba(234,179,8,0.4)', borderRadius: 6, background: 'rgba(234,179,8,0.06)' }}>
                 <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(234,179,8,0.9)', margin: '0 0 8px 0' }}>
                   Similar venue found: <strong>{nearDuplicate.name}</strong>
@@ -878,8 +900,8 @@ export function ImportForm() {
             </div>
           )}
 
-          {/* Neighborhood — only if new venue */}
-          {!form.venue_id && form.venue_name_manual && (
+          {/* Neighborhood — only if new venue (admin only) */}
+          {!staffMode && !form.venue_id && form.venue_name_manual && (
             <div style={fieldStyle}>
               <label style={labelStyle}>Neighborhood</label>
               <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))}>
@@ -889,8 +911,8 @@ export function ImportForm() {
             </div>
           )}
 
-          {/* Enriched venue fields — only for new venues */}
-          {!form.venue_id && form.venue_name_manual && (
+          {/* Enriched venue fields — only for new venues (admin only) */}
+          {!staffMode && !form.venue_id && form.venue_name_manual && (
             <>
               <div style={fieldStyle}>
                 <label style={labelStyle}>Hours</label>
@@ -1173,10 +1195,10 @@ export function ImportForm() {
             )}
             <button
               onClick={handleSubmit}
-              disabled={!form.title || !form.date || (!form.venue_id && !form.venue_name_manual)}
-              style={{ flex: 1, padding: '12px 0', background: (form.title && form.date && (form.venue_id || form.venue_name_manual)) ? '#A855F7' : 'var(--fg-18)', color: (form.title && form.date && (form.venue_id || form.venue_name_manual)) ? '#fff' : 'var(--fg-30)', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: (form.title && form.date) ? 'pointer' : 'not-allowed', transition: 'all 0.15s ease' }}
+              disabled={!form.title || !form.date || (staffMode ? !form.venue_id : (!form.venue_id && !form.venue_name_manual))}
+              style={{ flex: 1, padding: '12px 0', background: (form.title && form.date && (staffMode ? form.venue_id : (form.venue_id || form.venue_name_manual))) ? '#A855F7' : 'var(--fg-18)', color: (form.title && form.date && (staffMode ? form.venue_id : (form.venue_id || form.venue_name_manual))) ? '#fff' : 'var(--fg-30)', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: (form.title && form.date) ? 'pointer' : 'not-allowed', transition: 'all 0.15s ease' }}
             >
-              Post to Wall →
+              {staffMode ? 'Submit for Review →' : 'Post to Wall →'}
             </button>
             <button onClick={reset} style={{ padding: '12px 16px', background: 'transparent', border: '1px solid var(--fg-18)', borderRadius: 6, color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>
               Cancel
