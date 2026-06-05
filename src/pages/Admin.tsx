@@ -8,33 +8,45 @@ import { EventForm } from '@/components/admin/EventForm'
 import { AdminNotifications } from '@/components/admin/AdminNotifications'
 import { AdminReports } from '@/components/admin/AdminReports'
 import { AdminVARequests } from '@/components/admin/AdminVARequests'
+import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
+import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
 import {
   findDuplicateVenueGroups,
+  findDuplicateEventGroups,
   type Venue,
+  type EventSummary,
 } from '@/components/admin/adminShared'
 
 // ── Section wrapper ──────────────────────────────────────────
 
-function Section({ title, badge, children }: { title: string; badge?: string; children: React.ReactNode }) {
+function Section({ title, badge, children, collapsible = false, defaultCollapsed = false }:
+  { title: string; badge?: string; children: React.ReactNode; collapsible?: boolean; defaultCollapsed?: boolean }) {
+  const [open, setOpen] = useState(!defaultCollapsed)
   return (
     <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, margin: '0 0 24px 0' }}>
+      <div
+        onClick={collapsible ? () => setOpen(o => !o) : undefined}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, margin: open ? '0 0 24px 0' : 0,
+                 cursor: collapsible ? 'pointer' : 'default', userSelect: 'none' }}
+      >
         <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>{title}</h2>
         {badge && (
-          <span style={{
-            fontFamily: '"Space Grotesk", sans-serif',
-            fontSize: 12, fontWeight: 600,
-            color: '#dc2626',
-            background: 'rgba(239,68,68,0.12)',
-            padding: '3px 10px',
-            borderRadius: 999,
-            letterSpacing: '0.02em',
-          }}>{badge}</span>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600,
+            color: '#dc2626', background: 'rgba(239,68,68,0.12)', padding: '3px 10px',
+            borderRadius: 999, letterSpacing: '0.02em' }}>{badge}</span>
+        )}
+        {collapsible && (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--fg-40)"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{ marginLeft: 'auto', flexShrink: 0,
+                        transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         )}
       </div>
-      {children}
+      {(!collapsible || open) && children}
     </section>
   )
 }
@@ -43,6 +55,7 @@ function Section({ title, badge, children }: { title: string; badge?: string; ch
 
 function AdminDashboard() {
   const [venues, setVenues] = useState<Venue[]>([])
+  const [events, setEvents] = useState<EventSummary[]>([])
   const [venueFormOpen, setVenueFormOpen] = useState(false)
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
@@ -53,6 +66,15 @@ function AdminDashboard() {
     if (data) setVenues(data)
   }, [])
 
+  const fetchEvents = useCallback(async () => {
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+    const { data } = await supabaseAdmin.from('events')
+      .select('id, title, starts_at, venue_id, poster_url, show_times')
+      .gte('starts_at', cutoff)
+      .order('starts_at', { ascending: true })
+    if (data) setEvents(data)
+  }, [])
+
   const fetchOpenReportCount = useCallback(async () => {
     const { count } = await supabaseAdmin
       .from('content_reports')
@@ -61,7 +83,7 @@ function AdminDashboard() {
     setOpenReportCount(count ?? 0)
   }, [])
 
-  useEffect(() => { fetchVenues(); fetchOpenReportCount() }, [])
+  useEffect(() => { fetchVenues(); fetchEvents(); fetchOpenReportCount() }, [])
 
   return (
     <div style={{ height: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -70,6 +92,7 @@ function AdminDashboard() {
         <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 32px', width: '100%' }}>
 
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
+          <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
           <AdminNotifications />
 
           <Section
@@ -84,6 +107,10 @@ function AdminDashboard() {
             badge={pendingVACount > 0 ? `${pendingVACount} pending` : undefined}
           >
             <AdminVARequests onCountChange={setPendingVACount} />
+          </Section>
+
+          <Section title="Venue Accounts" collapsible defaultCollapsed>
+            <AdminVenueAccounts />
           </Section>
 
           <Section title="Import Poster">

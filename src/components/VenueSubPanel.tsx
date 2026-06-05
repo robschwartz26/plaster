@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { getGradient } from '@/lib/categories'
+import { FollowButton } from '@/components/FollowButton'
+import { NotifyBell } from '@/components/NotifyBell'
 
 export interface FollowVenue {
   id: string
@@ -37,9 +39,8 @@ interface Props {
 export function VenueSubPanel({ venue, onBack }: Props) {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [isFollowing, setIsFollowing] = useState(false)
-  const [toggling,    setToggling]    = useState(false)
-  const [events,      setEvents]      = useState<VenueEvent[] | null>(null)
+  const [accountProfileId, setAccountProfileId] = useState<string | null>(null)
+  const [events,           setEvents]           = useState<VenueEvent[] | null>(null)
 
   useEffect(() => {
     supabase
@@ -53,28 +54,14 @@ export function VenueSubPanel({ venue, onBack }: Props) {
   }, [venue.id])
 
   useEffect(() => {
-    if (!user) return
     supabase
-      .from('follows')
+      .from('profiles')
       .select('id')
-      .eq('follower_id', user.id)
-      .eq('following_id', venue.id)
-      .single()
-      .then(({ data }) => setIsFollowing(!!data))
-  }, [user, venue.id])
-
-  async function toggleFollow() {
-    if (!user) return
-    setToggling(true)
-    if (isFollowing) {
-      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', venue.id)
-      setIsFollowing(false)
-    } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: venue.id })
-      setIsFollowing(true)
-    }
-    setToggling(false)
-  }
+      .eq('venue_id', venue.id)
+      .eq('account_type', 'venue')
+      .maybeSingle()
+      .then(({ data }) => setAccountProfileId(data?.id ?? null))
+  }, [venue.id])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -134,21 +121,12 @@ export function VenueSubPanel({ venue, onBack }: Props) {
               </p>
             )}
           </div>
-          <button
-            onClick={toggleFollow}
-            disabled={toggling || !user}
-            style={{
-              flexShrink: 0,
-              padding: '8px 18px', borderRadius: 20,
-              border: isFollowing ? '1.5px solid var(--fg-25)' : 'none',
-              background: isFollowing ? 'transparent' : 'var(--fg)',
-              color: isFollowing ? 'var(--fg-55)' : 'var(--bg)',
-              fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, fontWeight: 700,
-              cursor: toggling ? 'not-allowed' : 'pointer', opacity: toggling ? 0.6 : 1,
-            }}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </button>
+          {accountProfileId && user && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
+              <FollowButton targetUserId={accountProfileId} size="small" />
+              <NotifyBell accountId={accountProfileId} accountType="venue" size="small" />
+            </div>
+          )}
         </div>
 
         {/* Upcoming events grid */}

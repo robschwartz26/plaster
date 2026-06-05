@@ -85,10 +85,13 @@ Return ONLY a JSON object, no markdown, no explanation:
   "category": ${CATEGORY_FIELD},
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
-  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
+  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+  "sold_out": false
 }
 
-For the "crop" field: applies only to the FIRST image (the poster art). Express bounds as fractions of that image's dimensions (0.0–1.0). If the first image IS the poster with no surrounding UI, use x=0, y=0, width=1, height=1.`
+For the "crop" field: applies only to the FIRST image (the poster art). Express bounds as fractions of that image's dimensions (0.0–1.0). If the first image IS the poster with no surrounding UI, use x=0, y=0, width=1, height=1.
+
+For "sold_out": set to true if the poster, any supplemental image, OR the event's stated details clearly indicate it is sold out — a visible stamp/badge, explicit wording like "sold out", "no tickets at the door", or "at capacity". If the description you write says it's sold out, sold_out MUST be true. Default false.`
       : `Analyze this image carefully. It may be a clean poster, or a screenshot containing a poster alongside other content (website UI, event listing text, Instagram chrome, white borders, etc).
 
 Return ONLY a JSON object, no markdown, no explanation:
@@ -102,8 +105,11 @@ Return ONLY a JSON object, no markdown, no explanation:
   "category": ${CATEGORY_FIELD},
   "confidence": "high or medium or low",
   "uncertain_fields": ["fields you were unsure about"],
-  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 }
+  "crop": { "x": 0.0, "y": 0.0, "width": 1.0, "height": 1.0 },
+  "sold_out": false
 }
+
+For "sold_out": set to true if the poster, any supplemental image, OR the event's stated details clearly indicate it is sold out — a visible stamp/badge, explicit wording like "sold out", "no tickets at the door", or "at capacity". If the description you write says it's sold out, sold_out MUST be true. Default false.
 
 For the "crop" field: express poster art bounds as fractions of the total image dimensions (0.0–1.0).
 - If the image IS the poster (clean, no surrounding UI): use x=0, y=0, width=1, height=1

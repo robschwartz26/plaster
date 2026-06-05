@@ -54,6 +54,14 @@ export function AdminNotifications() {
     } finally { setActioning(null) }
   }
 
+  const handleConfirmSoldOut = async (n: AdminNotification) => {
+    if (!n.event_id) return
+    setActioning(n.id)
+    await supabaseAdmin.rpc('confirm_sold_out', { p_event_id: n.event_id })
+    setNotifications(prev => prev.filter(x => x.id !== n.id))
+    setActioning(null)
+  }
+
   const handleMarkEnded = async (id: string) => {
     await supabaseAdmin.from('admin_notifications').update({ dismissed: true }).eq('id', id)
     setNotifications(prev => prev.filter(n => n.id !== id))
@@ -74,13 +82,23 @@ export function AdminNotifications() {
             <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: '0 0 6px 0' }}>{n.title}</p>
             <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: '0 0 12px 0', lineHeight: 1.5 }}>{n.message}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => handleExtend(n)}
-                disabled={actioning === n.id}
-                style={{ padding: '6px 12px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: actioning === n.id ? 'default' : 'pointer', opacity: actioning === n.id ? 0.6 : 1 }}
-              >
-                {actioning === n.id ? 'Extending…' : 'Extend 3 months'}
-              </button>
+              {n.type === 'sold_out_report' ? (
+                <button
+                  onClick={() => handleConfirmSoldOut(n)}
+                  disabled={actioning === n.id}
+                  style={{ padding: '6px 12px', background: 'var(--sold-out, #f0463c)', color: '#fff', border: 'none', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: actioning === n.id ? 'default' : 'pointer', opacity: actioning === n.id ? 0.6 : 1 }}
+                >
+                  {actioning === n.id ? 'Confirming…' : 'Confirm sold out'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleExtend(n)}
+                  disabled={actioning === n.id}
+                  style={{ padding: '6px 12px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: actioning === n.id ? 'default' : 'pointer', opacity: actioning === n.id ? 0.6 : 1 }}
+                >
+                  {actioning === n.id ? 'Extending…' : 'Extend 3 months'}
+                </button>
+              )}
               <button
                 onClick={() => handleMarkEnded(n.id)}
                 style={{ padding: '6px 12px', background: 'transparent', color: 'rgba(239,68,68,0.7)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}

@@ -386,6 +386,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           startsAt: allEvents[activeEventIdx].starts_at,
           likeCount: allEvents[activeEventIdx].like_count,
           viewCount: allEvents[activeEventIdx].view_count,
+          soldOut: allEvents[activeEventIdx].sold_out ?? false,
         }
       : null
 

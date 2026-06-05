@@ -22,5 +22,8 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     color2: c2,
     view_count: e.view_count,
     like_count: e.like_count ?? 0,
+    sold_out: e.sold_out ?? false,
+    sold_out_report_count: e.sold_out_report_count ?? 0,
+    show_times: e.show_times ?? null,
   }
 }

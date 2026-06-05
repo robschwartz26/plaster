@@ -63,6 +63,12 @@ export type Database = {
         }
         Relationships: []
       }
+      show_alert_subscriptions: {
+        Row:    { id: string; subscriber_id: string; account_id: string; created_at: string }
+        Insert: { id?: string; subscriber_id: string; account_id: string; created_at?: string }
+        Update: { id?: string; subscriber_id?: string; account_id?: string; created_at?: string }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           created_at: string | null
@@ -440,6 +446,9 @@ export type Database = {
           recurrence_frequency: string | null
           recurrence_group_id: string | null
           recurrence_rule: string | null
+          sold_out: boolean
+          sold_out_report_count: number
+          show_times: string[] | null
           starts_at: string
           title: string
           venue_id: string | null
@@ -466,6 +475,9 @@ export type Database = {
           recurrence_frequency?: string | null
           recurrence_group_id?: string | null
           recurrence_rule?: string | null
+          sold_out?: boolean
+          sold_out_report_count?: number
+          show_times?: string[] | null
           starts_at: string
           title: string
           venue_id?: string | null
@@ -492,6 +504,9 @@ export type Database = {
           recurrence_frequency?: string | null
           recurrence_group_id?: string | null
           recurrence_rule?: string | null
+          sold_out?: boolean
+          sold_out_report_count?: number
+          show_times?: string[] | null
           starts_at?: string
           title?: string
           venue_id?: string | null
@@ -699,6 +714,8 @@ export type Database = {
           avatar_diamond_url: string | null
           avatar_full_url: string | null
           avatar_url: string | null
+          banner_url: string | null
+          banner_focal_y: number
           bio: string | null
           created_at: string
           email_hash: string | null
@@ -711,12 +728,15 @@ export type Database = {
           phone_hash: string | null
           show_social_publicly: boolean
           username: string | null
+          venue_id: string | null
         }
         Insert: {
           account_type?: string
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
+          banner_url?: string | null
+          banner_focal_y?: number
           bio?: string | null
           created_at?: string
           email_hash?: string | null
@@ -729,12 +749,15 @@ export type Database = {
           phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
+          venue_id?: string | null
         }
         Update: {
           account_type?: string
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
+          banner_url?: string | null
+          banner_focal_y?: number
           bio?: string | null
           created_at?: string
           email_hash?: string | null
@@ -747,6 +770,7 @@ export type Database = {
           phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
+          venue_id?: string | null
         }
         Relationships: []
       }
@@ -950,6 +974,35 @@ export type Database = {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
       }
+      nearby_venue_accounts: {
+        Args: {
+          user_lat: number
+          user_lng: number
+          max_results?: number
+        }
+        Returns: {
+          profile_id: string
+          username: string
+          venue_name: string
+          neighborhood: string | null
+          avatar_diamond_url: string | null
+          distance_km: number
+        }[]
+      }
+      admin_list_venues_with_account_status: {
+        Args: Record<string, never>
+        Returns: {
+          venue_id: string
+          venue_name: string
+          neighborhood: string | null
+          address: string | null
+          has_account: boolean
+          account_profile_id: string | null
+          account_username: string | null
+          account_banner_url: string | null
+          account_avatar_diamond_url: string | null
+        }[]
+      }
       admin_approve_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -991,6 +1044,10 @@ export type Database = {
         Returns: undefined
       }
       follow_status: { Args: { other_user_id: string }; Returns: string }
+      match_contacts: {
+        Args: { hashes: string[] }
+        Returns: { id: string; username: string; avatar_diamond_url: string | null; avatar_url: string | null; account_type: string; matched_phone_hash: string | null; matched_email_hash: string | null }[]
+      }
       get_unread_count: { Args: never; Returns: number }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
@@ -1060,6 +1117,9 @@ export type Database = {
         Returns: number
       }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
+      report_sold_out: { Args: { p_event_id: string }; Returns: number }
+      confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
+      consolidate_events: { Args: { p_keep_id: string; p_remove_ids: string[] }; Returns: undefined }
       scrub_my_account_data: { Args: never; Returns: boolean }
       search_my_messages: {
         Args: { p_query: string }

@@ -10,16 +10,19 @@
     "preview": "vite preview",
     "types:gen": "npx supabase gen types typescript --linked 2>/dev/null > src/types/supabase.ts",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
-    "ios:sync": "npm run build && npx cap sync ios"
+    "ios:sync": "npm run build && npx cap sync ios",
+    "postinstall": "node scripts/patch-contacts-cap8.cjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
+    "@capacitor-community/contacts": "^7.2.0",
     "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.1",
     "@capacitor/core": "^8.3.1",
     "@capacitor/ios": "^8.3.1",
     "@capacitor/keyboard": "^8.0.3",
     "@capacitor/push-notifications": "^8.0.4",
+    "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@radix-ui/react-dialog": "^1.1.15",

@@ -18,4 +18,7 @@ export interface WallEvent {
   focal_y?: number
   poster_offset_x?: number
   poster_offset_y?: number
+  sold_out?: boolean
+  sold_out_report_count?: number
+  show_times?: string[] | null
 }

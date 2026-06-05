@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, Settings, ArrowLeft } from 'lucide-react'
 import { UserActionsMenu } from '@/components/UserActionsMenu'
@@ -14,6 +14,10 @@ import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { FollowButton } from '@/components/FollowButton'
+import { NotifyBell } from '@/components/NotifyBell'
+import { BannerUploader } from '@/components/BannerUploader'
+import { AccountProfile } from '@/components/AccountProfile'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -52,141 +56,8 @@ type DisplayProfile = {
   avatar_diamond_url: string | null
   is_public: boolean
   account_type: string | null
-}
-
-// ── Follow button (for person profiles) ───────────────────────────────────
-
-type FollowStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'following' | 'mutual' | 'self'
-
-function FollowButton({ targetUserId, size = 'large' }: { targetUserId: string; size?: 'large' | 'small' }) {
-  const { user } = useAuth()
-  const [status,               setStatus]               = useState<FollowStatus | null>(null)
-  const [loading,              setLoading]              = useState(false)
-  const [expandedAcceptDecline, setExpandedAcceptDecline] = useState(false)
-
-  const refreshStatus = useCallback(() => {
-    if (!user) return
-    supabase.rpc('follow_status', { other_user_id: targetUserId })
-      .then(({ data }) => {
-        if (typeof data === 'string') {
-          setStatus(data as FollowStatus)
-          if (data !== 'pending_incoming') setExpandedAcceptDecline(false)
-        }
-      })
-  }, [user, targetUserId])
-
-  useEffect(() => {
-    if (!user) return
-    refreshStatus()
-
-    const channel = supabase
-      .channel(`follow-status-${user.id}-${targetUserId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => refreshStatus())
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
-  }, [user, targetUserId, refreshStatus])
-
-  if (!user || status === 'self' || status === null) return null
-
-  async function handleClick() {
-    if (loading || !user) return
-    setLoading(true)
-    if (status === 'none') {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
-    } else if (status === 'pending_outgoing') {
-      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
-    } else if (status === 'following' || status === 'mutual') {
-      await supabase.rpc('unfollow_user', { other_user_id: targetUserId })
-    } else if (status === 'pending_incoming') {
-      setExpandedAcceptDecline(true)
-      setLoading(false)
-      return
-    }
-    await refreshStatus()
-    setLoading(false)
-  }
-
-  async function handleAccept() {
-    if (loading || !user) return
-    setLoading(true)
-    await supabase.rpc('accept_follow_request', { follower_user_id: targetUserId })
-    setExpandedAcceptDecline(false)
-    await refreshStatus()
-    setLoading(false)
-  }
-
-  async function handleDecline() {
-    if (loading || !user) return
-    setLoading(true)
-    await supabase.rpc('decline_follow_request', { follower_user_id: targetUserId })
-    setExpandedAcceptDecline(false)
-    await refreshStatus()
-    setLoading(false)
-  }
-
-  const btnSize: React.CSSProperties = size === 'small'
-    ? { padding: '6px 14px', borderRadius: 20, fontSize: 12 }
-    : { flex: 1, padding: '9px 0', borderRadius: 10, fontSize: 13 }
-
-  // Expanded accept/decline UI for pending_incoming
-  if (status === 'pending_incoming' && expandedAcceptDecline) {
-    return (
-      <div style={{ display: 'flex', gap: 10, flex: 1 }}>
-        <button
-          onClick={handleAccept}
-          disabled={loading}
-          style={{
-            flex: 1, ...btnSize,
-            border: 'none', background: 'var(--fg)', color: 'var(--bg)',
-            fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
-          }}
-        >
-          Accept
-        </button>
-        <button
-          onClick={handleDecline}
-          disabled={loading}
-          style={{
-            flex: 1, ...btnSize,
-            border: '1.5px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-55)',
-            fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600,
-            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1,
-          }}
-        >
-          Decline
-        </button>
-      </div>
-    )
-  }
-
-  const label = status === 'pending_incoming' ? 'Pending request'
-              : status === 'pending_outgoing'  ? 'Pending'
-              : status === 'mutual'            ? 'Following'
-              : status === 'following'         ? 'Following'
-              : 'Follow'
-
-  const isOutlineStyle = status !== 'none'
-
-  return (
-    <button
-      onClick={handleClick}
-      disabled={loading}
-      style={{
-        ...btnSize,
-        border: isOutlineStyle ? '1.5px solid var(--fg-25)' : 'none',
-        background: isOutlineStyle ? 'transparent' : 'var(--fg)',
-        color: isOutlineStyle ? 'var(--fg-55)' : 'var(--bg)',
-        fontFamily: '"Space Grotesk", sans-serif',
-        fontWeight: 600,
-        cursor: loading ? 'not-allowed' : 'pointer',
-        opacity: loading ? 0.6 : 1,
-      }}
-    >
-      {label}
-    </button>
-  )
+  banner_url: string | null
+  banner_focal_y: number
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -225,10 +96,12 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         avatar_diamond_url: selfProfile.avatar_diamond_url ?? null,
         is_public: selfProfile.is_public ?? true,
         account_type: selfProfile.account_type ?? null,
+        banner_url: (selfProfile as unknown as { banner_url?: string | null }).banner_url ?? null,
+        banner_focal_y: (selfProfile as unknown as { banner_focal_y?: number }).banner_focal_y ?? 0.5,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -238,6 +111,8 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [bio,      setBio]      = useState(selfProfile?.bio ?? '')
   const [isPublic, setIsPublic] = useState(selfProfile?.is_public ?? true)
   const [busy,     setBusy]     = useState(false)
+  const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
+  const [pendingBannerFocalY, setPendingBannerFocalY] = useState(0.5)
 
   useEffect(() => {
     setBio(selfProfile?.bio ?? '')
@@ -264,7 +139,6 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [searchQuery,   setSearchQuery]   = useState('')
   const [searchResults, setSearchResults] = useState<{ id: string; username: string; avatar_url: string | null; avatar_diamond_url: string | null }[]>([])
   const [searchBusy,    setSearchBusy]    = useState(false)
-  const [following,     setFollowing]     = useState<Set<string>>(new Set())
 
   // ── Data fetching ──────────────────────────────────────────────────────
 
@@ -273,11 +147,6 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     fetchAttended()
     fetchCounts()
   }, [targetUserId])
-
-  useEffect(() => {
-    if (!user || !isSelf) return
-    fetchFollowing()
-  }, [user?.id, isSelf])
 
   useEffect(() => {
     if (!user?.id || !isSelf) { setPendingAccountType(null); return }
@@ -329,19 +198,29 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     setCounts({ followers: followers ?? 0, following: fwing ?? 0 })
   }
 
-  async function fetchFollowing() {
-    if (!user) return
-    const { data } = await supabase.from('follows').select('following_id').eq('follower_id', user.id).eq('status', 'accepted')
-    setFollowing(new Set((data ?? []).map((r: { following_id: string }) => r.following_id)))
-  }
-
   // ── Profile save ───────────────────────────────────────────────────────
 
   async function saveProfile() {
     if (!user) return
     setBusy(true)
-    await supabase.from('profiles').update({ bio, is_public: isPublic }).eq('id', user.id)
+
+    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number } = { bio, is_public: isPublic }
+
+    if (pendingBannerBlob) {
+      const path = `${user.id}/banner.jpg`
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, pendingBannerBlob, { contentType: 'image/jpeg', upsert: true })
+      if (!upErr) {
+        const url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl + '?t=' + Date.now()
+        updates.banner_url     = url
+        updates.banner_focal_y = pendingBannerFocalY
+      } else {
+        console.error('[YouScreen] banner upload failed:', upErr.message)
+      }
+    }
+
+    await supabase.from('profiles').update(updates).eq('id', user.id)
     await refreshProfile()
+    setPendingBannerBlob(null)
     setBusy(false)
     setEditing(false)
   }
@@ -358,18 +237,6 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
       .ilike('username', `${clean}%`).neq('id', user?.id ?? '').limit(8)
     setSearchResults((data ?? []) as typeof searchResults)
     setSearchBusy(false)
-  }
-
-  async function toggleFollow(targetId: string) {
-    if (!user) return
-    if (following.has(targetId)) {
-      await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId)
-      setFollowing(prev => { const next = new Set(prev); next.delete(targetId); return next })
-    } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: targetId })
-      setFollowing(prev => new Set([...prev, targetId]))
-    }
-    fetchCounts()
   }
 
   // ── Derived ────────────────────────────────────────────────────────────
@@ -391,6 +258,23 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
       <p style={{ color: 'var(--fg-30)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14 }}>Loading…</p>
     </div>
   )
+
+  if (!isSelf) {
+    return (
+      <div style={{ height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        <PlasterHeader
+          leftAction={
+            <button style={headerIconBtn()} onClick={() => navigate(-1)} aria-label="Back">
+              <ArrowLeft size={16} />
+            </button>
+          }
+        />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <AccountProfile accountProfileId={targetUserId} />
+        </div>
+      </div>
+    )
+  }
 
   // ── Render ─────────────────────────────────────────────────────────────
 
@@ -431,60 +315,140 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
       <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px 0' }}>
 
         {/* Profile header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
-
-          {/* Diamond avatar */}
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <Diamond
-              diamondUrl={diamondSrc}
-              size={80}
-              onClick={() => isSelf ? setAvatarFullscreenOpen(true) : setAvatarFullscreenId(targetUserId)}
-            />
-            {isSelf && (
-              <button
-                onClick={() => uploaderRef.current?.open()}
-                style={{
-                  position: 'absolute', bottom: -2, right: -2,
-                  width: 22, height: 22, borderRadius: '50%',
-                  background: 'var(--bg)', border: '1px solid var(--fg-25)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', padding: 0,
-                }}
-              >
-                <Plus size={12} color="var(--fg-65)" />
-              </button>
-            )}
-          </div>
-
-          {/* Name + stats */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-              <span>@{displayProfile.username}</span>
-              <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
-            </p>
-            {displayProfile.bio && !editing && (
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
-                {displayProfile.bio}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
-              {[
-                { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
-                { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
-                { label: 'attended',  count: attended.length,  tab: null },
-              ].map(({ label, count, tab }) => (
-                <div
-                  key={label}
-                  onClick={tab ? () => { setFollowListTab(tab); setFollowListOpen(true) } : undefined}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: tab ? 'pointer' : 'default' }}
-                >
-                  <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1 }}>{count}</span>
-                  <span style={{ fontSize: 10, color: tab ? 'var(--fg-55)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', marginTop: 2, textDecoration: tab ? 'underline' : 'none', textUnderlineOffset: 2 }}>{label}</span>
+        {(displayProfile.account_type === 'venue' || displayProfile.account_type === 'artist') && displayProfile.banner_url ? (
+          <>
+            {/* Full-width banner + avatar ring */}
+            <div style={{ margin: '-12px -20px 0', position: 'relative' }}>
+              <div style={{ width: '100%', aspectRatio: '5/2', overflow: 'hidden' }}>
+                <img
+                  src={displayProfile.banner_url}
+                  style={{
+                    width: '100%', height: '100%',
+                    objectFit: 'cover',
+                    objectPosition: `center ${displayProfile.banner_focal_y * 100}%`,
+                    display: 'block',
+                  }}
+                />
+              </div>
+              {/* Avatar overlapping banner bottom-left */}
+              <div style={{ position: 'absolute', bottom: -44, left: 20 }}>
+                <div style={{ position: 'relative', width: 96, height: 96 }}>
+                  {/* --bg ring behind avatar */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)',
+                    background: 'var(--bg)',
+                  }} />
+                  <div style={{ position: 'absolute', inset: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Diamond
+                      diamondUrl={diamondSrc}
+                      size={88}
+                      onClick={() => isSelf ? setAvatarFullscreenOpen(true) : setAvatarFullscreenId(targetUserId)}
+                    />
+                  </div>
+                  {isSelf && (
+                    <button
+                      onClick={() => uploaderRef.current?.open()}
+                      style={{
+                        position: 'absolute', bottom: 4, right: 4, zIndex: 2,
+                        width: 22, height: 22, borderRadius: '50%',
+                        background: 'var(--bg)', border: '1px solid var(--fg-25)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', padding: 0,
+                      }}
+                    >
+                      <Plus size={12} color="var(--fg-65)" />
+                    </button>
+                  )}
                 </div>
-              ))}
+              </div>
+            </div>
+
+            {/* Text section — clears the 44px avatar overhang */}
+            <div style={{ marginTop: 56, marginBottom: 20 }}>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span>@{displayProfile.username}</span>
+                <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+              </p>
+              {displayProfile.bio && !editing && (
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
+                  {displayProfile.bio}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
+                {[
+                  { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
+                  { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
+                  { label: 'attended',  count: attended.length,  tab: null },
+                ].map(({ label, count, tab }) => (
+                  <div
+                    key={label}
+                    onClick={tab ? () => { setFollowListTab(tab); setFollowListOpen(true) } : undefined}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: tab ? 'pointer' : 'default' }}
+                  >
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1 }}>{count}</span>
+                    <span style={{ fontSize: 10, color: tab ? 'var(--fg-55)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', marginTop: 2, textDecoration: tab ? 'underline' : 'none', textUnderlineOffset: 2 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 20 }}>
+
+            {/* Diamond avatar */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <Diamond
+                diamondUrl={diamondSrc}
+                size={80}
+                onClick={() => isSelf ? setAvatarFullscreenOpen(true) : setAvatarFullscreenId(targetUserId)}
+              />
+              {isSelf && (
+                <button
+                  onClick={() => uploaderRef.current?.open()}
+                  style={{
+                    position: 'absolute', bottom: -2, right: -2,
+                    width: 22, height: 22, borderRadius: '50%',
+                    background: 'var(--bg)', border: '1px solid var(--fg-25)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <Plus size={12} color="var(--fg-65)" />
+                </button>
+              )}
+            </div>
+
+            {/* Name + stats */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                <span>@{displayProfile.username}</span>
+                <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+              </p>
+              {displayProfile.bio && !editing && (
+                <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
+                  {displayProfile.bio}
+                </p>
+              )}
+              <div style={{ display: 'flex', gap: 20, marginTop: 10 }}>
+                {[
+                  { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
+                  { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
+                  { label: 'attended',  count: attended.length,  tab: null },
+                ].map(({ label, count, tab }) => (
+                  <div
+                    key={label}
+                    onClick={tab ? () => { setFollowListTab(tab); setFollowListOpen(true) } : undefined}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: tab ? 'pointer' : 'default' }}
+                  >
+                    <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1 }}>{count}</span>
+                    <span style={{ fontSize: 10, color: tab ? 'var(--fg-55)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', marginTop: 2, textDecoration: tab ? 'underline' : 'none', textUnderlineOffset: 2 }}>{label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {isSelf && pendingAccountType && (
           <div style={{
@@ -536,6 +500,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               >
                 Message
               </button>
+              <NotifyBell accountId={targetUserId} accountType={displayProfile.account_type} />
             </>
           )}
         </div>
@@ -556,6 +521,19 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                     <div style={{ position: 'absolute', top: 3, left: isPublic ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--bg)', transition: 'left 200ms ease' }} />
                   </div>
                 </div>
+                {(selfProfile?.account_type === 'venue' || selfProfile?.account_type === 'artist') && (
+                  <div style={{ marginBottom: 14 }}>
+                    <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
+                      Banner image
+                    </p>
+                    <BannerUploader
+                      onConfirm={(blob, focalY) => { setPendingBannerBlob(blob); setPendingBannerFocalY(focalY) }}
+                      currentBannerUrl={pendingBannerBlob ? null : displayProfile.banner_url}
+                      currentFocalY={displayProfile.banner_focal_y}
+                    />
+                    {pendingBannerBlob && <p style={{ margin: '6px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Banner ready — will upload on Save</p>}
+                  </div>
+                )}
                 <button onClick={saveProfile} disabled={busy} style={saveBtnStyle(busy)}>{busy ? 'Saving…' : 'Save changes'}</button>
               </motion.div>
             )}
@@ -626,12 +604,9 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
       {isSelf && user && (
         <FollowListPanel
           userId={user.id}
-          currentUserId={user.id}
           initialTab={followListTab}
           open={followListOpen}
           onClose={() => setFollowListOpen(false)}
-          following={following}
-          onFollowToggle={async (targetId) => { await toggleFollow(targetId) }}
         />
       )}
 

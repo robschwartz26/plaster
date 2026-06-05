@@ -8,13 +8,16 @@ import { hashPhone, hashEmail } from '@/lib/contactHash'
 import { pickFromCamera, pickFromLibrary, type PickImageOutcome } from '@/lib/pickImage'
 import { CameraDeniedSheet } from '@/components/CameraDeniedSheet'
 import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploader'
+import { FindFriends } from '@/components/FindFriends'
+import { NearbyVenues } from '@/components/NearbyVenues'
+import { WelcomeScreen } from '@/components/WelcomeScreen'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
   'Food & Drink', 'Sports', 'Community', 'Outdoors', 'Tech',
 ]
 
-type Step = 'username' | 'account_type' | 'avatar' | 'interests' | 'phone'
+type Step = 'username' | 'account_type' | 'avatar' | 'interests' | 'phone' | 'find_friends' | 'nearby_venues' | 'welcome'
 
 export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('username')
@@ -22,13 +25,14 @@ export function OnboardingScreen() {
   const [usernameError, setUsernameError] = useState<string | null>(null)
   const [accountChoice, setAccountChoice] = useState<'person' | 'artist' | 'venue' | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [cropOpen, setCropOpen] = useState(false)
   const uploaderRef = useRef<AvatarUploaderRef>(null)
   const [interests, setInterests] = useState<string[]>([])
   const [phone, setPhone] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [deniedWhich, setDeniedWhich] = useState<'camera' | 'photos' | null>(null)
   const [busy, setBusy] = useState(false)
-  const { user, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile } = useAuth()
   const navigate = useNavigate()
 
   // ── Step 1: username ─────────────────────────────────────────
@@ -129,7 +133,7 @@ export function OnboardingScreen() {
         ...(eh ? { email_hash: eh } : {}),
       }).eq('id', user.id)
       await refreshProfile()
-      navigate('/', { replace: true })
+      setStep('find_friends')
     } catch (err) {
       console.error('[Onboarding] submitPhone failed:', err)
     } finally {
@@ -144,10 +148,33 @@ export function OnboardingScreen() {
       await supabase.from('profiles').update({ email_hash: eh }).eq('id', user.id)
     }
     await refreshProfile()
-    navigate('/', { replace: true })
+    setStep('find_friends')
   }
 
   // ── Render ───────────────────────────────────────────────────
+
+  // find_friends + welcome are full-screen — render outside the normal shell
+  if (step === 'find_friends') {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'var(--bg)', zIndex: 10 }}>
+        <FindFriends onDone={() => { refreshProfile(); setStep('nearby_venues') }} />
+      </div>
+    )
+  }
+
+  if (step === 'nearby_venues') {
+    return <NearbyVenues onDone={() => setStep('welcome')} />
+  }
+
+  if (step === 'welcome') {
+    return (
+      <WelcomeScreen
+        avatarUrl={avatarPreview ?? profile?.avatar_diamond_url ?? null}
+        onEnter={() => navigate('/', { replace: true })}
+      />
+    )
+  }
+
   return (
     <div
       style={{
@@ -161,7 +188,7 @@ export function OnboardingScreen() {
 
       {/* Step counter */}
       <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
-        step {step === 'phone' ? 5 : step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 5
+        step {step === 'phone' ? 5 : step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 6
       </p>
 
       {/* Centered content */}
@@ -225,7 +252,7 @@ export function OnboardingScreen() {
         </div>
       )}
 
-      {step === 'avatar' && (
+      {step === 'avatar' && !cropOpen && (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
           <h2 style={headingStyle}>Add a photo</h2>
           <div>
@@ -301,7 +328,10 @@ export function OnboardingScreen() {
 
       {step === 'phone' && (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <h2 style={headingStyle}>Find your friends on Plaster</h2>
+          <h2 style={headingStyle}>Let your friends find you</h2>
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', textAlign: 'center', margin: '0 0 4px', fontWeight: 500 }}>
+            Add your number so friends who have it can find you on Plaster.
+          </p>
           <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, lineHeight: 1.5, color: 'var(--fg-55)', textAlign: 'center', margin: '0 0 8px' }}>
             <strong style={{ color: 'var(--fg)', fontWeight: 700 }}>We don't sell phone, email, contacts, or personal info — ever. Period.</strong>{' '}
             Not to advertisers, marketers, or spammers. No exceptions, no fine print. We use it for one thing only: helping you find your friends on Plaster. Don't want to? Skip it — you can always add it later.
@@ -309,7 +339,7 @@ export function OnboardingScreen() {
           <input
             type="tel"
             inputMode="tel"
-            placeholder="Phone number"
+            placeholder="Your phone number"
             value={phone}
             onChange={(e) => { setPhone(e.target.value); setPhoneError(null) }}
             style={inputStyle}
@@ -354,6 +384,7 @@ export function OnboardingScreen() {
             refreshProfile()
           }}
           onCancel={() => {}}
+          onCropOpenChange={setCropOpen}
         />
       )}
     </div>

@@ -15,6 +15,7 @@
 //   reply                    → "@<sender> replied to your post"
 //   follow                   → "@<sender> followed you"
 //   message                  → "@<sender> sent you a message"
+//   show_reminder            → "Show today: <title> at <venue>, <time>"
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
@@ -81,6 +82,8 @@ function buildPushBody(notif: NotificationRow, senderUsername: string | null): {
       return { title: 'New follower', body: `${sender} followed you` }
     case 'message':
       return { title: sender, body: notif.body_preview ?? 'sent you a message' }
+    case 'show_reminder':
+      return { title: 'Show today', body: notif.body_preview ?? 'You have a show today' }
     default:
       return { title: 'Plaster', body: notif.body_preview ?? 'You have a new notification' }
   }

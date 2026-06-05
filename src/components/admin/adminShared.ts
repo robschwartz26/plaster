@@ -64,6 +64,7 @@ export interface AdminNotification {
   type: string
   title: string
   message: string
+  event_id: string | null
   recurrence_group_id: string | null
   snoozed_until: string | null
   dismissed: boolean
@@ -91,6 +92,7 @@ export interface ExtractedEvent {
   instagram?: string
   hours?: string
   existing_poster_url?: string
+  sold_out?: boolean
 }
 
 export type ExtractPayload =
@@ -192,6 +194,41 @@ export function venueSimilarity(a: string, b: string): number {
   return overlap / Math.max(wa.size, wb.size)
 }
 
+export interface EventSummary {
+  id: string
+  title: string
+  starts_at: string
+  venue_id: string | null
+  poster_url: string | null
+  show_times: string[] | null
+}
+
+export function findDuplicateEventGroups(events: EventSummary[]): EventSummary[][] {
+  const dayKey = (iso: string) => {
+    const d = new Date(iso)
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+  }
+  const groups: EventSummary[][] = []
+  const used = new Set<string>()
+  for (let i = 0; i < events.length; i++) {
+    if (used.has(events[i].id)) continue
+    const group = [events[i]]
+    for (let j = i + 1; j < events.length; j++) {
+      if (used.has(events[j].id)) continue
+      if (
+        events[i].venue_id !== null &&
+        events[i].venue_id === events[j].venue_id &&
+        dayKey(events[i].starts_at) === dayKey(events[j].starts_at) &&
+        titleSimilarity(events[i].title, events[j].title) > 0.7
+      ) {
+        group.push(events[j]); used.add(events[j].id)
+      }
+    }
+    if (group.length > 1) { used.add(events[i].id); groups.push(group) }
+  }
+  return groups
+}
+
 export function findDuplicateVenueGroups(venues: Venue[]): Venue[][] {
   const groups: Venue[][] = []
   const used = new Set<string>()
@@ -250,6 +287,23 @@ export async function extractEventFromImage(payload: ExtractPayload): Promise<Ex
 
   if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
   return await response.json() as ExtractedEvent
+}
+
+export async function extractScheduleFromImage({ base64, mimeType }: { base64: string; mimeType: string }): Promise<Array<{ date: string; time?: string }>> {
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+  const { data: { session } } = await supabaseAdmin.auth.getSession()
+  if (!session?.access_token) {
+    throw new Error('You must be signed in. Please sign out and sign back in.')
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  const response = await fetch(`${SUPABASE_URL}/functions/v1/extract-schedule`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify({ image: { base64, mimeType }, today }),
+  })
+  if (!response.ok) throw new Error(`Schedule extraction failed: ${response.status}`)
+  const data = await response.json()
+  return data.occurrences ?? []
 }
 
 // ── Text utilities ───────────────────────────────────────────

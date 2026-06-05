@@ -4,6 +4,7 @@
  * Discard hashes immediately after calling match_contacts(); never store
  * or log them.
  */
+import { Contacts } from '@capacitor-community/contacts'
 
 /**
  * Normalize a raw phone string to E.164 (+1XXXXXXXXXX for US numbers).
@@ -48,4 +49,85 @@ export async function hashPhone(raw: string): Promise<string | null> {
 /** Hash an email address (lowercased + trimmed before hashing). */
 export async function hashEmail(raw: string): Promise<string> {
   return sha256Hex(raw.toLowerCase().trim())
+}
+
+// ── Contact reading ──────────────────────────────────────────────────────────
+
+export interface DeviceContact {
+  name: string
+  phones: string[]
+  emails: string[]
+  /** SHA-256 hex of each normalized phone + lowercased email. */
+  hashes: string[]
+}
+
+/**
+ * Checks and requests contacts permission if needed.
+ * Returns 'granted' (includes 'limited'), 'denied', or 'prompt' (if the
+ * system is still deciding after a request — shouldn't happen normally).
+ */
+export async function ensureContactsPermission(): Promise<'granted' | 'denied' | 'prompt'> {
+  try {
+    const { contacts: state } = await Contacts.checkPermissions()
+    console.log('[contactHash] checkPermissions returned:', state)
+    if (state === 'granted' || state === 'limited') return 'granted'
+    if (state === 'denied') return 'denied'
+
+    // 'prompt' or 'prompt-with-rationale' — request
+    const { contacts: granted } = await Contacts.requestPermissions()
+    console.log('[contactHash] requestPermissions returned:', granted)
+    if (granted === 'granted' || granted === 'limited') return 'granted'
+    if (granted === 'denied') return 'denied'
+    return 'prompt'
+  } catch (err) {
+    console.error('[contactHash] ensureContactsPermission threw:', err)
+    return 'denied'
+  }
+}
+
+/**
+ * Reads device contacts and returns them with pre-computed match hashes.
+ * Caller must have already confirmed permission. Never logs raw contact data.
+ * Returns [] on any error.
+ */
+export async function readDeviceContacts(): Promise<DeviceContact[]> {
+  try {
+    const { contacts: raw } = await Contacts.getContacts({
+      projection: { name: true, phones: true, emails: true },
+    })
+
+    const results: DeviceContact[] = []
+    for (const c of raw) {
+      const phones = (c.phones ?? [])
+        .map(p => p.number)
+        .filter((n): n is string => typeof n === 'string' && n.trim().length > 0)
+
+      const emails = (c.emails ?? [])
+        .map(e => e.address)
+        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
+
+      if (phones.length === 0 && emails.length === 0) continue
+
+      const name = c.name?.display
+        || c.name?.given
+        || phones[0]
+        || emails[0]
+        || 'Unknown'
+
+      const hashes: string[] = []
+      for (const phone of phones) {
+        const h = await hashPhone(phone)
+        if (h) hashes.push(h)
+      }
+      for (const email of emails) {
+        hashes.push(await hashEmail(email))
+      }
+
+      results.push({ name, phones, emails, hashes })
+    }
+    return results
+  } catch (err) {
+    console.error('[contactHash] readDeviceContacts threw:', err)
+    return []
+  }
 }

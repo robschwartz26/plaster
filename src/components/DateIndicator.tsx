@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/hooks/useTheme'
 
+
 export interface EventInfo {
   id: string
   title: string
@@ -9,6 +10,7 @@ export interface EventInfo {
   startsAt: string // ISO datetime
   likeCount: number
   viewCount: number
+  soldOut?: boolean
 }
 
 interface Props {
@@ -112,6 +114,7 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                 <span style={{ ...BLOCK_BASE, color: 'var(--fg-65)' }}>
                   {formatTime(eventInfo.startsAt)}
                 </span>
+
               </div>
 
               {/* Right — ♥ count  👁 count */}

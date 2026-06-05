@@ -1,18 +1,10 @@
-import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { supabase } from '@/lib/supabase'
-
-export interface AvatarUploaderRef {
-  open: () => void
-  openWith: (file: File) => void
-}
 
 interface Props {
-  userId: string
-  onDone: (fullUrl: string, diamondUrl: string) => void
-  onCancel: () => void
-  onCropOpenChange?: (open: boolean) => void
-  onCroppedBlob?: (blob: Blob) => void
+  onConfirm: (blob: Blob, focalY: number) => void
+  currentBannerUrl?: string | null
+  currentFocalY?: number  // kept for API compat — new exports always bake at 0.5
 }
 
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)) }
@@ -22,36 +14,27 @@ function getTouchDist(touches: TouchList) {
   return Math.sqrt(dx * dx + dy * dy)
 }
 
-const DISPLAY_SIZE = 200
-const DIAMOND_OUT  = 400
-const FULL_MAX     = 1200
+const PREVIEW_W = 300
+const PREVIEW_H = 120  // 5:2
+const OUT_W     = 1200
+const OUT_H     = 480  // 5:2
+const FULL_MAX  = 2400
 
-export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function AvatarUploader({ userId, onDone, onCancel, onCropOpenChange, onCroppedBlob }, ref) {
-  const [rawSrc,   setRawSrc]   = useState<string | null>(null)
-  const [panX,     setPanX]     = useState(0)
-  const [panY,     setPanY]     = useState(0)
-  const [scale,    setScale]    = useState(1)
-  const [busy,     setBusy]     = useState(false)
-  const [flipBusy, setFlipBusy] = useState(false)
+export function BannerUploader({ onConfirm, currentBannerUrl }: Props) {
+  const [rawSrc,       setRawSrc]       = useState<string | null>(null)
+  const [panX,         setPanX]         = useState(0)
+  const [panY,         setPanY]         = useState(0)
+  const [scale,        setScale]        = useState(1)
+  const [busy,         setBusy]         = useState(false)
+  const [flipBusy,     setFlipBusy]     = useState(false)
+  const [confirmedUrl, setConfirmedUrl] = useState<string | null>(currentBannerUrl ?? null)
 
   const fileRef    = useRef<HTMLInputElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const dragRef    = useRef<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null)
   const pinchRef   = useRef<{ dist: number; startScale: number } | null>(null)
 
-  // Expose open() so parents can trigger file picker directly (in response to user gesture)
-  useImperativeHandle(ref, () => ({
-    open: () => fileRef.current?.click(),
-    openWith: (file: File) => {
-      if (rawSrc) URL.revokeObjectURL(rawSrc)
-      setRawSrc(URL.createObjectURL(file))
-      setPanX(0); setPanY(0); setScale(1)
-    },
-  }))
-
-  useEffect(() => { onCropOpenChange?.(!!rawSrc) }, [rawSrc])
-
-  // Non-passive touchmove to allow preventDefault during drag
+  // Non-passive touchmove so we can preventDefault during drag/pinch
   useEffect(() => {
     if (!rawSrc) return
     const el = previewRef.current
@@ -61,8 +44,8 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
       if (e.touches.length === 1 && dragRef.current) {
         const dx = e.touches[0].clientX - dragRef.current.startX
         const dy = e.touches[0].clientY - dragRef.current.startY
-        setPanX(clamp(dragRef.current.startPanX + dx, -120, 120))
-        setPanY(clamp(dragRef.current.startPanY + dy, -120, 120))
+        setPanX(clamp(dragRef.current.startPanX + dx, -200, 200))
+        setPanY(clamp(dragRef.current.startPanY + dy, -150, 150))
       } else if (e.touches.length === 2 && pinchRef.current) {
         const newDist = getTouchDist(e.touches)
         setScale(clamp((newDist / pinchRef.current.dist) * pinchRef.current.startScale, 0.5, 4))
@@ -76,6 +59,7 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
+    if (rawSrc) URL.revokeObjectURL(rawSrc)
     setRawSrc(URL.createObjectURL(file))
     setPanX(0); setPanY(0); setScale(1)
   }
@@ -83,7 +67,6 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
   function cancelCrop() {
     if (rawSrc) URL.revokeObjectURL(rawSrc)
     setRawSrc(null)
-    onCancel()
   }
 
   async function flipHorizontal() {
@@ -112,92 +95,90 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
     setFlipBusy(false)
   }
 
-  async function save() {
-    if (!rawSrc) return
+  async function handleConfirm() {
+    if (!rawSrc || busy) return
     setBusy(true)
 
     const img = new Image()
     img.src = rawSrc
     await new Promise<void>(res => { img.onload = () => res() })
 
-    // Diamond canvas — square crop at current pan/zoom
-    const diamondCanvas = document.createElement('canvas')
-    diamondCanvas.width = DIAMOND_OUT; diamondCanvas.height = DIAMOND_OUT
-    const dctx = diamondCanvas.getContext('2d')!
-    const coverScale = Math.max(DISPLAY_SIZE / img.naturalWidth, DISPLAY_SIZE / img.naturalHeight)
-    const RATIO = DIAMOND_OUT / DISPLAY_SIZE
+    // Bake the framed result into a 1200×480 canvas — same math as AvatarUploader's diamond export
+    const canvas = document.createElement('canvas')
+    canvas.width = OUT_W; canvas.height = OUT_H
+    const ctx = canvas.getContext('2d')!
+
+    const coverScale = Math.max(PREVIEW_W / img.naturalWidth, PREVIEW_H / img.naturalHeight)
+    const RATIO      = OUT_W / PREVIEW_W  // 4.0 — same factor in both axes (both are 5:2)
     const totalScale = coverScale * scale
     const sw = img.naturalWidth  * totalScale * RATIO
     const sh = img.naturalHeight * totalScale * RATIO
-    dctx.drawImage(img, (DIAMOND_OUT - sw) / 2 + panX * RATIO, (DIAMOND_OUT - sh) / 2 + panY * RATIO, sw, sh)
-    const diamondBlob = await new Promise<Blob>(res => diamondCanvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
+    ctx.drawImage(img, (OUT_W - sw) / 2 + panX * RATIO, (OUT_H - sh) / 2 + panY * RATIO, sw, sh)
 
-    // Full canvas — original scaled to max 1200px
-    const fullCanvas = document.createElement('canvas')
-    const longSide = Math.max(img.naturalWidth, img.naturalHeight)
-    const fullScale = longSide > FULL_MAX ? FULL_MAX / longSide : 1
-    fullCanvas.width  = Math.round(img.naturalWidth  * fullScale)
-    fullCanvas.height = Math.round(img.naturalHeight * fullScale)
-    fullCanvas.getContext('2d')!.drawImage(img, 0, 0, fullCanvas.width, fullCanvas.height)
-    const fullBlob = await new Promise<Blob>(res => fullCanvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
+    const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), 'image/jpeg', 0.9))
 
-    // If onCroppedBlob is provided, hand the blob to the caller and skip self-upload
-    if (onCroppedBlob) {
-      setBusy(false)
-      if (rawSrc) URL.revokeObjectURL(rawSrc)
-      setRawSrc(null)
-      onCroppedBlob(diamondBlob)
-      return
-    }
+    // Update inline thumbnail with the baked blob
+    const newUrl = URL.createObjectURL(blob)
+    if (confirmedUrl && confirmedUrl !== currentBannerUrl) URL.revokeObjectURL(confirmedUrl)
+    setConfirmedUrl(newUrl)
 
-    const ts = Date.now()
-    const diamondPath = `${userId}/diamond_${ts}.jpg`
-    const fullPath    = `${userId}/full_${ts}.jpg`
-
-    const [diamondUp, fullUp] = await Promise.all([
-      supabase.storage.from('avatars').upload(diamondPath, diamondBlob, { contentType: 'image/jpeg' }),
-      supabase.storage.from('avatars').upload(fullPath,    fullBlob,    { contentType: 'image/jpeg' }),
-    ])
-
-    if (diamondUp.error || fullUp.error) {
-      console.error('[AvatarUploader] upload error', diamondUp.error ?? fullUp.error)
-      alert('Photo upload failed. Please try again.')
-      setBusy(false)
-      return
-    }
-
-    const diamondUrl = supabase.storage.from('avatars').getPublicUrl(diamondPath).data.publicUrl + '?t=' + ts
-    const fullUrl    = supabase.storage.from('avatars').getPublicUrl(fullPath).data.publicUrl    + '?t=' + ts
-
-    await supabase.from('profiles').update({
-      avatar_url:         diamondUrl,
-      avatar_diamond_url: diamondUrl,
-      avatar_full_url:    fullUrl,
-    }).eq('id', userId)
-
-    setBusy(false)
-    if (rawSrc) URL.revokeObjectURL(rawSrc)
+    URL.revokeObjectURL(rawSrc)
     setRawSrc(null)
-    onDone(fullUrl, diamondUrl)
+    setBusy(false)
+
+    // focalY = 0.5 because framing is baked into the image — objectPosition: center 50% is correct
+    onConfirm(blob, 0.5)
   }
+
+  const displayUrl = confirmedUrl ?? currentBannerUrl ?? null
 
   return (
     <>
-      {/* Hidden file input — always in DOM so open() can trigger it from a user gesture */}
-      <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+      {/* ── Inline: thumbnail + pick button ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{
+          width: '100%', aspectRatio: '5/2', borderRadius: 8, overflow: 'hidden',
+          background: '#1a1918', border: '1px solid rgba(240,236,227,0.12)',
+          position: 'relative',
+        }}>
+          {displayUrl ? (
+            <img src={displayUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          ) : (
+            <div style={{
+              position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'rgba(240,236,227,0.35)',
+            }}>
+              No banner image
+            </div>
+          )}
+        </div>
 
-      {/* Crop portal — only rendered once a file is selected */}
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            padding: '10px 0', borderRadius: 8, border: '1.5px solid var(--fg-25)',
+            background: 'transparent', color: 'var(--fg-65)',
+            fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          {displayUrl ? 'Change banner' : 'Choose photo'}
+        </button>
+      </div>
+
+      {/* ── Portal: full-screen crop editor ── */}
       {rawSrc && createPortal(
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9000,
           background: 'rgba(12,11,11,1)',
           display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center',
-          gap: 28,
+          gap: 24,
         }}>
-          <p style={labelStyle}>Position your photo</p>
+          <p style={labelStyle}>Position your banner</p>
 
-          <div style={{ position: 'relative', width: DISPLAY_SIZE, height: DISPLAY_SIZE }}>
+          <div style={{ position: 'relative', width: PREVIEW_W, height: PREVIEW_H }}>
             <div
               ref={previewRef}
               onTouchStart={e => {
@@ -213,44 +194,37 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
               onMouseDown={e => { e.preventDefault(); dragRef.current = { startX: e.clientX, startY: e.clientY, startPanX: panX, startPanY: panY } }}
               onMouseMove={e => {
                 if (!dragRef.current) return
-                setPanX(clamp(dragRef.current.startPanX + (e.clientX - dragRef.current.startX), -120, 120))
-                setPanY(clamp(dragRef.current.startPanY + (e.clientY - dragRef.current.startY), -120, 120))
+                setPanX(clamp(dragRef.current.startPanX + (e.clientX - dragRef.current.startX), -200, 200))
+                setPanY(clamp(dragRef.current.startPanY + (e.clientY - dragRef.current.startY), -150, 150))
               }}
               onMouseUp={() => { dragRef.current = null }}
               onMouseLeave={() => { dragRef.current = null }}
               onWheel={e => { e.preventDefault(); setScale(prev => clamp(prev - e.deltaY * 0.003, 0.5, 4)) }}
-              style={{ position: 'absolute', inset: 0, overflow: 'hidden', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
+              style={{
+                position: 'absolute', inset: 0, overflow: 'hidden',
+                cursor: 'grab', userSelect: 'none', touchAction: 'none', borderRadius: 4,
+              }}
             >
+              {/* Blurred atmosphere */}
               <img src={rawSrc} draggable={false}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(10px) brightness(0.4)', pointerEvents: 'none' }} />
+              {/* Live preview — objectFit:cover establishes coverScale; transform applies pan+zoom on top */}
               <img src={rawSrc} draggable={false}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', transform: `translate(${panX}px, ${panY}px) scale(${scale})`, transformOrigin: 'center', pointerEvents: 'none' }} />
             </div>
-
-            <svg
-              width={DISPLAY_SIZE} height={DISPLAY_SIZE}
-              viewBox={`0 0 ${DISPLAY_SIZE} ${DISPLAY_SIZE}`}
-              style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 2 }}
-            >
-              <defs>
-                <mask id="av-diamond-mask">
-                  <rect width={DISPLAY_SIZE} height={DISPLAY_SIZE} fill="white" />
-                  <polygon points={`${DISPLAY_SIZE/2},4 ${DISPLAY_SIZE-4},${DISPLAY_SIZE/2} ${DISPLAY_SIZE/2},${DISPLAY_SIZE-4} 4,${DISPLAY_SIZE/2}`} fill="black" />
-                </mask>
-              </defs>
-              <rect width={DISPLAY_SIZE} height={DISPLAY_SIZE} fill="rgba(12,11,11,0.72)" mask="url(#av-diamond-mask)" />
-              <polygon
-                points={`${DISPLAY_SIZE/2},4 ${DISPLAY_SIZE-4},${DISPLAY_SIZE/2} ${DISPLAY_SIZE/2},${DISPLAY_SIZE-4} 4,${DISPLAY_SIZE/2}`}
-                fill="none" stroke="rgba(240,236,227,0.55)" strokeWidth="1.5"
-              />
-            </svg>
+            {/* Frame outline */}
+            <div style={{
+              position: 'absolute', inset: 0,
+              border: '1.5px solid rgba(240,236,227,0.45)',
+              borderRadius: 4, pointerEvents: 'none',
+            }} />
           </div>
 
           <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.45)' }}>
             Drag to reposition · Pinch or scroll to zoom
           </p>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 220 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: PREVIEW_W }}>
             <span style={scaleLabel}>−</span>
             <input type="range" min={0.5} max={4} step={0.01} value={scale}
               onChange={e => setScale(parseFloat(e.target.value))}
@@ -275,8 +249,8 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
               </svg>
               Flip
             </button>
-            <button onClick={save} disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}>
-              {busy ? 'Saving…' : 'Save'}
+            <button onClick={handleConfirm} disabled={busy} style={{ ...saveBtn, opacity: busy ? 0.6 : 1, cursor: busy ? 'not-allowed' : 'pointer' }}>
+              {busy ? 'Saving…' : 'Use this'}
             </button>
           </div>
         </div>,
@@ -284,7 +258,7 @@ export const AvatarUploader = forwardRef<AvatarUploaderRef, Props>(function Avat
       )}
     </>
   )
-})
+}
 
 const labelStyle: React.CSSProperties = {
   margin: 0,
@@ -305,5 +279,6 @@ const saveBtn: React.CSSProperties = {
 }
 
 const scaleLabel: React.CSSProperties = {
-  fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.45)', letterSpacing: '0.08em',
+  fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11,
+  color: 'rgba(240,236,227,0.45)', letterSpacing: '0.08em',
 }

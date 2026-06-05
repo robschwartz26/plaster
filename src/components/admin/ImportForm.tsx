@@ -5,13 +5,48 @@ import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from 
 import {
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
-  fileToDataURL, extractEventFromImage,
+  fileToDataURL, extractEventFromImage, extractScheduleFromImage,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
   generateWeekdayOccurrences, generateOccurrenceDates, fmtShortDate,
   type Venue, type ExtractedEvent, type ExtractPayload,
   type ImportPhase, type Category, type RecurrenceFrequency, type OrdinalKey,
 } from '@/components/admin/adminShared'
 import { CropPreviewModal } from '@/components/admin/CropPreviewModal'
+
+function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
+  const name = venueName?.trim().toLowerCase()
+  if (!name || name.length < 3) return undefined
+  return venues.find(v => {
+    const vn = v.name.toLowerCase()
+    return vn.includes(name) || name.includes(vn)
+  })
+}
+
+async function fileFromDrop(e: React.DragEvent): Promise<File | null> {
+  // READ dataTransfer SYNCHRONOUSLY first — it's only valid during the event
+  const local = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+  const html  = e.dataTransfer.getData('text/html')
+  const uri   = e.dataTransfer.getData('text/uri-list')
+  const plain = e.dataTransfer.getData('text/plain')
+  if (local) return local
+  const fromHtml = html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]
+  const url = uri || fromHtml || plain
+  if (!url || !/^https?:\/\//i.test(url)) return null
+  const { data: { session } } = await supabaseAdmin.auth.getSession()
+  const token = session?.access_token
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) throw new Error('fetch-image failed')
+  const { base64, mimeType } = await res.json()
+  const bin = atob(base64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+  return new File([bytes], `dropped-${Date.now()}.${ext}`, { type: mimeType })
+}
 
 export function ImportForm() {
   const [venues, setVenues] = useState<Venue[]>([])
@@ -30,6 +65,7 @@ export function ImportForm() {
   const [extracted, setExtracted] = useState<ExtractedEvent | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [fetchingFromUrl, setFetchingFromUrl] = useState(false)
   const [successTitle, setSuccessTitle] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -39,12 +75,20 @@ export function ImportForm() {
   const [infoDragging, setInfoDragging] = useState(false)
   const infoFileRef = useRef<HTMLInputElement>(null)
 
+  // Schedule image — AI-parsed into dates/times
+  const [schedulePreview, setSchedulePreview] = useState('')
+  const [scheduleLoading, setScheduleLoading] = useState(false)
+  const [scheduleError, setScheduleError] = useState('')
+  const [scheduleDragging, setScheduleDragging] = useState(false)
+  const scheduleFileRef = useRef<HTMLInputElement>(null)
+
   const [userCrop, setUserCrop] = useState<CropRect | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [duplicateEvent, setDuplicateEvent] = useState<{ id: string; title: string; poster_url: string | null; starts_at: string } | null>(null)
 
   const [form, setForm] = useState({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
   const [fillFrame, setFillFrame] = useState(false)
+  const [soldOut, setSoldOut] = useState(false)
   const [focalX, setFocalX] = useState(0.5)
   const [focalY, setFocalY] = useState(0.5)
   const [posterNatural, setPosterNatural] = useState<{ w: number; h: number } | null>(null)
@@ -83,10 +127,8 @@ export function ImportForm() {
       const result = await extractEventFromImage(payload)
       setExtracted(result)
       setReuseExistingPoster(!!result.existing_poster_url)
-      const match = venues.find(v =>
-        v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
-        result.venue_name.toLowerCase().includes(v.name.toLowerCase())
-      )
+      setSoldOut(result.sold_out ?? false)
+      const match = findVenueMatch(venues, result.venue_name)
       const detectedNeighborhood = neighborhoodFromAddress(match?.address || result.address)
       setForm({
         title: result.title,
@@ -129,17 +171,21 @@ export function ImportForm() {
       const result = await extractEventFromImage(payload)
       setExtracted(result)
       setReuseExistingPoster(!!result.existing_poster_url)
-      const match = venues.find(v =>
-        v.name.toLowerCase().includes(result.venue_name.toLowerCase()) ||
-        result.venue_name.toLowerCase().includes(v.name.toLowerCase())
-      )
+      setSoldOut(result.sold_out ?? soldOut)
+      const match = findVenueMatch(venues, result.venue_name)
       setForm(f => {
-        const resolvedVenueId = f.venue_id || match?.id || ''
-        const resolvedMatch = resolvedVenueId ? (venues.find(v => v.id === resolvedVenueId) ?? match) : match
+        const freshName = result.venue_name?.trim()
+        let venue_id = f.venue_id
+        let venue_name_manual = f.venue_name_manual
+        if (freshName) {
+          if (match) { venue_id = match.id; venue_name_manual = '' }
+          else { venue_id = ''; venue_name_manual = freshName }
+        }
+        const resolvedMatch = venue_id ? venues.find(v => v.id === venue_id) : undefined
         return {
           title: result.title || f.title,
-          venue_id: resolvedVenueId,
-          venue_name_manual: resolvedMatch ? '' : (result.venue_name || f.venue_name_manual),
+          venue_id,
+          venue_name_manual,
           date: result.date || f.date,
           time: result.time || f.time,
           address: resolvedMatch?.address || result.address || f.address,
@@ -157,6 +203,21 @@ export function ImportForm() {
       setReExtracting(false)
     }
   }, [imageFiles, venues])
+
+  const handleScheduleSet = useCallback(async (file: File) => {
+    fileToDataURL(file).then(setSchedulePreview)
+    setScheduleLoading(true); setScheduleError('')
+    try {
+      const occ = await extractScheduleFromImage({ base64: await blobToBase64(await resizeForExtraction(file)), mimeType: 'image/jpeg' })
+      const valid = (occ || []).filter(o => o.date)
+      if (!valid.length) { setScheduleError("Couldn't read any dates from that image.") }
+      else {
+        setForm(prev => ({ ...prev, date: valid[0].date, time: valid[0].time || prev.time || '' }))
+        setExtraDates(valid.slice(1).map(o => ({ date: o.date, time: o.time || '' })))
+      }
+    } catch { setScheduleError("Couldn't read that schedule. Try a clearer image.") }
+    finally { setScheduleLoading(false) }
+  }, [])
 
   const handleVenueChange = (venueId: string) => {
     const v = venues.find(v => v.id === venueId)
@@ -197,6 +258,18 @@ export function ImportForm() {
     img.src = src
   }, [imagePreviews[0], extracted?.existing_poster_url])
 
+  // Clipboard paste — active while the importer is mounted
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const item = Array.from(e.clipboardData?.items ?? []).find(i => i.type.startsWith('image/'))
+      if (!item) return
+      const file = item.getAsFile()
+      if (file) handleFiles([file])
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [handleFiles])
+
   // Only check for near-duplicate venues when the user is typing a new venue name
   useEffect(() => {
     if (form.venue_id || !venues.length) { setNearDuplicate(null); return }
@@ -205,10 +278,18 @@ export function ImportForm() {
     setNearDuplicate(near ?? null)
   }, [form.venue_id, form.venue_name_manual, venues])
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault(); setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file?.type.startsWith('image/')) handleFiles([file])
+    setFetchingFromUrl(true)
+    try {
+      const file = await fileFromDrop(e)
+      setFetchingFromUrl(false)
+      if (file) handleFiles([file])
+      else setErrorMsg("Couldn't read that image — try copy-image then paste, or download it and drop the file.")
+    } catch {
+      setFetchingFromUrl(false)
+      setErrorMsg("Couldn't fetch that image. Try copy-image and paste instead.")
+    }
   }
 
   const doUpload = async (updateExistingId?: string) => {
@@ -261,7 +342,7 @@ export function ImportForm() {
         const timeStr = form.time || '20:00'
         const startDate = new Date(`${form.date}T${timeStr}:00`)
         const nbhd = form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || ''
-        const baseRow = { venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY }
+        const baseRow = { venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, sold_out: soldOut }
 
         if (isRecurring) {
           const recurrenceGroupId = crypto.randomUUID()
@@ -294,14 +375,27 @@ export function ImportForm() {
           })
           setSuccessCount(dates.length)
         } else if (extraDates.length > 0) {
-          const seriesId = crypto.randomUUID()
-          const allRows = [
-            { ...baseRow, starts_at: startDate.toISOString(), recurrence_group_id: seriesId },
-            ...extraDates.map(ed => {
-              const t = ed.time || form.time || '20:00'
-              return { ...baseRow, starts_at: new Date(`${ed.date}T${t}:00`).toISOString(), recurrence_group_id: seriesId }
-            }),
-          ]
+          // Group all occurrences by calendar date — same date = multiple show times
+          const dateMap = new Map<string, string[]>()
+          const addToMap = (date: string, time: string) => {
+            const iso = new Date(`${date}T${time}:00`).toISOString()
+            if (!dateMap.has(date)) dateMap.set(date, [])
+            dateMap.get(date)!.push(iso)
+          }
+          addToMap(form.date, form.time || '20:00')
+          for (const ed of extraDates) addToMap(ed.date, ed.time || form.time || '20:00')
+          for (const [d, times] of dateMap) dateMap.set(d, times.sort())
+          const uniqueDates = [...dateMap.keys()].sort()
+          const seriesId = uniqueDates.length > 1 ? crypto.randomUUID() : null
+          const allRows = uniqueDates.map(date => {
+            const times = dateMap.get(date)!
+            return {
+              ...baseRow,
+              starts_at: times[0],
+              show_times: times.length > 1 ? times : null,
+              ...(seriesId ? { recurrence_group_id: seriesId } : {}),
+            }
+          })
           const { error: eventError } = await supabaseAdmin.from('events').insert(allRows)
           if (eventError) throw eventError
           setSuccessCount(allRows.length)
@@ -325,8 +419,7 @@ export function ImportForm() {
     // Validate extra dates
     if (extraDates.length > 0) {
       if (extraDates.some(ed => !ed.date)) { setErrorMsg('All extra dates must be filled in.'); setPhase('error'); return }
-      const allDates = [form.date, ...extraDates.map(ed => ed.date)]
-      if (new Set(allDates).size !== allDates.length) { setErrorMsg('Duplicate dates found — each date must be unique.'); setPhase('error'); return }
+
     }
 
     // Duplicate detection: same venue + date ±1 day + similar title
@@ -354,7 +447,7 @@ export function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1)
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
   }
 
   // DEV: generate a mock test poster
@@ -379,17 +472,29 @@ export function ImportForm() {
     <div>
 
       <div
-        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragOver={e => { e.preventDefault(); setDragging(true); setErrorMsg('') }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        onClick={() => fileRef.current?.click()}
-        style={{ border: `2px dashed ${dragging ? 'var(--fg)' : 'var(--fg-25)'}`, borderRadius: 10, padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, cursor: 'pointer', background: dragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
+        onClick={() => !fetchingFromUrl && fileRef.current?.click()}
+        style={{ border: `2px dashed ${dragging ? 'var(--fg)' : 'var(--fg-25)'}`, borderRadius: 10, padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, cursor: fetchingFromUrl ? 'wait' : 'pointer', background: dragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
       >
-        <span style={{ fontSize: 36 }}>🖼</span>
-        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', margin: 0, textAlign: 'center' }}>Drop a poster image here</p>
-        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>or click to browse · JPG, PNG, WEBP</p>
+        {fetchingFromUrl ? (
+          <>
+            <div style={{ width: 22, height: 22, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite' }} />
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: 0 }}>Fetching image…</p>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: 36 }}>🖼</span>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', margin: 0, textAlign: 'center' }}>Drop a poster image here</p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0 }}>or click to browse · paste from clipboard · JPG, PNG, WEBP</p>
+          </>
+        )}
       </div>
-      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFiles([f]) }} />
+      {errorMsg && phase === 'idle' && (
+        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)', margin: '8px 0 0', textAlign: 'center' }}>{errorMsg}</p>
+      )}
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFiles([f]); setErrorMsg('') }} />
 
       {/* Extra info image zone */}
       <div style={{ marginTop: 10 }}>
@@ -426,6 +531,54 @@ export function ImportForm() {
         <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
           const f = e.target.files?.[0]
           if (f) { setInfoFile(f); fileToDataURL(f).then(url => setInfoPreview(url)) }
+        }} />
+      </div>
+
+      {/* Show schedule drop zone */}
+      <div style={{ marginTop: 10 }}>
+        {schedulePreview ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <img src={schedulePreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
+              {!scheduleLoading && (
+                <button
+                  onClick={() => { setSchedulePreview(''); setScheduleError('') }}
+                  style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                >✕</button>
+              )}
+            </div>
+            <div>
+              {scheduleLoading ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                  <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Reading schedule…</p>
+                </div>
+              ) : scheduleError ? (
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)', margin: 0 }}>{scheduleError}</p>
+              ) : (
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Schedule parsed — dates filled in below</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div
+            onDragOver={e => { e.preventDefault(); setScheduleDragging(true) }}
+            onDragLeave={() => setScheduleDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setScheduleDragging(false)
+              const f = e.dataTransfer.files[0]
+              if (f?.type.startsWith('image/')) handleScheduleSet(f)
+            }}
+            onClick={() => scheduleFileRef.current?.click()}
+            style={{ border: `1px dashed ${scheduleDragging ? 'var(--fg-55)' : 'var(--fg-25)'}`, borderRadius: 8, padding: '22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer', background: scheduleDragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
+          >
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', margin: 0, fontWeight: 600 }}>Show schedule <span style={{ fontWeight: 400, color: 'var(--fg-40)' }}>(optional)</span></p>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0, textAlign: 'center' }}>Drop a run/tour schedule — pulls every date & time</p>
+          </div>
+        )}
+        <input ref={scheduleFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+          const f = e.target.files?.[0]
+          if (f) handleScheduleSet(f)
         }} />
       </div>
 
@@ -618,6 +771,53 @@ export function ImportForm() {
                 <input ref={infoFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
                   const f = e.target.files?.[0]
                   if (f) handleInfoSet(f)
+                }} />
+              </div>
+
+              {/* Schedule zone — review phase */}
+              <div style={{ marginTop: 10 }}>
+                {scheduleLoading ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>Reading schedule…</span>
+                  </div>
+                ) : schedulePreview ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      <img src={schedulePreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
+                      <button
+                        onClick={() => { setSchedulePreview(''); setScheduleError('') }}
+                        style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
+                      >✕</button>
+                    </div>
+                    <div>
+                      {scheduleError ? (
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)', margin: 0 }}>{scheduleError}</p>
+                      ) : (
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Show schedule used</p>
+                      )}
+                      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Drop another to re-read</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onDragOver={e => { e.preventDefault(); setScheduleDragging(true) }}
+                    onDragLeave={() => setScheduleDragging(false)}
+                    onDrop={e => {
+                      e.preventDefault(); setScheduleDragging(false)
+                      const f = e.dataTransfer.files[0]
+                      if (f?.type.startsWith('image/')) handleScheduleSet(f)
+                    }}
+                    onClick={() => scheduleFileRef.current?.click()}
+                    style={{ border: `1px dashed ${scheduleDragging ? 'var(--fg-55)' : 'var(--fg-25)'}`, borderRadius: 8, padding: '22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, cursor: 'pointer', background: scheduleDragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
+                  >
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', margin: 0, fontWeight: 600 }}>Show schedule <span style={{ fontWeight: 400, color: 'var(--fg-40)' }}>(optional)</span></p>
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0, textAlign: 'center' }}>Drop a run/tour schedule — pulls every date & time</p>
+                  </div>
+                )}
+                <input ref={scheduleFileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) handleScheduleSet(f)
                 }} />
               </div>
             </div>
@@ -940,6 +1140,23 @@ export function ImportForm() {
                 </div>
               )
             })()}
+          </div>
+
+          {/* Sold out */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Sold out</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setSoldOut(v => !v)}
+                style={{ padding: '6px 14px', background: soldOut ? 'rgba(240,70,60,0.15)' : 'transparent', border: `1px solid ${soldOut ? 'rgba(240,70,60,0.5)' : 'var(--fg-18)'}`, borderRadius: 4, color: soldOut ? 'var(--sold-out, #f0463c)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.04em' }}
+              >
+                {soldOut ? 'SOLD OUT' : 'AVAILABLE'}
+              </button>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>
+                {soldOut ? 'shows sold-out chip on poster' : 'mark if tickets are gone'}
+              </span>
+            </div>
           </div>
 
           {/* Submit */}

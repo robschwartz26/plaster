@@ -68,6 +68,7 @@ export function BottomNav() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [pendingConnects, setPendingConnects] = useState(0)
 
+
   useEffect(() => {
     if (!user) return
     let cancelled = false

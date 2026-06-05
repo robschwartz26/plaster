@@ -51,6 +51,10 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Plaster uses your location to suggest music venues near you, so you can follow your local spots. Your location is never stored or shared.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Plaster uses your contacts to help you find friends who are already on Plaster and invite others to join.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Plaster uses your camera so you can take a profile photo and capture moments to share.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

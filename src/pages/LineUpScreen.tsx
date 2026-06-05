@@ -2,21 +2,24 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
-import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { Diamond } from '@/components/Diamond'
 import { PlasterHeader } from '@/components/PlasterHeader'
-import { createOrGetConversation } from '@/lib/messaging'
 import { GifMessage } from '@/components/GifMessage'
-import { UserActionsMenu } from '@/components/UserActionsMenu'
 import { useUserBlocks } from '@/hooks/useUserBlocks'
 import { useUserMutes } from '@/hooks/useUserMutes'
-import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { AccountProfile } from '@/components/AccountProfile'
+import { publishSpineState } from '@/lib/lineupSpine'
+import { SoldOutChip } from '@/components/SoldOutChip'
+
+// ── Spine tunable constants ────────────────────────────────────────────────
+const SPINE_MAX_H = 30  // px — max slice height; below this the line doesn't reach the bottom
+const SPINE_GAP   = 6   // px — must match gap: in the spine JSX
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 interface FeedItem {
   id: string
-  kind: 'rsvp' | 'like' | 'venue_post' | 'wall_post'
+  kind: 'rsvp' | 'like' | 'venue_post' | 'wall_post' | 'venue_show'
   actor: {
     id: string
     name: string
@@ -44,8 +47,8 @@ interface FeedItem {
   viewerHasLiked: boolean
 }
 
-interface LineupItem { id: string; title: string; venue: string; starts_at: string; poster_url: string | null; color: string }
-interface PanelEntry { type: 'venue' | 'artist' | 'friend'; name: string; color: string }
+interface LineupItem { id: string; title: string; venue: string; starts_at: string; poster_url: string | null; color: string; sold_out?: boolean }
+interface PanelEntry { type: 'venue' | 'artist' | 'friend'; id: string; name: string; color: string }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,6 +59,54 @@ function fmtTime(iso: string) {
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()
+}
+
+// ── Portland-time helpers for venue_show rows ─────────────────────────────
+
+const DAY_NAMES_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+const DAY_NAMES_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+
+function ptDateParts(d: Date) {
+  const raw = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short',
+  }).formatToParts(d)
+  const get = (t: string) => raw.find(p => p.type === t)?.value ?? ''
+  const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(get('weekday'))
+  return { year: +get('year'), month: +get('month'), day: +get('day'), dow }
+}
+
+function ptMondayKey(d: Date): string {
+  const { year, month, day, dow } = ptDateParts(d)
+  const local = new Date(year, month - 1, day)
+  local.setDate(local.getDate() - (dow === 0 ? 6 : dow - 1))
+  return `${local.getFullYear()}-${String(local.getMonth()+1).padStart(2,'0')}-${String(local.getDate()).padStart(2,'0')}`
+}
+
+function ordinalSuffix(n: number): string {
+  const v = n % 100
+  if (v >= 11 && v <= 13) return 'th'
+  return (['th','st','nd','rd'] as const)[n % 10] ?? 'th'
+}
+
+function venueShowLead(startsAt: string): { lead: string; detail: string } {
+  const d = new Date(startsAt)
+  const { day, dow } = ptDateParts(d)
+  const weekDiff = Math.round(
+    (new Date(ptMondayKey(d)).getTime() - new Date(ptMondayKey(new Date())).getTime()) /
+    (7 * 24 * 60 * 60 * 1000)
+  )
+  let lead: string
+  if (weekDiff === 0) {
+    lead = `this ${DAY_NAMES_FULL[dow]}`
+  } else if (weekDiff === 1) {
+    lead = `next ${DAY_NAMES_FULL[dow]}`
+  } else {
+    const monthShort = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'short' }).format(d)
+    lead = `${DAY_NAMES_SHORT[dow]}, ${monthShort} ${day}`
+  }
+  const monthLong = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', month: 'long' }).format(d)
+  const timeStr  = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true }).format(d)
+  return { lead, detail: `${monthLong} ${day}${ordinalSuffix(day)} · ${timeStr}` }
 }
 
 // Parses body text and wraps @-mentions in a medium-bold span.
@@ -73,18 +124,8 @@ function renderBodyWithMentions(body: string): React.ReactNode {
   })
 }
 
-const btnPrimary: React.CSSProperties   = { flex: 1, padding: '11px 0', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 6, fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 13, cursor: 'pointer' }
-const btnSecondary: React.CSSProperties = { flex: 1, padding: '11px 0', background: 'transparent', color: 'var(--fg-55)', border: '1px solid var(--fg-18)', borderRadius: 6, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, cursor: 'pointer' }
-
 // ── Shared sub-components ──────────────────────────────────────────────────
 
-function DiamondImg({ color, posterUrl, size = 28, onTap }: { color: string; posterUrl: string | null; size?: number; onTap?: () => void }) {
-  return (
-    <div onClick={onTap} style={{ width: size, height: size, background: color, clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)', flexShrink: 0, overflow: 'hidden', position: 'relative', cursor: onTap ? 'pointer' : 'default' }}>
-      {posterUrl && <img src={posterUrl} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} draggable={false} />}
-    </div>
-  )
-}
 
 function ActivityHeart({ isLiked, onToggle }: { isLiked: boolean; onToggle: () => void }) {
   return (
@@ -108,258 +149,24 @@ function ActivityHeart({ isLiked, onToggle }: { isLiked: boolean; onToggle: () =
   )
 }
 
-function PanelHeader({ name, onBack, rightAction }: { name: string; onBack: () => void; rightAction?: React.ReactNode }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', padding: '13px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', position: 'relative' }}>
-      <button onClick={onBack} style={{ position: 'absolute', left: 16, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', color: 'var(--fg-55)', padding: 0 }}>
-        ← BACK
-      </button>
-      <span style={{ flex: 1, textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', padding: '0 60px' }}>
-        {name}
-      </span>
-      {rightAction && (
-        <div style={{ position: 'absolute', right: 16 }}>
-          {rightAction}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function LineupRow({ item, highlighted }: { item: LineupItem; highlighted?: boolean }) {
+function LineupRow({ item, highlighted, onTap }: { item: LineupItem; highlighted?: boolean; onTap?: () => void }) {
   return (
     <div
       data-event-id={item.id}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)', background: highlighted ? 'rgba(255, 220, 180, 0.4)' : 'transparent', transition: 'background 0.4s ease' }}
+      onClick={onTap}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)', background: highlighted ? 'rgba(255, 220, 180, 0.4)' : 'transparent', transition: 'background 0.4s ease', cursor: onTap ? 'pointer' : 'default' }}
     >
       <div style={{ width: 36, height: 54, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: item.color, position: 'relative' }}>
         {item.poster_url && <img src={item.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 13, color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 13, color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{item.title}</p>
+          {item.sold_out && <SoldOutChip />}
+        </div>
         <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, fontWeight: 500, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{item.venue} · {fmtTime(item.starts_at)}</p>
         <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-25)', margin: '1px 0 0 0' }}>{fmtDate(item.starts_at)}</p>
       </div>
-    </div>
-  )
-}
-
-// ── Venue panel ────────────────────────────────────────────────────────────
-
-function VenuePanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; onPush: (e: PanelEntry) => void }) {
-  const navigate = useNavigate()
-  const [venue, setVenue] = useState<any>(null)
-  const [evts,  setEvts]  = useState<any[]>([])
-
-  useEffect(() => {
-    supabase.from('venues').select('id, name, neighborhood, cover_url').ilike('name', `%${entry.name}%`).limit(1)
-      .then(({ data }) => {
-        const v = data?.[0]; if (!v) return
-        setVenue(v)
-        supabase.from('events').select('id, title, starts_at, poster_url').eq('venue_id', v.id)
-          .gte('starts_at', new Date().toISOString()).order('starts_at').limit(10)
-          .then(({ data: e }) => { if (e) setEvts(e) })
-      })
-  }, [entry.name])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader name={venue?.name ?? entry.name} onBack={onBack} />
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
-        <DiamondImg color={entry.color} posterUrl={venue?.cover_url ?? null} size={80} />
-        <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0', textAlign: 'center' }}>
-          {venue?.name ?? entry.name}
-        </p>
-        {venue?.neighborhood && (
-          <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '4px 0 0 0' }}>
-            {venue.neighborhood}
-          </p>
-        )}
-        <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-30)', margin: '4px 0 0 0' }}>
-          {evts.length} upcoming {evts.length === 1 ? 'show' : 'shows'}
-        </p>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
-        {evts.length === 0 && (
-          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No upcoming events</p>
-        )}
-        {evts.map(ev => (
-          <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)' }}>
-            <div style={{ width: 30, height: 45, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: entry.color, position: 'relative' }}>
-              {ev.poster_url && <img src={ev.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
-              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '2px 0 0 0' }}>{fmtDate(ev.starts_at)} · {fmtTime(ev.starts_at)}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
-        <button style={btnPrimary}>Follow</button>
-        <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
-      </div>
-    </div>
-  )
-}
-
-// ── Artist panel ───────────────────────────────────────────────────────────
-
-function ArtistPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; onPush: (e: PanelEntry) => void }) {
-  const navigate = useNavigate()
-  const [shows, setShows] = useState<any[]>([])
-
-  useEffect(() => {
-    supabase.from('events').select('id, title, starts_at, poster_url, venues(name)').ilike('title', `%${entry.name}%`)
-      .gte('starts_at', new Date().toISOString()).order('starts_at').limit(10)
-      .then(({ data }) => { if (data) setShows(data) })
-  }, [entry.name])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader name={entry.name} onBack={onBack} />
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
-        <DiamondImg color={entry.color} posterUrl={null} size={80} />
-        <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0', textAlign: 'center' }}>
-          {entry.name}
-        </p>
-        <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '4px 0 0 0' }}>
-          Artist
-        </p>
-        <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-30)', margin: '4px 0 0 0' }}>
-          {shows.length} upcoming Portland {shows.length === 1 ? 'show' : 'shows'}
-        </p>
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
-        {shows.length === 0 && (
-          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No upcoming Portland shows found</p>
-        )}
-        {shows.map(s => (
-          <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderBottom: '1px solid var(--fg-08)' }}>
-            <div style={{ width: 30, height: 45, borderRadius: 3, overflow: 'hidden', flexShrink: 0, background: entry.color, position: 'relative' }}>
-              {s.poster_url && <img src={s.poster_url} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</p>
-              <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 10, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '2px 0 0 0' }}>
-                {(s.venues as any)?.name ?? ''} · {fmtDate(s.starts_at)}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-      <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
-        <button style={btnPrimary}>Follow</button>
-        <button style={btnSecondary} onClick={() => navigate('/msg')}>Message</button>
-      </div>
-    </div>
-  )
-}
-
-// ── Friend panel ───────────────────────────────────────────────────────────
-
-function FriendPanel({ entry, onBack }: { entry: PanelEntry; onBack: () => void; onPush: (e: PanelEntry) => void }) {
-  const navigate = useNavigate()
-  const { user: currentUser } = useAuth()
-  const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
-  const [profile,        setProfile]        = useState<any>(null)
-  const [posters,        setPosters]        = useState<{ url: string; title: string }[]>([])
-  const [followerCount,  setFollowerCount]  = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [attendedCount,  setAttendedCount]  = useState(0)
-  const [superlatives,   setSuperlatives]   = useState<string[]>([])
-
-  useEffect(() => {
-    supabase.from('profiles').select('id, username, avatar_url, avatar_diamond_url, bio').ilike('username', `%${entry.name}%`).limit(1)
-      .then(({ data }) => {
-        const p = data?.[0]; if (!p) return
-        setProfile(p)
-        supabase.from('attendees').select('events(poster_url, title)').eq('user_id', p.id).limit(12)
-          .then(({ data: a }) => {
-            if (a) {
-              const items = (a as any[]).map(r => ({ url: r.events?.poster_url, title: r.events?.title ?? '' })).filter(r => r.url)
-              setPosters(items)
-              setAttendedCount(items.length)
-            }
-          })
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('following_id', p.id).eq('status', 'accepted')
-          .then(({ count }) => setFollowerCount(count ?? 0))
-        supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', p.id).eq('status', 'accepted')
-          .then(({ count }) => setFollowingCount(count ?? 0))
-        supabase.from('superlatives').select('title').eq('user_id', p.id).limit(6)
-          .then(({ data: s }) => { if (s) setSuperlatives((s as any[]).map(r => r.title)) })
-      })
-  }, [entry.name])
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader
-        name={profile?.username ? `@${profile.username}` : entry.name}
-        onBack={onBack}
-        rightAction={profile?.id && profile.id !== currentUser?.id ? (
-          <UserActionsMenu
-            targetUserId={profile.id}
-            targetUsername={profile.username ?? null}
-            onActionComplete={onBack}
-            variant="inline"
-          />
-        ) : undefined}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 16px 16px', flexShrink: 0 }}>
-        <Diamond
-            diamondUrl={profile?.avatar_diamond_url ?? null}
-            fallbackUrl={profile?.avatar_url ?? null}
-            size={80}
-            onClick={() => profile?.id && setAvatarFullscreenId(profile.id)}
-          />
-        <p style={{ fontFamily: 'Playfair Display, serif', fontWeight: 900, fontSize: 20, color: 'var(--fg)', margin: '12px 0 0 0' }}>
-          @{profile?.username ?? entry.name}
-        </p>
-        <p style={{ fontFamily: 'Barlow Condensed, sans-serif', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '4px 0 0 0' }}>
-          {followerCount} followers · {followingCount} following · {attendedCount} attended
-        </p>
-        {profile?.bio && (
-          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: '8px 16px 0', textAlign: 'center', lineHeight: 1.4 }}>
-            {profile.bio}
-          </p>
-        )}
-        {superlatives.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10, justifyContent: 'center' }}>
-            {superlatives.map((s, i) => (
-              <span key={i} style={{ fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#A855F7', border: '1px solid #A855F7', borderRadius: 20, padding: '3px 10px' }}>
-                {s}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-      <div style={{ flex: 1, overflowY: 'auto', borderTop: '1px solid var(--fg-08)' }}>
-        {posters.length > 0 ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, padding: '2px' }}>
-            {posters.map((p, i) => (
-              <div key={i} style={{ aspectRatio: '2/3', borderRadius: 2, overflow: 'hidden', position: 'relative', background: entry.color }}>
-                <img src={p.url} alt={p.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-40)', padding: '16px', margin: 0 }}>No attended events found</p>
-        )}
-      </div>
-      <div style={{ padding: '12px 16px', display: 'flex', gap: 10, flexShrink: 0, borderTop: '1px solid var(--fg-08)' }}>
-        <button style={btnPrimary}>Follow</button>
-        <button
-          style={btnSecondary}
-          onClick={async () => {
-            if (!profile?.id) return
-            const convId = await createOrGetConversation(profile.id)
-            if (convId) navigate('/msg', { state: { openConversationId: convId } })
-          }}
-        >Message</button>
-      </div>
-      {avatarFullscreenId && (
-        <AvatarFullscreen userId={avatarFullscreenId} onClose={() => setAvatarFullscreenId(null)} />
-      )}
     </div>
   )
 }
@@ -388,6 +195,7 @@ export default function LineUpScreen() {
   const { user } = useAuth()
   const { blockedIds } = useUserBlocks()
   const { mutedIds } = useUserMutes()
+  const navigate = useNavigate()
   const [feed,       setFeed]       = useState<FeedItem[]>([])
   const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
   const [lineup,     setLineup]     = useState<LineupItem[]>([])
@@ -395,7 +203,8 @@ export default function LineUpScreen() {
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
   const [displayMonth, setDisplayMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set())
-  const panelListRef = useRef<HTMLDivElement>(null)
+  const panelListRef    = useRef<HTMLDivElement>(null)
+  const spineContainerRef = useRef<HTMLDivElement>(null)
 
   const pushPanel = (e: PanelEntry) => setPanelStack(prev => [...prev, e])
   const popPanel  = () => setPanelStack(prev => prev.slice(0, -1))
@@ -450,12 +259,28 @@ export default function LineUpScreen() {
     setTimeout(() => setHighlightedEventIds(new Set()), 2000)
   }
 
+  function focusLineupItem(item: LineupItem) {
+    const d = new Date(item.starts_at)
+    setDisplayMonth(new Date(d.getFullYear(), d.getMonth(), 1))
+    setHighlightedEventIds(new Set([item.id]))
+    setPanelOpen(true)
+    // scroll after panel slide-in (350ms transition)
+    setTimeout(() => {
+      const el = panelListRef.current?.querySelector(`[data-event-id="${item.id}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 400)
+    setTimeout(() => setHighlightedEventIds(new Set()), 2400)
+  }
+
   // ── Real feed fetch ──────────────────────────────────────────────────────
   const fetchFeed = useCallback(async () => {
     if (!user) return
     setFeedState('loading')
 
-    const { data, error } = await supabase.rpc('activity_feed', { page_size: 50 })
+    const [{ data, error }, { data: showsData }] = await Promise.all([
+      supabase.rpc('activity_feed', { page_size: 50 }),
+      (supabase.rpc as any)('lineup_open_weekend_shows', { p_user: user.id, p_limit: 12 }),
+    ])
 
     if (error) {
       console.error('[LineUpScreen] activity_feed RPC error:', error)
@@ -509,7 +334,49 @@ export default function LineUpScreen() {
       viewerHasLiked: row.viewer_has_liked ?? false,
     }))
 
-    setFeed(adapted)
+    // Map open-weekend venue shows into synthetic feed items
+    const showItems: FeedItem[] = ((showsData ?? []) as any[]).map(row => ({
+      id: `venueshow-${row.event_id}`,
+      kind: 'venue_show' as const,
+      actor: {
+        id: row.venue_account_id,
+        name: row.venue_name,
+        avatar_diamond_url: row.venue_diamond_url ?? null,
+        avatar_url: null,
+        banner_url: null,
+        diamond_focal_x: null,
+        diamond_focal_y: null,
+        type: 'venue' as const,
+        account_type: 'venue',
+      },
+      event: {
+        id: row.event_id,
+        title: row.title,
+        starts_at: row.starts_at,
+        poster_url: row.poster_url ?? null,
+        venue_name: row.venue_name,
+      },
+      body: null,
+      media_url: null,
+      media_type: null,
+      created_at: row.starts_at,
+      sourceId: row.event_id,
+      likeCount: 0,
+      viewerHasLiked: false,
+    }))
+
+    // Weave venue shows into the activity feed at ~1 per 4 items
+    const woven: FeedItem[] = []
+    let showIdx = 0
+    adapted.forEach((item, i) => {
+      woven.push(item)
+      if ((i + 1) % 4 === 0 && showIdx < showItems.length) {
+        woven.push(showItems[showIdx++])
+      }
+    })
+    while (showIdx < showItems.length) woven.push(showItems[showIdx++])
+
+    setFeed(woven)
     setFeedState('ready')
   }, [user, blockedIds, mutedIds])
 
@@ -543,14 +410,30 @@ export default function LineUpScreen() {
   useEffect(() => {
     if (!user) return
     const now = new Date().toISOString()
-    supabase.from('attendees').select('event_id, events(id, title, starts_at, poster_url, venues(name))').eq('user_id', user.id)
+    supabase.from('attendees').select('event_id, events(id, title, starts_at, poster_url, sold_out, venues(name))').eq('user_id', user.id)
       .then(({ data }) => {
         const items: LineupItem[] = ((data ?? []) as any[]).filter(r => r.events?.starts_at >= now)
-          .map(r => { const ev = r.events as any; return { id: r.event_id, title: ev.title ?? 'Event', venue: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color: '#2e1065' } })
+          .map(r => { const ev = r.events as any; return { id: r.event_id, title: ev.title ?? 'Event', venue: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color: '#2e1065', sold_out: ev.sold_out ?? false } })
           .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         setLineup(items)
       })
   }, [user?.id])
+
+  // Publish spine state (count + reachesBottom) for BottomNav YOU icon
+  useEffect(() => {
+    const n = lineup.length
+    if (n === 0) { publishSpineState(0, false); return }
+    const el = spineContainerRef.current
+    if (!el) { publishSpineState(n, false); return }
+    const compute = () => {
+      const naturalH = n * SPINE_MAX_H + (n - 1) * SPINE_GAP
+      publishSpineState(n, naturalH >= el.clientHeight)
+    }
+    compute()
+    const ro = new ResizeObserver(compute)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [lineup.length])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg)' }}>
@@ -625,19 +508,31 @@ export default function LineUpScreen() {
       {/* Content area */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
-        {/* Diamond queue (right edge) */}
-        {lineup.length > 0 && (() => {
-          const queueCount = lineup.length
-          const computedSize = Math.max(8, Math.min(34, Math.floor(400 / queueCount) - 4))
-          const queueGap = Math.max(2, Math.min(8, Math.floor(computedSize / 4)))
-          return (
-            <div style={{ position: 'absolute', right: 10, top: 16, bottom: 4, display: 'flex', flexDirection: 'column', gap: queueGap, zIndex: 5, pointerEvents: 'none', justifyContent: 'flex-start' }}>
-              {lineup.map((item, i) => (
-                <DiamondImg key={item.id ?? i} color={item.color} posterUrl={item.poster_url} size={computedSize} />
+        {/* Poster-slice spine — fixed track (top→bottom of feed area) */}
+        {lineup.length > 0 && (
+          <div ref={spineContainerRef} style={{ position: 'absolute', right: 20, top: 0, bottom: 0, width: 8, zIndex: 5, display: 'flex', flexDirection: 'column' }}>
+
+            {/* Slices fill from top; maxHeight caps each slice so with few nights the line
+                doesn't reach the bottom. Once count grows enough to overflow maxHeight,
+                flex shrinks them to fit — they always fill exactly to the bottom. */}
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: SPINE_GAP }}>
+              {lineup.map(item => (
+                <div
+                  key={item.id}
+                  onClick={() => focusLineupItem(item)}
+                  style={{
+                    flex: 1, minHeight: 0, maxHeight: SPINE_MAX_H, width: '100%', cursor: 'pointer',
+                    backgroundColor: item.color,
+                    backgroundImage: item.poster_url ? `url(${item.poster_url})` : undefined,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                  }}
+                />
               ))}
             </div>
-          )
-        })()}
+
+          </div>
+        )}
 
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
@@ -663,17 +558,17 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 50,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 46,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
                 }}
               >
                 <div
-                  onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
+                  onClick={() => pushPanel({ type: item.actor.type, id: item.actor.id, name: item.actor.name, color: '#2e1065' })}
                   style={{ cursor: 'pointer', flexShrink: 0 }}
                 >
                   <Diamond
                     size={item.actor.type === 'venue' ? 36 : 26}
-                    diamondUrl={item.actor.type === 'venue' ? item.actor.banner_url : item.actor.avatar_diamond_url}
+                    diamondUrl={item.actor.type === 'venue' ? (item.actor.banner_url ?? item.actor.avatar_diamond_url) : item.actor.avatar_diamond_url}
                     fallbackUrl={item.actor.avatar_url}
                     focalX={item.actor.diamond_focal_x}
                     focalY={item.actor.diamond_focal_y}
@@ -682,18 +577,15 @@ export default function LineUpScreen() {
                 <div style={{ flex: 1, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35 }}>
                   <>
                     <span
-                      onClick={() => pushPanel({ type: item.actor.type, name: item.actor.name, color: '#2e1065' })}
-                      style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer' }}
+                      onClick={() => pushPanel({ type: item.actor.type, id: item.actor.id, name: item.actor.name, color: '#2e1065' })}
+                      style={{ color: 'var(--fg)', fontWeight: 600, cursor: 'pointer', textDecoration: item.actor.type === 'venue' ? 'underline' : 'none' }}
                     >{item.actor.name}</span>
-                    {item.actor.account_type && item.actor.account_type !== 'person' && (
-                      <>{' '}<AccountTypeBadge accountType={item.actor.account_type} /></>
-                    )}
                   </>
                   {item.kind === 'rsvp' && (
-                    <> is going to <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
+                    <> is going to <span onClick={() => item.event && navigate('/', { state: { openEventId: item.event.id } })} style={{ fontWeight: 500, color: 'var(--fg)', cursor: 'pointer' }}>{item.event?.title}</span></>
                   )}
                   {item.kind === 'like' && (
-                    <> liked <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span></>
+                    <> liked <span onClick={() => item.event && navigate('/', { state: { openEventId: item.event.id } })} style={{ fontWeight: 500, color: 'var(--fg)', cursor: 'pointer' }}>{item.event?.title}</span></>
                   )}
                   {item.kind === 'venue_post' && (
                     <>
@@ -706,7 +598,7 @@ export default function LineUpScreen() {
                   {item.kind === 'wall_post' && (
                     <>
                       {' posted on '}
-                      <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.event?.title}</span>
+                      <span onClick={() => item.event && navigate('/', { state: { openEventId: item.event.id } })} style={{ fontWeight: 500, color: 'var(--fg)', cursor: 'pointer' }}>{item.event?.title}</span>
                       {item.body && (
                         <>: <span style={{ color: 'var(--fg-65)', fontStyle: 'italic' }}>{renderBodyWithMentions(item.body)}</span></>
                       )}
@@ -715,8 +607,24 @@ export default function LineUpScreen() {
                       )}
                     </>
                   )}
+                  {item.kind === 'venue_show' && item.event && (() => {
+                    const { lead, detail } = venueShowLead(item.event.starts_at)
+                    return (
+                      <>
+                        {' '}
+                        <span
+                          onClick={() => navigate('/', { state: { openEventId: item.event!.id } })}
+                          style={{ fontWeight: 600, color: 'var(--fg)', cursor: 'pointer' }}
+                        >{item.event.title}</span>
+                        <span style={{ display: 'block', marginTop: 2 }}>
+                          <span style={{ fontWeight: 500, color: 'var(--fg)' }}>{lead}</span>
+                          <span style={{ color: 'var(--fg-55)', fontStyle: 'italic', fontSize: 11 }}>{' · '}{detail}</span>
+                        </span>
+                      </>
+                    )
+                  })()}
                 </div>
-                {item.kind !== 'like' && (
+                {item.kind !== 'like' && item.kind !== 'venue_show' && (
                   <ActivityHeart
                     isLiked={item.viewerHasLiked}
                     onToggle={() => toggleActivityLike(item)}
@@ -744,7 +652,7 @@ export default function LineUpScreen() {
                 <p style={{ margin: '8px 0 0', color: 'var(--fg-40)' }}>Tap a poster on the wall to add it to your lineup.</p>
               </div>
             ) : (
-              lineup.map(item => <LineupRow key={item.id} item={item} highlighted={highlightedEventIds.has(item.id)} />)
+              lineup.map(item => <LineupRow key={item.id} item={item} highlighted={highlightedEventIds.has(item.id)} onTap={() => navigate('/', { state: { openEventId: item.id } })} />)
             )}
 
             {/* Calendar */}
@@ -785,9 +693,66 @@ export default function LineUpScreen() {
 
         {/* Profile panels — slide from LEFT */}
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'var(--bg)', zIndex: 20, transform: panelStack.length > 0 ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.35s cubic-bezier(0.4,0,0.2,1)' }}>
-          {topPanel?.type === 'venue'  && <VenuePanel  key={`venue-${topPanel.name}`}  entry={topPanel} onBack={popPanel} onPush={pushPanel} />}
-          {topPanel?.type === 'artist' && <ArtistPanel key={`artist-${topPanel.name}`} entry={topPanel} onBack={popPanel} onPush={pushPanel} />}
-          {topPanel?.type === 'friend' && <FriendPanel key={`friend-${topPanel.name}`} entry={topPanel} onBack={popPanel} onPush={pushPanel} />}
+          {topPanel?.type === 'venue' && (
+            <div key={`venue-${topPanel.id}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                paddingTop: 'max(14px, env(safe-area-inset-top))',
+                paddingBottom: 10, paddingLeft: 16, paddingRight: 16,
+                flexShrink: 0, borderBottom: '1px solid var(--fg-08)',
+              }}>
+                <button onClick={popPanel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 12H5M12 5l-7 7 7 7" />
+                  </svg>
+                  BACK
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <AccountProfile accountProfileId={topPanel.id} />
+              </div>
+            </div>
+          )}
+          {topPanel?.type === 'artist' && (
+            <div key={`artist-${topPanel.id}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                paddingTop: 'max(14px, env(safe-area-inset-top))',
+                paddingBottom: 10, paddingLeft: 16, paddingRight: 16,
+                flexShrink: 0, borderBottom: '1px solid var(--fg-08)',
+              }}>
+                <button onClick={popPanel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 12H5M12 5l-7 7 7 7" />
+                  </svg>
+                  BACK
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <AccountProfile accountProfileId={topPanel.id} />
+              </div>
+            </div>
+          )}
+          {topPanel?.type === 'friend' && (
+            <div key={`friend-${topPanel.id}`} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <div style={{
+                display: 'flex', alignItems: 'center',
+                paddingTop: 'max(14px, env(safe-area-inset-top))',
+                paddingBottom: 10, paddingLeft: 16, paddingRight: 16,
+                flexShrink: 0, borderBottom: '1px solid var(--fg-08)',
+              }}>
+                <button onClick={popPanel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-55)', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Barlow Condensed, sans-serif', fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M19 12H5M12 5l-7 7 7 7" />
+                  </svg>
+                  BACK
+                </button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <AccountProfile accountProfileId={topPanel.id} />
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

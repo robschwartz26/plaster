@@ -10,6 +10,7 @@ import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { SoldOutChip } from '@/components/SoldOutChip'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -87,17 +88,24 @@ function matchesSearch(event: WallEvent, query: string): boolean {
   )
 }
 
-function formatDateTime(iso: string): string {
+function formatDateTime(iso: string, showTimes?: string[] | null): string {
   const d = new Date(iso)
   const today = new Date()
   const tomorrow = new Date(today)
   tomorrow.setDate(tomorrow.getDate() + 1)
   const isToday = d.toDateString() === today.toDateString()
   const isTomorrow = d.toDateString() === tomorrow.toDateString()
-  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (isToday) return `Tonight · ${time}`
-  if (isTomorrow) return `Tomorrow · ${time}`
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`
+  const dayLabel = isToday ? 'Tonight' : isTomorrow ? 'Tomorrow'
+    : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  const fmtTime = (s: string) => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
+  if (showTimes && showTimes.length >= 2) {
+    const times = showTimes.map(fmtTime)
+    const timesStr = times.length === 2
+      ? `${times[0]} & ${times[1]}`
+      : `${times.slice(0, -1).join(', ')} & ${times[times.length - 1]}`
+    return `${dayLabel} · ${timesStr}`
+  }
+  return `${dayLabel} · ${fmtTime(iso)}`
 }
 
 function formatDatePill(iso: string): string {
@@ -210,6 +218,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [pendingGif,    setPendingGif]    = useState<SelectedGif | null>(null)
   const [pendingGifQuery, setPendingGifQuery] = useState<string>('')
   const [reportingPost, setReportingPost] = useState<{ id: string; userId: string } | null>(null)
+  const [reported, setReported] = useState(false)
+  const [reportCount, setReportCount] = useState(event.sold_out_report_count ?? 0)
 
   function fetchPanelData() {
     if (detailFetched.current) return
@@ -470,6 +480,15 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       setIsAttending(true); setAttendeeCount((c) => c + 1)
     }
     setAttendLoading(false)
+  }
+
+  // ── Sold-out report ───────────────────────────────────────────────────
+  async function handleReportSoldOut() {
+    if (!user || reported) return
+    setReported(true); setReportCount(c => c + 1)
+    const { data, error } = await supabase.rpc('report_sold_out', { p_event_id: event.id })
+    if (error) { setReported(false); setReportCount(c => Math.max(0, c - 1)) }
+    else if (typeof data === 'number') setReportCount(data)
   }
 
   // ── Post like ──────────────────────────────────────────────────────────
@@ -840,6 +859,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 20, background: event.color2 + '33', border: `1px solid ${event.color2}55`, fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: event.color2 }}>
               {event.category || 'Event'}
             </span>
+            {event.sold_out && <SoldOutChip />}
             <span style={{ marginLeft: 'auto', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', letterSpacing: '0.04em' }}>swipe → for wall</span>
           </div>
           <h2 style={{ margin: '8px 0 2px', fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>
@@ -858,7 +878,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
             </svg>
             <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
-              {formatDateTime(event.starts_at)}
+              {formatDateTime(event.starts_at, event.show_times)}
             </span>
           </div>
 
@@ -894,6 +914,25 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               ) : (
                 <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>sign in to say you're going</p>
               )}
+
+              {user && (() => {
+                const reportLabel = reportCount >= 15
+                  ? `${reportCount} users have flagged this event as sold out`
+                  : (reported ? 'Passed it down, thanks' : 'Sold out? Pass it down')
+                return (
+                  <button onClick={handleReportSoldOut} disabled={reported}
+                    style={{
+                      width: '100%', boxSizing: 'border-box', marginTop: 10, padding: '3px 0',
+                      borderRadius: 4, background: 'transparent',
+                      border: '1px solid var(--fg-30)', color: 'var(--fg-30)',
+                      fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700,
+                      letterSpacing: '0.1em', textTransform: 'uppercase', textAlign: 'center',
+                      cursor: reported ? 'default' : 'pointer', opacity: reported ? 0.6 : 1,
+                    }}>
+                    {reportLabel}
+                  </button>
+                )
+              })()}
             </>
           ) : (
             <>

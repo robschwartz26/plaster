@@ -31,6 +31,8 @@
   /* Badge — pure white on black for max contrast (night mode) */
   --badge-bg: #ffffff;
   --badge-fg: #000000;
+
+  --sold-out: #f0463c;
 }
 
 [data-theme="day"] {
@@ -52,6 +54,8 @@
   /* Badge — pure black on white for max contrast (day mode) */
   --badge-bg: #000000;
   --badge-fg: #ffffff;
+
+  --sold-out: #c0392b;
 }
 
 /* ── Global reset ─────────────────────────────────────────── */
