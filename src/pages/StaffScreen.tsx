@@ -6,6 +6,7 @@ import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
 import { StaffClock } from '@/components/StaffClock'
+import { StaffChat } from '@/components/StaffChat'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
 
@@ -59,8 +60,8 @@ function PanelShell({ header, children, bodyPadding = 16 }: {
 }
 
 // ── Resizable panel card (full-height, wide layout) ──────────
-function PanelCard({ header, children, bodyPadding = 16, onMinimize }: {
-  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number; onMinimize?: () => void
+function PanelCard({ header, children, bodyPadding = 16, onMinimize, bodyOverflow = 'auto' }: {
+  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number; onMinimize?: () => void; bodyOverflow?: 'auto' | 'hidden'
 }) {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
@@ -78,7 +79,7 @@ function PanelCard({ header, children, bodyPadding = 16, onMinimize }: {
           )}
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: bodyPadding }}>{children}</div>
+      <div style={{ flex: 1, minHeight: 0, overflowY: bodyOverflow, padding: bodyPadding }}>{children}</div>
     </div>
   )
 }
@@ -154,8 +155,7 @@ export function StaffScreen() {
   const [savedLayout] = useState<Layout | undefined>(() => loadSavedLayout(layoutKey))
   const saveLayout = makeSaveLayout(layoutKey)
 
-  // Scaffold for Part I to wire
-  const hasUnreadStaffChat = false
+  const [hasUnreadStaffChat, setHasUnreadStaffChat] = useState(false)
 
   function togglePanel(key: keyof PanelOpen) {
     setOpen(prev => { const next = { ...prev, [key]: !prev[key] }; savePanelOpen(next); return next })
@@ -238,15 +238,29 @@ export function StaffScreen() {
 
   // ── Team rail content ────────────────────────────────────
   const teamContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <LiveClock />
-      {profile?.username && (
-        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', margin: 0 }}>
-          Signed in as <span style={{ color: 'var(--fg)', fontWeight: 600 }}>@{profile.username}</span>
-        </p>
-      )}
-      <StaffClock />
-      <StaffPresence />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 0 }}>
+      {/* Fixed header section */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, flexShrink: 0, paddingBottom: 16, borderBottom: '1px solid var(--fg-08)', marginBottom: 16 }}>
+        <LiveClock />
+        {profile?.username && (
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', margin: 0 }}>
+            Signed in as <span style={{ color: 'var(--fg)', fontWeight: 600 }}>@{profile.username}</span>
+          </p>
+        )}
+        <StaffClock />
+        <StaffPresence />
+      </div>
+
+      {/* Chat — fills remaining space */}
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+          Staff chat
+          {hasUnreadStaffChat && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 14, height: 14, borderRadius: '50%', background: '#A855F7', color: '#fff', fontSize: 8, fontWeight: 700, lineHeight: 1 }}>!</span>
+          )}
+        </div>
+        <StaffChat onUnreadChange={setHasUnreadStaffChat} />
+      </div>
     </div>
   )
 
@@ -299,7 +313,7 @@ export function StaffScreen() {
                   // React.Fragment with key for seam+panel pairs
                   idx === 0 ? (
                     <ResizablePanel key={panelKey} id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                      <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16}>
+                      <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={panelKey === 'team' ? 16 : 16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                         {renderPanelBody(panelKey)}
                       </PanelCard>
                     </ResizablePanel>
@@ -308,7 +322,7 @@ export function StaffScreen() {
                     <React.Fragment key={panelKey}>
                       <ResizeSeam />
                       <ResizablePanel id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                        <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16}>
+                        <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                           {renderPanelBody(panelKey)}
                         </PanelCard>
                       </ResizablePanel>
