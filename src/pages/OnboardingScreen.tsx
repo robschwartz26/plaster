@@ -32,7 +32,7 @@ export function OnboardingScreen() {
   const [phoneError, setPhoneError] = useState<string | null>(null)
   const [deniedWhich, setDeniedWhich] = useState<'camera' | 'photos' | null>(null)
   const [busy, setBusy] = useState(false)
-  const { user, profile, refreshProfile } = useAuth()
+  const { user, profile, refreshProfile, canIngest } = useAuth()
   const navigate = useNavigate()
 
   // ── Step 1: username ─────────────────────────────────────────
@@ -55,6 +55,9 @@ export function OnboardingScreen() {
       setUsernameError(error.code === '23505' ? 'Username taken — try another' : error.message)
       return
     }
+    await refreshProfile()
+    // Staff accounts skip the consumer onboarding steps and go directly to the staff dashboard
+    if (canIngest) { navigate('/staff'); return }
     setStep('account_type')
   }
 
