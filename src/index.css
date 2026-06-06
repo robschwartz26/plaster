@@ -116,3 +116,9 @@ html, body {
   display: none;
 }
 
+
+/* ── Staff dashboard resize handle ──────────────────────────── */
+[data-separator]:hover .resize-handle-line,
+[data-separator]:active .resize-handle-line {
+  background: #A855F7 !important;
+}
