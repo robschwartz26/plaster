@@ -5,6 +5,7 @@ import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
+import { StaffClock } from '@/components/StaffClock'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
 
@@ -237,17 +238,15 @@ export function StaffScreen() {
 
   // ── Team rail content ────────────────────────────────────
   const teamContent = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <LiveClock />
       {profile?.username && (
         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', margin: 0 }}>
           Signed in as <span style={{ color: 'var(--fg)', fontWeight: 600 }}>@{profile.username}</span>
         </p>
       )}
+      <StaffClock />
       <StaffPresence />
-      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-30)', fontStyle: 'italic', margin: 0, lineHeight: 1.5 }}>
-        Chat coming here.
-      </p>
     </div>
   )
 

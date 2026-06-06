@@ -864,6 +864,30 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_shifts: {
+        Row: {
+          id: string
+          worker_id: string
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          worker_id: string
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          worker_id?: string
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       staff_venue_checkoff: {
         Row: {
           worker_id: string
