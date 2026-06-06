@@ -20,6 +20,12 @@ interface PendingEvent {
   flag_note: string | null
 }
 
+interface Stats {
+  pending_count: number
+  approved_7d: number
+  rejected_7d: number
+}
+
 interface Props {
   onCountChange?: (n: number) => void
 }
@@ -48,19 +54,24 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyGroup, setBusyGroup] = useState<string | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
-    const { data, error } = await supabase.rpc('admin_pending_events')
-    if (error) {
-      console.error('[AdminPendingEvents] fetch failed', error)
+    const [pendingRes, statsRes] = await Promise.all([
+      supabase.rpc('admin_pending_events'),
+      supabase.rpc('staff_stats'),
+    ])
+    if (pendingRes.error) {
+      console.error('[AdminPendingEvents] fetch failed', pendingRes.error)
       setRows([])
       onCountChange?.(0)
     } else {
-      const r = (data ?? []) as PendingEvent[]
+      const r = (pendingRes.data ?? []) as PendingEvent[]
       setRows(r)
       onCountChange?.(r.length)
     }
+    if (statsRes.data?.[0]) setStats(statsRes.data[0] as Stats)
     setLoading(false)
   }, [onCountChange])
 
@@ -130,19 +141,42 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
+  const statsStrip = stats ? (
+    <div style={{ display: 'flex', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+      {[
+        { label: 'Pending', value: stats.pending_count, color: 'rgba(217,119,6,0.9)' },
+        { label: 'Approved 7d', value: stats.approved_7d, color: '#4ade80' },
+        { label: 'Rejected 7d', value: stats.rejected_7d, color: '#f87171' },
+      ].map(({ label, value, color }) => (
+        <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>
+            {value}
+          </span>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
+            {label}
+          </span>
+        </div>
+      ))}
+    </div>
+  ) : null
+
   if (loading) {
     return (
-      <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>
-        Loading…
-      </p>
+      <>
+        {statsStrip}
+        <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>Loading…</p>
+      </>
     )
   }
 
   if (rows.length === 0) {
     return (
-      <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontStyle: 'italic' }}>
-        No uploads waiting for review.
-      </p>
+      <>
+        {statsStrip}
+        <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontStyle: 'italic' }}>
+          No uploads waiting for review.
+        </p>
+      </>
     )
   }
 
@@ -157,6 +191,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {statsStrip}
       {groupOrder.map(key => {
         const group = groupMap[key]
         const isGroupBusy = busyGroup === key

@@ -1207,6 +1207,10 @@ export type Database = {
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
       consolidate_events: { Args: { p_keep_id: string; p_remove_ids: string[] }; Returns: undefined }
+      staff_stats: {
+        Args: Record<string, never>
+        Returns: { pending_count: number; approved_7d: number; rejected_7d: number }[]
+      }
       staff_roster: {
         Args: Record<string, never>
         Returns: {
