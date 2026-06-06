@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { VenueBoard } from '@/components/VenueBoard'
+import { StaffPreview } from '@/components/StaffPreview'
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsWide(breakpoint = 900) {
@@ -21,11 +22,15 @@ function Panel({
   children,
   flex,
   minWidth,
+  bodyPadding = 16,
+  bodyOverflow = 'auto' as 'auto' | 'hidden',
 }: {
   header?: React.ReactNode
   children: React.ReactNode
   flex: string
   minWidth: number
+  bodyPadding?: number
+  bodyOverflow?: 'auto' | 'hidden'
 }) {
   return (
     <div style={{
@@ -52,7 +57,7 @@ function Panel({
           {header}
         </div>
       )}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}>
+      <div style={{ flex: 1, minHeight: 0, overflowY: bodyOverflow, padding: bodyPadding }}>
         {children}
       </div>
     </div>
@@ -178,26 +183,8 @@ export function StaffScreen() {
       }}>
 
         {/* 1. Preview ─────────────────────────────────────── */}
-        <Panel header="Preview" flex="1.2 1 0" minWidth={220}>
-          <div style={{
-            height: '100%', display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            textAlign: 'center', gap: 12,
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 8,
-              background: 'var(--fg-08)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--fg-25)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18M9 21V9" />
-              </svg>
-            </div>
-            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', maxWidth: 160, margin: 0, lineHeight: 1.5 }}>
-              Shows you upload will preview here as you add them — with the live app behind.
-            </p>
-          </div>
+        <Panel header="Preview" flex="1.2 1 0" minWidth={220} bodyPadding={0} bodyOverflow="hidden">
+          <StaffPreview />
         </Panel>
 
         {/* 2. Ingester ─────────────────────────────────────── */}
