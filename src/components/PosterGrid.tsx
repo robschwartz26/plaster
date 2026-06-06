@@ -43,13 +43,14 @@ interface Props {
   onActiveCategoryChange?: (category: string | null) => void
   openEventId?: string | null
   onOpenEventHandled?: () => void
+  enableDesktopNav?: boolean
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled }: Props) {
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
@@ -451,6 +452,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                 previousPosterUrl={prevUrlMap?.[event.id]}
                 onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
                 onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
+                enableDesktopNav={enableDesktopNav}
               />
             )
           })
@@ -474,6 +476,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                   onLike={onLike}
                   isAdminMode={isAdminMode}
                   onEventSaved={onEventSaved}
+                  enableDesktopNav={enableDesktopNav}
                 />
               )
             })}

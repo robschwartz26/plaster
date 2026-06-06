@@ -118,6 +118,7 @@ export function StaffPreview() {
             prevUrlMap={{}}
             onUndoCrop={() => {}}
             onConfirmCrop={() => {}}
+            enableDesktopNav={true}
           />
         )}
       </div>

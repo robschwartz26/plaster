@@ -28,6 +28,7 @@ interface Props {
   previousPosterUrl?: string
   onUndoCrop?: () => void
   onConfirmCrop?: () => void
+  enableDesktopNav?: boolean
 }
 
 interface EventDetail {
@@ -159,7 +160,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
@@ -309,6 +310,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── 1-col: bidirectional swipe ────────────────────────────────────────
   const cardRef = useRef<HTMLDivElement>(null)
+  const wheelCooldownRef = useRef(false)
   const swipe = useRef({
     active: false,
     startX: 0,
@@ -446,6 +448,24 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       el.removeEventListener('touchcancel', onEnd)
     }
   }, [cols, isLiked]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Desktop wheel nav (opt-in, 1-col only) ────────────────────────────
+  useEffect(() => {
+    if (!enableDesktopNav || cols !== 1) return
+    const el = cardRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (wheelCooldownRef.current || loopingRef.current) return
+      const { deltaX, deltaY } = e
+      if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 8) return
+      e.preventDefault()
+      shiftPanel(deltaX > 0 ? 1 : -1)
+      wheelCooldownRef.current = true
+      setTimeout(() => { wheelCooldownRef.current = false }, 600)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [enableDesktopNav, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── View tracking (1-col only) ────────────────────────────────────────
   // Fires register_event_view on: 3s continuous dwell, carousel swipe, like, wall post.
@@ -635,6 +655,38 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           </div>
         </div>
 
+        {/* Desktop nav chevrons (opt-in) */}
+        {enableDesktopNav && (
+          <>
+            <button
+              onClick={e => { e.stopPropagation(); shiftPanel(-1) }}
+              style={{
+                position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                zIndex: 15,
+                background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
+                width: 32, height: 48,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'rgba(255,255,255,0.7)', fontSize: 20,
+                cursor: 'pointer', userSelect: 'none',
+              }}
+            >‹</button>
+            <button
+              onClick={e => { e.stopPropagation(); shiftPanel(1) }}
+              style={{
+                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                zIndex: 15,
+                background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8,
+                width: 32, height: 48,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'rgba(255,255,255,0.7)', fontSize: 20,
+                cursor: 'pointer', userSelect: 'none',
+              }}
+            >›</button>
+          </>
+        )}
+
         {/* Heart pop overlay — double-tap-to-like */}
         {popHeart && (
           <div
@@ -744,6 +796,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   return (
     <div
       onClick={handleTap}
+      onDoubleClick={enableDesktopNav ? () => onDoubleTap?.(event) : undefined}
       style={{
         aspectRatio: '2/3',
         position: 'relative',
