@@ -1,5 +1,5 @@
 # Plaster — FULL codebase dump
-# Generated: Fri Jun  5 15:28:09 PDT 2026
+# Generated: Fri Jun  5 17:04:03 PDT 2026
 
 === .claude/settings.local.json ===
 {
@@ -3341,6 +3341,7 @@ const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })))
 const TermsOfUse    = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })))
+const Staff         = lazy(() => import('./pages/StaffScreen').then(m => ({ default: m.StaffScreen })))
 
 // Redirects unauthenticated users to /auth
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -3375,6 +3376,7 @@ function AppRoutes() {
         {/* Routes outside the app shell */}
         <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
         <Route path="/admin"      element={<Admin />} />
+        <Route path="/staff"      element={<ProtectedRoute><Staff /></ProtectedRoute>} />
         <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/terms"      element={<TermsOfUse />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
@@ -4123,6 +4125,253 @@ export function AdminNotifications() {
         ))}
       </div>
     </section>
+  )
+}
+
+
+=== src/components/admin/AdminPendingEvents.tsx ===
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+
+interface PendingEvent {
+  id: string
+  title: string
+  starts_at: string
+  venue_id: string | null
+  venue_name: string | null
+  poster_url: string | null
+  category: string | null
+  created_by: string
+  uploader: string | null
+  created_at: string
+  is_duplicate: boolean
+  duplicate_of: string | null
+}
+
+interface Props {
+  onCountChange?: (n: number) => void
+}
+
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    weekday: 'short', month: 'short', day: 'numeric',
+  })
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    hour: 'numeric', minute: '2-digit', hour12: true,
+  })
+}
+
+function fmtShort(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+export function AdminPendingEvents({ onCountChange }: Props = {}) {
+  const { user } = useAuth()
+  const [rows, setRows] = useState<PendingEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [busyGroup, setBusyGroup] = useState<string | null>(null)
+
+  const fetchPending = useCallback(async () => {
+    setLoading(true)
+    const { data, error } = await supabase.rpc('admin_pending_events')
+    if (error) {
+      console.error('[AdminPendingEvents] fetch failed', error)
+      setRows([])
+      onCountChange?.(0)
+    } else {
+      const r = (data ?? []) as PendingEvent[]
+      setRows(r)
+      onCountChange?.(r.length)
+    }
+    setLoading(false)
+  }, [onCountChange])
+
+  useEffect(() => { fetchPending() }, [fetchPending])
+
+  async function approve(id: string) {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('events').update({
+      status: 'published',
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id)
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] approve failed', error)
+    fetchPending()
+  }
+
+  async function reject(id: string) {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('events').update({
+      status: 'rejected',
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+    }).eq('id', id)
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] reject failed', error)
+    fetchPending()
+  }
+
+  async function approveAll(group: PendingEvent[]) {
+    if (!user) return
+    const key = group[0].uploader ?? group[0].created_by
+    setBusyGroup(key)
+    const now = new Date().toISOString()
+    await Promise.all(group.map(e =>
+      supabase.from('events').update({ status: 'published', reviewed_by: user.id, reviewed_at: now }).eq('id', e.id)
+    ))
+    setBusyGroup(null)
+    fetchPending()
+  }
+
+  async function rejectDuplicates(group: PendingEvent[]) {
+    if (!user) return
+    const dupes = group.filter(e => e.is_duplicate)
+    if (!dupes.length) return
+    const key = group[0].uploader ?? group[0].created_by
+    setBusyGroup(key)
+    const now = new Date().toISOString()
+    await Promise.all(dupes.map(e =>
+      supabase.from('events').update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now }).eq('id', e.id)
+    ))
+    setBusyGroup(null)
+    fetchPending()
+  }
+
+  if (loading) {
+    return (
+      <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>
+        Loading…
+      </p>
+    )
+  }
+
+  if (rows.length === 0) {
+    return (
+      <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontStyle: 'italic' }}>
+        No uploads waiting for review.
+      </p>
+    )
+  }
+
+  // Group by uploader (preserving order from RPC which orders by username then starts_at)
+  const groupMap: Record<string, PendingEvent[]> = {}
+  const groupOrder: string[] = []
+  for (const row of rows) {
+    const key = row.uploader ?? row.created_by
+    if (!groupMap[key]) { groupMap[key] = []; groupOrder.push(key) }
+    groupMap[key].push(row)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {groupOrder.map(key => {
+        const group = groupMap[key]
+        const isGroupBusy = busyGroup === key
+        const dupeCount = group.filter(e => e.is_duplicate).length
+
+        return (
+          <div key={key}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8, flexWrap: 'wrap' }}>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
+                Uploaded by @{group[0].uploader ?? '(unknown)'} · {group.length}
+              </p>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {dupeCount > 0 && (
+                  <button
+                    onClick={() => rejectDuplicates(group)}
+                    disabled={isGroupBusy}
+                    style={{ padding: '5px 10px', background: 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: isGroupBusy ? 'wait' : 'pointer', opacity: isGroupBusy ? 0.5 : 1 }}
+                  >
+                    {isGroupBusy ? '…' : `Reject ${dupeCount} duplicate${dupeCount !== 1 ? 's' : ''}`}
+                  </button>
+                )}
+                <button
+                  onClick={() => approveAll(group)}
+                  disabled={isGroupBusy}
+                  style={{ padding: '5px 10px', background: 'transparent', color: '#A855F7', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: isGroupBusy ? 'wait' : 'pointer', opacity: isGroupBusy ? 0.5 : 1 }}
+                >
+                  {isGroupBusy ? '…' : 'Approve all'}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {group.map(e => {
+                const isBusy = busyId === e.id || isGroupBusy
+                return (
+                  <div
+                    key={e.id}
+                    style={{
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: `1px solid ${e.is_duplicate ? 'rgba(239,68,68,0.3)' : 'var(--fg-15)'}`,
+                      background: e.is_duplicate ? 'rgba(239,68,68,0.04)' : 'transparent',
+                      fontFamily: '"Space Grotesk", sans-serif',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 4, overflow: 'hidden', flexShrink: 0, background: 'var(--fg-08)' }}>
+                        {e.poster_url && <img src={e.poster_url} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--fg)' }}>{e.title}</span>
+                          {e.is_duplicate && (
+                            <span style={{
+                              fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
+                              letterSpacing: '0.08em', textTransform: 'uppercase',
+                              color: '#ef4444', background: 'rgba(239,68,68,0.12)',
+                              border: '1px solid rgba(239,68,68,0.3)', padding: '1px 6px', borderRadius: 3, flexShrink: 0,
+                            }}>
+                              DUPLICATE · already published this date
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--fg-55)' }}>
+                          {e.venue_name} · {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
+                          added {fmtShort(e.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => approve(e.id)}
+                        disabled={isBusy}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                      >
+                        {busyId === e.id ? '…' : 'Approve'}
+                      </button>
+                      <button
+                        onClick={() => reject(e.id)}
+                        disabled={isBusy}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -5798,6 +6047,10 @@ import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { type EventSummary } from '@/components/admin/adminShared'
 
+function fmtLocalDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 function fmtLocalTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
@@ -5862,7 +6115,7 @@ export function DuplicateEventMerger({ groups, onMergeComplete }: { groups: Even
             <div key={groupIdx} style={{ border: '1px solid var(--fg-18)', borderRadius: 7, overflow: 'hidden' }}>
               <button onClick={() => handleExpand(groupIdx)} style={{ width: '100%', padding: '10px 14px', background: 'rgba(240,236,227,0.02)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)', textAlign: 'left' }}>
-                  {group.map(e => e.title).join(' · ')}
+                  <span style={{ color: 'var(--fg-40)' }}>{fmtLocalDate(group[0].starts_at)} — </span>{group.map(e => e.title).join(' · ')}
                 </span>
                 <span style={{ color: 'var(--fg-40)', fontSize: 10, flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
               </button>
@@ -5875,7 +6128,7 @@ export function DuplicateEventMerger({ groups, onMergeComplete }: { groups: Even
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</p>
-                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>{eventTimeLabel(e)}</p>
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>{fmtLocalDate(e.starts_at)} · {eventTimeLabel(e)}</p>
                       </div>
                       <button
                         onClick={() => setPrimaryIds(prev => ({ ...prev, [groupIdx]: e.id }))}
@@ -6219,7 +6472,7 @@ async function fileFromDrop(e: React.DragEvent): Promise<File | null> {
   return new File([bytes], `dropped-${Date.now()}.${ext}`, { type: mimeType })
 }
 
-export function ImportForm() {
+export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) {
   const [venues, setVenues] = useState<Venue[]>([])
 
   useEffect(() => {
@@ -6267,6 +6520,7 @@ export function ImportForm() {
   const [reExtracting, setReExtracting] = useState(false)
   const [reuseExistingPoster, setReuseExistingPoster] = useState(false)
   const [nearDuplicate, setNearDuplicate] = useState<Venue | null>(null)
+  const [venueMismatch, setVenueMismatch] = useState<string | null>(null)
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<RecurrenceFrequency>('weekly')
   const [weekdayOrdinals, setWeekdayOrdinals] = useState<Set<OrdinalKey>>(new Set())
@@ -6304,7 +6558,7 @@ export function ImportForm() {
       setForm({
         title: result.title,
         venue_id: match?.id ?? '',
-        venue_name_manual: match ? '' : result.venue_name,
+        venue_name_manual: (staffMode || match) ? '' : result.venue_name,
         date: result.date,
         time: result.time,
         address: match?.address || result.address,
@@ -6315,6 +6569,9 @@ export function ImportForm() {
         instagram: match?.instagram || result.instagram || '',
         hours: match?.hours || result.hours || '',
       })
+      if (staffMode) {
+        setVenueMismatch(!match && result.venue_name ? result.venue_name : null)
+      }
       setPhase('review')
     } catch (e) {
       setErrorMsg(String(e)); setPhase('error')
@@ -6344,13 +6601,17 @@ export function ImportForm() {
       setReuseExistingPoster(!!result.existing_poster_url)
       setSoldOut(result.sold_out ?? soldOut)
       const match = findVenueMatch(venues, result.venue_name)
+      if (staffMode) {
+        const freshName = result.venue_name?.trim()
+        if (freshName) setVenueMismatch(!match ? result.venue_name : null)
+      }
       setForm(f => {
         const freshName = result.venue_name?.trim()
         let venue_id = f.venue_id
         let venue_name_manual = f.venue_name_manual
         if (freshName) {
           if (match) { venue_id = match.id; venue_name_manual = '' }
-          else { venue_id = ''; venue_name_manual = freshName }
+          else { venue_id = ''; venue_name_manual = staffMode ? '' : freshName }
         }
         const resolvedMatch = venue_id ? venues.find(v => v.id === venue_id) : undefined
         return {
@@ -6391,6 +6652,7 @@ export function ImportForm() {
   }, [])
 
   const handleVenueChange = (venueId: string) => {
+    if (venueId) setVenueMismatch(null)
     const v = venues.find(v => v.id === venueId)
     setForm(f => ({
       ...f,
@@ -6485,7 +6747,7 @@ export function ImportForm() {
         if (error) throw error
       } else {
         let venue_id = form.venue_id
-        if (!venue_id && form.venue_name_manual) {
+        if (!staffMode && !venue_id && form.venue_name_manual) {
           const { data: newVenue, error: venueError } = await supabaseAdmin.from('venues').insert({
             name: form.venue_name_manual,
             neighborhood: form.neighborhood || 'Portland',
@@ -6537,13 +6799,15 @@ export function ImportForm() {
           const snoozeDate = new Date(lastDate); snoozeDate.setMonth(snoozeDate.getMonth() + 3)
           const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
           const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : recurrenceFrequency === 'monthly' ? 'monthly' : 'on specific weekdays'
-          await supabaseAdmin.from('admin_notifications').insert({
-            type: 'recurrence_check',
-            title: `Check recurring event: ${form.title}`,
-            message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
-            recurrence_group_id: recurrenceGroupId,
-            snoozed_until: snoozeDate.toISOString(),
-          })
+          if (!staffMode) {
+            await supabaseAdmin.from('admin_notifications').insert({
+              type: 'recurrence_check',
+              title: `Check recurring event: ${form.title}`,
+              message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
+              recurrence_group_id: recurrenceGroupId,
+              snoozed_until: snoozeDate.toISOString(),
+            })
+          }
           setSuccessCount(dates.length)
         } else if (extraDates.length > 0) {
           // Group all occurrences by calendar date — same date = multiple show times
@@ -6586,6 +6850,7 @@ export function ImportForm() {
 
   const handleSubmit = async () => {
     if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
+    if (staffMode && !form.venue_id) { setErrorMsg('Please select a venue before submitting.'); setPhase('error'); return }
 
     // Validate extra dates
     if (extraDates.length > 0) {
@@ -6618,7 +6883,7 @@ export function ImportForm() {
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
   }
 
   // DEV: generate a mock test poster
@@ -6785,8 +7050,10 @@ export function ImportForm() {
       <span style={{ fontSize: 40 }}>✓</span>
       <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, color: 'var(--fg)', margin: 0 }}>{successTitle}</p>
       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>
-      {successCount > 1 ? `${successCount} events posted · ${recurrenceFrequency === 'weekdays' ? 'specific weekdays' : FREQ_LABELS[recurrenceFrequency].toLowerCase()} for 3 months` : 'Posted to the wall'}
-    </p>
+        {successCount > 1
+          ? `${successCount} events ${staffMode ? 'submitted for review' : 'posted'} · ${recurrenceFrequency === 'weekdays' ? 'specific weekdays' : FREQ_LABELS[recurrenceFrequency].toLowerCase()} for 3 months`
+          : staffMode ? 'Submitted for review' : 'Posted to the wall'}
+      </p>
       <button onClick={reset} style={{ marginTop: 8, padding: '10px 28px', background: '#A855F7', color: 'white', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }}>
         Import Another
       </button>
@@ -7007,16 +7274,24 @@ export function ImportForm() {
           <div style={fieldStyle}>
             <label style={{ ...labelStyle, color: isUncertain('venue_name') ? '#facc15' : 'var(--fg-55)' }}>Venue {isUncertain('venue_name') && '⚠'} *</label>
             <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.venue_id} onChange={e => handleVenueChange(e.target.value)}>
-              <option value="">— New venue —</option>
+              {staffMode
+                ? <option value="" disabled>— Select a venue —</option>
+                : <option value="">— New venue —</option>
+              }
               {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
             </select>
             {form.venue_id && !nearDuplicate && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>existing venue · address &amp; details auto-filled</p>
             )}
-            {!form.venue_id && (
+            {venueMismatch && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)', margin: '6px 0 0 0' }}>
+                ⚠ "{venueMismatch}" isn't on the venue list — please select the correct venue.
+              </p>
+            )}
+            {!staffMode && !form.venue_id && (
               <input style={{ ...inputStyle, marginTop: 8 }} value={form.venue_name_manual} onChange={e => setForm(f => ({ ...f, venue_name_manual: e.target.value }))} placeholder="New venue name (will be created)" />
             )}
-            {nearDuplicate && (
+            {!staffMode && nearDuplicate && (
               <div style={{ marginTop: 8, padding: '10px 12px', border: '1px solid rgba(234,179,8,0.4)', borderRadius: 6, background: 'rgba(234,179,8,0.06)' }}>
                 <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(234,179,8,0.9)', margin: '0 0 8px 0' }}>
                   Similar venue found: <strong>{nearDuplicate.name}</strong>
@@ -7049,8 +7324,8 @@ export function ImportForm() {
             </div>
           )}
 
-          {/* Neighborhood — only if new venue */}
-          {!form.venue_id && form.venue_name_manual && (
+          {/* Neighborhood — only if new venue (admin only) */}
+          {!staffMode && !form.venue_id && form.venue_name_manual && (
             <div style={fieldStyle}>
               <label style={labelStyle}>Neighborhood</label>
               <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))}>
@@ -7060,8 +7335,8 @@ export function ImportForm() {
             </div>
           )}
 
-          {/* Enriched venue fields — only for new venues */}
-          {!form.venue_id && form.venue_name_manual && (
+          {/* Enriched venue fields — only for new venues (admin only) */}
+          {!staffMode && !form.venue_id && form.venue_name_manual && (
             <>
               <div style={fieldStyle}>
                 <label style={labelStyle}>Hours</label>
@@ -7344,10 +7619,10 @@ export function ImportForm() {
             )}
             <button
               onClick={handleSubmit}
-              disabled={!form.title || !form.date || (!form.venue_id && !form.venue_name_manual)}
-              style={{ flex: 1, padding: '12px 0', background: (form.title && form.date && (form.venue_id || form.venue_name_manual)) ? '#A855F7' : 'var(--fg-18)', color: (form.title && form.date && (form.venue_id || form.venue_name_manual)) ? '#fff' : 'var(--fg-30)', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: (form.title && form.date) ? 'pointer' : 'not-allowed', transition: 'all 0.15s ease' }}
+              disabled={!form.title || !form.date || (staffMode ? !form.venue_id : (!form.venue_id && !form.venue_name_manual))}
+              style={{ flex: 1, padding: '12px 0', background: (form.title && form.date && (staffMode ? form.venue_id : (form.venue_id || form.venue_name_manual))) ? '#A855F7' : 'var(--fg-18)', color: (form.title && form.date && (staffMode ? form.venue_id : (form.venue_id || form.venue_name_manual))) ? '#fff' : 'var(--fg-30)', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: (form.title && form.date) ? 'pointer' : 'not-allowed', transition: 'all 0.15s ease' }}
             >
-              Post to Wall →
+              {staffMode ? 'Submit for Review →' : 'Post to Wall →'}
             </button>
             <button onClick={reset} style={{ padding: '12px 16px', background: 'transparent', border: '1px solid var(--fg-18)', borderRadius: 6, color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', flexShrink: 0 }}>
               Cancel
@@ -16117,6 +16392,7 @@ export interface Profile {
   bio: string | null
   is_public: boolean
   is_admin?: boolean
+  is_ingester?: boolean
   interests: string[]
   created_at: string
   account_type: string | null
@@ -16128,6 +16404,7 @@ interface AuthContextValue {
   session: Session | null
   profile: Profile | null
   isAdmin: boolean
+  canIngest: boolean
   loading: boolean
   signUp: (email: string, password: string) => Promise<{ error: Error | null }>
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -16206,9 +16483,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = profile?.is_admin === true
+  const canIngest = (profile?.is_admin || profile?.is_ingester) === true
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, canIngest, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
       {children}
     </AuthContext.Provider>
   )
@@ -17515,6 +17793,7 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications'
 import { AdminReports } from '@/components/admin/AdminReports'
 import { AdminVARequests } from '@/components/admin/AdminVARequests'
 import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
+import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
@@ -17566,6 +17845,7 @@ function AdminDashboard() {
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
   const [pendingVACount, setPendingVACount] = useState<number>(0)
+  const [pendingEventCount, setPendingEventCount] = useState<number>(0)
 
   const fetchVenues = useCallback(async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
@@ -17576,6 +17856,7 @@ function AdminDashboard() {
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
     const { data } = await supabaseAdmin.from('events')
       .select('id, title, starts_at, venue_id, poster_url, show_times')
+      .eq('status', 'published')
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
     if (data) setEvents(data)
@@ -17600,6 +17881,13 @@ function AdminDashboard() {
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
           <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
           <AdminNotifications />
+
+          <Section
+            title="Pending Uploads"
+            badge={pendingEventCount > 0 ? `${pendingEventCount} to review` : undefined}
+          >
+            <AdminPendingEvents onCountChange={setPendingEventCount} />
+          </Section>
 
           <Section
             title="Reports"
@@ -22381,6 +22669,84 @@ const ul: React.CSSProperties = {
 }
 
 
+=== src/pages/StaffScreen.tsx ===
+import { useAuth } from '@/contexts/AuthContext'
+import { ImportForm } from '@/components/admin/ImportForm'
+
+export function StaffScreen() {
+  const { canIngest, loading, signOut } = useAuth()
+
+  if (loading) return null
+
+  if (!canIngest) {
+    return (
+      <div style={{
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
+        textAlign: 'center',
+        fontFamily: '"Space Grotesk", sans-serif',
+        color: 'var(--fg)',
+        background: 'var(--bg)',
+      }}>
+        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 32, fontWeight: 900, marginBottom: 8 }}>
+          plaster
+        </div>
+        <p style={{ margin: '8px 0', fontSize: 15, maxWidth: 320 }}>
+          This page is for Plaster staff.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ minHeight: '100dvh', background: 'var(--bg)', color: 'var(--fg)', display: 'flex', flexDirection: 'column' }}>
+      {/* Top bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 24px',
+        paddingTop: 'calc(env(safe-area-inset-top) + 12px)',
+        borderBottom: '1px solid var(--fg-08)',
+        background: 'var(--bg)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: '"Playfair Display", serif', fontSize: 26, fontWeight: 900, color: 'var(--fg)', letterSpacing: '-0.02em', lineHeight: 1 }}>
+            plaster
+          </span>
+          <span style={{
+            fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700,
+            letterSpacing: '0.12em', textTransform: 'uppercase',
+            color: '#A855F7', background: 'rgba(168,85,247,0.12)',
+            border: '1px solid rgba(168,85,247,0.3)',
+            padding: '2px 8px', borderRadius: 4,
+          }}>STAFF</span>
+        </div>
+        <button
+          onClick={signOut}
+          style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', padding: '4px 0' }}
+        >
+          Sign out
+        </button>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 48px', width: '100%' }}>
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
+            Upload shows here — they go live once they're approved.
+          </p>
+          <ImportForm staffMode />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
 === src/pages/TermsOfUse.tsx ===
 /**
  * Terms of Use — public route at /terms.
@@ -24139,6 +24505,10 @@ export type Database = {
           sold_out_report_count: number
           show_times: string[] | null
           starts_at: string
+          status: string
+          created_by: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
           title: string
           venue_id: string | null
           view_count: number
@@ -24168,6 +24538,10 @@ export type Database = {
           sold_out_report_count?: number
           show_times?: string[] | null
           starts_at: string
+          status?: string
+          created_by?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
           title: string
           venue_id?: string | null
           view_count?: number
@@ -24197,6 +24571,10 @@ export type Database = {
           sold_out_report_count?: number
           show_times?: string[] | null
           starts_at?: string
+          status?: string
+          created_by?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
           title?: string
           venue_id?: string | null
           view_count?: number
@@ -24411,6 +24789,7 @@ export type Database = {
           id: string
           interests: string[]
           is_admin: boolean
+          is_ingester: boolean
           is_public: boolean
           is_suspended: boolean
           pending_account_type: string | null
@@ -24432,6 +24811,7 @@ export type Database = {
           id: string
           interests?: string[]
           is_admin?: boolean
+          is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
@@ -24453,6 +24833,7 @@ export type Database = {
           id?: string
           interests?: string[]
           is_admin?: boolean
+          is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
           pending_account_type?: string | null
@@ -24692,6 +25073,23 @@ export type Database = {
           account_avatar_diamond_url: string | null
         }[]
       }
+      admin_pending_events: {
+        Args: Record<string, never>
+        Returns: {
+          id: string
+          title: string
+          starts_at: string
+          venue_id: string | null
+          venue_name: string | null
+          poster_url: string | null
+          category: string | null
+          created_by: string
+          uploader: string | null
+          created_at: string
+          is_duplicate: boolean
+          duplicate_of: string | null
+        }[]
+      }
       admin_approve_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -24738,6 +25136,7 @@ export type Database = {
         Returns: { id: string; username: string; avatar_diamond_url: string | null; avatar_url: string | null; account_type: string; matched_phone_hash: string | null; matched_email_hash: string | null }[]
       }
       get_unread_count: { Args: never; Returns: number }
+      can_ingest: { Args: { user_id: string }; Returns: boolean }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
         Args: { target_id: string; viewer_id: string }
@@ -25366,11 +25765,11 @@ serve(async (req) => {
 
   const { data: profile } = await supabaseService
     .from('profiles')
-    .select('is_admin')
+    .select('is_admin, is_ingester')
     .eq('id', user.id)
     .single()
 
-  if (!profile?.is_admin) {
+  if (!profile?.is_admin && !profile?.is_ingester) {
     return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json', ...corsHeaders },
@@ -25691,8 +26090,8 @@ serve(async (req) => {
       status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
   }
-  const { data: profile } = await supabaseService.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) {
+  const { data: profile } = await supabaseService.from('profiles').select('is_admin, is_ingester').eq('id', user.id).single()
+  if (!profile?.is_admin && !profile?.is_ingester) {
     return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
       status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders },
     })
@@ -31206,6 +31605,245 @@ AS $function$
 $function$;
 
 grant execute on function public.lineup_open_weekend_shows(uuid, integer) to anon, authenticated;
+
+
+=== supabase/migrations/063_ingester_role_and_event_staging.sql ===
+-- ── (a) Ingester role flag ────────────────────────────────────
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS is_ingester boolean NOT NULL DEFAULT false;
+
+-- ── (b) can_ingest helper ─────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.can_ingest(user_id uuid)
+RETURNS boolean LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT COALESCE((SELECT is_admin OR is_ingester FROM profiles WHERE id = user_id), false)
+$$;
+GRANT EXECUTE ON FUNCTION public.can_ingest(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.can_ingest(uuid) TO anon;
+
+-- ── (c) Event staging columns ─────────────────────────────────
+ALTER TABLE public.events
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'published'
+    CHECK (status IN ('pending','published','rejected')),
+  ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES public.profiles(id),
+  ADD COLUMN IF NOT EXISTS reviewed_by uuid REFERENCES public.profiles(id),
+  ADD COLUMN IF NOT EXISTS reviewed_at timestamptz;
+
+CREATE INDEX IF NOT EXISTS events_status_idx    ON public.events(status);
+CREATE INDEX IF NOT EXISTS events_created_by_idx ON public.events(created_by);
+
+-- ── (d) BEFORE INSERT trigger ─────────────────────────────────
+CREATE OR REPLACE FUNCTION public.events_set_ingest_status()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NEW.created_by IS NULL THEN NEW.created_by := auth.uid(); END IF;
+  IF auth.uid() IS NOT NULL AND NOT public.is_admin(auth.uid()) THEN
+    NEW.status := 'pending';
+  END IF;
+  RETURN NEW;
+END; $$;
+
+DROP TRIGGER IF EXISTS events_set_ingest_status_trg ON public.events;
+CREATE TRIGGER events_set_ingest_status_trg BEFORE INSERT ON public.events
+  FOR EACH ROW EXECUTE FUNCTION public.events_set_ingest_status();
+
+-- ── (e) SELECT policy ─────────────────────────────────────────
+DROP POLICY IF EXISTS "Events are viewable by everyone" ON public.events;
+CREATE POLICY "events_select" ON public.events FOR SELECT
+  USING (status = 'published' OR public.is_admin(auth.uid()) OR created_by = auth.uid());
+
+-- ── (f) INSERT policy ─────────────────────────────────────────
+DROP POLICY IF EXISTS "Authenticated users can create events" ON public.events;
+CREATE POLICY "events_insert" ON public.events FOR INSERT TO authenticated
+  WITH CHECK (public.can_ingest(auth.uid()));
+
+-- ── (g) UPDATE policy ─────────────────────────────────────────
+DROP POLICY IF EXISTS "events_update" ON public.events;
+CREATE POLICY "events_update" ON public.events FOR UPDATE TO authenticated
+  USING (
+    public.is_admin(auth.uid())
+    OR EXISTS (SELECT 1 FROM venues WHERE venues.id = events.venue_id AND venues.created_by = auth.uid())
+    OR (created_by = auth.uid() AND status = 'pending')
+  )
+  WITH CHECK (
+    public.is_admin(auth.uid())
+    OR EXISTS (SELECT 1 FROM venues WHERE venues.id = events.venue_id AND venues.created_by = auth.uid())
+    OR (created_by = auth.uid() AND status <> 'published')
+  );
+
+-- ── (h) Feed functions — add status = 'published' filter ──────
+
+CREATE OR REPLACE FUNCTION public.activity_feed(before_round integer DEFAULT NULL::integer, before_cursor timestamp with time zone DEFAULT NULL::timestamp with time zone, page_size integer DEFAULT 50)
+ RETURNS TABLE(activity_type text, source_id uuid, actor_id uuid, actor_username text, actor_avatar_diamond_url text, actor_account_type text, target_event_id uuid, target_event_title text, target_event_starts_at timestamp with time zone, target_event_poster_url text, body_preview text, media_url text, media_type text, like_count integer, viewer_has_liked boolean, round_num integer, created_at timestamp with time zone)
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id uuid := auth.uid();
+BEGIN
+  IF v_user_id IS NULL THEN RETURN; END IF;
+
+  RETURN QUERY
+  WITH viewer_follows AS (
+    SELECT f.following_id AS followed_user_id
+    FROM follows f
+    WHERE f.follower_id = v_user_id
+      AND f.status = 'accepted'
+  ),
+  combined AS (
+    SELECT
+      'rsvp'::text AS a_type,
+      a.id AS a_source_id,
+      a.user_id AS a_actor_id,
+      a.event_id AS a_event_id,
+      NULL::text AS a_body_preview,
+      NULL::text AS a_media_url,
+      NULL::text AS a_media_type,
+      a.created_at AS a_created_at
+    FROM attendees a
+    JOIN viewer_follows vf ON vf.followed_user_id = a.user_id
+
+    UNION ALL
+
+    SELECT
+      'wall_post'::text,
+      ewp.id,
+      ewp.user_id,
+      ewp.event_id,
+      LEFT(COALESCE(ewp.body, ''), 80),
+      ewp.media_url,
+      ewp.media_type,
+      ewp.created_at
+    FROM event_wall_posts ewp
+    JOIN viewer_follows vf ON vf.followed_user_id = ewp.user_id
+    WHERE ewp.parent_id IS NULL
+      AND ewp.is_venue_post = false
+      AND ewp.deleted_at IS NULL
+
+    UNION ALL
+
+    SELECT
+      'venue_post'::text,
+      ewp.id,
+      ewp.user_id,
+      ewp.event_id,
+      LEFT(COALESCE(ewp.body, ''), 80),
+      ewp.media_url,
+      ewp.media_type,
+      ewp.created_at
+    FROM event_wall_posts ewp
+    JOIN viewer_follows vf ON vf.followed_user_id = ewp.user_id
+    WHERE ewp.is_venue_post = true
+      AND ewp.deleted_at IS NULL
+
+    UNION ALL
+
+    SELECT
+      'like'::text,
+      el.id,
+      el.user_id,
+      el.event_id,
+      NULL::text,
+      NULL::text,
+      NULL::text,
+      el.created_at
+    FROM event_likes el
+    JOIN viewer_follows vf ON vf.followed_user_id = el.user_id
+  ),
+  ranked AS (
+    SELECT
+      c.*,
+      ROW_NUMBER() OVER (PARTITION BY c.a_actor_id ORDER BY c.a_created_at DESC)::integer AS r_round_num
+    FROM combined c
+  )
+  SELECT
+    r.a_type,
+    r.a_source_id,
+    r.a_actor_id,
+    actor.username,
+    actor.avatar_diamond_url,
+    actor.account_type,
+    r.a_event_id,
+    e.title,
+    e.starts_at,
+    e.poster_url,
+    r.a_body_preview,
+    r.a_media_url,
+    r.a_media_type,
+    COALESCE((SELECT COUNT(*)::integer FROM activity_likes al WHERE al.activity_type = r.a_type AND al.source_id = r.a_source_id), 0),
+    EXISTS (SELECT 1 FROM activity_likes al WHERE al.activity_type = r.a_type AND al.source_id = r.a_source_id AND al.liker_id = v_user_id),
+    r.r_round_num,
+    r.a_created_at
+  FROM ranked r
+  JOIN profiles actor ON actor.id = r.a_actor_id
+  LEFT JOIN events e ON e.id = r.a_event_id AND e.status = 'published'
+  WHERE
+    before_round IS NULL OR before_cursor IS NULL OR
+    r.r_round_num > before_round OR
+    (r.r_round_num = before_round AND r.a_created_at < before_cursor)
+  ORDER BY r.r_round_num ASC, r.a_created_at DESC
+  LIMIT page_size;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.lineup_open_weekend_shows(p_user uuid, p_limit integer DEFAULT 12)
+ RETURNS TABLE(event_id uuid, title text, starts_at timestamp with time zone, poster_url text, venue_name text, venue_account_id uuid, venue_diamond_url text)
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  with my_busy_weeks as (
+    select distinct date_trunc('week', (e.starts_at at time zone 'America/Los_Angeles'))::date as wk
+    from public.attendees a
+    join public.events e on e.id = a.event_id
+    where a.user_id = p_user
+      and e.starts_at >= now()
+      and e.status = 'published'
+      and extract(dow from (e.starts_at at time zone 'America/Los_Angeles')) in (0,5,6)
+  )
+  select e.id, e.title, e.starts_at, e.poster_url, v.name, vp.id, vp.avatar_diamond_url
+  from public.follows f
+  join public.profiles vp on vp.id = f.following_id and vp.account_type = 'venue'
+  join public.venues v on v.id = vp.venue_id
+  join public.events e on e.venue_id = v.id
+  where f.follower_id = p_user
+    and f.status = 'accepted'
+    and e.starts_at >= now()
+    and e.status = 'published'
+    and extract(dow from (e.starts_at at time zone 'America/Los_Angeles')) in (0,5,6)
+    and date_trunc('week', (e.starts_at at time zone 'America/Los_Angeles'))::date not in (select wk from my_busy_weeks)
+  order by e.starts_at asc
+  limit p_limit;
+$function$;
+
+GRANT EXECUTE ON FUNCTION public.lineup_open_weekend_shows(uuid, integer) TO anon, authenticated;
+
+
+=== supabase/migrations/064_admin_pending_events.sql ===
+create or replace function public.admin_pending_events()
+returns table (
+  id uuid, title text, starts_at timestamptz, venue_id uuid, venue_name text,
+  poster_url text, category text, created_by uuid, uploader text, created_at timestamptz,
+  is_duplicate boolean, duplicate_of uuid
+)
+language sql security definer set search_path = public stable as $$
+  select e.id, e.title, e.starts_at, e.venue_id, v.name, e.poster_url, e.category,
+    e.created_by, p.username, e.created_at,
+    exists (select 1 from public.events pub
+      where pub.status='published' and pub.venue_id=e.venue_id and lower(pub.title)=lower(e.title)
+        and (pub.starts_at at time zone 'America/Los_Angeles')::date
+          = (e.starts_at at time zone 'America/Los_Angeles')::date) as is_duplicate,
+    (select pub.id from public.events pub
+      where pub.status='published' and pub.venue_id=e.venue_id and lower(pub.title)=lower(e.title)
+        and (pub.starts_at at time zone 'America/Los_Angeles')::date
+          = (e.starts_at at time zone 'America/Los_Angeles')::date limit 1) as duplicate_of
+  from public.events e
+  left join public.venues v on v.id = e.venue_id
+  left join public.profiles p on p.id = e.created_by
+  where e.status='pending' and public.is_admin(auth.uid())
+  order by p.username nulls last, e.starts_at;
+$$;
+grant execute on function public.admin_pending_events() to authenticated;
 
 
 === supabase/RLS_POLICIES.md ===

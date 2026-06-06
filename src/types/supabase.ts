@@ -864,6 +864,24 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_venue_checkoff: {
+        Row: {
+          worker_id: string
+          venue_id: string
+          checked_at: string
+        }
+        Insert: {
+          worker_id: string
+          venue_id: string
+          checked_at?: string
+        }
+        Update: {
+          worker_id?: string
+          venue_id?: string
+          checked_at?: string
+        }
+        Relationships: []
+      }
       venues: {
         Row: {
           address: string | null

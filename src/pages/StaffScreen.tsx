@@ -1,7 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
-import { StaffWorklog } from '@/components/StaffWorklog'
+import { VenueBoard } from '@/components/VenueBoard'
 
 export function StaffScreen() {
   const { canIngest, isAdmin, loading, signOut } = useAuth()
@@ -65,24 +65,37 @@ export function StaffScreen() {
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 48px', width: '100%' }}>
-          {isAdmin ? (
-            <>
-              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
-                Review uploads from your staff — approve, reject, or consolidate duplicates.
-              </p>
-              <AdminPendingEvents />
-            </>
-          ) : (
-            <>
-              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
-                Upload shows here — they go live once they're approved.
-              </p>
-              <ImportForm staffMode />
-              <StaffWorklog />
-            </>
-          )}
-        </div>
+        {isAdmin ? (
+          /* ── Admin: review queue, single column ── */
+          <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 48px', width: '100%' }}>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
+              Review uploads from your staff — approve, reject, or consolidate duplicates.
+            </p>
+            <AdminPendingEvents />
+          </div>
+        ) : (
+          /* ── Worker: ingester + venue board, two-column on wide screens ── */
+          <div style={{ maxWidth: 1400, margin: '0 auto', padding: '32px 24px 48px', width: '100%' }}>
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
+              Upload shows here — they go live once they're approved.
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: 32,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+            }}>
+              {/* Left: ingester */}
+              <div style={{ flex: '0 0 400px', minWidth: 300 }}>
+                <ImportForm staffMode />
+              </div>
+              {/* Right: venue board — grows to fill remaining space */}
+              <div style={{ flex: '1 1 400px', minWidth: 300 }}>
+                <VenueBoard />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
