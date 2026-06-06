@@ -9,6 +9,7 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications'
 import { AdminReports } from '@/components/admin/AdminReports'
 import { AdminVARequests } from '@/components/admin/AdminVARequests'
 import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
+import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
@@ -60,6 +61,7 @@ function AdminDashboard() {
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
   const [pendingVACount, setPendingVACount] = useState<number>(0)
+  const [pendingEventCount, setPendingEventCount] = useState<number>(0)
 
   const fetchVenues = useCallback(async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
@@ -70,6 +72,7 @@ function AdminDashboard() {
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
     const { data } = await supabaseAdmin.from('events')
       .select('id, title, starts_at, venue_id, poster_url, show_times')
+      .eq('status', 'published')
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
     if (data) setEvents(data)
@@ -94,6 +97,13 @@ function AdminDashboard() {
           <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
           <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
           <AdminNotifications />
+
+          <Section
+            title="Pending Uploads"
+            badge={pendingEventCount > 0 ? `${pendingEventCount} to review` : undefined}
+          >
+            <AdminPendingEvents onCountChange={setPendingEventCount} />
+          </Section>
 
           <Section
             title="Reports"

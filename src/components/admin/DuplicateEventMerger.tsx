@@ -2,6 +2,10 @@ import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { type EventSummary } from '@/components/admin/adminShared'
 
+function fmtLocalDate(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+}
+
 function fmtLocalTime(iso: string) {
   return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
 }
@@ -66,7 +70,7 @@ export function DuplicateEventMerger({ groups, onMergeComplete }: { groups: Even
             <div key={groupIdx} style={{ border: '1px solid var(--fg-18)', borderRadius: 7, overflow: 'hidden' }}>
               <button onClick={() => handleExpand(groupIdx)} style={{ width: '100%', padding: '10px 14px', background: 'rgba(240,236,227,0.02)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                 <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)', textAlign: 'left' }}>
-                  {group.map(e => e.title).join(' · ')}
+                  <span style={{ color: 'var(--fg-40)' }}>{fmtLocalDate(group[0].starts_at)} — </span>{group.map(e => e.title).join(' · ')}
                 </span>
                 <span style={{ color: 'var(--fg-40)', fontSize: 10, flexShrink: 0 }}>{isExpanded ? '▲' : '▼'}</span>
               </button>
@@ -79,7 +83,7 @@ export function DuplicateEventMerger({ groups, onMergeComplete }: { groups: Even
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: '0 0 2px 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.title}</p>
-                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>{eventTimeLabel(e)}</p>
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>{fmtLocalDate(e.starts_at)} · {eventTimeLabel(e)}</p>
                       </div>
                       <button
                         onClick={() => setPrimaryIds(prev => ({ ...prev, [groupIdx]: e.id }))}

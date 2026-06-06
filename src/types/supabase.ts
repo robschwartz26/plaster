@@ -1018,6 +1018,23 @@ export type Database = {
           account_avatar_diamond_url: string | null
         }[]
       }
+      admin_pending_events: {
+        Args: Record<string, never>
+        Returns: {
+          id: string
+          title: string
+          starts_at: string
+          venue_id: string | null
+          venue_name: string | null
+          poster_url: string | null
+          category: string | null
+          created_by: string
+          uploader: string | null
+          created_at: string
+          is_duplicate: boolean
+          duplicate_of: string | null
+        }[]
+      }
       admin_approve_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
