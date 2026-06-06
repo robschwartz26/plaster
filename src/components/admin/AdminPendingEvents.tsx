@@ -15,6 +15,9 @@ interface PendingEvent {
   created_at: string
   is_duplicate: boolean
   duplicate_of: string | null
+  source_url: string | null
+  ai_confidence: number | null
+  flag_note: string | null
 }
 
 interface Props {
@@ -223,9 +226,31 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         <div style={{ fontSize: 12, color: 'var(--fg-55)' }}>
                           {e.venue_name} · {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
                         </div>
-                        <div style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
-                          added {fmtShort(e.created_at)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 11, color: 'var(--fg-40)' }}>added {fmtShort(e.created_at)}</span>
+                          {e.ai_confidence != null && (
+                            <span style={{
+                              fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
+                              letterSpacing: '0.07em', textTransform: 'uppercase',
+                              color: e.ai_confidence >= 80 ? '#4ade80' : e.ai_confidence >= 55 ? 'rgba(217,119,6,0.9)' : '#f87171',
+                              background: e.ai_confidence >= 80 ? 'rgba(74,222,128,0.1)' : e.ai_confidence >= 55 ? 'rgba(217,119,6,0.1)' : 'rgba(248,113,113,0.1)',
+                              border: `1px solid ${e.ai_confidence >= 80 ? 'rgba(74,222,128,0.3)' : e.ai_confidence >= 55 ? 'rgba(217,119,6,0.3)' : 'rgba(248,113,113,0.3)'}`,
+                              padding: '1px 5px', borderRadius: 3,
+                            }}>
+                              AI {e.ai_confidence}%
+                            </span>
+                          )}
+                          {e.source_url && (
+                            <a href={e.source_url} target="_blank" rel="noopener noreferrer" onClick={ev => ev.stopPropagation()} style={{ fontSize: 11, color: '#A855F7', textDecoration: 'none' }}>
+                              source ↗
+                            </a>
+                          )}
                         </div>
+                        {e.flag_note && (
+                          <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(217,119,6,0.9)', background: 'rgba(217,119,6,0.08)', border: '1px solid rgba(217,119,6,0.25)', borderRadius: 4, padding: '4px 8px', marginTop: 5 }}>
+                            ⚑ {e.flag_note}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>

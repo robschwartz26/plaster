@@ -451,6 +451,9 @@ export type Database = {
           show_times: string[] | null
           starts_at: string
           status: string
+          source_url: string | null
+          ai_confidence: number | null
+          flag_note: string | null
           created_by: string | null
           reviewed_by: string | null
           reviewed_at: string | null
@@ -484,6 +487,9 @@ export type Database = {
           show_times?: string[] | null
           starts_at: string
           status?: string
+          source_url?: string | null
+          ai_confidence?: number | null
+          flag_note?: string | null
           created_by?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -517,6 +523,9 @@ export type Database = {
           show_times?: string[] | null
           starts_at?: string
           status?: string
+          source_url?: string | null
+          ai_confidence?: number | null
+          flag_note?: string | null
           created_by?: string | null
           reviewed_by?: string | null
           reviewed_at?: string | null
@@ -1075,6 +1084,9 @@ export type Database = {
           created_at: string
           is_duplicate: boolean
           duplicate_of: string | null
+          source_url: string | null
+          ai_confidence: number | null
+          flag_note: string | null
         }[]
       }
       admin_approve_va_request: {

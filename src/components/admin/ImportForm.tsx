@@ -103,6 +103,8 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
   const [weekdayDays,     setWeekdayDays]     = useState<Set<number>>(new Set())
   const [extraDates, setExtraDates] = useState<Array<{ date: string; time: string }>>([])
   const [successCount, setSuccessCount] = useState(1)
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [flagNote, setFlagNote] = useState('')
 
   const isUncertain = (field: string) => extracted?.uncertain_fields?.includes(field) ?? false
 
@@ -351,7 +353,14 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
         const timeStr = form.time || '20:00'
         const startDate = new Date(`${form.date}T${timeStr}:00`)
         const nbhd = form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || ''
-        const baseRow = { venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, sold_out: soldOut }
+        const confidenceMap: Record<string, number> = { high: 95, medium: 65, low: 35 }
+        const aiConfidence = extracted?.confidence ? (confidenceMap[extracted.confidence] ?? null) : null
+        const baseRow = {
+          venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, sold_out: soldOut,
+          source_url: sourceUrl.trim() || null,
+          ai_confidence: aiConfidence,
+          flag_note: flagNote.trim() || null,
+        }
 
         if (isRecurring) {
           const recurrenceGroupId = crypto.randomUUID()
@@ -459,7 +468,7 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError('')
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError(''); setSourceUrl(''); setFlagNote('')
   }
 
   // DEV: generate a mock test poster
@@ -838,6 +847,22 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
           )
         })()}
 
+        {/* AI confidence badge */}
+        {extracted?.confidence && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>AI confidence:</span>
+            <span style={{
+              fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+              color: extracted.confidence === 'high' ? '#4ade80' : extracted.confidence === 'medium' ? 'rgba(217,119,6,0.9)' : '#f87171',
+              background: extracted.confidence === 'high' ? 'rgba(74,222,128,0.1)' : extracted.confidence === 'medium' ? 'rgba(217,119,6,0.1)' : 'rgba(248,113,113,0.1)',
+              border: `1px solid ${extracted.confidence === 'high' ? 'rgba(74,222,128,0.3)' : extracted.confidence === 'medium' ? 'rgba(217,119,6,0.3)' : 'rgba(248,113,113,0.3)'}`,
+              padding: '2px 6px', borderRadius: 3,
+            }}>
+              {extracted.confidence === 'high' ? 'HIGH — looks solid' : extracted.confidence === 'medium' ? 'MEDIUM — check flagged fields' : 'LOW — verify everything'}
+            </span>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
           {/* Title */}
@@ -1180,6 +1205,20 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
               </span>
             </div>
           </div>
+
+          {/* Source URL */}
+          <div style={fieldStyle}>
+            <label style={labelStyle}>Source URL <span style={{ fontWeight: 400, color: 'var(--fg-30)' }}>(optional — website or Instagram link for this show)</span></label>
+            <input style={inputStyle} type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://…" />
+          </div>
+
+          {/* Flag note (staff only) */}
+          {staffMode && (
+            <div style={fieldStyle}>
+              <label style={labelStyle}>Flag note <span style={{ fontWeight: 400, color: 'var(--fg-30)' }}>(optional — leave a note for admin review)</span></label>
+              <input style={inputStyle} value={flagNote} onChange={e => setFlagNote(e.target.value)} placeholder="e.g. Venue name unclear on poster" />
+            </div>
+          )}
 
           {/* Submit */}
           <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
