@@ -1,8 +1,10 @@
 import { useAuth } from '@/contexts/AuthContext'
 import { ImportForm } from '@/components/admin/ImportForm'
+import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
+import { StaffWorklog } from '@/components/StaffWorklog'
 
 export function StaffScreen() {
-  const { canIngest, loading, signOut } = useAuth()
+  const { canIngest, isAdmin, loading, signOut } = useAuth()
 
   if (loading) return null
 
@@ -64,10 +66,22 @@ export function StaffScreen() {
       {/* Content */}
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px 48px', width: '100%' }}>
-          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
-            Upload shows here — they go live once they're approved.
-          </p>
-          <ImportForm staffMode />
+          {isAdmin ? (
+            <>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
+                Review uploads from your staff — approve, reject, or consolidate duplicates.
+              </p>
+              <AdminPendingEvents />
+            </>
+          ) : (
+            <>
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-55)', margin: '0 0 28px 0' }}>
+                Upload shows here — they go live once they're approved.
+              </p>
+              <ImportForm staffMode />
+              <StaffWorklog />
+            </>
+          )}
         </div>
       </div>
     </div>

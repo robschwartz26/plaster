@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -9,7 +10,6 @@ import { AdminNotifications } from '@/components/admin/AdminNotifications'
 import { AdminReports } from '@/components/admin/AdminReports'
 import { AdminVARequests } from '@/components/admin/AdminVARequests'
 import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
-import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
@@ -61,7 +61,7 @@ function AdminDashboard() {
   const [manualFormOpen, setManualFormOpen] = useState(false)
   const [openReportCount, setOpenReportCount] = useState<number>(0)
   const [pendingVACount, setPendingVACount] = useState<number>(0)
-  const [pendingEventCount, setPendingEventCount] = useState<number>(0)
+  const navigate = useNavigate()
 
   const fetchVenues = useCallback(async () => {
     const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
@@ -98,12 +98,14 @@ function AdminDashboard() {
           <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
           <AdminNotifications />
 
-          <Section
-            title="Pending Uploads"
-            badge={pendingEventCount > 0 ? `${pendingEventCount} to review` : undefined}
-          >
-            <AdminPendingEvents onCountChange={setPendingEventCount} />
-          </Section>
+          <div style={{ marginBottom: 8 }}>
+            <button
+              onClick={() => navigate('/staff')}
+              style={{ background: 'none', border: 'none', padding: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: '#A855F7', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}
+            >
+              Review staff uploads →
+            </button>
+          </div>
 
           <Section
             title="Reports"

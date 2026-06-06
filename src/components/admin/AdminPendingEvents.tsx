@@ -89,6 +89,18 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
+  async function consolidate(e: PendingEvent) {
+    if (!e.duplicate_of) return
+    setBusyId(e.id)
+    const { error } = await supabase.rpc('consolidate_events', {
+      p_keep_id: e.duplicate_of,
+      p_remove_ids: [e.id],
+    })
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] consolidate failed', error)
+    fetchPending()
+  }
+
   async function approveAll(group: PendingEvent[]) {
     if (!user) return
     const key = group[0].uploader ?? group[0].created_by
@@ -231,6 +243,15 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       >
                         Reject
                       </button>
+                      {e.is_duplicate && e.duplicate_of && (
+                        <button
+                          onClick={() => consolidate(e)}
+                          disabled={isBusy}
+                          style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid rgba(168,85,247,0.4)', background: 'transparent', color: '#A855F7', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 11, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                        >
+                          Consolidate → live show
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
