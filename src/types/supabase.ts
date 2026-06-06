@@ -1171,6 +1171,16 @@ export type Database = {
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
       consolidate_events: { Args: { p_keep_id: string; p_remove_ids: string[] }; Returns: undefined }
+      staff_roster: {
+        Args: Record<string, never>
+        Returns: {
+          id: string
+          username: string | null
+          avatar_diamond_url: string | null
+          avatar_url: string | null
+          is_admin: boolean
+        }[]
+      }
       scrub_my_account_data: { Args: never; Returns: boolean }
       search_my_messages: {
         Args: { p_query: string }

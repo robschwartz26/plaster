@@ -6,6 +6,7 @@ import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
+import { StaffPresence } from '@/components/StaffPresence'
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsWide(breakpoint = 900) {
@@ -235,8 +236,9 @@ export function StaffScreen() {
           Signed in as <span style={{ color: 'var(--fg)', fontWeight: 600 }}>@{profile.username}</span>
         </p>
       )}
+      <StaffPresence />
       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-30)', fontStyle: 'italic', margin: 0, lineHeight: 1.5 }}>
-        Clock-in, who's online, and chat are coming here.
+        Chat coming here.
       </p>
     </div>
   )
