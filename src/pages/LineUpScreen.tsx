@@ -10,6 +10,9 @@ import { useUserMutes } from '@/hooks/useUserMutes'
 import { AccountProfile } from '@/components/AccountProfile'
 import { publishSpineState } from '@/lib/lineupSpine'
 import { SoldOutChip } from '@/components/SoldOutChip'
+import { TrendingStrip, computeTrendingTop } from '@/components/TrendingStrip'
+import { dbEventToWallEvent } from '@/lib/adapters'
+import { type WallEvent } from '@/types/event'
 
 // ── Spine tunable constants ────────────────────────────────────────────────
 const SPINE_MAX_H = 30  // px — max slice height; below this the line doesn't reach the bottom
@@ -196,8 +199,9 @@ export default function LineUpScreen() {
   const { blockedIds } = useUserBlocks()
   const { mutedIds } = useUserMutes()
   const navigate = useNavigate()
-  const [feed,       setFeed]       = useState<FeedItem[]>([])
-  const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
+  const [feed,           setFeed]           = useState<FeedItem[]>([])
+  const [feedState,      setFeedState]      = useState<'loading' | 'ready'>('loading')
+  const [trendingEvents, setTrendingEvents] = useState<WallEvent[]>([])
   const [lineup,     setLineup]     = useState<LineupItem[]>([])
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
@@ -421,6 +425,20 @@ export default function LineUpScreen() {
 
   // Publish spine state (count + reachesBottom) for BottomNav YOU icon
   useEffect(() => {
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+    supabase
+      .from('events')
+      .select('*, venues(name)')
+      .gt('trending_score', 0)
+      .gte('starts_at', cutoff)
+      .order('trending_score', { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        if (data) setTrendingEvents((data as any[]).map(dbEventToWallEvent))
+      })
+  }, [])
+
+  useEffect(() => {
     const n = lineup.length
     if (n === 0) { publishSpineState(0, false); return }
     const el = spineContainerRef.current
@@ -536,6 +554,21 @@ export default function LineUpScreen() {
 
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+
+          {/* Trending in Portland */}
+          {computeTrendingTop(trendingEvents).length >= 3 && (
+            <div style={{ borderBottom: '1px solid var(--fg-08)', paddingBottom: 4 }}>
+              <div style={{ padding: '10px 14px 4px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+                Trending in Portland
+              </div>
+              <TrendingStrip
+                events={trendingEvents}
+                onOpenEvent={id => navigate('/', { state: { openEventId: id } })}
+                alwaysExpanded
+              />
+            </div>
+          )}
+
           {feedState === 'loading' && (
             <p style={{ margin: 0, padding: '40px 20px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
               Loading…
