@@ -6,12 +6,28 @@ interface Props {
   onOpenEvent: (id: string) => void
 }
 
-export function TrendingStrip({ events, onOpenEvent }: Props) {
-  const top = events
-    .filter(e => e.trending_score > 0)
+// Exported so LINE UP can check the count before rendering a section header.
+export function computeTrendingTop(events: WallEvent[]): WallEvent[] {
+  const groups = new Map<string, WallEvent>()
+  for (const e of events) {
+    if (e.trending_score <= 0) continue
+    const key = e.recurrence_group_id ?? `${e.venue_name}|${e.title.toLowerCase()}`
+    const prev = groups.get(key)
+    if (
+      !prev
+      || e.trending_score > prev.trending_score
+      || (e.trending_score === prev.trending_score && e.starts_at < prev.starts_at)
+    ) {
+      groups.set(key, e)
+    }
+  }
+  return Array.from(groups.values())
     .sort((a, b) => b.trending_score - a.trending_score)
     .slice(0, 10)
+}
 
+export function TrendingStrip({ events, onOpenEvent }: Props) {
+  const top = computeTrendingTop(events)
   if (top.length < 3) return null
 
   return (
@@ -78,7 +94,6 @@ export function TrendingStrip({ events, onOpenEvent }: Props) {
                 ) : (
                   <div style={{ position: 'absolute', inset: 0, background: e.color2 }} />
                 )}
-
                 {/* Rank badge */}
                 <div style={{
                   position: 'absolute', top: 4, left: 4,
