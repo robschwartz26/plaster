@@ -1,12 +1,20 @@
+import { useState } from 'react'
 import { type WallEvent } from '@/types/event'
 import { posterThumb } from '@/lib/posterThumb'
+
+const OPEN_KEY = 'wall-trending-open'
+
+function loadOpen(): boolean {
+  try { return localStorage.getItem(OPEN_KEY) === 'true' } catch { return false }
+}
 
 interface Props {
   events: WallEvent[]
   onOpenEvent: (id: string) => void
+  alwaysExpanded?: boolean
 }
 
-// Exported so LINE UP can check the count before rendering a section header.
+// Exported so consumers (LINE UP) can check count before rendering a section header.
 export function computeTrendingTop(events: WallEvent[]): WallEvent[] {
   const groups = new Map<string, WallEvent>()
   for (const e of events) {
@@ -26,108 +34,122 @@ export function computeTrendingTop(events: WallEvent[]): WallEvent[] {
     .slice(0, 10)
 }
 
-export function TrendingStrip({ events, onOpenEvent }: Props) {
+export function TrendingStrip({ events, onOpenEvent, alwaysExpanded }: Props) {
+  const [open, setOpen] = useState<boolean>(() => alwaysExpanded ? true : loadOpen())
+
   const top = computeTrendingTop(events)
   if (top.length < 3) return null
 
-  return (
+  function toggle() {
+    const next = !open
+    setOpen(next)
+    try { localStorage.setItem(OPEN_KEY, next ? 'true' : 'false') } catch { /* noop */ }
+  }
+
+  const tileRow = (
     <div style={{
-      flexShrink: 0,
-      borderBottom: '1px solid var(--fg-08)',
-      paddingBottom: 8,
-    }}>
-      {/* Label */}
-      <div style={{
-        padding: '6px 12px 4px',
-        fontFamily: '"Barlow Condensed", sans-serif',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.12em',
-        textTransform: 'uppercase',
-        color: 'var(--fg-40)',
-      }}>
-        Trending
+      overflowX: 'auto',
+      overflowY: 'hidden',
+      paddingLeft: 12,
+      paddingRight: 12,
+      scrollbarWidth: 'none',
+      WebkitOverflowScrolling: 'touch',
+    } as React.CSSProperties}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', paddingBottom: 8 }}>
+        {top.map((e, i) => (
+          <button
+            key={e.id}
+            onClick={() => onOpenEvent(e.id)}
+            style={{
+              flexShrink: 0, width: 72,
+              background: 'none', border: 'none', padding: 0,
+              cursor: 'pointer', textAlign: 'left',
+            }}
+          >
+            <div style={{
+              position: 'relative', width: 72, paddingBottom: '150%',
+              borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)',
+            }}>
+              {e.poster_url ? (
+                <img
+                  src={posterThumb(e.poster_url, 120) ?? e.poster_url}
+                  onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = e.poster_url! }}
+                  alt={e.title}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              ) : (
+                <div style={{ position: 'absolute', inset: 0, background: e.color2 }} />
+              )}
+              <div style={{
+                position: 'absolute', top: 4, left: 4, width: 18, height: 18,
+                borderRadius: '50%', background: 'rgba(0,0,0,0.62)',
+                backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
+                color: '#f0ece3', lineHeight: 1,
+              }}>
+                {i + 1}
+              </div>
+            </div>
+            <div style={{
+              marginTop: 4, fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 10, fontWeight: 600, color: 'var(--fg-80)',
+              lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap', width: 72,
+            }}>
+              {e.title}
+            </div>
+          </button>
+        ))}
       </div>
+    </div>
+  )
 
-      {/* Horizontally scrollable tile row */}
+  // LINE UP mode: just the tile row, no chrome or collapse
+  if (alwaysExpanded) {
+    return <div style={{ marginBottom: 4 }}>{tileRow}</div>
+  }
+
+  // Wall mode: quiet pill + animated collapse
+  return (
+    <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
+      {/* Toggle pill */}
+      <button
+        onClick={toggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '5px 12px', background: 'none', border: 'none',
+          cursor: 'pointer', width: '100%',
+        }}
+      >
+        <span style={{
+          fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10,
+          fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+          color: '#A855F7',
+        }}>
+          ▲ Trending
+        </span>
+        <svg
+          width="12" height="12" viewBox="0 0 24 24" fill="none"
+          stroke="var(--fg-40)" strokeWidth="2.5" strokeLinecap="round"
+          style={{
+            marginLeft: 2, flexShrink: 0,
+            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+            transition: 'transform 0.2s ease',
+          }}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {/* Animated tile strip */}
       <div style={{
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        paddingLeft: 12,
-        paddingRight: 12,
-        scrollbarWidth: 'none',
-        WebkitOverflowScrolling: 'touch',
-      } as React.CSSProperties}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-          {top.map((e, i) => (
-            <button
-              key={e.id}
-              onClick={() => onOpenEvent(e.id)}
-              style={{
-                flexShrink: 0,
-                width: 72,
-                background: 'none',
-                border: 'none',
-                padding: 0,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-            >
-              {/* Poster */}
-              <div style={{
-                position: 'relative',
-                width: 72,
-                paddingBottom: '150%',
-                borderRadius: 5,
-                overflow: 'hidden',
-                background: 'var(--fg-08)',
-              }}>
-                {e.poster_url ? (
-                  <img
-                    src={posterThumb(e.poster_url, 120) ?? e.poster_url}
-                    onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = e.poster_url! }}
-                    alt={e.title}
-                    style={{
-                      position: 'absolute', inset: 0,
-                      width: '100%', height: '100%',
-                      objectFit: 'cover', display: 'block',
-                    }}
-                  />
-                ) : (
-                  <div style={{ position: 'absolute', inset: 0, background: e.color2 }} />
-                )}
-                {/* Rank badge */}
-                <div style={{
-                  position: 'absolute', top: 4, left: 4,
-                  width: 18, height: 18,
-                  borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.62)',
-                  backdropFilter: 'blur(4px)',
-                  WebkitBackdropFilter: 'blur(4px)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: '"Barlow Condensed", sans-serif',
-                  fontSize: 10, fontWeight: 700, color: '#f0ece3',
-                  lineHeight: 1,
-                }}>
-                  {i + 1}
-                </div>
-              </div>
-
-              {/* Title */}
-              <div style={{
-                marginTop: 4,
-                fontFamily: '"Space Grotesk", sans-serif',
-                fontSize: 10, fontWeight: 600,
-                color: 'var(--fg-80)',
-                lineHeight: 1.3,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                width: 72,
-              }}>
-                {e.title}
-              </div>
-            </button>
-          ))}
-        </div>
+        maxHeight: open ? 220 : 0,
+        opacity: open ? 1 : 0,
+        overflow: 'hidden',
+        transition: 'max-height 0.2s ease, opacity 0.15s ease',
+      }}>
+        {tileRow}
       </div>
     </div>
   )
