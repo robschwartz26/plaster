@@ -25,5 +25,6 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     sold_out: e.sold_out ?? false,
     sold_out_report_count: e.sold_out_report_count ?? 0,
     show_times: e.show_times ?? null,
+    trending_score: Number(e.trending_score ?? 0),
   }
 }

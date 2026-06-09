@@ -458,6 +458,7 @@ export type Database = {
           reviewed_by: string | null
           reviewed_at: string | null
           title: string
+          trending_score: number
           venue_id: string | null
           view_count: number
         }
@@ -494,6 +495,7 @@ export type Database = {
           reviewed_by?: string | null
           reviewed_at?: string | null
           title: string
+          trending_score?: number
           venue_id?: string | null
           view_count?: number
         }
@@ -530,6 +532,7 @@ export type Database = {
           reviewed_by?: string | null
           reviewed_at?: string | null
           title?: string
+          trending_score?: number
           venue_id?: string | null
           view_count?: number
         }
