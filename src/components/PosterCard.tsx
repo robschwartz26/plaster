@@ -11,6 +11,7 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
+import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -829,7 +830,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           />
           {/* Main poster image */}
           <img
-            src={event.poster_url}
+            src={posterThumb(event.poster_url, cols >= 4 ? 300 : 500) ?? event.poster_url}
+            onError={e => { const img = e.currentTarget; img.onerror = null; img.src = event.poster_url! }}
             alt={event.title}
             style={{
               position: 'absolute', inset: 0,

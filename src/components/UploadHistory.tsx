@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { posterThumb } from '@/lib/posterThumb'
 
 interface UploadRow {
   id: string
@@ -251,7 +252,8 @@ export function UploadHistory() {
                 <div style={{ position: 'relative', paddingBottom: '140%', borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)' }}>
                   {row.poster_url ? (
                     <img
-                      src={row.poster_url} loading="lazy" alt={row.title}
+                      src={posterThumb(row.poster_url, 300) ?? row.poster_url} loading="lazy" alt={row.title}
+                      onError={e => { const img = e.currentTarget; img.onerror = null; img.src = row.poster_url! }}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />
                   ) : (
@@ -345,7 +347,8 @@ export function UploadHistory() {
               <div style={{ ...dataCell(), padding: '5px 6px 5px 8px' }}>
                 {row.poster_url ? (
                   <img
-                    src={row.poster_url} loading="lazy" alt=""
+                    src={posterThumb(row.poster_url, 120) ?? row.poster_url} loading="lazy" alt=""
+                    onError={e => { const img = e.currentTarget; img.onerror = null; img.src = row.poster_url! }}
                     style={{ width: 30, height: 42, borderRadius: 3, objectFit: 'cover', display: 'block', flexShrink: 0, border: '1px solid var(--fg-08)' }}
                   />
                 ) : (
