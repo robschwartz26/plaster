@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
+import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
@@ -216,6 +217,8 @@ export function Wall() {
       )}
 
       <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
+
+      <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 
       <PosterGrid
         events={events}
