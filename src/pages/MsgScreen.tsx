@@ -14,6 +14,7 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ interface AppNotification {
     id: string
     title: string
     starts_at: string
+    poster_url: string | null
   } | null
 }
 
@@ -127,6 +129,7 @@ function notifCopy(notif: AppNotification) {
     case 'va_approved': return <>Your {notif.body_preview ?? 'account'} account has been approved 🎉</>
     case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
     case 'show_reminder': return <>Show today: {eventNode}</>
+    case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -282,7 +285,7 @@ export function MsgScreen() {
         id, sender_id, kind, target_event_id, target_post_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
-        event:events!target_event_id(id, title, starts_at)
+        event:events!target_event_id(id, title, starts_at, poster_url)
       `)
       .eq('recipient_id', user.id)
       .is('read_at', null)
@@ -322,6 +325,11 @@ export function MsgScreen() {
         return
       case 'warning':
       case 'message':
+        return
+      case 'venue_new_show':
+        if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
+          navigate('/', { state: { openEventId: notif.target_event_id } })
+        }
         return
       default:
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
@@ -898,7 +906,7 @@ export function MsgScreen() {
                     <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {notifCopy(notif)}
                     </p>
-                    {notif.body_preview && notif.kind !== 'follow' && (
+                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
                       <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         "{notif.body_preview}"
                       </p>
@@ -914,6 +922,14 @@ export function MsgScreen() {
                       </div>
                     )}
                   </div>
+                  {notif.kind === 'venue_new_show' && notif.event?.poster_url && (
+                    <img
+                      src={posterThumb(notif.event.poster_url, 120) ?? notif.event.poster_url}
+                      onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = notif.event!.poster_url! }}
+                      alt=""
+                      style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 3, objectFit: 'cover', border: '1px solid var(--fg-08)' }}
+                    />
+                  )}
                   <button
                     onClick={e => { e.stopPropagation(); markNotificationRead(notif.id) }}
                     style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
