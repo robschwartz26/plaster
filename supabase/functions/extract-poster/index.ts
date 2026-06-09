@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
+const EXTRACT_MODEL = Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6'
+
 const CATEGORY_FIELD = `"Live Music or Dance or Comedy or Drag or Jazz or Trivia or Karaoke or Theater or Burlesque or Classical or Film or Art or Literary or Spoken or Other. Pick the single best category based on the event's primary format. Prefer Live Music for bands and singer-songwriters playing instruments. Prefer Dance for DJ nights and themed dance parties. Prefer Jazz when jazz is the explicit featured genre. Prefer Classical for orchestras, chamber music, or opera. Prefer Comedy for stand-up or sketch. Prefer Theater for plays and musicals. Prefer Drag for drag-focused shows. Prefer Burlesque for burlesque shows specifically. Prefer Karaoke for karaoke nights. Prefer Trivia for pub quiz events. Prefer Film for screenings. Prefer Art for gallery/exhibition events. Prefer Literary for book clubs, book signings, and events centered on books as objects rather than performance. Prefer Spoken for live podcasts, author talks, storytelling shows, spoken word, and other events where the primary format is people speaking rather than singing or playing music. Only use Other if nothing fits."`
 
 const corsHeaders = {
@@ -126,7 +128,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-opus-4-5',
+        model: EXTRACT_MODEL,
         max_tokens: 1024,
         messages: [{
           role: 'user',
@@ -221,7 +223,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-              model: 'claude-opus-4-5',
+              model: 'claude-haiku-4-5-20251001',
               max_tokens: 256,
               messages: [{
                 role: 'user',
