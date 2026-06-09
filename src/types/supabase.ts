@@ -1236,6 +1236,21 @@ export type Database = {
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
       consolidate_events: { Args: { p_keep_id: string; p_remove_ids: string[] }; Returns: undefined }
+      upload_history: {
+        Args: { p_limit?: number }
+        Returns: {
+          id: string
+          title: string
+          poster_url: string | null
+          starts_at: string
+          created_at: string
+          status: string
+          category: string | null
+          venue_name: string | null
+          neighborhood: string | null
+          uploader: string | null
+        }[]
+      }
       staff_stats: {
         Args: Record<string, never>
         Returns: { pending_count: number; approved_7d: number; rejected_7d: number }[]

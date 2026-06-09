@@ -7,6 +7,7 @@ import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
 import { StaffClock } from '@/components/StaffClock'
 import { StaffChat } from '@/components/StaffChat'
+import { UploadHistory } from '@/components/UploadHistory'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
 
@@ -97,14 +98,14 @@ function ResizeSeam() {
 const OPEN_KEY = 'staff-panel-open'
 
 interface PanelOpen {
-  preview: boolean; ingester: boolean; board: boolean; review: boolean; team: boolean
+  preview: boolean; ingester: boolean; board: boolean; history: boolean; review: boolean; team: boolean
 }
 
 function loadPanelOpen(): PanelOpen {
   try {
     const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}')
-    return { preview: saved.preview ?? true, ingester: saved.ingester ?? true, board: saved.board ?? true, review: saved.review ?? true, team: saved.team ?? true }
-  } catch { return { preview: true, ingester: true, board: true, review: true, team: true } }
+    return { preview: saved.preview ?? true, ingester: saved.ingester ?? true, board: saved.board ?? true, history: saved.history ?? false, review: saved.review ?? true, team: saved.team ?? true }
+  } catch { return { preview: true, ingester: true, board: true, history: false, review: true, team: true } }
 }
 function savePanelOpen(o: PanelOpen) { try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)) } catch { /* noop */ } }
 
@@ -120,16 +121,16 @@ function makeSaveLayout(key: string) {
 }
 
 // ── Panel config ─────────────────────────────────────────────
-type PanelKey = 'ingester' | 'board' | 'review' | 'team'
+type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team'
 
 const PANEL_LABELS: Record<PanelKey, string> = {
-  ingester: 'Add a show', board: 'Venue board', review: 'Review', team: 'Team',
+  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team',
 }
 
-// Worker: 3 panels; Admin: 4 panels
-const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, review: 0,  team: 22 }
-const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 24, board: 34, review: 24, team: 18 }
-const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 22, review: 18, team: 12 }
+// Worker: 3 core panels + optional history; Admin: 4 core panels + optional history
+const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22 }
+const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 24, board: 34, history: 26, review: 24, team: 18 }
+const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12 }
 
 // ── Preview header with minimize ─────────────────────────────
 function PreviewCard({ children, onMinimize }: { children: React.ReactNode; onMinimize: () => void }) {
@@ -177,6 +178,7 @@ export function StaffScreen() {
     { key: 'preview', label: 'Preview' },
     { key: 'ingester', label: 'Add a show' },
     { key: 'board', label: 'Venue board' },
+    { key: 'history', label: 'Upload history' },
     ...(isAdmin ? [{ key: 'review' as keyof PanelOpen, label: 'Review' }] : []),
     { key: 'team', label: 'Team' },
   ]
@@ -266,21 +268,28 @@ export function StaffScreen() {
 
   // ── Resizable panel group (wide layout) ──────────────────
   const defaultSizes = isAdmin ? DEFAULT_SIZES_ADMIN : DEFAULT_SIZES_WORKER
+  // history is optional/togglable; core panels are the always-default-open set
   const resizablePanelOrder: PanelKey[] = isAdmin
+    ? ['ingester', 'board', 'review', 'history', 'team']
+    : ['ingester', 'board', 'history', 'team']
+  const corePanelOrder: PanelKey[] = isAdmin
     ? ['ingester', 'board', 'review', 'team']
     : ['ingester', 'board', 'team']
 
   const openResizable = resizablePanelOrder.filter(k => open[k])
 
-  // Only pass/save layout when ALL resizable panels for this role are open (v4 footgun prevention)
-  const isFullOpen = resizablePanelOrder.every(k => open[k])
-  const layoutToPass = isFullOpen ? savedLayout : undefined
-  const handleLayoutChanged = isFullOpen ? saveLayout : () => { /* noop when partial */ }
+  // Save/restore layout only when core panels are all open AND history is closed.
+  // history is an optional panel — when it's open, each panel falls back to defaultSize
+  // so the saved core-panel widths aren't corrupted by a panel-count mismatch in v4.
+  const isCoreFullOpen = corePanelOrder.every(k => open[k]) && !open.history
+  const layoutToPass = isCoreFullOpen ? savedLayout : undefined
+  const handleLayoutChanged = isCoreFullOpen ? saveLayout : () => { /* noop */ }
 
   function renderPanelBody(key: PanelKey): React.ReactNode {
     switch (key) {
       case 'ingester': return <ImportForm staffMode />
       case 'board':    return <VenueBoard />
+      case 'history':  return <UploadHistory />
       case 'review':   return <AdminPendingEvents />
       case 'team':     return teamContent
     }
@@ -344,6 +353,7 @@ export function StaffScreen() {
           <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}><VenueBoard /></div>
           </div>
+          <PanelShell header="Upload history"><UploadHistory /></PanelShell>
           {isAdmin && <PanelShell header="Review"><AdminPendingEvents /></PanelShell>}
           <PanelShell header="Team">{teamContent}</PanelShell>
         </div>

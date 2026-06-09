@@ -13,6 +13,7 @@ import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
+import { UploadHistory } from '@/components/UploadHistory'
 import {
   findDuplicateVenueGroups,
   findDuplicateEventGroups,
@@ -106,6 +107,10 @@ function AdminDashboard() {
               Review staff uploads →
             </button>
           </div>
+
+          <Section title="Upload history" collapsible defaultCollapsed>
+            <UploadHistory />
+          </Section>
 
           <Section
             title="Reports"
