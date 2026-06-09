@@ -957,9 +957,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
               {attendeeCount > 0 && (
-                <p style={{ margin: '0 0 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
-                  {attendeeCount} {attendeeCount === 1 ? 'person' : 'people'} going
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 10px' }}>
+                  <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+                    <strong style={{ color: 'var(--fg-80)', fontWeight: 700 }}>{attendeeCount}</strong> {attendeeCount === 1 ? 'person' : 'people'} going
+                  </p>
+                  {event.trending_score > 0 && (
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#A855F7' }}>▲ Trending</span>
+                  )}
+                </div>
               )}
 
               {user ? (
