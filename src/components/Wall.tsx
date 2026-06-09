@@ -6,10 +6,14 @@ import { PosterGrid } from './PosterGrid'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
-import { supabase } from '@/lib/supabase'
+import { supabase, type DbEvent } from '@/lib/supabase'
 import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
+
+const WALL_CACHE_KEY = 'wall-cache-v1'
+const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
+
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
@@ -44,9 +48,25 @@ export function Wall() {
 
     const realEvents = (data ?? []).map(dbEventToWallEvent)
     setEvents(realEvents)
+
+    try {
+      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: data ?? [] }))
+    } catch { /* quota failure must never break the wall */ }
   }, [])
 
-  useEffect(() => { fetchEvents() }, [fetchEvents])
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(WALL_CACHE_KEY)
+      if (raw) {
+        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: DbEvent[] }
+        if (Date.now() - savedAt < WALL_CACHE_TTL) {
+          const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+          setEvents(cachedData.filter(e => e.starts_at >= cutoff).map(dbEventToWallEvent))
+        }
+      }
+    } catch { /* corrupt or missing cache — first load proceeds normally */ }
+    fetchEvents()
+  }, [fetchEvents])
 
   // Fetch liked event IDs for the current user
   useEffect(() => {
