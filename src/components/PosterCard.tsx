@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useLayoutEffect } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -195,19 +195,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
   const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   const loopingRef = useRef(false)
-  // Fallback-C content gate (iOS tearing): which panel is settled + centered in-view
-  // and therefore allowed to render its HEAVY content. Heavy info/wall content mounts
-  // ONLY when its panel is live, so its first paint is always in-view — never painted
-  // off-screen inside the translated strip (which WebKit half-rasterizes and the swipe
-  // slides into view = the tear). Off-screen/parked panels render blank.
-  const [livePanel, setLivePanel] = useState<0 | 1 | 2>(restingPanel)
-  // Strip-transition guard (iOS WKWebView tearing fix). While a transform
-  // transition is in flight, fetched panel data must NOT setState (content reflow
-  // inside the composited strip layer mid-transition tears on WKWebView). Defer
-  // such commits into pendingCommitsRef and flush them when the transition settles.
-  const isAnimatingRef = useRef(false)
-  const animEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingCommitsRef = useRef<Array<() => void>>([])
 
   // Commit a panel as this card's final value. shared=true reports it up to the
   // grid (onPanelSettled → restingPanel) so every other card follows. The
@@ -237,35 +224,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
   }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Prefetch panel data on rest ───────────────────────────────────────
-  // Load info/wall content ~100ms AFTER a card becomes the active card, before any
-  // swipe — so content is in by the time the user swipes poster→info. Fast
-  // flick-scrolling clears the timer on deactivate, so only cards the user actually
-  // rests on prefetch; detailFetched dedupes. (Tearing itself is fixed by the
-  // active-card GPU promotion below, not this; this just hides fetch latency.)
-  useEffect(() => {
-    if (cols !== 1 || !isActive || detailFetched.current) return
-    const t = setTimeout(() => fetchPanelData(), 100)
-    return () => clearTimeout(t)
-  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Clear the strip-animation settle timer on unmount.
-  useEffect(() => () => { if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current) }, [])
-
-  // ── Force fresh raster of the active card's panels (iOS tearing fix) ──────
-  // Each panel of the active card is its own GPU layer (translateZ(0) in the panel
-  // wrappers below), so panels rasterize independently of the strip's translation —
-  // no half-painted off-screen region sliding into view. When a card becomes active
-  // (incl. arriving directly onto info/wall via restingPanel), read offsetHeight to
-  // flush layout so WebKit rasterizes those just-promoted panel layers BEFORE paint —
-  // mirroring the loop seam's transition:none teleport, which is exactly why the
-  // poster→wall→info route never tore while the direct poster→info route did.
-  useLayoutEffect(() => {
-    if (cols !== 1 || !isActive) return
-    setLivePanel(restingPanel) // arrival is in-view on restingPanel → its content may render
-    void stripRef.current?.offsetHeight
-  }, [cols, isActive, restingPanel])
-
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
   const [detail, setDetail] = useState<EventDetail | null>(null)
@@ -286,51 +244,21 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [reported, setReported] = useState(false)
   const [reportCount, setReportCount] = useState(event.sold_out_report_count ?? 0)
 
-  // Commit a panel-data setState now, or — if a strip transition is in flight —
-  // defer it until the transition settles (endStripAnimation flushes the queue).
-  // Prevents content reflow inside the strip mid-transition (WKWebView tearing).
-  function commitPanelData(fn: () => void) {
-    if (isAnimatingRef.current) pendingCommitsRef.current.push(fn)
-    else fn()
-  }
-
-  // Mark a strip transition as in flight for `durationMs`, then flush deferred
-  // commits when it settles. Re-arming (a quick second swipe) just pushes the settle
-  // out, so deferred panel-data commits never land mid-motion. GPU promotion is NOT
-  // handled here — the active-card effect keeps the strip promoted the whole time
-  // it's on screen, so it's already a clean layer before any swipe begins.
-  function startStripAnimation(durationMs: number) {
-    isAnimatingRef.current = true
-    if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current)
-    animEndTimerRef.current = setTimeout(() => {
-      isAnimatingRef.current = false
-      animEndTimerRef.current = null
-      const queued = pendingCommitsRef.current
-      pendingCommitsRef.current = []
-      queued.forEach(commit => commit())
-      // The slide has settled — the centered panel is now in-view and may render its
-      // heavy content (mounts here, in-view → no off-screen first paint).
-      setLivePanel(panelIdxRef.current)
-      // Nudge a fresh raster now that deferred content has landed in the panels.
-      void stripRef.current?.offsetHeight
-    }, durationMs)
-  }
-
   function fetchPanelData() {
     if (detailFetched.current) return
     detailFetched.current = true
 
     supabase.from('events').select('description, address').eq('id', event.id).single()
-      .then(({ data }) => { if (data) commitPanelData(() => setDetail(data as EventDetail)) })
+      .then(({ data }) => { if (data) setDetail(data as EventDetail) })
 
     supabase.from('attendees').select('user_id', { count: 'exact', head: true })
       .eq('event_id', event.id)
-      .then(({ count }) => commitPanelData(() => setAttendeeCount(count ?? 0)))
+      .then(({ count }) => setAttendeeCount(count ?? 0))
 
     if (user) {
       supabase.from('attendees').select('id')
         .eq('event_id', event.id).eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => commitPanelData(() => setIsAttending(!!data)))
+        .then(({ data }) => setIsAttending(!!data))
     }
 
     fetchPosts()
@@ -338,7 +266,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (user) {
       supabase.from('post_likes').select('post_id').eq('user_id', user.id)
         .then(({ data }) => {
-          commitPanelData(() => setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id))))
+          setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id)))
         })
     }
   }
@@ -349,7 +277,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       .eq('event_id', event.id)
       .order('created_at', { ascending: false })
       .limit(30)
-      .then(({ data }) => commitPanelData(() => setPosts((data as WallPost[] | null) ?? [])))
+      .then(({ data }) => setPosts((data as WallPost[] | null) ?? []))
   }
 
   // ── 1-col: panel navigation ───────────────────────────────────────────
@@ -358,10 +286,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     const el = stripRef.current
     if (!el) return
     const cur = panelIdxRef.current
-
-    // Guard the upcoming transform transition (0.28s; loop wraps at 300ms) so any
-    // data fetched for this swipe commits only after motion settles.
-    startStripAnimation(300)
 
     if (cur === 0) fetchPanelData()
 
@@ -378,7 +302,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[0]}%)` }
           setPanelIdx(0)
-          setLivePanel(0)
           loopingRef.current = false
         }, 300)
       } else {
@@ -396,7 +319,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[2]}%)` }
           setPanelIdx(2)
-          setLivePanel(2)
           loopingRef.current = false
         }, 300)
       } else {
@@ -534,9 +456,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           strip.style.transition = 'transform 0.2s ease'
           strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
         }
-        // Snap-back is also a transition — guard it so an in-flight fetch can't
-        // commit mid-motion.
-        startStripAnimation(200)
       }
     }
 
@@ -710,22 +629,19 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             // still drive the active strip imperatively; React only re-applies the
             // same endpoint on the post-commit re-render.
             //
-            // NO strip-level promotion here on purpose: promoting the whole 500%
-            // strip as ONE layer is what let off-screen panel regions go stale (→
-            // tearing as the swipe slid a half-painted region into view). Instead each
-            // PANEL wrapper below promotes itself (translateZ(0)) only on the active
-            // card, so panels rasterize as independent in-view layers. Inactive cards
-            // stay unpromoted and re-raster when the promotion flips on at activation.
+            // No willChange / layer promotion here: a permanent willChange on every
+            // card's 500% strip promoted ~200 GPU layers and exhausted WKWebView tile
+            // memory. (1-col tearing is investigated separately via the tear lab.)
             transform: `translateX(${PANEL_PCT[isActive ? panelIdx : restingPanel]}%)`,
           }}
         >
           {/* Panel 0: PostWallClone */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {isActive && livePanel === 2 ? renderPostWall() : null}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {renderPostWall()}
           </div>
 
           {/* Panel 1: Poster */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
             {panelIdx === 0 && (
               <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
@@ -756,17 +672,17 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           </div>
 
           {/* Panel 2: Info */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {isActive && livePanel === 1 ? renderInfo() : null}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {renderInfo()}
           </div>
 
           {/* Panel 3: PostWall */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {isActive && livePanel === 2 ? renderPostWall() : null}
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {renderPostWall()}
           </div>
 
           {/* Panel 4: PosterClone */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
             {renderPosterContent()}
           </div>
         </div>
