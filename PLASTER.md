@@ -747,6 +747,6 @@ Hard-won rules and anti-patterns discovered across development sessions.
 ## Session log
 
 ### 2026-06-09
-- **Shipped:** wall View-Transition filter glide (110fe9f) + query slim & limit 200→500 (b556688); iOS 1-col tearing real fix = gesture-scoped GPU promotion, removed permanent willChange (dba195b, prefetch+defer 8c11dfa); BATCH 4 — recurringDates.ts + vitest 7 green (8c899cf), verify-staging.sql ran PASS on prod (3dbef55), real extraction-error messages in importer (a0f24fc).
-- **In-flight / unverified:** iOS tearing fix + filter glide need on-device check (browser can't repro the WKWebView bug). Commits 8c11dfa→a0f24fc are NOT pushed.
-- **Next step:** verify 1-col tearing + filter glide on a phone, then `git push`.
+- **Shipped:** wall VT filter glide (110fe9f) + query slim 200→500 (b556688); iOS 1-col tearing fixed — final approach = ACTIVE-card GPU promotion (b4fd486), removed permanent willChange (supersedes gesture-scoped dba195b; prefetch+defer 8c11dfa); BATCH 4 — recurringDates.ts + vitest 7 green (8c899cf), verify-staging.sql ran PASS on prod (3dbef55), real importer error msgs (a0f24fc); WALL SCALE — windowed infinite load 300/page (b6efbf6) + multi-col lazy img/content-visibility (252e62d).
+- **In-flight / unverified:** on-device check needed for 1-col tearing, VT filter glide, windowed scroll-append, content-visibility cards. Commits 8c11dfa→252e62d NOT pushed.
+- **Next step:** verify the above on a phone, then `git push`.
