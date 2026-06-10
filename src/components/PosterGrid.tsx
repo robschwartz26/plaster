@@ -58,10 +58,12 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  // Shared 1-col panel index, owned by this grid instance. Persists which panel
-  // the user is browsing as they scroll between cards. Per-instance + reset on
-  // remount, so a second PosterGrid (e.g. StaffPreview) never collides with the wall.
-  const sharedPanelIdx = useRef(0)
+  // Resting 1-col panel (0=poster, 1=info, 2=wall) — STATE, not a ref, so every
+  // card re-renders pre-positioned on it and an incoming card never flashes its
+  // poster. A card reports a settled swipe via onPanelSettled → setRestingPanel.
+  // Per-instance state, so a second PosterGrid (e.g. StaffPreview) is independent
+  // and a remount resets to poster automatically.
+  const [restingPanel, setRestingPanel] = useState<0 | 1 | 2>(0)
   const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
@@ -361,7 +363,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     if (cols !== 1) {
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
-      sharedPanelIdx.current = 0 // zoom-out resets panel persistence
+      setRestingPanel(0) // zoom-out resets panel persistence to poster
     }
   }, [cols])
 
@@ -468,7 +470,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                 onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
                 onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
                 enableDesktopNav={enableDesktopNav}
-                sharedPanelIdx={sharedPanelIdx}
+                restingPanel={restingPanel}
+                onPanelSettled={setRestingPanel}
               />
             )
           })

@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -30,10 +30,12 @@ interface Props {
   onUndoCrop?: () => void
   onConfirmCrop?: () => void
   enableDesktopNav?: boolean
-  // Shared 1-col panel index, owned by the parent PosterGrid (one ref per grid
-  // instance). Persists which panel (poster/info/wall) the user is browsing as
-  // they scroll between cards. Scoped per-grid so separate walls never collide.
-  sharedPanelIdx?: MutableRefObject<number>
+  // 1-col panel persistence. restingPanel is the panel (0=poster, 1=info, 2=wall)
+  // every card rests on — owned by the parent PosterGrid as state, so all cards
+  // render pre-positioned and an incoming card never flashes its poster. The card
+  // reports a settled swipe via onPanelSettled; the grid lifts it to restingPanel.
+  restingPanel?: 0 | 1 | 2
+  onPanelSettled?: (panel: 0 | 1 | 2) => void
 }
 
 interface EventDetail {
@@ -165,7 +167,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, sharedPanelIdx }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
@@ -187,43 +189,37 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
   const stripRef = useRef<HTMLDivElement>(null)
-  const panelIdxRef = useRef(sharedPanelIdx?.current ?? 0)
-  const [panelIdx, _setPanelIdx] = useState(() => sharedPanelIdx?.current ?? 0)
+  const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
+  const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   const loopingRef = useRef(false)
 
-  function setPanelIdx(i: number, shared = true) {
+  // Commit a panel as this card's final value. shared=true reports it up to the
+  // grid (onPanelSettled → restingPanel) so every other card follows. The
+  // render-phase mirror below adopts the grid's value directly (no setPanelIdx)
+  // so it never echoes straight back up.
+  function setPanelIdx(i: 0 | 1 | 2, shared = true) {
     panelIdxRef.current = i
     _setPanelIdx(i)
-    if (shared && sharedPanelIdx) sharedPanelIdx.current = i
+    if (shared) onPanelSettled?.(i)
   }
 
-  // ── Reset to Poster when card scrolls out of view ─────────────────────
-  useEffect(() => {
-    if (cols !== 1) return
-    if (!isActive && panelIdxRef.current !== 0) {
-      const el = stripRef.current
-      if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[0]}%)` }
-      setPanelIdx(0, false) // reset visually — don't clobber the shared index
-      loopingRef.current = false
-    }
-  }, [isActive, cols])
+  // Pre-position the active card on the grid's resting panel — render-phase
+  // prop→state sync (React's pattern for adjusting state when a prop changes).
+  // When a card scrolls into view and becomes active it adopts restingPanel HERE,
+  // before paint, so it never flashes panel 0. Inactive cards stay render-pure via
+  // the transform below. Guarded against mid-loop so a wrap animation isn't cut.
+  if (cols === 1 && isActive && !loopingRef.current && panelIdx !== restingPanel) {
+    panelIdxRef.current = restingPanel
+    _setPanelIdx(restingPanel)
+  }
 
-  // ── Sync strip to shared panel when a card becomes active (before paint) ──
-  // Lets users browse info→info or wall→wall as they scroll through 1-col.
-  useLayoutEffect(() => {
-    if (cols !== 1 || !isActive) return
-    const targetIdx = Math.min(2, Math.max(0, sharedPanelIdx?.current ?? 0)) as 0 | 1 | 2
-    if (targetIdx === panelIdxRef.current) return
-    const el = stripRef.current
-    if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[targetIdx]}%)` }
-    setPanelIdx(targetIdx, false) // reading from shared — don't echo back
-  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Trigger data fetch when activating on a non-poster panel ─────────
+  // ── Fetch panel data when a card activates already on a non-poster panel ──
+  // (Swiping from the poster fetches via shiftPanel; this covers arriving on
+  // info/wall by scrolling with the panel already shifted.)
   useEffect(() => {
     if (cols !== 1 || !isActive) return
-    if ((sharedPanelIdx?.current ?? 0) > 0 && !detailFetched.current) fetchPanelData()
-  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
+  }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
@@ -622,12 +618,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             display: 'flex',
             width: '500%',
             height: '100%',
-            // Resting position derived from panelIdx so a (re)rendered card paints
-            // on the correct panel in-commit (no effect-lag flash). Swipe drag and
-            // shiftPanel override this imperatively; React only re-applies the same
-            // endpoint value on the post-commit re-render, so the imperative
-            // transition is never interrupted.
-            transform: `translateX(${PANEL_PCT[panelIdx]}%)`,
+            // Active card follows its local panelIdx (so the imperative swipe
+            // transition's endpoint matches what React re-applies); inactive cards
+            // render straight from the grid's restingPanel, so every off-screen card
+            // is already standing on the shared panel before it scrolls into view —
+            // no per-card correction, no poster flash. Swipe drag and shiftPanel
+            // still drive the active strip imperatively; React only re-applies the
+            // same endpoint on the post-commit re-render.
+            transform: `translateX(${PANEL_PCT[isActive ? panelIdx : restingPanel]}%)`,
             willChange: 'transform',
           }}
         >
