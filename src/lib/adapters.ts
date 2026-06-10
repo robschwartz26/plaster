@@ -2,7 +2,18 @@ import { type DbEvent } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 import { getGradient } from '@/lib/categories'
 
-export function dbEventToWallEvent(e: DbEvent): WallEvent {
+// Exactly the event columns the wall renders — the slim wall fetch selects these,
+// and a full DbEvent row also satisfies it (the localStorage cache path). Long-text
+// fields like `description` are intentionally excluded; the 1-col info panel
+// lazy-fetches detail on demand, so the wall payload stays small.
+export type WallEventRow = Pick<DbEvent,
+  | 'id' | 'title' | 'venue_id' | 'starts_at' | 'category' | 'poster_url'
+  | 'fill_frame' | 'focal_x' | 'focal_y' | 'poster_offset_x' | 'poster_offset_y'
+  | 'view_count' | 'like_count' | 'sold_out' | 'sold_out_report_count'
+  | 'show_times' | 'trending_score' | 'recurrence_group_id' | 'venues'
+>
+
+export function dbEventToWallEvent(e: WallEventRow): WallEvent {
   const cat = e.category ?? 'Other'
   const [c1, c2] = getGradient(cat)
   return {

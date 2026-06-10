@@ -9,12 +9,12 @@ import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
-import { supabase, type DbEvent } from '@/lib/supabase'
-import { dbEventToWallEvent } from '@/lib/adapters'
+import { supabase } from '@/lib/supabase'
+import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
 
-const WALL_CACHE_KEY = 'wall-cache-v1'
+const WALL_CACHE_KEY = 'wall-cache-v2'
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
 
 // Wrap a user-initiated filter/search change in a View Transition so surviving
@@ -59,12 +59,15 @@ export function Wall() {
     // that started before midnight don't vanish off the wall.
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
 
+    // Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering.
+    // Excludes description and other long-text fields (the 1-col info panel
+    // lazy-fetches those), keeping the payload small enough to raise the limit.
     const { data } = await supabase
       .from('events')
-      .select('*, venues(name)')
+      .select('id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, venues(name)')
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
-      .limit(200)
+      .limit(500)
 
     const realEvents = (data ?? []).map(dbEventToWallEvent)
     setEvents(realEvents)
@@ -78,7 +81,7 @@ export function Wall() {
     try {
       const raw = localStorage.getItem(WALL_CACHE_KEY)
       if (raw) {
-        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: DbEvent[] }
+        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: WallEventRow[] }
         if (Date.now() - savedAt < WALL_CACHE_TTL) {
           const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
           setEvents(cachedData.filter(e => e.starts_at >= cutoff).map(dbEventToWallEvent))
