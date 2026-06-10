@@ -195,6 +195,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
   const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   const loopingRef = useRef(false)
+  // Fallback-C content gate (iOS tearing): which panel is settled + centered in-view
+  // and therefore allowed to render its HEAVY content. Heavy info/wall content mounts
+  // ONLY when its panel is live, so its first paint is always in-view — never painted
+  // off-screen inside the translated strip (which WebKit half-rasterizes and the swipe
+  // slides into view = the tear). Off-screen/parked panels render blank.
+  const [livePanel, setLivePanel] = useState<0 | 1 | 2>(restingPanel)
   // Strip-transition guard (iOS WKWebView tearing fix). While a transform
   // transition is in flight, fetched panel data must NOT setState (content reflow
   // inside the composited strip layer mid-transition tears on WKWebView). Defer
@@ -256,6 +262,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // poster→wall→info route never tore while the direct poster→info route did.
   useLayoutEffect(() => {
     if (cols !== 1 || !isActive) return
+    setLivePanel(restingPanel) // arrival is in-view on restingPanel → its content may render
     void stripRef.current?.offsetHeight
   }, [cols, isActive, restingPanel])
 
@@ -301,6 +308,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       const queued = pendingCommitsRef.current
       pendingCommitsRef.current = []
       queued.forEach(commit => commit())
+      // The slide has settled — the centered panel is now in-view and may render its
+      // heavy content (mounts here, in-view → no off-screen first paint).
+      setLivePanel(panelIdxRef.current)
       // Nudge a fresh raster now that deferred content has landed in the panels.
       void stripRef.current?.offsetHeight
     }, durationMs)
@@ -368,6 +378,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[0]}%)` }
           setPanelIdx(0)
+          setLivePanel(0)
           loopingRef.current = false
         }, 300)
       } else {
@@ -385,6 +396,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           const el2 = stripRef.current
           if (el2) { el2.style.transition = 'none'; el2.style.transform = `translateX(${PANEL_PCT[2]}%)` }
           setPanelIdx(2)
+          setLivePanel(2)
           loopingRef.current = false
         }, 300)
       } else {
@@ -709,7 +721,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         >
           {/* Panel 0: PostWallClone */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {renderPostWall()}
+            {isActive && livePanel === 2 ? renderPostWall() : null}
           </div>
 
           {/* Panel 1: Poster */}
@@ -745,12 +757,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
           {/* Panel 2: Info */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {renderInfo()}
+            {isActive && livePanel === 1 ? renderInfo() : null}
           </div>
 
           {/* Panel 3: PostWall */}
           <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
-            {renderPostWall()}
+            {isActive && livePanel === 2 ? renderPostWall() : null}
           </div>
 
           {/* Panel 4: PosterClone */}
