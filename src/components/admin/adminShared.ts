@@ -268,6 +268,42 @@ export function fileToDataURL(file: File): Promise<string> {
 
 // ── AI extraction ────────────────────────────────────────────
 
+// Carries the edge function's real failure reason (the `{ error }` body) alongside
+// the HTTP status, so the UI can surface the true cause instead of a bare "500".
+export class ExtractionError extends Error {
+  status: number
+  detail: string
+  constructor(status: number, detail: string) {
+    super(detail || `Extraction failed: ${status}`)
+    this.name = 'ExtractionError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
+// Read the `{ error }` body off a failed extraction response (tolerant of a
+// non-JSON body) and throw an ExtractionError with the real reason + status.
+async function throwExtractionError(response: Response): Promise<never> {
+  let detail = ''
+  try {
+    const body = await response.json()
+    if (typeof body?.error === 'string') detail = body.error
+  } catch { /* non-JSON body — fall back to status */ }
+  throw new ExtractionError(response.status, detail)
+}
+
+// Map an extraction failure to a user-facing message. Two common ops cases get a
+// friendlier first line; everything else surfaces the real reason from the body.
+export function friendlyExtractionError(e: unknown): string {
+  if (e instanceof ExtractionError) {
+    const d = e.detail.toLowerCase()
+    if (d.includes('credit balance')) return 'The AI account is out of credits — tell Rob.'
+    if (e.status === 429 || d.includes('429') || d.includes('rate limit')) return 'AI rate limit hit — wait a minute and retry.'
+    return `Extraction failed — ${e.detail || `error ${e.status}`}`
+  }
+  return e instanceof Error ? e.message : String(e)
+}
+
 export async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const { data: { session } } = await supabaseAdmin.auth.getSession()
@@ -285,7 +321,7 @@ export async function extractEventFromImage(payload: ExtractPayload): Promise<Ex
     body: JSON.stringify(payload),
   })
 
-  if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
+  if (!response.ok) await throwExtractionError(response)
   return await response.json() as ExtractedEvent
 }
 
@@ -301,7 +337,7 @@ export async function extractScheduleFromImage({ base64, mimeType }: { base64: s
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
     body: JSON.stringify({ image: { base64, mimeType }, today }),
   })
-  if (!response.ok) throw new Error(`Schedule extraction failed: ${response.status}`)
+  if (!response.ok) await throwExtractionError(response)
   const data = await response.json()
   return data.occurrences ?? []
 }

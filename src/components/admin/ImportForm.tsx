@@ -6,7 +6,7 @@ import { expandOccurrences } from '@/lib/recurringDates'
 import {
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
-  fileToDataURL, extractEventFromImage, extractScheduleFromImage,
+  fileToDataURL, extractEventFromImage, extractScheduleFromImage, friendlyExtractionError,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
   generateWeekdayOccurrences, generateOccurrenceDates, fmtShortDate,
   type Venue, type ExtractedEvent, type ExtractPayload,
@@ -153,7 +153,7 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
       }
       setPhase('review')
     } catch (e) {
-      setErrorMsg(String(e)); setPhase('error')
+      setErrorMsg(friendlyExtractionError(e)); setPhase('error')
     }
   }, [venues, infoFile])
 
@@ -226,7 +226,7 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
         setForm(prev => ({ ...prev, date: valid[0].date, time: valid[0].time || prev.time || '' }))
         setExtraDates(valid.slice(1).map(o => ({ date: o.date, time: o.time || '' })))
       }
-    } catch { setScheduleError("Couldn't read that schedule. Try a clearer image.") }
+    } catch (e) { setScheduleError(friendlyExtractionError(e)) }
     finally { setScheduleLoading(false) }
   }, [])
 
