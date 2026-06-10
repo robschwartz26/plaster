@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
+import { expandOccurrences } from '@/lib/recurringDates'
 import {
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
@@ -395,27 +396,16 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
           }
           setSuccessCount(dates.length)
         } else if (extraDates.length > 0) {
-          // Group all occurrences by calendar date — same date = multiple show times
-          const dateMap = new Map<string, string[]>()
-          const addToMap = (date: string, time: string) => {
-            const iso = new Date(`${date}T${time}:00`).toISOString()
-            if (!dateMap.has(date)) dateMap.set(date, [])
-            dateMap.get(date)!.push(iso)
-          }
-          addToMap(form.date, form.time || '20:00')
-          for (const ed of extraDates) addToMap(ed.date, ed.time || form.time || '20:00')
-          for (const [d, times] of dateMap) dateMap.set(d, times.sort())
-          const uniqueDates = [...dateMap.keys()].sort()
-          const seriesId = uniqueDates.length > 1 ? crypto.randomUUID() : null
-          const allRows = uniqueDates.map(date => {
-            const times = dateMap.get(date)!
-            return {
-              ...baseRow,
-              starts_at: times[0],
-              show_times: times.length > 1 ? times : null,
-              ...(seriesId ? { recurrence_group_id: seriesId } : {}),
-            }
-          })
+          // Group all occurrences by calendar date — same date = multiple show times.
+          // Pure expansion extracted to src/lib/recurringDates.ts (unit-tested).
+          const occurrences = expandOccurrences(form.date, form.time, extraDates)
+          const seriesId = occurrences.length > 1 ? crypto.randomUUID() : null
+          const allRows = occurrences.map(occ => ({
+            ...baseRow,
+            starts_at: occ.starts_at,
+            show_times: occ.show_times,
+            ...(seriesId ? { recurrence_group_id: seriesId } : {}),
+          }))
           const { error: eventError } = await supabaseAdmin.from('events').insert(allRows)
           if (eventError) throw eventError
           setSuccessCount(allRows.length)
