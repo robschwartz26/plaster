@@ -231,15 +231,15 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
   }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Prefetch panel data on rest (iOS tearing fix) ─────────────────────
-  // Load info/wall content ~250ms AFTER a card becomes the active card, before any
-  // swipe — so by the time the user swipes poster→info, data is already in and no
-  // setState injects content into the strip mid-transform-transition (the WKWebView
-  // tearing cause). Fast flick-scrolling clears the timer on deactivate, so only
-  // cards the user actually rests on prefetch; detailFetched dedupes.
+  // ── Prefetch panel data on rest ───────────────────────────────────────
+  // Load info/wall content ~100ms AFTER a card becomes the active card, before any
+  // swipe — so content is in by the time the user swipes poster→info. Fast
+  // flick-scrolling clears the timer on deactivate, so only cards the user actually
+  // rests on prefetch; detailFetched dedupes. (Tearing itself is fixed by the
+  // gesture-scoped GPU promotion above, not this; this just hides fetch latency.)
   useEffect(() => {
     if (cols !== 1 || !isActive || detailFetched.current) return
-    const t = setTimeout(() => fetchPanelData(), 250)
+    const t = setTimeout(() => fetchPanelData(), 100)
     return () => clearTimeout(t)
   }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -266,6 +266,13 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [reported, setReported] = useState(false)
   const [reportCount, setReportCount] = useState(event.sold_out_report_count ?? 0)
 
+  // GPU-promote / demote ONLY the active strip, ONLY during motion. willChange is
+  // set imperatively at gesture/animation start and cleared on settle, so at rest
+  // zero strips are promoted (vs ~200 permanent layers exhausting iOS tile memory).
+  // Clearing it on settle also forces WKWebView to re-rasterize the resting panel.
+  function promoteStrip() { const el = stripRef.current; if (el) el.style.willChange = 'transform' }
+  function demoteStrip()  { const el = stripRef.current; if (el) el.style.willChange = '' }
+
   // Commit a panel-data setState now, or — if a strip transition is in flight —
   // defer it until the transition settles (endStripAnimation flushes the queue).
   // Prevents content reflow inside the strip mid-transition (WKWebView tearing).
@@ -274,15 +281,18 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     else fn()
   }
 
-  // Mark a strip transition as in flight for `durationMs`; flush deferred commits
-  // when it settles. Re-arming (a quick second swipe) just pushes the settle out,
-  // so commits never land mid-motion across a multi-swipe sequence.
+  // Mark a strip transition as in flight for `durationMs`; promote the strip for the
+  // duration and flush deferred commits + demote when it settles. Re-arming (a quick
+  // second swipe) just pushes the settle out, so commits never land mid-motion and
+  // the strip stays promoted across a multi-swipe sequence.
   function startStripAnimation(durationMs: number) {
     isAnimatingRef.current = true
+    promoteStrip()
     if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current)
     animEndTimerRef.current = setTimeout(() => {
       isAnimatingRef.current = false
       animEndTimerRef.current = null
+      demoteStrip()
       const queued = pendingCommitsRef.current
       pendingCommitsRef.current = []
       queued.forEach(commit => commit())
@@ -408,7 +418,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         movedSignificantly: false,
       }
       const strip = stripRef.current
-      if (strip) strip.style.transition = 'none'
+      // Promote the strip for the duration of the gesture (demoted on settle/abort).
+      if (strip) { strip.style.willChange = 'transform'; strip.style.transition = 'none' }
     }
 
     const onMove = (e: TouchEvent) => {
@@ -423,6 +434,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           if (strip) {
             strip.style.transition = 'transform 0.2s ease'
             strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+            strip.style.willChange = ''
           }
         }
         return
@@ -447,6 +459,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         if (strip) {
           strip.style.transition = 'none'
           strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+          strip.style.willChange = '' // vertical scroll — strip won't move, demote
         }
         return
       }
@@ -466,10 +479,11 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       // bail without committing a swipe.
       if (e.touches.length > 0) {
         s.active = false
+        demoteStrip()
         return
       }
 
-      if (!s.active) { s.active = false; return }
+      if (!s.active) { s.active = false; demoteStrip(); return }
 
       const endX = e.changedTouches[0].clientX
       const endY = e.changedTouches[0].clientY
@@ -489,12 +503,13 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           setPopHeart(heart)
           setTimeout(() => setPopHeart(null), 700)
           s.active = false
+          demoteStrip()
           return
         }
         lastTapTimeRef.current = now
       }
 
-      if (s.isHorizontal !== true) { s.active = false; return }
+      if (s.isHorizontal !== true) { s.active = false; demoteStrip(); return }
       s.active = false
 
       if (Math.abs(dx) > 50) {
@@ -680,8 +695,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             // no per-card correction, no poster flash. Swipe drag and shiftPanel
             // still drive the active strip imperatively; React only re-applies the
             // same endpoint on the post-commit re-render.
+            //
+            // NO willChange here on purpose: a permanent willChange:'transform' on
+            // every card's 500%-wide strip promotes ~200 giant GPU layers and
+            // exhausts WKWebView tile memory → stale-tile tearing on text panels.
+            // The active strip is promoted imperatively (promoteStrip) only during a
+            // gesture/animation, and demoted (demoteStrip) on settle so iOS
+            // re-rasterizes the resting panel cleanly.
             transform: `translateX(${PANEL_PCT[isActive ? panelIdx : restingPanel]}%)`,
-            willChange: 'transform',
           }}
         >
           {/* Panel 0: PostWallClone */}
