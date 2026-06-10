@@ -195,6 +195,13 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
   const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   const loopingRef = useRef(false)
+  // Strip-transition guard (iOS WKWebView tearing fix). While a transform
+  // transition is in flight, fetched panel data must NOT setState (content reflow
+  // inside the composited strip layer mid-transition tears on WKWebView). Defer
+  // such commits into pendingCommitsRef and flush them when the transition settles.
+  const isAnimatingRef = useRef(false)
+  const animEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingCommitsRef = useRef<Array<() => void>>([])
 
   // Commit a panel as this card's final value. shared=true reports it up to the
   // grid (onPanelSettled → restingPanel) so every other card follows. The
@@ -224,6 +231,21 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
   }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Prefetch panel data on rest (iOS tearing fix) ─────────────────────
+  // Load info/wall content ~250ms AFTER a card becomes the active card, before any
+  // swipe — so by the time the user swipes poster→info, data is already in and no
+  // setState injects content into the strip mid-transform-transition (the WKWebView
+  // tearing cause). Fast flick-scrolling clears the timer on deactivate, so only
+  // cards the user actually rests on prefetch; detailFetched dedupes.
+  useEffect(() => {
+    if (cols !== 1 || !isActive || detailFetched.current) return
+    const t = setTimeout(() => fetchPanelData(), 250)
+    return () => clearTimeout(t)
+  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear the strip-animation settle timer on unmount.
+  useEffect(() => () => { if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current) }, [])
+
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
   const [detail, setDetail] = useState<EventDetail | null>(null)
@@ -244,21 +266,44 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [reported, setReported] = useState(false)
   const [reportCount, setReportCount] = useState(event.sold_out_report_count ?? 0)
 
+  // Commit a panel-data setState now, or — if a strip transition is in flight —
+  // defer it until the transition settles (endStripAnimation flushes the queue).
+  // Prevents content reflow inside the strip mid-transition (WKWebView tearing).
+  function commitPanelData(fn: () => void) {
+    if (isAnimatingRef.current) pendingCommitsRef.current.push(fn)
+    else fn()
+  }
+
+  // Mark a strip transition as in flight for `durationMs`; flush deferred commits
+  // when it settles. Re-arming (a quick second swipe) just pushes the settle out,
+  // so commits never land mid-motion across a multi-swipe sequence.
+  function startStripAnimation(durationMs: number) {
+    isAnimatingRef.current = true
+    if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current)
+    animEndTimerRef.current = setTimeout(() => {
+      isAnimatingRef.current = false
+      animEndTimerRef.current = null
+      const queued = pendingCommitsRef.current
+      pendingCommitsRef.current = []
+      queued.forEach(commit => commit())
+    }, durationMs)
+  }
+
   function fetchPanelData() {
     if (detailFetched.current) return
     detailFetched.current = true
 
     supabase.from('events').select('description, address').eq('id', event.id).single()
-      .then(({ data }) => { if (data) setDetail(data as EventDetail) })
+      .then(({ data }) => { if (data) commitPanelData(() => setDetail(data as EventDetail)) })
 
     supabase.from('attendees').select('user_id', { count: 'exact', head: true })
       .eq('event_id', event.id)
-      .then(({ count }) => setAttendeeCount(count ?? 0))
+      .then(({ count }) => commitPanelData(() => setAttendeeCount(count ?? 0)))
 
     if (user) {
       supabase.from('attendees').select('id')
         .eq('event_id', event.id).eq('user_id', user.id).maybeSingle()
-        .then(({ data }) => setIsAttending(!!data))
+        .then(({ data }) => commitPanelData(() => setIsAttending(!!data)))
     }
 
     fetchPosts()
@@ -266,7 +311,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (user) {
       supabase.from('post_likes').select('post_id').eq('user_id', user.id)
         .then(({ data }) => {
-          setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id)))
+          commitPanelData(() => setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id))))
         })
     }
   }
@@ -277,7 +322,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       .eq('event_id', event.id)
       .order('created_at', { ascending: false })
       .limit(30)
-      .then(({ data }) => setPosts((data as WallPost[] | null) ?? []))
+      .then(({ data }) => commitPanelData(() => setPosts((data as WallPost[] | null) ?? [])))
   }
 
   // ── 1-col: panel navigation ───────────────────────────────────────────
@@ -286,6 +331,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     const el = stripRef.current
     if (!el) return
     const cur = panelIdxRef.current
+
+    // Guard the upcoming transform transition (0.28s; loop wraps at 300ms) so any
+    // data fetched for this swipe commits only after motion settles.
+    startStripAnimation(300)
 
     if (cur === 0) fetchPanelData()
 
@@ -456,6 +505,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           strip.style.transition = 'transform 0.2s ease'
           strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
         }
+        // Snap-back is also a transition — guard it so an in-flight fetch can't
+        // commit mid-motion.
+        startStripAnimation(200)
       }
     }
 
