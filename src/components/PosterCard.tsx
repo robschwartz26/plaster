@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -161,6 +161,10 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
+// Shared across all 1-col cards — persists the active panel index as users scroll.
+// PosterGrid resets this to 0 when leaving 1-col mode.
+export const sharedPanelIdx = { current: 0 }
+
 export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
@@ -187,9 +191,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [panelIdx, _setPanelIdx] = useState(0)
   const loopingRef = useRef(false)
 
-  function setPanelIdx(i: number) {
+  function setPanelIdx(i: number, shared = true) {
     panelIdxRef.current = i
     _setPanelIdx(i)
+    if (shared) sharedPanelIdx.current = i
   }
 
   // ── Reset to Poster when card scrolls out of view ─────────────────────
@@ -198,10 +203,27 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (!isActive && panelIdxRef.current !== 0) {
       const el = stripRef.current
       if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[0]}%)` }
-      setPanelIdx(0)
+      setPanelIdx(0, false) // reset visually — don't clobber the shared index
       loopingRef.current = false
     }
   }, [isActive, cols])
+
+  // ── Sync strip to shared panel when a card becomes active (before paint) ──
+  // Lets users browse info→info or wall→wall as they scroll through 1-col.
+  useLayoutEffect(() => {
+    if (cols !== 1 || !isActive) return
+    const targetIdx = Math.min(2, Math.max(0, sharedPanelIdx.current)) as 0 | 1 | 2
+    if (targetIdx === panelIdxRef.current) return
+    const el = stripRef.current
+    if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[targetIdx]}%)` }
+    setPanelIdx(targetIdx, false) // reading from shared — don't echo back
+  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Trigger data fetch when activating on a non-poster panel ─────────
+  useEffect(() => {
+    if (cols !== 1 || !isActive) return
+    if (sharedPanelIdx.current > 0 && !detailFetched.current) fetchPanelData()
+  }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)

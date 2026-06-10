@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
-import { PosterCard } from './PosterCard'
+import { PosterCard, sharedPanelIdx } from './PosterCard'
 import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
 import { eventLocalDate } from '@/lib/dates'
@@ -357,6 +357,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     if (cols !== 1) {
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
+      sharedPanelIdx.current = 0 // zoom-out resets panel persistence
     }
   }, [cols])
 
