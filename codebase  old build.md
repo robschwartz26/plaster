@@ -1,5 +1,5 @@
 # Plaster — FULL codebase dump
-# Generated: Tue Jun  9 17:22:35 PDT 2026
+# Generated: Tue Jun  9 15:53:53 PDT 2026
 
 === .claude/settings.local.json ===
 {
@@ -12305,7 +12305,6 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
-import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -13124,8 +13123,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           />
           {/* Main poster image */}
           <img
-            src={posterThumb(event.poster_url, cols >= 4 ? 300 : 500) ?? event.poster_url}
-            onError={e => { const img = e.currentTarget; img.onerror = null; img.src = event.poster_url! }}
+            src={event.poster_url}
             alt={event.title}
             style={{
               position: 'absolute', inset: 0,
@@ -13251,14 +13249,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
               {attendeeCount > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 10px' }}>
-                  <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
-                    <strong style={{ color: 'var(--fg-80)', fontWeight: 700 }}>{attendeeCount}</strong> {attendeeCount === 1 ? 'person' : 'people'} going
-                  </p>
-                  {event.trending_score >= 12 && (
-                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#A855F7' }}>▲ Trending</span>
-                  )}
-                </div>
+                <p style={{ margin: '0 0 10px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+                  {attendeeCount} {attendeeCount === 1 ? 'person' : 'people'} going
+                </p>
               )}
 
               {user ? (
@@ -16041,230 +16034,9 @@ export function SwipeableConversationRow({ onDismiss, children }: Props) {
 }
 
 
-=== src/components/TrendingStrip.tsx ===
-import React, { useState } from 'react'
-import { type WallEvent } from '@/types/event'
-import { posterThumb } from '@/lib/posterThumb'
-
-const OPEN_KEY = 'wall-trending-open'
-const CURTAIN_W = 20  // px — solid bg band width for 'curtain' edgeStyle
-
-function loadOpen(): boolean {
-  try { return localStorage.getItem(OPEN_KEY) === 'true' } catch { return false }
-}
-
-interface Props {
-  events: WallEvent[]
-  onOpenEvent: (id: string) => void
-  alwaysExpanded?: boolean
-  // 'card'    — contained card with bg/border/radius; tiles scroll inside rounded edge
-  // 'curtain' — no card; solid page-bg band + hairline seam at right boundary
-  // undefined — bare look (Wall's collapsed-pill instance)
-  edgeStyle?: 'card' | 'curtain'
-}
-
-// Exported so consumers (LINE UP) can check count before rendering a section header.
-export function computeTrendingTop(events: WallEvent[]): WallEvent[] {
-  const groups = new Map<string, WallEvent>()
-  for (const e of events) {
-    if (e.trending_score <= 0) continue
-    const key = e.recurrence_group_id ?? `${e.venue_name}|${e.title.toLowerCase()}`
-    const prev = groups.get(key)
-    if (
-      !prev
-      || e.trending_score > prev.trending_score
-      || (e.trending_score === prev.trending_score && e.starts_at < prev.starts_at)
-    ) {
-      groups.set(key, e)
-    }
-  }
-  return Array.from(groups.values())
-    .sort((a, b) => b.trending_score - a.trending_score)
-    .slice(0, 10)
-}
-
-export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }: Props) {
-  const [open, setOpen] = useState<boolean>(() => alwaysExpanded ? true : loadOpen())
-
-  const top = computeTrendingTop(events)
-  if (top.length < 3) return null
-
-  function toggle() {
-    const next = !open
-    setOpen(next)
-    try { localStorage.setItem(OPEN_KEY, next ? 'true' : 'false') } catch { /* noop */ }
-  }
-
-  const tiles = top.map((e, i) => (
-    <button
-      key={e.id}
-      onClick={() => onOpenEvent(e.id)}
-      style={{
-        flexShrink: 0, width: 72,
-        background: 'none', border: 'none', padding: 0,
-        cursor: 'pointer', textAlign: 'left',
-      }}
-    >
-      <div style={{
-        position: 'relative', width: 72, paddingBottom: '150%',
-        borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)',
-      }}>
-        {e.poster_url ? (
-          <img
-            src={posterThumb(e.poster_url, 120) ?? e.poster_url}
-            onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = e.poster_url! }}
-            alt={e.title}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        ) : (
-          <div style={{ position: 'absolute', inset: 0, background: e.color2 }} />
-        )}
-        <div style={{
-          position: 'absolute', top: 4, left: 4, width: 18, height: 18,
-          borderRadius: '50%', background: 'rgba(0,0,0,0.62)',
-          backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
-          color: '#f0ece3', lineHeight: 1,
-        }}>
-          {i + 1}
-        </div>
-      </div>
-      <div style={{
-        marginTop: 4, fontFamily: '"Space Grotesk", sans-serif',
-        fontSize: 10, fontWeight: 600, color: 'var(--fg-80)',
-        lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap', width: 72,
-      }}>
-        {e.title}
-      </div>
-    </button>
-  ))
-
-  // Standard scroll container — used by bare, card, and wall modes
-  const tileRow = (
-    <div style={{
-      overflowX: 'auto',
-      overflowY: 'hidden',
-      paddingLeft: 12,
-      paddingRight: 12,
-      scrollbarWidth: 'none',
-      WebkitOverflowScrolling: 'touch',
-    } as React.CSSProperties}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', paddingBottom: 8 }}>
-        {tiles}
-      </div>
-    </div>
-  )
-
-  // ── Card variant ──────────────────────────────────────────────────────────
-  // Tiles scroll within the card's overflow-hidden rounded border.
-  // Label lives inside the card. The caller (LINE UP) sets a right margin on
-  // its wrapper so the card's right edge stops clear of the poster spine.
-  if (edgeStyle === 'card') {
-    return (
-      <div style={{
-        background: 'color-mix(in srgb, var(--bg) 85%, var(--fg) 15%)',
-        border: '1px solid var(--fg-15)',
-        borderRadius: 12,
-        overflow: 'hidden',
-      }}>
-        <div style={{
-          padding: '8px 14px 4px',
-          fontFamily: '"Barlow Condensed", sans-serif',
-          fontSize: 10, fontWeight: 700,
-          letterSpacing: '0.12em', textTransform: 'uppercase',
-          color: 'var(--fg-40)',
-        }}>
-          Trending in Portland
-        </div>
-        {tileRow}
-      </div>
-    )
-  }
-
-  // ── Curtain variant ───────────────────────────────────────────────────────
-  // No card — scroll container has extra right padding; an absolutely-positioned
-  // solid band + hairline seam sits at the right boundary, tiles slide behind it.
-  // Switch LINE UP to this with edgeStyle="curtain".
-  if (edgeStyle === 'curtain') {
-    return (
-      <div style={{ position: 'relative', overflow: 'hidden', marginBottom: 4 }}>
-        <div style={{
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          paddingLeft: 12,
-          paddingRight: 12 + CURTAIN_W,
-          scrollbarWidth: 'none',
-          WebkitOverflowScrolling: 'touch',
-        } as React.CSSProperties}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', paddingBottom: 8 }}>
-            {tiles}
-          </div>
-        </div>
-        <div style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: CURTAIN_W,
-          background: 'var(--bg)',
-          borderLeft: '1px solid var(--fg-15)',
-          pointerEvents: 'none',
-        }} />
-      </div>
-    )
-  }
-
-  // ── LINE UP bare mode ─────────────────────────────────────────────────────
-  if (alwaysExpanded) {
-    return <div style={{ marginBottom: 4 }}>{tileRow}</div>
-  }
-
-  // ── Wall mode: ambient pill (grey + right-aligned when collapsed; purple when open) ──
-  return (
-    <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
-      {/* Collapsed: small grey "▲ TRENDING" tucked right, no chevron.
-          Expanded: purple label + upward chevron — slightly more present. */}
-      <button
-        onClick={toggle}
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
-          padding: '5px 12px', background: 'none', border: 'none',
-          cursor: 'pointer', width: '100%',
-        }}
-      >
-        <span style={{
-          fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10,
-          fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-          color: open ? '#A855F7' : 'var(--fg-40)',
-        }}>
-          ▲ Trending
-        </span>
-        {open && (
-          <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round"
-            style={{ flexShrink: 0, transform: 'rotate(180deg)' }}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        )}
-      </button>
-
-      <div style={{
-        maxHeight: open ? 220 : 0,
-        opacity: open ? 1 : 0,
-        overflow: 'hidden',
-        transition: 'max-height 0.2s ease, opacity 0.15s ease',
-      }}>
-        {tileRow}
-      </div>
-    </div>
-  )
-}
-
-
 === src/components/UploadHistory.tsx ===
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { posterThumb } from '@/lib/posterThumb'
 
 interface UploadRow {
   id: string
@@ -16516,8 +16288,7 @@ export function UploadHistory() {
                 <div style={{ position: 'relative', paddingBottom: '140%', borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)' }}>
                   {row.poster_url ? (
                     <img
-                      src={posterThumb(row.poster_url, 300) ?? row.poster_url} loading="lazy" alt={row.title}
-                      onError={e => { const img = e.currentTarget; img.onerror = null; img.src = row.poster_url! }}
+                      src={row.poster_url} loading="lazy" alt={row.title}
                       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                     />
                   ) : (
@@ -16611,8 +16382,7 @@ export function UploadHistory() {
               <div style={{ ...dataCell(), padding: '5px 6px 5px 8px' }}>
                 {row.poster_url ? (
                   <img
-                    src={posterThumb(row.poster_url, 120) ?? row.poster_url} loading="lazy" alt=""
-                    onError={e => { const img = e.currentTarget; img.onerror = null; img.src = row.poster_url! }}
+                    src={row.poster_url} loading="lazy" alt=""
                     style={{ width: 30, height: 42, borderRadius: 3, objectFit: 'cover', display: 'block', flexShrink: 0, border: '1px solid var(--fg-08)' }}
                   />
                 ) : (
@@ -17753,18 +17523,13 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
 import { PosterGrid } from './PosterGrid'
-import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
-import { supabase, type DbEvent } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
-
-const WALL_CACHE_KEY = 'wall-cache-v1'
-const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
-
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
   const [activeFilter, setActiveFilter] = useState('All')
@@ -17799,25 +17564,9 @@ export function Wall() {
 
     const realEvents = (data ?? []).map(dbEventToWallEvent)
     setEvents(realEvents)
-
-    try {
-      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: data ?? [] }))
-    } catch { /* quota failure must never break the wall */ }
   }, [])
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(WALL_CACHE_KEY)
-      if (raw) {
-        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: DbEvent[] }
-        if (Date.now() - savedAt < WALL_CACHE_TTL) {
-          const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-          setEvents(cachedData.filter(e => e.starts_at >= cutoff).map(dbEventToWallEvent))
-        }
-      }
-    } catch { /* corrupt or missing cache — first load proceeds normally */ }
-    fetchEvents()
-  }, [fetchEvents])
+  useEffect(() => { fetchEvents() }, [fetchEvents])
 
   // Fetch liked event IDs for the current user
   useEffect(() => {
@@ -17967,8 +17716,6 @@ export function Wall() {
       )}
 
       <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
-
-      <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 
       <PosterGrid
         events={events}
@@ -18727,8 +18474,6 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
     sold_out: e.sold_out ?? false,
     sold_out_report_count: e.sold_out_report_count ?? 0,
     show_times: e.show_times ?? null,
-    trending_score: Number(e.trending_score ?? 0),
-    recurrence_group_id: e.recurrence_group_id ?? null,
   }
 }
 
@@ -19431,19 +19176,6 @@ export async function pickFromLibrary(): Promise<PickImageOutcome> {
     if (isCancelError(err)) return { status: 'cancelled' }
     return { status: 'error', message: err instanceof Error ? err.message : 'Library error' }
   }
-}
-
-
-=== src/lib/posterThumb.ts ===
-const SNAP = [200, 400, 600, 800, 1200]
-
-export function posterThumb(url: string | null | undefined, cssWidth: number): string | undefined {
-  if (!url) return undefined
-  const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1
-  const raw = Math.round(cssWidth * dpr)
-  const w = SNAP.find(s => s >= raw) ?? SNAP[SNAP.length - 1]
-  if (!url.includes('/storage/v1/object/public/')) return url
-  return url.replace('/object/public/', '/render/image/public/') + `?width=${w}&quality=75&resize=contain`
 }
 
 
@@ -20174,17 +19906,10 @@ import { useUserMutes } from '@/hooks/useUserMutes'
 import { AccountProfile } from '@/components/AccountProfile'
 import { publishSpineState } from '@/lib/lineupSpine'
 import { SoldOutChip } from '@/components/SoldOutChip'
-import { TrendingStrip, computeTrendingTop } from '@/components/TrendingStrip'
-import { dbEventToWallEvent } from '@/lib/adapters'
-import { type WallEvent } from '@/types/event'
 
 // ── Spine tunable constants ────────────────────────────────────────────────
-const SPINE_MAX_H = 30   // px — max slice height; below this the line doesn't reach the bottom
-const SPINE_GAP   = 6    // px — must match gap: in the spine JSX
-const SPINE_RIGHT = 20   // px — right offset of the spine container
-const SPINE_WIDTH = 8    // px — width of the spine container
-// Kill switch — false removes the spine entirely (no layout ghost).
-const SHOW_POSTER_SPINE = false
+const SPINE_MAX_H = 30  // px — max slice height; below this the line doesn't reach the bottom
+const SPINE_GAP   = 6   // px — must match gap: in the spine JSX
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -20367,9 +20092,8 @@ export default function LineUpScreen() {
   const { blockedIds } = useUserBlocks()
   const { mutedIds } = useUserMutes()
   const navigate = useNavigate()
-  const [feed,           setFeed]           = useState<FeedItem[]>([])
-  const [feedState,      setFeedState]      = useState<'loading' | 'ready'>('loading')
-  const [trendingEvents, setTrendingEvents] = useState<WallEvent[]>([])
+  const [feed,       setFeed]       = useState<FeedItem[]>([])
+  const [feedState,  setFeedState]  = useState<'loading' | 'ready'>('loading')
   const [lineup,     setLineup]     = useState<LineupItem[]>([])
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
@@ -20593,20 +20317,6 @@ export default function LineUpScreen() {
 
   // Publish spine state (count + reachesBottom) for BottomNav YOU icon
   useEffect(() => {
-    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    supabase
-      .from('events')
-      .select('*, venues(name)')
-      .gt('trending_score', 0)
-      .gte('starts_at', cutoff)
-      .order('trending_score', { ascending: false })
-      .limit(20)
-      .then(({ data }) => {
-        if (data) setTrendingEvents((data as any[]).map(dbEventToWallEvent))
-      })
-  }, [])
-
-  useEffect(() => {
     const n = lineup.length
     if (n === 0) { publishSpineState(0, false); return }
     const el = spineContainerRef.current
@@ -20695,8 +20405,8 @@ export default function LineUpScreen() {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
         {/* Poster-slice spine — fixed track (top→bottom of feed area) */}
-        {SHOW_POSTER_SPINE && lineup.length > 0 && (
-          <div ref={spineContainerRef} style={{ position: 'absolute', right: SPINE_RIGHT, top: 0, bottom: 0, width: SPINE_WIDTH, zIndex: 5, display: 'flex', flexDirection: 'column' }}>
+        {lineup.length > 0 && (
+          <div ref={spineContainerRef} style={{ position: 'absolute', right: 20, top: 0, bottom: 0, width: 8, zIndex: 5, display: 'flex', flexDirection: 'column' }}>
 
             {/* Slices fill from top; maxHeight caps each slice so with few nights the line
                 doesn't reach the bottom. Once count grows enough to overflow maxHeight,
@@ -20722,21 +20432,6 @@ export default function LineUpScreen() {
 
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
-
-          {/* Trending in Portland */}
-          {computeTrendingTop(trendingEvents).length >= 3 && (
-            <div style={{ borderBottom: '1px solid var(--fg-08)', paddingBottom: 4 }}>
-              <div style={{ padding: '10px 14px 4px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-                Trending in Portland
-              </div>
-              <TrendingStrip
-                events={trendingEvents}
-                onOpenEvent={id => navigate('/', { state: { openEventId: id } })}
-                alwaysExpanded
-              />
-            </div>
-          )}
-
           {feedState === 'loading' && (
             <p style={{ margin: 0, padding: '40px 20px', textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
               Loading…
@@ -20759,7 +20454,7 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 14,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 46,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
                 }}
               >
@@ -22076,7 +21771,6 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
-import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -22138,7 +21832,6 @@ interface AppNotification {
     id: string
     title: string
     starts_at: string
-    poster_url: string | null
   } | null
 }
 
@@ -22191,7 +21884,6 @@ function notifCopy(notif: AppNotification) {
     case 'va_approved': return <>Your {notif.body_preview ?? 'account'} account has been approved 🎉</>
     case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
     case 'show_reminder': return <>Show today: {eventNode}</>
-    case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -22347,7 +22039,7 @@ export function MsgScreen() {
         id, sender_id, kind, target_event_id, target_post_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
-        event:events!target_event_id(id, title, starts_at, poster_url)
+        event:events!target_event_id(id, title, starts_at)
       `)
       .eq('recipient_id', user.id)
       .is('read_at', null)
@@ -22387,11 +22079,6 @@ export function MsgScreen() {
         return
       case 'warning':
       case 'message':
-        return
-      case 'venue_new_show':
-        if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
-          navigate('/', { state: { openEventId: notif.target_event_id } })
-        }
         return
       default:
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
@@ -22968,7 +22655,7 @@ export function MsgScreen() {
                     <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {notifCopy(notif)}
                     </p>
-                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
+                    {notif.body_preview && notif.kind !== 'follow' && (
                       <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         "{notif.body_preview}"
                       </p>
@@ -22984,14 +22671,6 @@ export function MsgScreen() {
                       </div>
                     )}
                   </div>
-                  {notif.kind === 'venue_new_show' && notif.event?.poster_url && (
-                    <img
-                      src={posterThumb(notif.event.poster_url, 120) ?? notif.event.poster_url}
-                      onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = notif.event!.poster_url! }}
-                      alt=""
-                      style={{ flexShrink: 0, width: 28, height: 42, borderRadius: 3, objectFit: 'cover', border: '1px solid var(--fg-08)' }}
-                    />
-                  )}
                   <button
                     onClick={e => { e.stopPropagation(); markNotificationRead(notif.id) }}
                     style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', padding: '4px 2px', fontSize: 16, lineHeight: 1 }}
@@ -26208,8 +25887,6 @@ export interface WallEvent {
   sold_out?: boolean
   sold_out_report_count?: number
   show_times?: string[] | null
-  trending_score: number
-  recurrence_group_id?: string | null
 }
 
 
@@ -26674,7 +26351,6 @@ export type Database = {
           reviewed_by: string | null
           reviewed_at: string | null
           title: string
-          trending_score: number
           venue_id: string | null
           view_count: number
         }
@@ -26711,7 +26387,6 @@ export type Database = {
           reviewed_by?: string | null
           reviewed_at?: string | null
           title: string
-          trending_score?: number
           venue_id?: string | null
           view_count?: number
         }
@@ -26748,7 +26423,6 @@ export type Database = {
           reviewed_by?: string | null
           reviewed_at?: string | null
           title?: string
-          trending_score?: number
           venue_id?: string | null
           view_count?: number
         }
@@ -34268,159 +33942,6 @@ language sql security definer set search_path = public stable as $$
   limit p_limit;
 $$;
 grant execute on function public.upload_history(int) to authenticated;
-
-
-=== supabase/migrations/073_hot_path_indexes.sql ===
-create index if not exists events_status_starts_at_idx on public.events (status, starts_at);
-create index if not exists events_starts_at_idx on public.events (starts_at);
-create index if not exists venues_neighborhood_idx on public.venues (neighborhood);
-
-
-=== supabase/migrations/074_trending_score.sql ===
--- ── Column + index ──────────────────────────────────────────────────────────
-alter table public.events add column if not exists trending_score numeric not null default 0;
-
-create index if not exists events_trending_idx
-  on public.events (trending_score desc) where status = 'published';
-
--- ── Refresh function ─────────────────────────────────────────────────────────
-create or replace function public.refresh_trending_scores()
-returns void
-language sql security definer set search_path = public as $$
-  -- Zero out past / non-published events first
-  update public.events
-  set trending_score = 0
-  where status <> 'published' or starts_at < now() - interval '6 hours';
-
-  -- Recompute scores for live published events
-  update public.events e
-  set trending_score = sub.score
-  from (
-    select e2.id,
-      ( coalesce(v.cnt, 0) * 1.0
-      + coalesce(l.cnt, 0) * 4.0
-      + coalesce(a.cnt, 0) * 10.0
-      ) as score
-    from public.events e2
-    left join (
-      select event_id, count(*) cnt
-      from public.event_views
-      where viewed_at > now() - interval '7 days'
-      group by 1
-    ) v on v.event_id = e2.id
-    left join (
-      select event_id, count(*) cnt
-      from public.event_likes
-      where created_at > now() - interval '7 days'
-      group by 1
-    ) l on l.event_id = e2.id
-    left join (
-      select event_id, count(*) cnt
-      from public.attendees
-      where created_at > now() - interval '7 days'
-      group by 1
-    ) a on a.event_id = e2.id
-    where e2.status = 'published'
-      and e2.starts_at >= now() - interval '6 hours'
-  ) sub
-  where sub.id = e.id;
-$$;
-
--- ── Schedule via pg_cron every 30 minutes ───────────────────────────────────
-create extension if not exists pg_cron;
-
-select cron.unschedule('trending-scores-refresh')
-where exists (select 1 from cron.job where jobname = 'trending-scores-refresh');
-
-select cron.schedule('trending-scores-refresh', '*/30 * * * *',
-  $$ select public.refresh_trending_scores(); $$);
-
--- ── Seed scores now ──────────────────────────────────────────────────────────
-select public.refresh_trending_scores();
-
-
-=== supabase/migrations/075_venue_new_show_notifications.sql ===
--- ── Extend notifications.kind CHECK ────────────────────────────────────────
-ALTER TABLE public.notifications
-  DROP CONSTRAINT IF EXISTS notifications_kind_check;
-
-ALTER TABLE public.notifications
-  ADD CONSTRAINT notifications_kind_check
-  CHECK (kind IN (
-    'mention',
-    'activity_like:rsvp',
-    'activity_like:wall_post',
-    'activity_like:venue_post',
-    'warning',
-    'follow',
-    'message',
-    'follow_accepted',
-    'reply',
-    'va_approved',
-    'va_declined',
-    'show_reminder',
-    'venue_new_show'
-  ));
-
--- ── Trigger function ─────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION public.notify_followers_on_publish()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_sender uuid;
-BEGIN
-  -- Only fire when status transitions TO published
-  IF NEW.status <> 'published' THEN RETURN NEW; END IF;
-  IF TG_OP = 'UPDATE' AND (OLD.status IS NOT DISTINCT FROM 'published') THEN RETURN NEW; END IF;
-  -- Skip events that already started
-  IF NEW.starts_at <= now() THEN RETURN NEW; END IF;
-
-  -- Recurring guard: only notify for the soonest future date in a series
-  IF NEW.recurrence_group_id IS NOT NULL THEN
-    IF EXISTS (
-      SELECT 1 FROM public.events
-      WHERE recurrence_group_id = NEW.recurrence_group_id
-        AND status = 'published'
-        AND starts_at < NEW.starts_at
-        AND id <> NEW.id
-    ) THEN
-      RETURN NEW;
-    END IF;
-  END IF;
-
-  -- Find the venue's account profile (not every venue has one yet)
-  SELECT vp.id INTO v_sender
-  FROM public.profiles vp
-  WHERE vp.venue_id = NEW.venue_id
-    AND vp.account_type = 'venue'
-  LIMIT 1;
-
-  IF v_sender IS NULL THEN RETURN NEW; END IF;
-
-  -- One notification per accepted follower of that venue account
-  INSERT INTO public.notifications (recipient_id, sender_id, kind, target_event_id, body_preview)
-  SELECT
-    f.follower_id,
-    v_sender,
-    'venue_new_show',
-    NEW.id,
-    left(NEW.title, 120)
-  FROM public.follows f
-  WHERE f.following_id = v_sender
-    AND f.status = 'accepted';
-
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS events_after_publish_notify ON public.events;
-CREATE TRIGGER events_after_publish_notify
-  AFTER INSERT OR UPDATE OF status ON public.events
-  FOR EACH ROW
-  EXECUTE FUNCTION public.notify_followers_on_publish();
 
 
 === supabase/RLS_POLICIES.md ===
