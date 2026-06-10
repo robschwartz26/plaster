@@ -15,8 +15,12 @@ import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 
 // ── Spine tunable constants ────────────────────────────────────────────────
-const SPINE_MAX_H = 30  // px — max slice height; below this the line doesn't reach the bottom
-const SPINE_GAP   = 6   // px — must match gap: in the spine JSX
+const SPINE_MAX_H = 30   // px — max slice height; below this the line doesn't reach the bottom
+const SPINE_GAP   = 6    // px — must match gap: in the spine JSX
+const SPINE_RIGHT = 20   // px — right offset of the spine container
+const SPINE_WIDTH = 8    // px — width of the spine container
+// Kill switch — false removes the spine entirely (no layout ghost). Leave true.
+const SHOW_POSTER_SPINE = true
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -527,8 +531,8 @@ export default function LineUpScreen() {
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
 
         {/* Poster-slice spine — fixed track (top→bottom of feed area) */}
-        {lineup.length > 0 && (
-          <div ref={spineContainerRef} style={{ position: 'absolute', right: 20, top: 0, bottom: 0, width: 8, zIndex: 5, display: 'flex', flexDirection: 'column' }}>
+        {SHOW_POSTER_SPINE && lineup.length > 0 && (
+          <div ref={spineContainerRef} style={{ position: 'absolute', right: SPINE_RIGHT, top: 0, bottom: 0, width: SPINE_WIDTH, zIndex: 5, display: 'flex', flexDirection: 'column' }}>
 
             {/* Slices fill from top; maxHeight caps each slice so with few nights the line
                 doesn't reach the bottom. Once count grows enough to overflow maxHeight,
@@ -555,16 +559,19 @@ export default function LineUpScreen() {
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
 
-          {/* Trending in Portland */}
+          {/* Trending in Portland — inset card, right margin clears the poster spine */}
           {computeTrendingTop(trendingEvents).length >= 3 && (
-            <div style={{ borderBottom: '1px solid var(--fg-08)', paddingBottom: 4 }}>
-              <div style={{ padding: '10px 14px 4px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-                Trending in Portland
-              </div>
+            <div style={{
+              paddingTop: 12, paddingBottom: 10,
+              paddingLeft: 14,
+              paddingRight: SPINE_RIGHT + SPINE_WIDTH + 8,  // 36px — clears spine left edge
+              borderBottom: '1px solid var(--fg-08)',
+            }}>
               <TrendingStrip
                 events={trendingEvents}
                 onOpenEvent={id => navigate('/', { state: { openEventId: id } })}
                 alwaysExpanded
+                edgeStyle="card"
               />
             </div>
           )}
