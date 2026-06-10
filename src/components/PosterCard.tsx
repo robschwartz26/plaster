@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useLayoutEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, type MutableRefObject } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -30,6 +30,10 @@ interface Props {
   onUndoCrop?: () => void
   onConfirmCrop?: () => void
   enableDesktopNav?: boolean
+  // Shared 1-col panel index, owned by the parent PosterGrid (one ref per grid
+  // instance). Persists which panel (poster/info/wall) the user is browsing as
+  // they scroll between cards. Scoped per-grid so separate walls never collide.
+  sharedPanelIdx?: MutableRefObject<number>
 }
 
 interface EventDetail {
@@ -161,11 +165,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-// Shared across all 1-col cards — persists the active panel index as users scroll.
-// PosterGrid resets this to 0 when leaving 1-col mode.
-export const sharedPanelIdx = { current: 0 }
-
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, sharedPanelIdx }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
@@ -187,14 +187,14 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
   const stripRef = useRef<HTMLDivElement>(null)
-  const panelIdxRef = useRef(0)
-  const [panelIdx, _setPanelIdx] = useState(0)
+  const panelIdxRef = useRef(sharedPanelIdx?.current ?? 0)
+  const [panelIdx, _setPanelIdx] = useState(() => sharedPanelIdx?.current ?? 0)
   const loopingRef = useRef(false)
 
   function setPanelIdx(i: number, shared = true) {
     panelIdxRef.current = i
     _setPanelIdx(i)
-    if (shared) sharedPanelIdx.current = i
+    if (shared && sharedPanelIdx) sharedPanelIdx.current = i
   }
 
   // ── Reset to Poster when card scrolls out of view ─────────────────────
@@ -212,7 +212,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // Lets users browse info→info or wall→wall as they scroll through 1-col.
   useLayoutEffect(() => {
     if (cols !== 1 || !isActive) return
-    const targetIdx = Math.min(2, Math.max(0, sharedPanelIdx.current)) as 0 | 1 | 2
+    const targetIdx = Math.min(2, Math.max(0, sharedPanelIdx?.current ?? 0)) as 0 | 1 | 2
     if (targetIdx === panelIdxRef.current) return
     const el = stripRef.current
     if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[targetIdx]}%)` }
@@ -222,7 +222,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── Trigger data fetch when activating on a non-poster panel ─────────
   useEffect(() => {
     if (cols !== 1 || !isActive) return
-    if (sharedPanelIdx.current > 0 && !detailFetched.current) fetchPanelData()
+    if ((sharedPanelIdx?.current ?? 0) > 0 && !detailFetched.current) fetchPanelData()
   }, [isActive, cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
@@ -622,7 +622,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             display: 'flex',
             width: '500%',
             height: '100%',
-            transform: 'translateX(-20%)',
+            // Resting position derived from panelIdx so a (re)rendered card paints
+            // on the correct panel in-commit (no effect-lag flash). Swipe drag and
+            // shiftPanel override this imperatively; React only re-applies the same
+            // endpoint value on the post-commit re-render, so the imperative
+            // transition is never interrupted.
+            transform: `translateX(${PANEL_PCT[panelIdx]}%)`,
             willChange: 'transform',
           }}
         >

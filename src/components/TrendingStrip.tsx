@@ -173,7 +173,7 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
     return <div style={{ marginBottom: 4 }}>{tileRow}</div>
   }
 
-  // ── Wall mode: ambient pill (grey + right-aligned when collapsed; purple when open) ──
+  // ── Wall mode: ambient pill (quiet grey "TRENDING", right-aligned; ▲ added when open) ──
   return (
     <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
       <button

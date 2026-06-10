@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
-import { PosterCard, sharedPanelIdx } from './PosterCard'
+import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
 import { eventLocalDate } from '@/lib/dates'
@@ -58,6 +58,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Shared 1-col panel index, owned by this grid instance. Persists which panel
+  // the user is browsing as they scroll between cards. Per-instance + reset on
+  // remount, so a second PosterGrid (e.g. StaffPreview) never collides with the wall.
+  const sharedPanelIdx = useRef(0)
   const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
@@ -361,6 +365,16 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     }
   }, [cols])
 
+  // Filtering now genuinely shrinks the event list (chips remove cards rather
+  // than fading them), so a stale scrollTop can land mid-wall or past the end.
+  // Reset to the top whenever the filter or search query changes. Skipped while
+  // deep-linking (openEventId) so it doesn't fight the scroll-to-target.
+  useEffect(() => {
+    if (openEventId) return
+    const el = containerRef.current
+    if (el) el.scrollTop = 0
+  }, [activeFilter, searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
   // activeEventIdx is synced here so DateIndicator has correct state before
@@ -454,6 +468,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                 onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
                 onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
                 enableDesktopNav={enableDesktopNav}
+                sharedPanelIdx={sharedPanelIdx}
               />
             )
           })
