@@ -24,13 +24,13 @@ export function Wall() {
   const [events, setEvents] = useState<WallEvent[]>([])
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
 
+  const [isAdminMode, setIsAdminMode] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+
   const visibleEvents = useMemo(
     () => events.filter(e => matchesFilter(e, activeFilter, likedIds.has(e.id)) && matchesSearch(e, searchQuery)),
     [events, activeFilter, likedIds, searchQuery],
   )
-
-  const [isAdminMode, setIsAdminMode] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
