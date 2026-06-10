@@ -912,6 +912,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         userSelect: 'none',
         background: '#000',
         viewTransitionName: transitionName,
+        // Skip rendering off-screen cards (multi-col only) so a tall wall stays
+        // cheap to scroll. The 2:3 intrinsic size reserves the right box so there's
+        // no layout shift; `auto` lets the browser remember each card's real size
+        // after its first paint.
+        contentVisibility: 'auto',
+        containIntrinsicSize: 'auto 80px auto 120px',
       } as React.CSSProperties}
     >
       {event.poster_url ? (
@@ -937,6 +943,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             src={posterThumb(event.poster_url, cols >= 4 ? 300 : 500) ?? event.poster_url}
             onError={e => { const img = e.currentTarget; img.onerror = null; img.src = event.poster_url! }}
             alt={event.title}
+            loading="lazy"
+            decoding="async"
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
