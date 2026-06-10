@@ -478,9 +478,9 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         ) : (
           // ── 2-5 col ───────────────────────────────────────────────
           <div style={gridStyle}>
-            {walledItems.map((item) => {
+            {walledItems.map((item, wi) => {
               if (item.type === 'date-poster') {
-                return <DatePoster key={`d-${item.date}`} date={item.date} />
+                return <DatePoster key={`d-${item.date}`} date={item.date} transitionName={`d-${item.date}`} />
               }
               const { event } = item
               return (
@@ -496,6 +496,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                   isAdminMode={isAdminMode}
                   onEventSaved={onEventSaved}
                   enableDesktopNav={enableDesktopNav}
+                  transitionName={wi < 40 ? `p-${event.id}` : undefined}
                 />
               )
             })}

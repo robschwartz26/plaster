@@ -36,6 +36,9 @@ interface Props {
   // reports a settled swipe via onPanelSettled; the grid lifts it to restingPanel.
   restingPanel?: 0 | 1 | 2
   onPanelSettled?: (panel: 0 | 1 | 2) => void
+  // viewTransitionName for the multi-col root, so a surviving poster glides to its
+  // new slot during a filter-change View Transition. Multi-col only; undefined in 1-col.
+  transitionName?: string
 }
 
 interface EventDetail {
@@ -167,7 +170,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
@@ -833,7 +836,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         cursor: 'pointer',
         userSelect: 'none',
         background: '#000',
-      }}
+        viewTransitionName: transitionName,
+      } as React.CSSProperties}
     >
       {event.poster_url ? (
         <>

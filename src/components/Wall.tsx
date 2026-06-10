@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
@@ -15,6 +16,18 @@ import { useAuth } from '@/contexts/AuthContext'
 
 const WALL_CACHE_KEY = 'wall-cache-v1'
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
+
+// Wrap a user-initiated filter/search change in a View Transition so surviving
+// posters glide to their new grid slots while removed ones fade. flushSync forces
+// React to commit synchronously inside the transition callback so the API captures
+// the new layout. Falls back to an instant update under reduced-motion or on
+// browsers without the API (older iOS Safari). Never wrap data refreshes.
+function withWallTransition(update: () => void) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const d = document as any
+  if (reduce || typeof d.startViewTransition !== 'function') { update(); return }
+  d.startViewTransition(() => { flushSync(update) })
+}
 
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
@@ -197,7 +210,7 @@ export function Wall() {
             type="text"
             autoFocus
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => { const v = e.target.value; withWallTransition(() => setSearchQuery(v)) }}
             placeholder="Search events, venues, categories…"
             style={{
               flex: 1,
@@ -213,7 +226,7 @@ export function Wall() {
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => withWallTransition(() => setSearchQuery(''))}
               style={{
                 background: 'none',
                 border: 'none',
@@ -230,7 +243,7 @@ export function Wall() {
         </div>
       )}
 
-      <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
+      <FilterBar active={activeFilter} onChange={(f) => withWallTransition(() => setActiveFilter(f))} activePosterCategory={activePosterCategory ?? undefined} />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 

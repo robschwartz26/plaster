@@ -2,12 +2,14 @@ import { useTheme } from '@/hooks/useTheme'
 
 interface Props {
   date: string // YYYY-MM-DD
+  // viewTransitionName for a filter-change View Transition (multi-col only).
+  transitionName?: string
 }
 
 const STYLES = ['split', 'stacked', 'hugenum', 'topbar', 'bottomweighted', 'framed'] as const
 type StyleName = typeof STYLES[number]
 
-export function DatePoster({ date }: Props) {
+export function DatePoster({ date, transitionName }: Props) {
   const { theme } = useTheme()
 
   const [yearStr, monthStr, dayStr] = date.split('-')
@@ -31,7 +33,7 @@ export function DatePoster({ date }: Props) {
   const BAR_BG = night ? '#f0ece3' : '#1a1a1a'
   const BAR_FG = night ? '#1a1a1a' : '#f0ece3'
 
-  const base: React.CSSProperties = {
+  const base = {
     aspectRatio: '2/3',
     background: BG,
     color: FG,
@@ -40,7 +42,8 @@ export function DatePoster({ date }: Props) {
     fontFamily: '"Barlow Condensed", sans-serif',
     userSelect: 'none',
     containerType: 'inline-size',
-  }
+    viewTransitionName: transitionName,
+  } as React.CSSProperties
 
   if (styleName === 'split') {
     return (

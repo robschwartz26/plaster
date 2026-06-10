@@ -122,3 +122,15 @@ html, body {
 [data-separator]:active .resize-handle-line {
   background: #A855F7 !important;
 }
+
+/* ── Wall filter View-Transition motion ─────────────────────── */
+/* Surviving posters (named per-card) glide to new slots; the root crossfade
+   handles removed/added cards. Tuned snappy so the reorg reads as one motion. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+::view-transition-group(*) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
