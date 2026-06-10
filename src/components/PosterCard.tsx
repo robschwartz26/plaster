@@ -12,6 +12,7 @@ import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
 import { posterThumb } from '@/lib/posterThumb'
+import { tearOn, TEAR_LOREM } from '@/lib/tearlab'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -222,7 +223,32 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   useEffect(() => {
     if (cols !== 1 || !isActive) return
     if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
+    // TEARLAB [C]: poke the scroller of the panel we activated directly onto.
+    if (restingPanel > 0 && tearOn('C')) requestAnimationFrame(() => pokeVisiblePanel())
   }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // TEARLAB [C]: poke the now-visible panel's inner scroller after a swipe settles
+  // (transform transitionend) — the classic iOS unpainted-scroller fix. Inert unless C.
+  useEffect(() => {
+    if (cols !== 1) return
+    const strip = stripRef.current
+    if (!strip) return
+    const onEnd = (e: TransitionEvent) => {
+      if (e.target === strip && e.propertyName === 'transform' && tearOn('C')) pokeVisiblePanel()
+    }
+    strip.addEventListener('transitionend', onEnd)
+    return () => strip.removeEventListener('transitionend', onEnd)
+  }, [cols])
+
+  // The currently-centered panel is strip child index (panelIdx + 1):
+  // [0:wall-clone, 1:poster, 2:info, 3:wall, 4:poster-clone].
+  function pokeVisiblePanel() {
+    const strip = stripRef.current
+    if (!strip) return
+    const panelEl = strip.children[panelIdxRef.current + 1] as HTMLElement | undefined
+    const scroller = panelEl?.querySelector('[data-scroller]') as HTMLElement | null
+    if (scroller) { scroller.scrollTop = 1; requestAnimationFrame(() => { scroller.scrollTop = 0 }) }
+  }
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
@@ -608,9 +634,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           height: '100%',
           background: 'var(--bg)',
           scrollSnapAlign: 'start',
-          opacity: dimmed ? 0.18 : 1,
-          filter: dimmed ? 'grayscale(0.5)' : 'none',
-          transition: 'opacity 0.25s ease, filter 0.25s ease',
+          // TEARLAB [D]: drop the opacity/filter/transition fade trio entirely.
+          ...(tearOn('D') ? {} : {
+            opacity: dimmed ? 0.18 : 1,
+            filter: dimmed ? 'grayscale(0.5)' : 'none',
+            transition: 'opacity 0.25s ease, filter 0.25s ease',
+          }),
           position: 'relative',
           overflow: 'hidden',
         }}
@@ -947,6 +976,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   }
 
   function renderInfo() {
+    // TEARLAB [A]: ignore fetched data — render fixed content to kill the fetch-timing theory.
+    const effDetail = tearOn('A') ? { description: TEAR_LOREM, address: '123 Test Ave, Portland OR' } : detail
+    const effAttendee = tearOn('A') ? 12 : attendeeCount
     return (
       <>
         <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)' }}>
@@ -967,7 +999,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 24px' }}>
+        <div data-scroller style={{ flex: 1, overflowY: tearOn('B') ? 'hidden' : 'auto', padding: '14px 16px 24px', transform: tearOn('E') ? 'translateZ(0)' : undefined }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0 }}>
               <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
@@ -977,29 +1009,29 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             </span>
           </div>
 
-          {detail ? (
+          {effDetail ? (
             <>
-              {detail.address && (
+              {effDetail.address && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 12 }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--fg-40)', flexShrink: 0, marginTop: 1 }}>
                     <path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
                   </svg>
-                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>{detail.address}</span>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.4 }}>{effDetail.address}</span>
                 </div>
               )}
 
-              {detail.description && (
+              {effDetail.description && (
                 <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
-                  {detail.description}
+                  {effDetail.description}
                 </p>
               )}
 
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
-              {attendeeCount > 0 && (
+              {effAttendee > 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 10px' }}>
                   <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
-                    <strong style={{ color: 'var(--fg-80)', fontWeight: 700 }}>{attendeeCount}</strong> {attendeeCount === 1 ? 'person' : 'people'} going
+                    <strong style={{ color: 'var(--fg-80)', fontWeight: 700 }}>{effAttendee}</strong> {effAttendee === 1 ? 'person' : 'people'} going
                   </p>
                   {event.trending_score >= 12 && (
                     <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#A855F7' }}>▲ Trending</span>
@@ -1066,7 +1098,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', letterSpacing: '0.04em' }}>swipe → to loop</span>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div data-scroller style={{ flex: 1, overflowY: 'auto', transform: tearOn('E') ? 'translateZ(0)' : undefined }}>
           {posts.length === 0 ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 120 }}>
               <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-25)' }}>No notes yet. Be the first.</p>

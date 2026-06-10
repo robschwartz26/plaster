@@ -7,6 +7,7 @@ import { PosterGrid } from './PosterGrid'
 import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
+import { TearLab } from './TearLab'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
 import { supabase } from '@/lib/supabase'
@@ -192,6 +193,7 @@ export function Wall() {
 
   return (
     <>
+    <TearLab />
     <div
       className="flex flex-col h-full overflow-hidden"
       style={{ background: 'var(--bg)' }}
