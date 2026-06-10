@@ -19,8 +19,8 @@ const SPINE_MAX_H = 30   // px — max slice height; below this the line doesn't
 const SPINE_GAP   = 6    // px — must match gap: in the spine JSX
 const SPINE_RIGHT = 20   // px — right offset of the spine container
 const SPINE_WIDTH = 8    // px — width of the spine container
-// Kill switch — false removes the spine entirely (no layout ghost). Leave true.
-const SHOW_POSTER_SPINE = true
+// Kill switch — false removes the spine entirely (no layout ghost).
+const SHOW_POSTER_SPINE = false
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -559,19 +559,16 @@ export default function LineUpScreen() {
         {/* Feed */}
         <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
 
-          {/* Trending in Portland — inset card, right margin clears the poster spine */}
+          {/* Trending in Portland */}
           {computeTrendingTop(trendingEvents).length >= 3 && (
-            <div style={{
-              paddingTop: 12, paddingBottom: 10,
-              paddingLeft: 14,
-              paddingRight: SPINE_RIGHT + SPINE_WIDTH + 8,  // 36px — clears spine left edge
-              borderBottom: '1px solid var(--fg-08)',
-            }}>
+            <div style={{ borderBottom: '1px solid var(--fg-08)', paddingBottom: 4 }}>
+              <div style={{ padding: '10px 14px 4px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+                Trending in Portland
+              </div>
               <TrendingStrip
                 events={trendingEvents}
                 onOpenEvent={id => navigate('/', { state: { openEventId: id } })}
                 alwaysExpanded
-                edgeStyle="card"
               />
             </div>
           )}
@@ -598,7 +595,7 @@ export default function LineUpScreen() {
               <div
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  paddingTop: 9, paddingBottom: 9, paddingRight: 46,
+                  paddingTop: 9, paddingBottom: 9, paddingRight: 14,
                   paddingLeft: item.actor.type === 'venue' ? 14 : 28,
                 }}
               >

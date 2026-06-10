@@ -173,13 +173,15 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
     return <div style={{ marginBottom: 4 }}>{tileRow}</div>
   }
 
-  // ── Wall mode: quiet pill + animated collapse ─────────────────────────────
+  // ── Wall mode: ambient pill (grey + right-aligned when collapsed; purple when open) ──
   return (
     <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
+      {/* Collapsed: small grey "▲ TRENDING" tucked right, no chevron.
+          Expanded: purple label + upward chevron — slightly more present. */}
       <button
         onClick={toggle}
         style={{
-          display: 'flex', alignItems: 'center', gap: 6,
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4,
           padding: '5px 12px', background: 'none', border: 'none',
           cursor: 'pointer', width: '100%',
         }}
@@ -187,21 +189,19 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
         <span style={{
           fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-          color: '#A855F7',
+          color: open ? '#A855F7' : 'var(--fg-40)',
         }}>
           ▲ Trending
         </span>
-        <svg
-          width="12" height="12" viewBox="0 0 24 24" fill="none"
-          stroke="var(--fg-40)" strokeWidth="2.5" strokeLinecap="round"
-          style={{
-            marginLeft: 2, flexShrink: 0,
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            transition: 'transform 0.2s ease',
-          }}
-        >
-          <path d="M6 9l6 6 6-6" />
-        </svg>
+        {open && (
+          <svg
+            width="12" height="12" viewBox="0 0 24 24" fill="none"
+            stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round"
+            style={{ flexShrink: 0, transform: 'rotate(180deg)' }}
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        )}
       </button>
 
       <div style={{
