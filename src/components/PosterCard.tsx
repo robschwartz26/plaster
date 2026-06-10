@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -246,20 +246,18 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // Clear the strip-animation settle timer on unmount.
   useEffect(() => () => { if (animEndTimerRef.current) clearTimeout(animEndTimerRef.current) }, [])
 
-  // ── Active-card GPU promotion (iOS tearing fix) ───────────────────────
-  // Promote ONLY the active card's strip to its own layer the whole time it's the
-  // active 1-col card — so it's rasterized fresh BEFORE any swipe and the swipe
-  // composites from a clean raster (kills the residual one-frame tear that remained
-  // when promotion happened at gesture start). Demote on deactivate: scrolling to the
-  // next card re-rasterizes this one, preserving the parked-card cleanup. Exactly one
-  // promoted strip on screen at a time — never the ~200 permanent layers that
-  // exhausted WKWebView tile memory.
-  useEffect(() => {
+  // ── Force fresh raster of the active card's panels (iOS tearing fix) ──────
+  // Each panel of the active card is its own GPU layer (translateZ(0) in the panel
+  // wrappers below), so panels rasterize independently of the strip's translation —
+  // no half-painted off-screen region sliding into view. When a card becomes active
+  // (incl. arriving directly onto info/wall via restingPanel), read offsetHeight to
+  // flush layout so WebKit rasterizes those just-promoted panel layers BEFORE paint —
+  // mirroring the loop seam's transition:none teleport, which is exactly why the
+  // poster→wall→info route never tore while the direct poster→info route did.
+  useLayoutEffect(() => {
     if (cols !== 1 || !isActive) return
-    const el = stripRef.current
-    if (el) el.style.willChange = 'transform'
-    return () => { if (el) el.style.willChange = '' }
-  }, [cols, isActive])
+    void stripRef.current?.offsetHeight
+  }, [cols, isActive, restingPanel])
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
@@ -303,6 +301,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       const queued = pendingCommitsRef.current
       pendingCommitsRef.current = []
       queued.forEach(commit => commit())
+      // Nudge a fresh raster now that deferred content has landed in the panels.
+      void stripRef.current?.offsetHeight
     }, durationMs)
   }
 
@@ -698,22 +698,22 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             // still drive the active strip imperatively; React only re-applies the
             // same endpoint on the post-commit re-render.
             //
-            // NO willChange here on purpose: a permanent willChange:'transform' on
-            // every card's 500%-wide strip promotes ~200 giant GPU layers and
-            // exhausts WKWebView tile memory → stale-tile tearing on text panels.
-            // Instead the ACTIVE card's strip is promoted via an effect while it's
-            // active (one fresh layer, rasterized before any swipe) and demoted when
-            // it deactivates, which re-rasterizes the parked card cleanly.
+            // NO strip-level promotion here on purpose: promoting the whole 500%
+            // strip as ONE layer is what let off-screen panel regions go stale (→
+            // tearing as the swipe slid a half-painted region into view). Instead each
+            // PANEL wrapper below promotes itself (translateZ(0)) only on the active
+            // card, so panels rasterize as independent in-view layers. Inactive cards
+            // stay unpromoted and re-raster when the promotion flips on at activation.
             transform: `translateX(${PANEL_PCT[isActive ? panelIdx : restingPanel]}%)`,
           }}
         >
           {/* Panel 0: PostWallClone */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
             {renderPostWall()}
           </div>
 
           {/* Panel 1: Poster */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
             {renderPosterContent()}
             {panelIdx === 0 && (
               <div style={{ position: 'absolute', bottom: 'max(18px, env(safe-area-inset-bottom))', left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 10, pointerEvents: 'none' }}>
@@ -744,17 +744,17 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
           </div>
 
           {/* Panel 2: Info */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
             {renderInfo()}
           </div>
 
           {/* Panel 3: PostWall */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
             {renderPostWall()}
           </div>
 
           {/* Panel 4: PosterClone */}
-          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)' }}>
+          <div style={{ width: '20%', flexShrink: 0, height: '100%', position: 'relative', background: 'var(--bg)', transform: cols === 1 && isActive ? 'translateZ(0)' : undefined }}>
             {renderPosterContent()}
           </div>
         </div>
