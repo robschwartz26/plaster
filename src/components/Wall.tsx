@@ -17,11 +17,13 @@ import { useAuth } from '@/contexts/AuthContext'
 const WALL_CACHE_KEY = 'wall-cache-v2'
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
 
-// Wrap a user-initiated filter/search change in a View Transition so surviving
-// posters glide to their new grid slots while removed ones fade. flushSync forces
-// React to commit synchronously inside the transition callback so the API captures
-// the new layout. Falls back to an instant update under reduced-motion or on
-// browsers without the API (older iOS Safari). Never wrap data refreshes.
+// Wrap a filter-chip change in a View Transition so surviving posters glide to
+// their new grid slots while removed ones fade. flushSync forces React to commit
+// synchronously inside the transition callback so the API captures the new layout.
+// Falls back to an instant update under reduced-motion or on browsers without the
+// API (older iOS Safari). Search is deliberately NOT animated — it fires per
+// keystroke, so animating it would make the wall churn mid-word. Never wrap data
+// refreshes.
 function withWallTransition(update: () => void) {
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const d = document as any
@@ -213,7 +215,7 @@ export function Wall() {
             type="text"
             autoFocus
             value={searchQuery}
-            onChange={e => { const v = e.target.value; withWallTransition(() => setSearchQuery(v)) }}
+            onChange={e => setSearchQuery(e.target.value)}
             placeholder="Search events, venues, categories…"
             style={{
               flex: 1,
@@ -229,7 +231,7 @@ export function Wall() {
           />
           {searchQuery && (
             <button
-              onClick={() => withWallTransition(() => setSearchQuery(''))}
+              onClick={() => setSearchQuery('')}
               style={{
                 background: 'none',
                 border: 'none',
