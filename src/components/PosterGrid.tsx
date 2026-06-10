@@ -44,13 +44,14 @@ interface Props {
   openEventId?: string | null
   onOpenEventHandled?: () => void
   enableDesktopNav?: boolean
+  onNearEnd?: () => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav }: Props) {
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
@@ -65,6 +66,11 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   // and a remount resets to poster automatically.
   const [restingPanel, setRestingPanel] = useState<0 | 1 | 2>(0)
   const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Near-end infinite-load trigger — kept in refs so the stable scroll handler reads
+  // them fresh without re-registering. Cooldown throttles onNearEnd to ~2/sec.
+  const onNearEndRef = useRef(onNearEnd)
+  onNearEndRef.current = onNearEnd
+  const nearEndCooldownRef = useRef(0)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
   const pinchRef = useRef<{
@@ -312,6 +318,16 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
     scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
+
+    // Near the bottom (within 3 viewports) → request the next window, throttled.
+    const { scrollTop, clientHeight, scrollHeight } = container
+    if (scrollTop + clientHeight > scrollHeight - 3 * clientHeight) {
+      const now = Date.now()
+      if (now - nearEndCooldownRef.current > 500) {
+        nearEndCooldownRef.current = now
+        onNearEndRef.current?.()
+      }
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync activeDay on mount and when layout/events change ─────────

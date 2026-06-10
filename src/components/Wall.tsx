@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
@@ -16,6 +16,11 @@ import { useAuth } from '@/contexts/AuthContext'
 
 const WALL_CACHE_KEY = 'wall-cache-v2'
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
+const WALL_PAGE = 300 // events per fetch window (initial + each load-more page)
+// Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering
+// (description and other long-text excluded; the 1-col info panel lazy-fetches
+// detail). Shared verbatim by the initial fetch and loadMore.
+const EVENT_SELECT = 'id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, venues(name)'
 
 // Wrap a filter-chip change in a View Transition so surviving posters glide to
 // their new grid slots while removed ones fade. flushSync forces React to commit
@@ -56,27 +61,61 @@ export function Wall() {
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
 
+  // Windowed infinite loading: cursor = last loaded row's starts_at; pages append.
+  const cursorRef = useRef<string | null>(null)
+  const hasMoreRef = useRef(true)
+  const isLoadingMoreRef = useRef(false)
+
   const fetchEvents = useCallback(async () => {
     // Show events from up to 6 hours ago so late-night shows
     // that started before midnight don't vanish off the wall.
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
 
-    // Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering.
-    // Excludes description and other long-text fields (the 1-col info panel
-    // lazy-fetches those), keeping the payload small enough to raise the limit.
     const { data } = await supabase
       .from('events')
-      .select('id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, venues(name)')
+      .select(EVENT_SELECT)
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
-      .limit(500)
+      .limit(WALL_PAGE)
 
-    const realEvents = (data ?? []).map(dbEventToWallEvent)
-    setEvents(realEvents)
+    const batch = data ?? []
+    setEvents(batch.map(dbEventToWallEvent))
+    cursorRef.current = batch.length ? batch[batch.length - 1].starts_at : null
+    hasMoreRef.current = batch.length === WALL_PAGE
 
     try {
-      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: data ?? [] }))
+      // Cache only the first window — appended pages are session-only.
+      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: batch.slice(0, WALL_PAGE) }))
     } catch { /* quota failure must never break the wall */ }
+  }, [])
+
+  // Append the next window when the grid nears the bottom. Guarded against
+  // double-fires and a no-op once the DB is exhausted; dedupes by id on append.
+  const loadMore = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMoreRef.current || cursorRef.current == null) return
+    isLoadingMoreRef.current = true
+    try {
+      const { data } = await supabase
+        .from('events')
+        .select(EVENT_SELECT)
+        .gt('starts_at', cursorRef.current)
+        .order('starts_at', { ascending: true })
+        .limit(WALL_PAGE)
+
+      const batch = data ?? []
+      if (batch.length) {
+        const mapped = batch.map(dbEventToWallEvent)
+        setEvents(prev => {
+          const seen = new Set(prev.map(e => e.id))
+          const fresh = mapped.filter(e => !seen.has(e.id))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
+        cursorRef.current = batch[batch.length - 1].starts_at
+      }
+      hasMoreRef.current = batch.length === WALL_PAGE
+    } finally {
+      isLoadingMoreRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -286,6 +325,7 @@ export function Wall() {
         prevUrlMap={prevUrlMap}
         onUndoCrop={handleUndoCrop}
         onConfirmCrop={handleConfirmCrop}
+        onNearEnd={loadMore}
       />
       )}
 
