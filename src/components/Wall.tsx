@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
@@ -7,6 +7,7 @@ import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
+import { matchesFilter, matchesSearch } from './PosterCard'
 import { supabase, type DbEvent } from '@/lib/supabase'
 import { dbEventToWallEvent } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
@@ -22,6 +23,11 @@ export function Wall() {
   const [_activeDay, setActiveDay] = useState(today)
   const [events, setEvents] = useState<WallEvent[]>([])
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
+
+  const visibleEvents = useMemo(
+    () => events.filter(e => matchesFilter(e, activeFilter, likedIds.has(e.id)) && matchesSearch(e, searchQuery)),
+    [events, activeFilter, likedIds, searchQuery],
+  )
 
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -80,6 +86,14 @@ export function Wall() {
         setLikedIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)))
       })
   }, [user?.id])
+
+  // When deep-linking to an event (TrendingStrip tap, location.state), reset filters
+  // so the target event is always visible in the filtered grid.
+  useEffect(() => {
+    if (!openEventId) return
+    setActiveFilter('All')
+    setSearchQuery('')
+  }, [openEventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLike(eventId: string) {
     if (!user) return
@@ -220,8 +234,15 @@ export function Wall() {
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 
+      {visibleEvents.length === 0 && events.length > 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-30)' }}>
+            Nothing on the wall for this yet
+          </p>
+        </div>
+      ) : (
       <PosterGrid
-        events={events}
+        events={visibleEvents}
         activeFilter={activeFilter}
         searchQuery={searchQuery}
         today={today}
@@ -248,6 +269,7 @@ export function Wall() {
         onUndoCrop={handleUndoCrop}
         onConfirmCrop={handleConfirmCrop}
       />
+      )}
 
     </div>
     <PreferencesPanel open={prefsOpen} onClose={() => setPrefsOpen(false)} context="wall" />

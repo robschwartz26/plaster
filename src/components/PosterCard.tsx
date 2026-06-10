@@ -74,13 +74,13 @@ function groupPostsWithReplies(flatPosts: WallPost[]): (WallPost & { replies: Wa
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
+export function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
   if (filter === 'All') return true
   if (filter === '♥') return isLiked
   return event.category === filter
 }
 
-function matchesSearch(event: WallEvent, query: string): boolean {
+export function matchesSearch(event: WallEvent, query: string): boolean {
   if (!query.trim()) return true
   const q = query.toLowerCase()
   return (
