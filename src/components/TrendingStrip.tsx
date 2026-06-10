@@ -176,8 +176,6 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
   // ── Wall mode: ambient pill (grey + right-aligned when collapsed; purple when open) ──
   return (
     <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
-      {/* Collapsed: small grey "▲ TRENDING" tucked right, no chevron.
-          Expanded: purple label + upward chevron — slightly more present. */}
       <button
         onClick={toggle}
         style={{
@@ -189,19 +187,10 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
         <span style={{
           fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-          color: open ? '#A855F7' : 'var(--fg-40)',
+          color: 'var(--fg-40)',
         }}>
-          ▲ Trending
+          {open ? '▲ ' : ''}TRENDING
         </span>
-        {open && (
-          <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round"
-            style={{ flexShrink: 0, transform: 'rotate(180deg)' }}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        )}
       </button>
 
       <div style={{
