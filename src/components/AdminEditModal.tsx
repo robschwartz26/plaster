@@ -298,8 +298,11 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving('delete'); setSaveError('')
     try {
-      const { error } = await supabase.from('events').delete().eq('id', event.id)
+      // .select('id') makes RLS-blocked deletes detectable — without it a blocked
+      // delete returns success-with-0-rows and the modal closes as if it worked.
+      const { data, error } = await supabase.from('events').delete().eq('id', event.id).select('id')
       if (error) throw error
+      if (!data || data.length === 0) throw new Error('Delete blocked — 0 rows affected (RLS). Are you admin?')
       onSaved()
     } catch (e) {
       setSaveError(String(e))
