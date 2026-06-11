@@ -13,6 +13,17 @@ interface UploadRow {
   venue_name: string | null
   neighborhood: string | null
   uploader: string | null
+  rejection_reason: string | null
+  rejection_note: string | null
+}
+
+// Neutral, lowercase reason labels — no admin name, just the house-standard signal.
+const REASON_LABELS: Record<string, string> = {
+  duplicate: 'duplicate',
+  wrong_date: 'wrong date',
+  bad_image: 'bad image',
+  not_an_event: 'not an event',
+  other: 'other',
 }
 
 type ColKey = 'title' | 'venue' | 'neighborhood' | 'type' | 'uploader' | 'date'
@@ -118,6 +129,7 @@ export function UploadHistory() {
   const [sort, setSort] = useState<SortState>({ col: 'date', dir: 'desc' })
   const [view, setView] = useState<ViewMode>('list')
   const [colorOn, setColorOn] = useState(loadColorOn)
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.rpc('upload_history', { p_limit: 200 }).then(({ data }) => {
@@ -279,6 +291,11 @@ export function UploadHistory() {
                 <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'var(--fg-40)', lineHeight: 1.2 }}>
                   {fmtShort(row.created_at)}
                 </div>
+                {row.status === 'rejected' && row.rejection_reason && (
+                  <div title={row.rejection_note ?? undefined} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600, color: '#8a9bb0', lineHeight: 1.2, cursor: row.rejection_note ? 'help' : 'default' }}>
+                    rejected · {REASON_LABELS[row.rejection_reason] ?? row.rejection_reason}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -386,10 +403,32 @@ export function UploadHistory() {
                 {fmtShort(row.created_at)}
               </div>
 
-              {/* Status */}
-              <div style={{ ...dataCell(), justifyContent: 'center' }}>
+              {/* Status + rejection reason chip (note on tap/hover) */}
+              <div style={{ ...dataCell(), justifyContent: 'center', flexDirection: 'column', gap: 2, overflow: 'visible' }}>
                 <StatusPill status={row.status} />
+                {row.status === 'rejected' && row.rejection_reason && (
+                  <button
+                    onClick={() => row.rejection_note && setExpandedNoteId(prev => prev === row.id ? null : row.id)}
+                    title={row.rejection_note ?? undefined}
+                    style={{
+                      background: 'none', border: 'none', padding: 0,
+                      fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600,
+                      color: '#8a9bb0', lineHeight: 1.2, textAlign: 'center',
+                      cursor: row.rejection_note ? 'pointer' : 'default',
+                      textDecoration: row.rejection_note ? 'underline dotted' : 'none',
+                    }}
+                  >
+                    {REASON_LABELS[row.rejection_reason] ?? row.rejection_reason}
+                  </button>
+                )}
               </div>
+
+              {/* Full-width rejection note — revealed on tap of the reason chip */}
+              {expandedNoteId === row.id && row.rejection_note && (
+                <div style={{ gridColumn: '1 / -1', padding: '6px 12px 8px 52px', borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', fontStyle: 'italic' }}>
+                  rejected · {REASON_LABELS[row.rejection_reason ?? ''] ?? row.rejection_reason} — {row.rejection_note}
+                </div>
+              )}
             </React.Fragment>
           ))}
         </div>

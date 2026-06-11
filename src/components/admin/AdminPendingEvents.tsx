@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -48,6 +48,74 @@ function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// ── Structured rejection reasons ─────────────────────────────
+type RejectionReason = 'duplicate' | 'wrong_date' | 'bad_image' | 'not_an_event' | 'other'
+
+const QUICK_REASONS: { value: Exclude<RejectionReason, 'other'>; label: string }[] = [
+  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'wrong_date', label: 'Wrong date' },
+  { value: 'bad_image', label: 'Bad image' },
+  { value: 'not_an_event', label: 'Not an event' },
+]
+
+const reasonChip: CSSProperties = {
+  padding: '4px 9px', borderRadius: 5, flexShrink: 0,
+  border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)',
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+}
+
+// Inline reason picker — the four quick reasons reject in one tap; "Other" reveals
+// an optional short note then a confirm. Shared by per-row reject and Reject all.
+function ReasonPicker({ onPick, onCancel, busy }: {
+  onPick: (reason: RejectionReason, note: string | null) => void
+  onCancel: () => void
+  busy: boolean
+}) {
+  const [otherOpen, setOtherOpen] = useState(false)
+  const [note, setNote] = useState('')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', border: '1px solid var(--fg-15)', borderRadius: 8, background: 'var(--fg-08)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+          Reason for rejection
+        </span>
+        <button onClick={onCancel} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>
+          Cancel
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {QUICK_REASONS.map(r => (
+          <button key={r.value} disabled={busy} onClick={() => onPick(r.value, null)} style={reasonChip}>
+            {r.label}
+          </button>
+        ))}
+        <button
+          disabled={busy}
+          onClick={() => setOtherOpen(o => !o)}
+          style={{ ...reasonChip, ...(otherOpen ? { borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)', color: '#A855F7' } : null) }}
+        >
+          Other
+        </button>
+      </div>
+      {otherOpen && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            autoFocus
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onPick('other', note.trim() || null) }}
+            placeholder="Short note (optional)"
+            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--fg-15)', background: 'var(--bg)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, outline: 'none' }}
+          />
+          <button disabled={busy} onClick={() => onPick('other', note.trim() || null)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: busy ? 'wait' : 'pointer', flexShrink: 0 }}>
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const { user } = useAuth()
   const [rows, setRows] = useState<PendingEvent[]>([])
@@ -55,6 +123,8 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyGroup, setBusyGroup] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectAllOpen, setRejectAllOpen] = useState(false)
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -90,15 +160,18 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
-  async function reject(id: string) {
+  async function reject(id: string, reason: RejectionReason, note: string | null) {
     if (!user) return
     setBusyId(id)
     const { error } = await supabase.from('events').update({
       status: 'rejected',
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
+      rejection_reason: reason,
+      rejection_note: note,
     }).eq('id', id)
     setBusyId(null)
+    setRejectingId(null)
     if (error) console.error('[AdminPendingEvents] reject failed', error)
     fetchPending()
   }
@@ -127,17 +200,17 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
-  async function rejectAll() {
+  async function rejectAll(reason: RejectionReason, note: string | null) {
     if (!user || rows.length === 0) return
-    if (!window.confirm(`Reject all ${rows.length} pending events? They never appeared publicly.`)) return
     setBusyGroup('*')
     const now = new Date().toISOString()
-    // Batched: one update over every listed pending event
+    // Batched: one update over every listed pending event, with the shared reason
     const { error } = await supabase.from('events')
-      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now })
+      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now, rejection_reason: reason, rejection_note: note })
       .in('id', rows.map(e => e.id))
     if (error) console.error('[AdminPendingEvents] reject all failed', error)
     setBusyGroup(null)
+    setRejectAllOpen(false)
     fetchPending()
   }
 
@@ -149,7 +222,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     setBusyGroup(key)
     const now = new Date().toISOString()
     await Promise.all(dupes.map(e =>
-      supabase.from('events').update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now }).eq('id', e.id)
+      supabase.from('events').update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now, rejection_reason: 'duplicate', rejection_note: null }).eq('id', e.id)
     ))
     setBusyGroup(null)
     fetchPending()
@@ -205,15 +278,22 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-        {statsStrip}
-        <button
-          onClick={rejectAll}
-          disabled={busyGroup === '*'}
-          style={{ padding: '5px 10px', background: 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1, flexShrink: 0 }}
-        >
-          {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
-        </button>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+          {statsStrip}
+          <button
+            onClick={() => setRejectAllOpen(o => !o)}
+            disabled={busyGroup === '*'}
+            style={{ padding: '5px 10px', background: rejectAllOpen ? 'rgba(239,68,68,0.1)' : 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1, flexShrink: 0 }}
+          >
+            {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
+          </button>
+        </div>
+        {rejectAllOpen && (
+          <div style={{ marginTop: 10 }}>
+            <ReasonPicker busy={busyGroup === '*'} onCancel={() => setRejectAllOpen(false)} onPick={(reason, note) => rejectAll(reason, note)} />
+          </div>
+        )}
       </div>
       {groupOrder.map(key => {
         const group = groupMap[key]
@@ -320,9 +400,9 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         {busyId === e.id ? '…' : 'Approve'}
                       </button>
                       <button
-                        onClick={() => reject(e.id)}
+                        onClick={() => setRejectingId(prev => prev === e.id ? null : e.id)}
                         disabled={isBusy}
-                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: rejectingId === e.id ? 'var(--fg-08)' : 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
                       >
                         Reject
                       </button>
@@ -336,6 +416,13 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         </button>
                       )}
                     </div>
+                    {rejectingId === e.id && (
+                      <ReasonPicker
+                        busy={busyId === e.id}
+                        onCancel={() => setRejectingId(null)}
+                        onPick={(reason, note) => reject(e.id, reason, note)}
+                      />
+                    )}
                   </div>
                 )
               })}
