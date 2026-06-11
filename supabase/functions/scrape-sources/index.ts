@@ -100,7 +100,7 @@ interface SourceResult {
 class PageFetcher {
   remaining = PAGE_FETCH_BUDGET
   notes: string[] = []
-  async get(url: string): Promise<{ status: number; text: string } | null> {
+  async get(url: string): Promise<{ status: number; text: string; contentType: string } | null> {
     if (this.remaining <= 0) { this.notes.push(`budget exhausted, skipped ${url}`); return null }
     this.remaining--
     const attempt = async (ua: string) => {
@@ -110,8 +110,8 @@ class PageFetcher {
           signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
           redirect: 'follow',
         })
-        return { status: res.status, text: await res.text().catch(() => '') }
-      } catch { return { status: 0, text: '' } }
+        return { status: res.status, text: await res.text().catch(() => ''), contentType: res.headers.get('content-type') ?? '' }
+      } catch { return { status: 0, text: '', contentType: '' } }
     }
     const first = await attempt(BOT_UA)
     if (first.status !== 0 && first.status !== 403 && first.status !== 404) return first
@@ -329,7 +329,8 @@ function ogMeta(html: string, property: string): string | null {
 }
 
 // AI text fallback. Returns [] when the page genuinely has no events — never invents.
-async function aiExtractEvents(pageText: string, pageUrl: string, now: number, maxOut: number): Promise<ScrapedEvent[]> {
+// jsonFeed=true marks the input as a raw JSON calendar feed rather than page text.
+async function aiExtractEvents(pageText: string, pageUrl: string, now: number, maxOut: number, jsonFeed = false): Promise<ScrapedEvent[]> {
   const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
 
@@ -345,7 +346,7 @@ async function aiExtractEvents(pageText: string, pageUrl: string, now: number, m
       max_tokens: 2048,
       messages: [{
         role: 'user',
-        content: `Today is ${portlandToday()} in Portland, Oregon. The following is the readable text of an events web page (${pageUrl}). Extract every distinct UPCOMING event as a JSON array — respond with ONLY the JSON array, no markdown fences, no commentary:
+        content: `Today is ${portlandToday()} in Portland, Oregon. The following is the readable text of an events web page (${pageUrl}). ${jsonFeed ? "The input is a JSON feed from a venue's calendar system — extract the events from it. " : ''}Extract every distinct UPCOMING event as a JSON array — respond with ONLY the JSON array, no markdown fences, no commentary:
 
 [{"title": string, "date": "YYYY-MM-DD", "time": "HH:mm" | null, "venue_name": string | null, "description": string | null, "image_url": string | null}]
 
@@ -668,35 +669,52 @@ serve(async (req) => {
 
       let sourcePage = adhocUrl
       let html = page.text
-      let { events: scraped, method } = await extractFromPage(fetcher, adhocUrl, html, now, maxOut)
+      let scraped: ScrapedEvent[] = []
+      let method = 'none'
+      let confidence = CONFIDENCE_STRUCTURED
 
-      // One-hop link hunt when the page itself yields nothing structured.
-      if (scraped.length === 0) {
-        const hunted = huntEventsLink(html, adhocUrl)
-        if (hunted) {
-          const huntedPage = await fetcher.get(hunted)
-          if (huntedPage && huntedPage.status === 200) {
-            const result = await extractFromPage(fetcher, hunted, huntedPage.text, now, maxOut)
-            if (result.events.length > 0) {
-              scraped = result.events
-              method = `${result.method} (hunted)`
-              sourcePage = hunted
-              html = huntedPage.text
-            } else {
-              // keep the hunted page as the AI target — it's the events page
-              sourcePage = hunted
-              html = huntedPage.text
+      // Raw-JSON feed (e.g. a WP Tribe endpoint pasted directly): skip the HTML
+      // paths and hand the pretty-printed JSON to the AI extractor.
+      let jsonFeed: string | null = null
+      const bodyTrim = page.text.trim()
+      if (page.contentType.includes('application/json') || bodyTrim.startsWith('{') || bodyTrim.startsWith('[')) {
+        try { jsonFeed = JSON.stringify(JSON.parse(bodyTrim), null, 2) } catch { /* not JSON — HTML paths below */ }
+      }
+
+      if (jsonFeed) {
+        scraped = await aiExtractEvents(jsonFeed.slice(0, AI_TEXT_CAP), adhocUrl, now, maxOut, true)
+        method = 'json-feed'
+        confidence = CONFIDENCE_AI
+      } else {
+        ;({ events: scraped, method } = await extractFromPage(fetcher, adhocUrl, html, now, maxOut))
+
+        // One-hop link hunt when the page itself yields nothing structured.
+        if (scraped.length === 0) {
+          const hunted = huntEventsLink(html, adhocUrl)
+          if (hunted) {
+            const huntedPage = await fetcher.get(hunted)
+            if (huntedPage && huntedPage.status === 200) {
+              const result = await extractFromPage(fetcher, hunted, huntedPage.text, now, maxOut)
+              if (result.events.length > 0) {
+                scraped = result.events
+                method = `${result.method} (hunted)`
+                sourcePage = hunted
+                html = huntedPage.text
+              } else {
+                // keep the hunted page as the AI target — it's the events page
+                sourcePage = hunted
+                html = huntedPage.text
+              }
             }
           }
         }
-      }
 
-      // AI text fallback — only after structured paths come up empty.
-      let confidence = CONFIDENCE_STRUCTURED
-      if (scraped.length === 0) {
-        scraped = await aiExtractEvents(htmlToText(html), sourcePage, now, maxOut)
-        confidence = CONFIDENCE_AI
-        method = sourcePage === adhocUrl ? 'ai' : 'ai (hunted)'
+        // AI text fallback — only after structured paths come up empty.
+        if (scraped.length === 0) {
+          scraped = await aiExtractEvents(htmlToText(html), sourcePage, now, maxOut)
+          confidence = CONFIDENCE_AI
+          method = sourcePage === adhocUrl ? 'ai' : 'ai (hunted)'
+        }
       }
 
       scraped = scraped.slice(0, MAX_ADHOC_EVENTS)
