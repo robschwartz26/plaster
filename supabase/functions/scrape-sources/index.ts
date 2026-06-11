@@ -361,6 +361,43 @@ Rules:
   return mapped
 }
 
+// Rewrite a scraped description into Plaster's own voice — applied to EVERY
+// description the pipeline ingests (JSON-LD, endpoint probes, AI fallback output),
+// at the pre-insert point. Hardcoded cheap tier (NOT EXTRACT_MODEL). Empty or
+// failed rewrite → null (the info panel handles null) — never the verbatim source.
+const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
+
+async function rewriteDescription(sourceText: string | null, eventTitle: string, venueName: string): Promise<string | null> {
+  if (!sourceText || !sourceText.trim()) return null // no source prose → no call, store null
+  const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!ANTHROPIC_KEY) return null
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: REWRITE_MODEL,
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `Rewrite this event description in 1–3 sentences for a Portland events app with a warm, plainspoken, slightly playful voice. STRICT GROUNDING: use ONLY facts present in the source text (names, genres, prices, ages, times) — never add, embellish, or guess anything not stated. Do not copy phrases of 5+ consecutive words from the source. If the source has no real descriptive content, return an empty string. Respond with ONLY the rewritten description (or empty), no quotes, no commentary.
+
+Event: ${eventTitle}${venueName ? ` at ${venueName}` : ''}
+Source text: ${sourceText.slice(0, 1500)}`,
+        }],
+      }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    const text = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
+    return text || null
+  } catch { return null }
+}
+
 // Re-host an image into posters/scrape/{uuid}.jpg. Sequential callers share a
 // deadline (IMAGE_TOTAL_BUDGET_MS): past it, fall back to the remote URL so
 // posters can never time out the whole request.
@@ -578,7 +615,7 @@ serve(async (req) => {
             category: 'Live Music',
             poster_url: posterUrl,
             starts_at: ev.starts_at,
-            description: ev.description ?? null,
+            description: await rewriteDescription(ev.description ?? null, ev.title, ev.venue_name ?? ''),
             view_count: 0,
             like_count: 0,
             status: 'pending', // explicit — service role bypasses the 063 trigger
@@ -695,7 +732,7 @@ serve(async (req) => {
           category: 'Live Music',
           poster_url: posterUrl,
           starts_at: ev.starts_at,
-          description: ev.description,
+          description: await rewriteDescription(ev.description, ev.title, ev.venue_name ?? ''),
           view_count: 0,
           like_count: 0,
           status: 'pending',
@@ -778,7 +815,7 @@ serve(async (req) => {
             category: src.default_category,
             poster_url: posterUrl,
             starts_at: ev.starts_at,
-            description: ev.description,
+            description: await rewriteDescription(ev.description, ev.title, venueName),
             view_count: 0,
             like_count: 0,
             // Service-role inserts BYPASS the 063 staging trigger — set explicitly:
