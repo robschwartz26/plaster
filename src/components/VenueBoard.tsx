@@ -56,25 +56,32 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export function VenueBoard() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [venues, setVenues] = useState<BoardVenue[]>([])
   const [events, setEvents] = useState<BoardEvent[]>([])
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [collapsedNeighborhoods, setCollapsedNeighborhoods] = useState<Set<string>>(loadCollapsed)
   const [loading, setLoading] = useState(true)
+  const [assignments, setAssignments] = useState<Record<string, string>>({}) // venue_id -> worker_id
+  const [roster, setRoster] = useState<{ id: string; username: string }[]>([])
+  const [assigningVenueId, setAssigningVenueId] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     if (!user) return
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    const [venuesRes, eventsRes, checkoffsRes] = await Promise.all([
+    const [venuesRes, eventsRes, checkoffsRes, assignmentsRes, rosterRes] = await Promise.all([
       supabase.from('venues').select('id, name, neighborhood').order('name'),
       supabase.from('events').select('id, title, starts_at, status, created_by, created_at, venue_id').gte('starts_at', cutoff).order('starts_at'),
       supabase.from('staff_venue_checkoff').select('venue_id'),
+      supabase.from('staff_venue_assignments').select('venue_id, worker_id'),
+      supabase.rpc('staff_roster'),
     ])
     if (venuesRes.data) setVenues(venuesRes.data as BoardVenue[])
     if (eventsRes.data) setEvents(eventsRes.data as BoardEvent[])
     if (checkoffsRes.data) setCheckedIds(new Set(checkoffsRes.data.map(r => r.venue_id)))
+    if (assignmentsRes.data) setAssignments(Object.fromEntries(assignmentsRes.data.map(r => [r.venue_id, r.worker_id])))
+    if (rosterRes.data) setRoster((rosterRes.data as { id: string; username: string }[]).map(r => ({ id: r.id, username: r.username })))
     setLoading(false)
   }, [user])
 
@@ -107,6 +114,22 @@ export function VenueBoard() {
     setExpandedIds(prev => { const next = new Set(prev); if (next.has(venueId)) next.delete(venueId); else next.add(venueId); return next })
   }
 
+  // Admin-only writes (RLS also enforces is_admin). Optimistic, revert on error.
+  async function assignVenue(venueId: string, workerId: string) {
+    if (!user) return
+    setAssignments(prev => ({ ...prev, [venueId]: workerId }))
+    setAssigningVenueId(null)
+    const { error } = await supabase.from('staff_venue_assignments')
+      .upsert({ venue_id: venueId, worker_id: workerId, assigned_by: user.id }, { onConflict: 'venue_id' })
+    if (error) { console.error('[VenueBoard] assign failed', error); fetchAll() }
+  }
+  async function unassignVenue(venueId: string) {
+    setAssignments(prev => { const next = { ...prev }; delete next[venueId]; return next })
+    setAssigningVenueId(null)
+    const { error } = await supabase.from('staff_venue_assignments').delete().eq('venue_id', venueId)
+    if (error) { console.error('[VenueBoard] unassign failed', error); fetchAll() }
+  }
+
   if (loading) {
     return <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>Loading venues…</p>
   }
@@ -122,15 +145,172 @@ export function VenueBoard() {
   const coveredCount = venues.filter(v => (eventsByVenue[v.id]?.length ?? 0) > 0).length
   const coveragePct = venues.length > 0 ? (coveredCount / venues.length) * 100 : 0
 
+  // Assignments: worker_id -> username for chips; the current user's own venues
+  // get pinned to a "Your venues" section and dropped from neighborhood groups.
+  const rosterNames: Record<string, string> = Object.fromEntries(roster.map(r => [r.id, r.username]))
+  const myVenueIds = new Set(venues.filter(v => assignments[v.id] && assignments[v.id] === user?.id).map(v => v.id))
+  const myVenues = venues.filter(v => myVenueIds.has(v.id)).sort((a, b) => a.name.localeCompare(b.name))
+
   // Neighborhood grouping
   const neighborhoodOrder = [...NEIGHBORHOODS, 'Other']
   const byNeighborhood: Record<string, BoardVenue[]> = {}
   for (const v of venues) {
+    if (myVenueIds.has(v.id)) continue // pinned above in "Your venues"
     const key = v.neighborhood && NEIGHBORHOODS.includes(v.neighborhood as typeof NEIGHBORHOODS[number]) ? v.neighborhood : 'Other'
     if (!byNeighborhood[key]) byNeighborhood[key] = []
     byNeighborhood[key].push(v)
   }
   const activeNeighborhoods = neighborhoodOrder.filter(n => byNeighborhood[n]?.length)
+
+  // ── Venue row renderer (shared by "Your venues" + neighborhood groups) ──
+  function renderVenueRow(venue: BoardVenue) {
+    const venueEvents = (eventsByVenue[venue.id] ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    const hasShows = venueEvents.length > 0
+    const isChecked = checkedIds.has(venue.id)
+    const isExpanded = expandedIds.has(venue.id)
+
+    // Staleness: no upcoming shows OR newest created_at >21 days ago
+    const maxCreatedAt = hasShows ? Math.max(...venueEvents.map(e => new Date(e.created_at).getTime())) : 0
+    const isStale = !hasShows || (Date.now() - maxCreatedAt > STALE_MS)
+
+    // Coverage high-water mark: latest pending/published show (visibility, not a gate)
+    const coveredEvents = venueEvents.filter(e => e.status === 'pending' || e.status === 'published')
+    const coveredThru = coveredEvents.length
+      ? coveredEvents.reduce((max, e) => e.starts_at > max ? e.starts_at : max, coveredEvents[0].starts_at)
+      : null
+
+    const nextShow = venueEvents[0]
+
+    const assignedWorkerId = assignments[venue.id]
+    const assigneeName = assignedWorkerId ? rosterNames[assignedWorkerId] : undefined
+    const isPicking = assigningVenueId === venue.id
+
+    return (
+      <div
+        key={venue.id}
+        style={{ borderRadius: 7, border: '1px solid var(--fg-08)', overflow: 'hidden', opacity: isChecked ? 0.45 : 1, transition: 'opacity 0.2s' }}
+      >
+        {/* Venue header row */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+
+          {/* Disclosure chevron (venues with shows only) */}
+          {hasShows ? (
+            <button
+              onClick={() => toggleExpand(venue.id)}
+              style={{ width: 30, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-30)', fontSize: 10, transition: 'color 0.15s' }}
+            >
+              <span style={{ display: 'inline-block', transition: 'transform 0.22s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▸</span>
+            </button>
+          ) : (
+            <div style={{ width: 30, flexShrink: 0 }} />
+          )}
+
+          {/* Venue name + meta — clicking expands if has shows */}
+          <button
+            onClick={() => hasShows && toggleExpand(venue.id)}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, padding: '9px 8px 9px 2px', background: isExpanded ? 'rgba(240,236,227,0.04)' : 'transparent', border: 'none', cursor: hasShows ? 'pointer' : 'default', textAlign: 'left' }}
+          >
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {venue.name}
+              <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 500, color: 'var(--fg-30)' }}>
+                {coveredThru ? `thru ${fmtMD(coveredThru)}` : '—'}
+              </span>
+            </span>
+            {isStale && (
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', background: 'var(--fg-08)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+                stale
+              </span>
+            )}
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: nextShow ? 'var(--fg-40)' : 'rgba(251,146,60,0.7)', flexShrink: 0 }}>
+              {nextShow ? fmtShort(nextShow.starts_at) : '⚠ no shows'}
+            </span>
+          </button>
+
+          {/* Assignee — admin can (re)assign; everyone else sees a read-only chip */}
+          {isAdmin ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); setAssigningVenueId(prev => prev === venue.id ? null : venue.id) }}
+              title={assigneeName ? `Assigned to @${assigneeName}` : 'Assign a venue owner'}
+              style={{
+                flexShrink: 0, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', marginRight: 2, borderRadius: 4, cursor: 'pointer',
+                border: assigneeName ? '1px solid rgba(168,85,247,0.4)' : '1px dashed var(--fg-15)',
+                background: assigneeName ? 'rgba(168,85,247,0.1)' : 'transparent',
+                color: assigneeName ? '#A855F7' : 'var(--fg-30)',
+              }}
+            >
+              {assigneeName ? `@${assigneeName}` : 'assign'}
+            </button>
+          ) : assigneeName ? (
+            <span style={{ flexShrink: 0, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600, padding: '2px 7px', marginRight: 2, borderRadius: 4, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#A855F7' }}>
+              @{assigneeName}
+            </span>
+          ) : null}
+
+          {/* Check-off — far right, stopPropagation */}
+          <button
+            onClick={(e) => toggleCheckoff(venue.id, e)}
+            title={isChecked ? 'Mark as not done' : 'Mark as done'}
+            style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: isChecked ? '#4ade80' : 'var(--fg-25)', fontSize: 15, lineHeight: 1 }}
+          >
+            {isChecked ? '✓' : '○'}
+          </button>
+        </div>
+
+        {/* Admin assignee picker — inline (role-gated, RLS-enforced) */}
+        {isAdmin && isPicking && (
+          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-40)', marginRight: 2 }}>Assign to</span>
+            {roster.map(r => (
+              <button
+                key={r.id}
+                onClick={() => assignVenue(venue.id, r.id)}
+                style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', border: r.id === assignedWorkerId ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)', background: r.id === assignedWorkerId ? 'rgba(168,85,247,0.1)' : 'transparent', color: r.id === assignedWorkerId ? '#A855F7' : 'var(--fg-65)' }}
+              >
+                @{r.username}
+              </button>
+            ))}
+            {assignedWorkerId && (
+              <button
+                onClick={() => unassignVenue(venue.id)}
+                style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.4)', background: 'transparent', color: '#ef4444' }}
+              >
+                Unassign
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Show list — cascading expand */}
+        <div style={{ overflow: 'hidden', maxHeight: isExpanded ? 600 : 0, opacity: isExpanded ? 1 : 0, transition: 'max-height 0.25s ease, opacity 0.2s ease' }}>
+          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px 10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {venueEvents.map(e => {
+                const isOwnPending = e.status === 'pending' && e.created_by === user?.id
+                return (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {e.title}
+                        </span>
+                        <StatusPill status={e.status} />
+                      </div>
+                      <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
+                        {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
+                        {isOwnPending && <span style={{ marginLeft: 6, color: 'var(--fg-30)' }}>· added {fmtShort(e.created_at)}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -147,6 +327,23 @@ export function VenueBoard() {
           <div style={{ height: '100%', width: `${coveragePct}%`, background: '#A855F7', borderRadius: 2, transition: 'width 0.4s ease' }} />
         </div>
       </div>
+
+      {/* Your venues — the current user's assigned venues, pinned to the top */}
+      {myVenues.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 4px 6px 0', borderBottom: '1px solid var(--fg-15)', marginBottom: 6 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A855F7', flex: 1 }}>
+              Your venues
+            </span>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>
+              {myVenues.length}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
+            {myVenues.map(venue => renderVenueRow(venue))}
+          </div>
+        </div>
+      )}
 
       {/* Neighborhood groups */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -188,122 +385,7 @@ export function VenueBoard() {
                 transition: 'max-height 0.28s ease, opacity 0.22s ease',
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
-                  {sorted.map(venue => {
-                    const venueEvents = (eventsByVenue[venue.id] ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-                    const hasShows = venueEvents.length > 0
-                    const isChecked = checkedIds.has(venue.id)
-                    const isExpanded = expandedIds.has(venue.id)
-
-                    // Staleness: no upcoming shows OR newest created_at >21 days ago
-                    const maxCreatedAt = hasShows ? Math.max(...venueEvents.map(e => new Date(e.created_at).getTime())) : 0
-                    const isStale = !hasShows || (Date.now() - maxCreatedAt > STALE_MS)
-
-                    // Coverage high-water mark: latest pending/published show — quiet
-                    // visibility for "how far ahead is this venue ingested" (NOT a
-                    // gate; dedupe remains the overlap protection).
-                    const coveredEvents = venueEvents.filter(e => e.status === 'pending' || e.status === 'published')
-                    const coveredThru = coveredEvents.length
-                      ? coveredEvents.reduce((max, e) => e.starts_at > max ? e.starts_at : max, coveredEvents[0].starts_at)
-                      : null
-
-                    const nextShow = venueEvents[0]
-
-                    return (
-                      <div
-                        key={venue.id}
-                        style={{ borderRadius: 7, border: '1px solid var(--fg-08)', overflow: 'hidden', opacity: isChecked ? 0.45 : 1, transition: 'opacity 0.2s' }}
-                      >
-                        {/* Venue header row */}
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-
-                          {/* Disclosure chevron (venues with shows only) */}
-                          {hasShows ? (
-                            <button
-                              onClick={() => toggleExpand(venue.id)}
-                              style={{
-                                width: 30, height: 36, flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'var(--fg-30)', fontSize: 10,
-                                transition: 'color 0.15s',
-                              }}
-                            >
-                              <span style={{ display: 'inline-block', transition: 'transform 0.22s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▸</span>
-                            </button>
-                          ) : (
-                            <div style={{ width: 30, flexShrink: 0 }} />
-                          )}
-
-                          {/* Venue name + meta — clicking expands if has shows */}
-                          <button
-                            onClick={() => hasShows && toggleExpand(venue.id)}
-                            style={{
-                              flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
-                              padding: '9px 8px 9px 2px',
-                              background: isExpanded ? 'rgba(240,236,227,0.04)' : 'transparent',
-                              border: 'none', cursor: hasShows ? 'pointer' : 'default', textAlign: 'left',
-                            }}
-                          >
-                            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                              {venue.name}
-                              <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 500, color: 'var(--fg-30)' }}>
-                                {coveredThru ? `thru ${fmtMD(coveredThru)}` : '—'}
-                              </span>
-                            </span>
-                            {isStale && (
-                              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', background: 'var(--fg-08)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
-                                stale
-                              </span>
-                            )}
-                            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: nextShow ? 'var(--fg-40)' : 'rgba(251,146,60,0.7)', flexShrink: 0 }}>
-                              {nextShow ? fmtShort(nextShow.starts_at) : '⚠ no shows'}
-                            </span>
-                          </button>
-
-                          {/* Check-off — far right, stopPropagation */}
-                          <button
-                            onClick={(e) => toggleCheckoff(venue.id, e)}
-                            title={isChecked ? 'Mark as not done' : 'Mark as done'}
-                            style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: isChecked ? '#4ade80' : 'var(--fg-25)', fontSize: 15, lineHeight: 1 }}
-                          >
-                            {isChecked ? '✓' : '○'}
-                          </button>
-                        </div>
-
-                        {/* Show list — cascading expand */}
-                        <div style={{
-                          overflow: 'hidden',
-                          maxHeight: isExpanded ? 600 : 0,
-                          opacity: isExpanded ? 1 : 0,
-                          transition: 'max-height 0.25s ease, opacity 0.2s ease',
-                        }}>
-                          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px 10px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {venueEvents.map(e => {
-                                const isOwnPending = e.status === 'pending' && e.created_by === user?.id
-                                return (
-                                  <div key={e.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {e.title}
-                                        </span>
-                                        <StatusPill status={e.status} />
-                                      </div>
-                                      <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
-                                        {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
-                                        {isOwnPending && <span style={{ marginLeft: 6, color: 'var(--fg-30)' }}>· added {fmtShort(e.created_at)}</span>}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {sorted.map(venue => renderVenueRow(venue))}
                 </div>
               </div>
             </div>

@@ -975,6 +975,49 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_venue_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          venue_id: string
+          worker_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          venue_id: string
+          worker_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          venue_id?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_venue_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_venue_assignments_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_venue_assignments_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       staff_venue_checkoff: {
         Row: {
           checked_at: string
