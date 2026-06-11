@@ -9,7 +9,7 @@
  * mechanism for users to acknowledge agreement before using.
  */
 
-const EFFECTIVE_DATE = 'June 4, 2026'
+const EFFECTIVE_DATE = 'June 11, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
@@ -129,6 +129,28 @@ export function TermsOfUse() {
         We may suspend or terminate your access to Plaster at our discretion
         if you violate these terms or engage in conduct that harms the
         community or the service.
+      </p>
+
+      <h2 style={h2}>Event listings and third-party content</h2>
+      <p>
+        Event listings on Plaster are compiled from venue websites, public
+        announcements, and submissions by our staff and users. We work to keep
+        them accurate, but details — dates, times, prices, and availability —
+        can change or be canceled at any time. Always confirm with the venue
+        before making plans; Plaster does not guarantee the accuracy of any
+        listing.
+      </p>
+      <p>
+        Event poster artwork and promotional images belong to their respective
+        venues, artists, and promoters. We display them to inform users about
+        events, not to claim any ownership of them. Listing an event does not
+        imply affiliation with, or endorsement by, the venue or artist.
+      </p>
+      <p>
+        If you are a venue, artist, or rights holder and would like a listing or
+        image corrected or removed, contact us at the address in the Contact
+        section below (<a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#A855F7' }}>{CONTACT_EMAIL}</a>)
+        and we will respond promptly.
       </p>
 
       <h2 style={h2}>Disclaimers</h2>
