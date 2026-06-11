@@ -43,6 +43,8 @@ interface ScrapeResult {
   rewriteError?: string
   enriched?: number
   enrichTried?: number
+  beyondHorizon?: number
+  past?: number
 }
 
 // friendlyExtractionError-style mapping for description-rewrite failures.
@@ -86,6 +88,9 @@ interface AdhocResponse {
   rewriteError?: string
   enriched?: number
   enrichTried?: number
+  beyondHorizon?: number
+  past?: number
+  horizonLabel?: string
 }
 
 interface VenueDraft {
@@ -417,6 +422,8 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
         <span>found {res.found}</span>
         {res.wouldInsert !== undefined && <span> · would insert {res.wouldInsert}</span>}
         {res.inserted !== undefined && <span> · inserted {res.inserted} · skipped {res.skipped}</span>}
+        {!!res.beyondHorizon && <span> · {res.beyondHorizon} beyond horizon</span>}
+        {!!res.past && <span> · {res.past} already past</span>}
         {!!res.enrichTried && <span> · enriched {res.enriched}/{res.enrichTried} from detail pages</span>}
         {!!res.rewriteFailures && <span style={{ color: '#fca5a5' }}> · {friendlyRewriteError(res.rewriteFailures, res.rewriteError)}</span>}
         {res.samples && res.samples.length > 0 && (
@@ -512,6 +519,8 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
               {adhocParsed.method} · found {adhocParsed.found} · insertable {adhocParsed.wouldInsert}
+              {!!adhocParsed.beyondHorizon && <> · {adhocParsed.beyondHorizon} beyond {adhocParsed.horizonLabel ?? ''} horizon</>}
+              {!!adhocParsed.past && <> · {adhocParsed.past} already past</>}
               {adhocParsed.sourcePage && adhocParsed.sourcePage !== adhocParsed.url && <> · read {adhocParsed.sourcePage}</>}
               {(adhocParsed.notes ?? []).length > 0 && <> · {adhocParsed.notes!.join(' · ')}</>}
             </p>

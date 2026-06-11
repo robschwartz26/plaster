@@ -130,6 +130,8 @@ interface SourceResult {
   rewriteError?: string
   enriched?: number
   enrichTried?: number
+  beyondHorizon?: number
+  past?: number
 }
 
 // Budgeted page fetcher: PlasterBot UA first; ONE browser-UA retry on
@@ -204,8 +206,22 @@ function portlandToday(): string {
   return portlandDate(new Date())
 }
 
-function inWindow(d: Date, now: number, maxOut: number): boolean {
-  return d.getTime() >= now && d.getTime() <= maxOut
+// Visibility: events parsed but dropped by the horizon window. A page that
+// features only far-future shows would otherwise look like a failed scrape
+// ("found 0") — these counts surface "6 beyond horizon · 2 already past".
+interface WindowStats { beyondHorizon: number; past: number }
+
+// True when d is within [now, maxOut]; tallies WHY an out-of-window event dropped.
+function windowCheck(d: Date, now: number, maxOut: number, stats?: WindowStats): boolean {
+  if (d.getTime() < now) { if (stats) stats.past++; return false }
+  if (d.getTime() > maxOut) { if (stats) stats.beyondHorizon++; return false }
+  return true
+}
+
+// "90" → "3-month", "45" → "45-day" (months only for clean multiples of ~30).
+function horizonLabel(days: number): string {
+  const months = Math.round(days / 30)
+  return months >= 1 && Math.abs(days - months * 30) <= 2 ? `${months}-month` : `${days}-day`
 }
 
 // Pull every <script type="application/ld+json"> block and parse tolerantly.
@@ -269,7 +285,7 @@ function stripTags(html: string): string {
 }
 
 // JSON-LD on a page → ScrapedEvents within the ingest window.
-function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: number): ScrapedEvent[] {
+function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: number, stats?: WindowStats): ScrapedEvent[] {
   const rawEvents: Record<string, unknown>[] = []
   for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
   const mapped: ScrapedEvent[] = []
@@ -277,7 +293,8 @@ function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: num
     const rawTitle = typeof ev.name === 'string' ? decodeEntities(ev.name).trim() : ''
     const { title, soldOut: titleSold } = detectSoldOut(rawTitle)
     const start = parseStartDate(ev.startDate)
-    if (!title || !start || !inWindow(start, now, maxOut)) continue
+    if (!title || !start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
     const desc = typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) : null
     const loc = ev.location as Record<string, unknown> | undefined
     const venueName = loc && typeof loc.name === 'string' ? decodeEntities(loc.name).trim() : undefined
@@ -296,7 +313,7 @@ function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: num
 }
 
 // Hidden endpoint probe 1: WP The Events Calendar REST API.
-async function probeTribe(fetcher: PageFetcher, origin: string, now: number, maxOut: number): Promise<ScrapedEvent[]> {
+async function probeTribe(fetcher: PageFetcher, origin: string, now: number, maxOut: number, stats?: WindowStats): Promise<ScrapedEvent[]> {
   const res = await fetcher.get(`${origin}/wp-json/tribe/events/v1/events?per_page=50`)
   if (!res || res.status !== 200) return []
   let json: { events?: Array<Record<string, unknown>> } | null = null
@@ -308,7 +325,8 @@ async function probeTribe(fetcher: PageFetcher, origin: string, now: number, max
     const sd = typeof ev.start_date === 'string' ? ev.start_date : ''
     const [date, timeFull] = sd.split(' ')
     const start = date ? ptTimestamp(date, timeFull ? timeFull.slice(0, 5) : null) : null
-    if (!title || !start || !inWindow(start, now, maxOut)) continue
+    if (!title || !start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
     const img = ev.image as Record<string, unknown> | undefined
     const venue = ev.venue as Record<string, unknown> | undefined
     out.push({
@@ -326,7 +344,7 @@ async function probeTribe(fetcher: PageFetcher, origin: string, now: number, max
 }
 
 // Hidden endpoint probe 2: Squarespace collection JSON (?format=json).
-async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: number, maxOut: number): Promise<ScrapedEvent[]> {
+async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: number, maxOut: number, stats?: WindowStats): Promise<ScrapedEvent[]> {
   const probeUrl = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}format=json`
   const res = await fetcher.get(probeUrl)
   if (!res || res.status !== 200) return []
@@ -340,7 +358,8 @@ async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: numb
     const { title, soldOut } = detectSoldOut(typeof it.title === 'string' ? decodeEntities(it.title).trim() : '')
     // Squarespace startDate is epoch milliseconds.
     const start = typeof it.startDate === 'number' ? new Date(it.startDate) : null
-    if (!title || !start || isNaN(start.getTime()) || !inWindow(start, now, maxOut)) continue
+    if (!title || !start || isNaN(start.getTime())) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
     out.push({
       title,
       starts_at: start.toISOString(),
@@ -434,7 +453,7 @@ async function enrichFromDetailPage(fetcher: PageFetcher, eventUrl: string): Pro
 
 // AI text fallback. Returns [] when the page genuinely has no events — never invents.
 // jsonFeed=true marks the input as a raw JSON calendar feed rather than page text.
-async function aiExtractEvents(pageText: string, pageUrl: string, now: number, maxOut: number, jsonFeed = false): Promise<ScrapedEvent[]> {
+async function aiExtractEvents(pageText: string, pageUrl: string, now: number, maxOut: number, jsonFeed = false, stats?: WindowStats): Promise<ScrapedEvent[]> {
   const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
 
@@ -483,7 +502,8 @@ Rules:
     if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue // discard rows without a parseable date
     const time = typeof ev.time === 'string' && /^\d{2}:\d{2}$/.test(ev.time) ? ev.time : null
     const start = ptTimestamp(date, time)
-    if (!start || !inWindow(start, now, maxOut)) continue
+    if (!start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
     mapped.push({
       title,
       soldOut: titleSold || ev.sold_out === true,
@@ -623,14 +643,14 @@ function isDuplicate(idx: DedupeIndex, date: string, title: string): boolean {
 
 // Ad-hoc extraction pipeline for one page: JSON-LD → endpoint probes → (caller
 // handles the link-hunt hop) → AI is also caller-driven. Returns events + method.
-async function extractFromPage(fetcher: PageFetcher, url: string, html: string, now: number, maxOut: number):
+async function extractFromPage(fetcher: PageFetcher, url: string, html: string, now: number, maxOut: number, stats?: WindowStats):
   Promise<{ events: ScrapedEvent[]; method: string }> {
-  const jsonld = mapJsonLdEvents(html, url, now, maxOut)
+  const jsonld = mapJsonLdEvents(html, url, now, maxOut, stats)
   if (jsonld.length > 0) return { events: jsonld, method: 'jsonld' }
   const origin = new URL(url).origin
-  const tribe = await probeTribe(fetcher, origin, now, maxOut)
+  const tribe = await probeTribe(fetcher, origin, now, maxOut, stats)
   if (tribe.length > 0) return { events: tribe, method: 'wp-tribe' }
-  const sq = await probeSquarespace(fetcher, url, now, maxOut)
+  const sq = await probeSquarespace(fetcher, url, now, maxOut, stats)
   if (sq.length > 0) return { events: sq, method: 'squarespace' }
   return { events: [], method: 'none' }
 }
@@ -848,7 +868,8 @@ serve(async (req) => {
       const dryRun: boolean = body.dryRun === true
       const postedEvents: AdhocEvent[] | null = Array.isArray(body.events) ? body.events : null
       // Configurable ingest horizon for this request (UI sends maxDays; default 120)
-      const maxOut = now + clampDays(body.maxDays) * 24 * 60 * 60 * 1000
+      const horizonDays = clampDays(body.maxDays)
+      const maxOut = now + horizonDays * 24 * 60 * 60 * 1000
 
       // ── Import step: insert the posted-back selection (no re-parse/AI) ──
       if (!dryRun && postedEvents) {
@@ -941,6 +962,9 @@ serve(async (req) => {
       let scraped: ScrapedEvent[] = []
       let method = 'none'
       let confidence = CONFIDENCE_STRUCTURED
+      // Tally events parsed-but-dropped by the horizon across every path so a
+      // far-future-only page reads "found 0 · 6 beyond horizon", not a failure.
+      const windowStats: WindowStats = { beyondHorizon: 0, past: 0 }
 
       // Raw-JSON feed (e.g. a WP Tribe endpoint pasted directly): skip the HTML
       // paths and hand the pretty-printed JSON to the AI extractor.
@@ -951,11 +975,11 @@ serve(async (req) => {
       }
 
       if (jsonFeed) {
-        scraped = await aiExtractEvents(jsonFeed.slice(0, AI_TEXT_CAP), adhocUrl, now, maxOut, true)
+        scraped = await aiExtractEvents(jsonFeed.slice(0, AI_TEXT_CAP), adhocUrl, now, maxOut, true, windowStats)
         method = 'json-feed'
         confidence = CONFIDENCE_AI
       } else {
-        ;({ events: scraped, method } = await extractFromPage(fetcher, adhocUrl, html, now, maxOut))
+        ;({ events: scraped, method } = await extractFromPage(fetcher, adhocUrl, html, now, maxOut, windowStats))
 
         // One-hop link hunt when the page itself yields nothing structured.
         if (scraped.length === 0) {
@@ -963,7 +987,7 @@ serve(async (req) => {
           if (hunted) {
             const huntedPage = await fetcher.get(hunted)
             if (huntedPage && huntedPage.status === 200) {
-              const result = await extractFromPage(fetcher, hunted, huntedPage.text, now, maxOut)
+              const result = await extractFromPage(fetcher, hunted, huntedPage.text, now, maxOut, windowStats)
               if (result.events.length > 0) {
                 scraped = result.events
                 method = `${result.method} (hunted)`
@@ -980,7 +1004,7 @@ serve(async (req) => {
 
         // AI text fallback — only after structured paths come up empty.
         if (scraped.length === 0) {
-          scraped = await aiExtractEvents(htmlToText(html), sourcePage, now, maxOut)
+          scraped = await aiExtractEvents(htmlToText(html), sourcePage, now, maxOut, false, windowStats)
           confidence = CONFIDENCE_AI
           method = sourcePage === adhocUrl ? 'ai' : 'ai (hunted)'
         }
@@ -1050,7 +1074,12 @@ serve(async (req) => {
 
       if (dryRun) {
         return new Response(JSON.stringify({
-          adhoc: { url: adhocUrl, sourcePage, method, found: annotated.length, wouldInsert, events: annotated, notes: fetcher.notes },
+          adhoc: {
+            url: adhocUrl, sourcePage, method, found: annotated.length, wouldInsert, events: annotated, notes: fetcher.notes,
+            ...(windowStats.beyondHorizon ? { beyondHorizon: windowStats.beyondHorizon } : {}),
+            ...(windowStats.past ? { past: windowStats.past } : {}),
+            horizonLabel: horizonLabel(horizonDays),
+          },
         }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
@@ -1083,7 +1112,13 @@ serve(async (req) => {
         inserted++
       }
       return new Response(JSON.stringify({
-        adhoc: { url: adhocUrl, sourcePage, method, inserted, skipped, notes: fetcher.notes, ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}) },
+        adhoc: {
+          url: adhocUrl, sourcePage, method, inserted, skipped, notes: fetcher.notes,
+          ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}),
+          ...(windowStats.beyondHorizon ? { beyondHorizon: windowStats.beyondHorizon } : {}),
+          ...(windowStats.past ? { past: windowStats.past } : {}),
+          horizonLabel: horizonLabel(horizonDays),
+        },
       }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
@@ -1125,9 +1160,13 @@ serve(async (req) => {
         const pageRes = await fetcher.get(srcUrl)
         if (!pageRes || pageRes.status !== 200) throw new Error(`page fetch ${pageRes?.status ?? 'failed'}`)
         // Per-source ingest horizon (venue_sources.horizon_days, default 120)
-        const maxOutSrc = now + clampDays(src.horizon_days) * 24 * 60 * 60 * 1000
-        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOutSrc)
+        const srcDays = clampDays(src.horizon_days)
+        const maxOutSrc = now + srcDays * 24 * 60 * 60 * 1000
+        const windowStats: WindowStats = { beyondHorizon: 0, past: 0 }
+        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOutSrc, windowStats)
         result.found = mapped.length
+        if (windowStats.beyondHorizon) result.beyondHorizon = windowStats.beyondHorizon
+        if (windowStats.past) result.past = windowStats.past
 
         // 2. Dedupe — venue + Portland date, exact normalized title OR similarity
         // ≥ threshold, against existing rows of ANY status AND within this batch.
@@ -1192,12 +1231,14 @@ serve(async (req) => {
         if (rewriteFailures) { result.rewriteFailures = rewriteFailures; result.rewriteError = rewriteError }
         if (enrichTried) { result.enriched = enriched; result.enrichTried = enrichTried }
 
-        // 5. Stamp the source row (method + enrichment + rewrite failures)
+        // 5. Stamp the source row (method + horizon discards + enrichment + rewrite failures)
+        const horizonNote = windowStats.beyondHorizon ? ` · ${windowStats.beyondHorizon} beyond ${horizonLabel(srcDays)} horizon` : ''
+        const pastNote = windowStats.past ? ` · ${windowStats.past} already past` : ''
         const enrichNote = enrichTried ? ` · enriched ${enriched}/${enrichTried} from detail pages` : ''
         const rwNote = rewriteFailures ? ` · descriptions failed: ${rewriteFailures} (${rewriteError})` : ''
         await supabaseService.from('venue_sources').update({
           last_run_at: new Date().toISOString(),
-          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${enrichNote}${rwNote}`,
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${horizonNote}${pastNote}${enrichNote}${rwNote}`,
         }).eq('id', src.id)
       } catch (err) {
         // Per-source failure is a note, not a batch failure
