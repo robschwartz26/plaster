@@ -482,18 +482,50 @@ async function rehostImage(supabaseService: any, imageUrl: string | null, deadli
   } catch { return imageUrl }
 }
 
-// Dedupe key set for a venue: ANY-status events from yesterday onward.
+// Dedupe index for a venue: ANY-status events from yesterday onward. Exact
+// normalized keys PLUS per-Portland-date normalized titles, so retitled twins
+// ("Carl & Wes" vs "AN EVENING WITH, CARL & WES: …") are caught by similarity
+// while distinct same-night events (3:30pm mic vs 8pm show, similarity ~0) stay safe.
+interface DedupeIndex {
+  keys: Set<string> // exact `${portland_date}|${normalized title}`
+  byDate: Map<string, string[]> // portland_date → normalized titles that day
+}
+
+const DUP_SIMILARITY_THRESHOLD = 0.8
+
 // deno-lint-ignore no-explicit-any
-async function existingKeys(supabaseService: any, venueId: string, now: number): Promise<Set<string>> {
+async function existingIndex(supabaseService: any, venueId: string, now: number): Promise<DedupeIndex> {
   const { data: existing } = await supabaseService
     .from('events')
     .select('title, starts_at')
     .eq('venue_id', venueId)
     .gte('starts_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
-  return new Set(
-    ((existing ?? []) as Array<{ title: string; starts_at: string }>)
-      .map(e => `${portlandDate(new Date(e.starts_at))}|${normalizeName(e.title)}`),
-  )
+  const idx: DedupeIndex = { keys: new Set(), byDate: new Map() }
+  for (const e of (existing ?? []) as Array<{ title: string; starts_at: string }>) {
+    addToIndex(idx, portlandDate(new Date(e.starts_at)), e.title)
+  }
+  return idx
+}
+
+function addToIndex(idx: DedupeIndex, date: string, title: string) {
+  const norm = normalizeName(title)
+  idx.keys.add(`${date}|${norm}`)
+  if (!idx.byDate.has(date)) idx.byDate.set(date, [])
+  idx.byDate.get(date)!.push(norm)
+}
+
+// Duplicate = exact key match OR same venue+date with title similarity ≥ threshold
+// (nameSimilarity's containment rule yields 0.9 for retitled twins).
+function isDuplicate(idx: DedupeIndex, date: string, title: string): boolean {
+  const norm = normalizeName(title)
+  if (idx.keys.has(`${date}|${norm}`)) return true
+  const titles = idx.byDate.get(date)
+  if (titles) {
+    for (const t of titles) {
+      if (nameSimilarity(norm, t) >= DUP_SIMILARITY_THRESHOLD) return true
+    }
+  }
+  return false
 }
 
 // Ad-hoc extraction pipeline for one page: JSON-LD → endpoint probes → (caller
@@ -658,16 +690,15 @@ serve(async (req) => {
       if (!dryRun && postedEvents) {
         let inserted = 0, skipped = 0
         const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
-        const keysByVenue = new Map<string, Set<string>>()
+        const idxByVenue = new Map<string, DedupeIndex>()
         for (const ev of postedEvents.slice(0, MAX_ADHOC_EVENTS)) {
           const venueId = ev.venue_id || forcedVenueId
           if (!venueId || !ev.title || !ev.starts_at) { skipped++; continue }
-          if (!keysByVenue.has(venueId)) keysByVenue.set(venueId, await existingKeys(supabaseService, venueId, now))
-          const keys = keysByVenue.get(venueId)!
+          if (!idxByVenue.has(venueId)) idxByVenue.set(venueId, await existingIndex(supabaseService, venueId, now))
+          const idx = idxByVenue.get(venueId)!
           const pDate = portlandDate(new Date(ev.starts_at))
-          const key = `${pDate}|${normalizeName(ev.title)}`
-          if (keys.has(key)) { skipped++; continue }
-          keys.add(key)
+          if (isDuplicate(idx, pDate, ev.title)) { skipped++; continue }
+          addToIndex(idx, pDate, ev.title)
 
           const posterUrl = await rehostImage(supabaseService, ev.image ?? null, imageDeadline)
           const { error: insErr } = await supabaseService.from('events').insert({
@@ -792,18 +823,17 @@ serve(async (req) => {
         }
       })
 
-      // Dedupe annotation (per resolved venue)
-      const keysByVenue = new Map<string, Set<string>>()
+      // Dedupe annotation (per resolved venue) — exact key OR title similarity
+      const idxByVenue = new Map<string, DedupeIndex>()
       let wouldInsert = 0
       const annotated = [] as Array<AdhocEvent & { duplicate: boolean }>
       for (const ev of adhocEvents) {
         let duplicate = false
         if (ev.venue_id) {
-          if (!keysByVenue.has(ev.venue_id)) keysByVenue.set(ev.venue_id, await existingKeys(supabaseService, ev.venue_id, now))
-          const keys = keysByVenue.get(ev.venue_id)!
-          const key = `${ev.portland_date}|${normalizeName(ev.title)}`
-          duplicate = keys.has(key)
-          if (!duplicate) { keys.add(key); wouldInsert++ }
+          if (!idxByVenue.has(ev.venue_id)) idxByVenue.set(ev.venue_id, await existingIndex(supabaseService, ev.venue_id, now))
+          const idx = idxByVenue.get(ev.venue_id)!
+          duplicate = isDuplicate(idx, ev.portland_date, ev.title)
+          if (!duplicate) { addToIndex(idx, ev.portland_date, ev.title); wouldInsert++ }
         }
         annotated.push({ ...ev, duplicate })
       }
@@ -882,15 +912,15 @@ serve(async (req) => {
         const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOut)
         result.found = mapped.length
 
-        // 2. Dedupe — venue_id + Portland calendar date + case-insensitive title,
-        // against existing rows of ANY status AND within this batch. Idempotent.
-        const seen = await existingKeys(supabaseService, src.venue_id, now)
+        // 2. Dedupe — venue + Portland date, exact normalized title OR similarity
+        // ≥ threshold, against existing rows of ANY status AND within this batch.
+        // Idempotent.
+        const idx = await existingIndex(supabaseService, src.venue_id, now)
         const fresh: ScrapedEvent[] = []
         let skipped = 0
         for (const ev of mapped) {
-          const key = `${ev.portland_date}|${normalizeName(ev.title)}`
-          if (seen.has(key)) { skipped++; continue }
-          seen.add(key)
+          if (isDuplicate(idx, ev.portland_date, ev.title)) { skipped++; continue }
+          addToIndex(idx, ev.portland_date, ev.title)
           fresh.push(ev)
         }
 
