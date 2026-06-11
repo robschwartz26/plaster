@@ -744,6 +744,10 @@ Hard-won rules and anti-patterns discovered across development sessions.
 - `~/plaster/src/pages/YouScreen.tsx`
 - `~/plaster/src/components/BottomNav.tsx`
 
+## Backlog
+
+- **Auto-ingest legal:** add a takedown / third-party-content clause to TermsOfUse (scraped posters + event data are venue-owned content; need a documented removal path) BEFORE auto-ingest scales past the pilot.
+
 ## Known issues & diagnostics
 
 ### Tearlab — 1-col rendering diagnostic

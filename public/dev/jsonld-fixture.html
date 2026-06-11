@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plaster scrape-sources self-test fixture</title>
+  <!--
+    Permanent self-test page for the scrape-sources edge function (Auto-Ingest).
+    Registered in /admin as the "ZZ Scrape Test" source. Contains 3 schema.org
+    events: two in-window (should insert as pending) and one in the past (should
+    be filtered). One uses @graph and an ImageObject to exercise tolerant parsing.
+    NOTE: static dates — refresh them if they age past the 120-day window.
+  -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MusicEvent",
+    "name": "Plaster Self-Test Alpha",
+    "startDate": "2026-07-15T20:00:00-07:00",
+    "url": "https://plasterthewall.com/dev/jsonld-fixture.html#alpha",
+    "image": "https://lhetwgdlpulgnjetuope.supabase.co/storage/v1/object/public/posters/1776977461991-william-basinski-with-kelly-moran.jpg",
+    "description": "Fixture event Alpha — exercises the happy path: full ISO startDate with offset, string image to re-host, short description."
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Event",
+        "name": "Plaster Self-Test Beta",
+        "startDate": "2026-08-01",
+        "url": "/dev/jsonld-fixture.html#beta",
+        "image": { "@type": "ImageObject", "url": "https://lhetwgdlpulgnjetuope.supabase.co/storage/v1/object/public/posters/1776977461991-william-basinski-with-kelly-moran.jpg" },
+        "description": "Fixture event Beta — exercises @graph wrapping, date-only startDate (assumed 7pm Portland), relative url, and ImageObject image."
+      },
+      {
+        "@type": "MusicEvent",
+        "name": "Plaster Self-Test Past (should be filtered)",
+        "startDate": "2026-05-01T20:00:00-07:00",
+        "url": "https://plasterthewall.com/dev/jsonld-fixture.html#past"
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <p>Plaster scrape-sources self-test fixture. Expected: found 3 · wouldInsert/inserted 2 (past event filtered) · second run inserts 0.</p>
+</body>
+</html>
