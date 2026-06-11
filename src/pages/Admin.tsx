@@ -13,6 +13,7 @@ import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { ImportForm } from '@/components/admin/ImportForm'
+import { AdminAutoIngest } from '@/components/admin/AdminAutoIngest'
 import { UploadHistory } from '@/components/UploadHistory'
 import {
   findDuplicateVenueGroups,
@@ -128,6 +129,10 @@ function AdminDashboard() {
 
           <Section title="Venue Accounts" collapsible defaultCollapsed>
             <AdminVenueAccounts />
+          </Section>
+
+          <Section title="Auto-Ingest" collapsible defaultCollapsed>
+            <AdminAutoIngest venues={venues} />
           </Section>
 
           <Section title="Import Poster">
