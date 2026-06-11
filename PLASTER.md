@@ -744,6 +744,11 @@ Hard-won rules and anti-patterns discovered across development sessions.
 - `~/plaster/src/pages/YouScreen.tsx`
 - `~/plaster/src/components/BottomNav.tsx`
 
+## Known issues & diagnostics
+
+### Tearlab — 1-col rendering diagnostic
+Archived at tag `tearlab-v1` (branch archive/tearlab). A ?tearlab URL-param overlay with 5 toggles isolating 1-col tear causes: A=static content (fetch timing), B=no inner scroller, C=scroller paint-poke on arrival, D=remove root fade/filter residue, E=translateZ on inner scroller. Repro recipe: fresh load → 1-col → poster→info ×5 → info→info scroll ×5. To resurrect: cherry-pick the lab commit from the tag, or git diff the tag against its parent for the patch. History: the original weeks-long tear = 200 permanent willChange strip layers (fixed); later tear-fix machinery (prefetch debounce, defer-commit, panel promotion) manufactured its own artifacts and was reverted 2026-06-09; clean at stripped baseline.
+
 ## Session log
 
 ### 2026-06-09
