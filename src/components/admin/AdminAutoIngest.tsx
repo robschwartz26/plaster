@@ -44,6 +44,8 @@ interface AdhocEvent {
   needsVenue: boolean
   confidence: number
   duplicate: boolean
+  suggested_venue_id?: string
+  suggested_venue_name?: string
 }
 
 interface AdhocResponse {
@@ -140,6 +142,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   // Venues created in-session (merged into selects + assignment options)
   const [createdVenues, setCreatedVenues] = useState<Array<{ id: string; name: string }>>([])
   const allVenueOptions = [...venues.map(v => ({ id: v.id, name: v.name })), ...createdVenues]
+  const [bulkVenueId, setBulkVenueId] = useState('')
 
   const fetchSources = useCallback(async () => {
     const { data } = await supabaseAdmin
@@ -402,6 +405,19 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
               {adhocParsed.sourcePage && adhocParsed.sourcePage !== adhocParsed.url && <> · read {adhocParsed.sourcePage}</>}
               {(adhocParsed.notes ?? []).length > 0 && <> · {adhocParsed.notes!.join(' · ')}</>}
             </p>
+            {/* Bulk assignment for unmatched rows */}
+            {(adhocParsed.events ?? []).some((ev, i) => ev.needsVenue && !adhocVenueFix[i]) && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', whiteSpace: 'nowrap' }}>Assign all unmatched to:</span>
+                <select value={bulkVenueId} onChange={e => setBulkVenueId(e.target.value)} style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '4px 8px' }}>
+                  <option value="">pick venue…</option>
+                  {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+                <button onClick={() => { if (bulkVenueId) assignVenueToNeedsRows(bulkVenueId) }} disabled={!bulkVenueId} style={{ ...smallBtn, opacity: bulkVenueId ? 1 : 0.5 }}>
+                  Apply
+                </button>
+              </div>
+            )}
             {(adhocParsed.events ?? []).map((ev, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--fg-08)' }}>
                 <input
@@ -425,14 +441,27 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                     {ev.duplicate && <span style={{ color: '#fbbf24' }}> · duplicate</span>}
                   </div>
                   {ev.needsVenue && (
-                    <select
-                      value={adhocVenueFix[i] ?? ''}
-                      onChange={e => setAdhocVenueFix(prev => ({ ...prev, [i]: e.target.value }))}
-                      style={{ ...inputStyle, marginTop: 4, fontSize: 11, padding: '4px 8px' }}
-                    >
-                      <option value="">⚠ needs venue{ev.venue_name ? ` ("${ev.venue_name}" unmatched)` : ''} — pick…</option>
-                      {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-                    </select>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                      <select
+                        value={adhocVenueFix[i] ?? ''}
+                        onChange={e => setAdhocVenueFix(prev => ({ ...prev, [i]: e.target.value }))}
+                        style={{ ...inputStyle, flex: 1, fontSize: 11, padding: '4px 8px' }}
+                      >
+                        <option value="">⚠ needs venue{ev.venue_name ? ` ("${ev.venue_name}" unmatched)` : ''} — pick…</option>
+                        {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      {ev.suggested_venue_id && !adhocVenueFix[i] && (
+                        <button
+                          onClick={() => {
+                            setAdhocVenueFix(prev => ({ ...prev, [i]: ev.suggested_venue_id! }))
+                            if (!ev.duplicate) setAdhocChecked(prev => new Set([...prev, i]))
+                          }}
+                          style={{ ...smallBtn, fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)' }}
+                        >
+                          → {ev.suggested_venue_name}?
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <span style={{ flexShrink: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: ev.confidence >= 95 ? '#86efac' : '#fbbf24' }}>
@@ -441,9 +470,12 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
               </div>
             ))}
             {(adhocParsed.events ?? []).length > 0 && (
-              <button onClick={handleAdhocImport} disabled={adhocBusy || adhocChecked.size === 0} style={{ ...smallBtn, alignSelf: 'flex-start', padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy || adhocChecked.size === 0 ? 0.5 : 1 }}>
-                {adhocBusy ? 'Importing…' : `Import selected (${adhocChecked.size})`}
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={handleAdhocImport} disabled={adhocBusy || adhocChecked.size === 0} style={{ ...smallBtn, padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy || adhocChecked.size === 0 ? 0.5 : 1 }}>
+                  {adhocBusy ? 'Importing…' : `Import selected (${adhocChecked.size})`}
+                </button>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>duplicates are re-checked on import</span>
+              </div>
             )}
             {(adhocParsed.events ?? []).length === 0 && (
               <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>No upcoming events found on that page.</p>

@@ -51,7 +51,37 @@ interface AdhocEvent extends ScrapedEvent {
   venue_name: string | null
   needsVenue: boolean
   confidence: number
+  suggested_venue_id?: string
+  suggested_venue_name?: string
 }
+
+// Normalize a venue/title for matching + dedupe: lowercase, straighten curly
+// quotes, strip punctuation, collapse whitespace, drop a leading "the ".
+function normalizeName(s: string): string {
+  return s.toLowerCase()
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"')
+    .replace(/^the\s+/, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Same scoring as adminShared.venueSimilarity (ported): exact → 1, containment
+// → 0.9, else word overlap / max word count.
+function nameSimilarity(a: string, b: string): number {
+  const na = normalizeName(a), nb = normalizeName(b)
+  if (!na || !nb) return 0
+  if (na === nb) return 1
+  if (na.includes(nb) || nb.includes(na)) return 0.9
+  const words = (s: string) => new Set(s.split(/\s+/).filter(w => w.length > 1))
+  const wa = words(na), wb = words(nb)
+  if (wa.size === 0 || wb.size === 0) return 0
+  let overlap = 0
+  for (const w of wa) { if (wb.has(w)) overlap++ }
+  return overlap / Math.max(wa.size, wb.size)
+}
+
+const VENUE_AUTOMATCH_THRESHOLD = 0.85
 
 interface SourceResult {
   sourceId: string
@@ -432,7 +462,7 @@ async function existingKeys(supabaseService: any, venueId: string, now: number):
     .gte('starts_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
   return new Set(
     ((existing ?? []) as Array<{ title: string; starts_at: string }>)
-      .map(e => `${portlandDate(new Date(e.starts_at))}|${e.title.trim().toLowerCase()}`),
+      .map(e => `${portlandDate(new Date(e.starts_at))}|${normalizeName(e.title)}`),
   )
 }
 
@@ -604,7 +634,7 @@ serve(async (req) => {
           if (!keysByVenue.has(venueId)) keysByVenue.set(venueId, await existingKeys(supabaseService, venueId, now))
           const keys = keysByVenue.get(venueId)!
           const pDate = portlandDate(new Date(ev.starts_at))
-          const key = `${pDate}|${ev.title.trim().toLowerCase()}`
+          const key = `${pDate}|${normalizeName(ev.title)}`
           if (keys.has(key)) { skipped++; continue }
           keys.add(key)
 
@@ -673,20 +703,35 @@ serve(async (req) => {
 
       // Poster fallback: page og:image when the event carries none.
       const pageOg = ogMeta(html, 'og:image')
-      // Venue resolution: forced venueId, else case-insensitive name MATCH
-      // (never create). Unmatched → needsVenue (insert blocked until chosen).
+      // Venue resolution: forced venueId, else FUZZY name match (never create) —
+      // exact-normalized first, then similarity ≥ threshold auto-matches; below
+      // threshold stays needsVenue but carries the best guess as a suggestion.
       const { data: allVenues } = await supabaseService.from('venues').select('id, name')
-      const venueByName = new Map<string, { id: string; name: string }>(
-        ((allVenues ?? []) as Array<{ id: string; name: string }>).map(v => [v.name.trim().toLowerCase(), v]),
-      )
+      const venueList = (allVenues ?? []) as Array<{ id: string; name: string }>
+      const venueByNorm = new Map(venueList.map(v => [normalizeName(v.name), v]))
+
+      function matchVenue(rawName: string): { match: { id: string; name: string } | null; suggestion: { id: string; name: string } | null } {
+        const exact = venueByNorm.get(normalizeName(rawName))
+        if (exact) return { match: exact, suggestion: null }
+        let best: { v: { id: string; name: string }; score: number } | null = null
+        for (const v of venueList) {
+          const score = nameSimilarity(rawName, v.name)
+          if (!best || score > best.score) best = { v, score }
+        }
+        if (best && best.score >= VENUE_AUTOMATCH_THRESHOLD) return { match: best.v, suggestion: null }
+        if (best && best.score >= 0.5) return { match: null, suggestion: best.v }
+        return { match: null, suggestion: null }
+      }
 
       const adhocEvents: AdhocEvent[] = scraped.map(ev => {
         const rawVenueName = ev._venue_name ?? null
         let venue_id: string | null = forcedVenueId
         let venue_name: string | null = rawVenueName
+        let suggestion: { id: string; name: string } | null = null
         if (!venue_id && rawVenueName) {
-          const match = venueByName.get(rawVenueName.trim().toLowerCase())
+          const { match, suggestion: sugg } = matchVenue(rawVenueName)
           if (match) { venue_id = match.id; venue_name = match.name }
+          else suggestion = sugg
         }
         return {
           ...ev,
@@ -695,6 +740,7 @@ serve(async (req) => {
           venue_name,
           needsVenue: !venue_id,
           confidence,
+          ...(suggestion ? { suggested_venue_id: suggestion.id, suggested_venue_name: suggestion.name } : {}),
         }
       })
 
@@ -707,7 +753,7 @@ serve(async (req) => {
         if (ev.venue_id) {
           if (!keysByVenue.has(ev.venue_id)) keysByVenue.set(ev.venue_id, await existingKeys(supabaseService, ev.venue_id, now))
           const keys = keysByVenue.get(ev.venue_id)!
-          const key = `${ev.portland_date}|${ev.title.toLowerCase()}`
+          const key = `${ev.portland_date}|${normalizeName(ev.title)}`
           duplicate = keys.has(key)
           if (!duplicate) { keys.add(key); wouldInsert++ }
         }
@@ -776,14 +822,14 @@ serve(async (req) => {
       results.push(result)
 
       try {
-        // 1. Fetch + extract JSON-LD events (each source gets its own fetch budget)
+        // 1. Fetch + structured extraction: JSON-LD → wp-tribe → squarespace.
+        // NO link-hunt and NO AI fallback for unattended runs — registered URLs
+        // should be the events page itself, and unattended AI burns money silently.
         const fetcher = new PageFetcher()
         const pageRes = await fetcher.get(src.source_url)
         if (!pageRes || pageRes.status !== 200) throw new Error(`page fetch ${pageRes?.status ?? 'failed'}`)
-        const mapped = mapJsonLdEvents(pageRes.text, src.source_url, now, maxOut)
-        const rawCount: Record<string, unknown>[] = []
-        for (const block of extractJsonLdBlocks(pageRes.text)) collectEvents(block, rawCount)
-        result.found = rawCount.length
+        const { events: mapped, method } = await extractFromPage(fetcher, src.source_url, pageRes.text, now, maxOut)
+        result.found = mapped.length
 
         // 2. Dedupe — venue_id + Portland calendar date + case-insensitive title,
         // against existing rows of ANY status AND within this batch. Idempotent.
@@ -791,7 +837,7 @@ serve(async (req) => {
         const fresh: ScrapedEvent[] = []
         let skipped = 0
         for (const ev of mapped) {
-          const key = `${ev.portland_date}|${ev.title.toLowerCase()}`
+          const key = `${ev.portland_date}|${normalizeName(ev.title)}`
           if (seen.has(key)) { skipped++; continue }
           seen.add(key)
           fresh.push(ev)
@@ -831,10 +877,10 @@ serve(async (req) => {
         result.inserted = inserted
         result.skipped = skipped
 
-        // 5. Stamp the source row
+        // 5. Stamp the source row (winning extraction method included)
         await supabaseService.from('venue_sources').update({
           last_run_at: new Date().toISOString(),
-          last_run_note: `inserted ${inserted} · skipped ${skipped} · found ${result.found}`,
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}`,
         }).eq('id', src.id)
       } catch (err) {
         // Per-source failure is a note, not a batch failure
