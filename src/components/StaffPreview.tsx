@@ -72,9 +72,12 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
           .limit(200)
     const [mineRes, liveRes] = await Promise.all([
       pendingQuery,
+      // 'Live app' = the real public wall — published only (without the filter,
+      // admins/creators see their own pending mixed in via RLS).
       supabase
         .from('events')
         .select('*, venues(name)')
+        .eq('status', 'published')
         .gte('starts_at', cutoff)
         .order('starts_at', { ascending: true })
         .limit(200),

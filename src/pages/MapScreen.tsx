@@ -562,6 +562,7 @@ export function MapScreen() {
     const toISO = addDays(selectedDate, 1) + 'T08:00:00'
     supabase.from('events')
       .select('id, title, starts_at, poster_url, category, venue_id')
+      .eq('status', 'published')
       .gte('starts_at', fromISO).lte('starts_at', toISO)
       .not('venue_id', 'is', null)
       .order('starts_at', { ascending: true })

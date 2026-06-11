@@ -14,7 +14,7 @@ import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
 
-const WALL_CACHE_KEY = 'wall-cache-v2'
+const WALL_CACHE_KEY = 'wall-cache-v3' // v3: status-filtered — flush cached admin walls holding pending events
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
 const WALL_PAGE = 300 // events per fetch window (initial + each load-more page)
 // Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering
@@ -74,6 +74,7 @@ export function Wall() {
     const { data } = await supabase
       .from('events')
       .select(EVENT_SELECT)
+      .eq('status', 'published') // RLS hides pending from the public, but admins/creators see their own — filter explicitly
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
       .limit(WALL_PAGE)
@@ -98,6 +99,7 @@ export function Wall() {
       const { data } = await supabase
         .from('events')
         .select(EVENT_SELECT)
+        .eq('status', 'published')
         .gt('starts_at', cursorRef.current)
         .order('starts_at', { ascending: true })
         .limit(WALL_PAGE)

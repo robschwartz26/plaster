@@ -433,6 +433,7 @@ export default function LineUpScreen() {
     supabase
       .from('events')
       .select('*, venues(name)')
+      .eq('status', 'published')
       .gt('trending_score', 0)
       .gte('starts_at', cutoff)
       .order('trending_score', { ascending: false })

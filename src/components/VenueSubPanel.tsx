@@ -46,6 +46,7 @@ export function VenueSubPanel({ venue, onBack }: Props) {
     supabase
       .from('events')
       .select('id, title, starts_at, poster_url, category')
+      .eq('status', 'published')
       .eq('venue_id', venue.id)
       .gte('starts_at', new Date().toISOString())
       .order('starts_at', { ascending: true })

@@ -130,6 +130,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           queries.push(
             supabase.from('events')
               .select('id, title, starts_at, poster_url, category')
+              .eq('status', 'published')
               .eq('venue_id', p.venue_id!)
               .gte('starts_at', new Date().toISOString())
               .order('starts_at', { ascending: true })

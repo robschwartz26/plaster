@@ -46,6 +46,7 @@ export function TonightScreen() {
     const { data } = await supabase
       .from('events')
       .select('id, title, starts_at, poster_url, category, like_count, venues(id, name)')
+      .eq('status', 'published')
       .gte('starts_at', `${today}T00:00:00`)
       .lt('starts_at', `${today}T23:59:59`)
       .order('starts_at', { ascending: true })
