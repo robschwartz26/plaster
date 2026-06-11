@@ -91,9 +91,16 @@ function portlandTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
+// Mirror of the edge function's URL normalization — scheme-less input
+// ("kellysolympian.com") gets https:// so display parsing and hrefs work.
+function ensureScheme(u: string): string {
+  const t = u.trim()
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
 function shortUrl(url: string): string {
   try {
-    const u = new URL(url)
+    const u = new URL(ensureScheme(url))
     const path = u.pathname.length > 24 ? u.pathname.slice(0, 24) + '…' : u.pathname
     return u.hostname.replace(/^www\./, '') + (path === '/' ? '' : path)
   } catch { return url.slice(0, 40) }
@@ -520,7 +527,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: src.enabled ? 'var(--fg)' : 'var(--fg-40)' }}>
                     {src.venues?.name ?? '(venue)'}
                   </span>
-                  <a href={src.source_url} target="_blank" rel="noreferrer"
+                  <a href={ensureScheme(src.source_url)} target="_blank" rel="noreferrer"
                      style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', textDecoration: 'underline', textDecorationColor: 'var(--fg-18)' }}>
                     {shortUrl(src.source_url)}
                   </a>

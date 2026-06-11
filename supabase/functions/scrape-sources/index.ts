@@ -121,6 +121,13 @@ class PageFetcher {
   }
 }
 
+// fetch() requires a scheme — normalize user-entered URLs ("kellysolympian.com")
+// at every entry point so scheme-less input can't fail with "page fetch 0".
+function ensureScheme(u: string): string {
+  const t = u.trim()
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
 // Portland is UTC-7 mid-March..early-Nov, else UTC-8 (month heuristic, same as
 // scripts/ingest.js — exact DST boundary doesn't matter at event-time precision).
 function portlandOffset(dateStr: string): string {
@@ -525,7 +532,7 @@ serve(async (req) => {
 
     // ═══ VENUE ENRICHMENT MODE: draft a venue from its site, NO inserts ══════
     if (typeof body.enrichVenueFromUrl === 'string' && body.enrichVenueFromUrl.trim()) {
-      const url = body.enrichVenueFromUrl.trim()
+      const url = ensureScheme(body.enrichVenueFromUrl)
       const fetcher = new PageFetcher()
       const page = await fetcher.get(url)
       if (!page || page.status !== 200) throw new Error(`page fetch ${page?.status ?? 'failed'}`)
@@ -624,7 +631,7 @@ serve(async (req) => {
 
     // ═══ AD-HOC MODE: paste any event page URL ═══════════════════════════════
     if (typeof body.adhocUrl === 'string' && body.adhocUrl.trim()) {
-      const adhocUrl = body.adhocUrl.trim()
+      const adhocUrl = ensureScheme(body.adhocUrl)
       const forcedVenueId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
       const dryRun: boolean = body.dryRun === true
       const postedEvents: AdhocEvent[] | null = Array.isArray(body.events) ? body.events : null
@@ -841,7 +848,10 @@ serve(async (req) => {
 
     for (const src of sources ?? []) {
       const venueName = (src as unknown as { venues: { name: string } | null }).venues?.name ?? '(unknown venue)'
-      const result: SourceResult = { sourceId: src.id, venue: venueName, url: src.source_url, found: 0 }
+      // Normalize at run time so a source saved without a scheme can't silently
+      // fail on every nightly run.
+      const srcUrl = ensureScheme(src.source_url)
+      const result: SourceResult = { sourceId: src.id, venue: venueName, url: srcUrl, found: 0 }
       results.push(result)
 
       try {
@@ -849,9 +859,9 @@ serve(async (req) => {
         // NO link-hunt and NO AI fallback for unattended runs — registered URLs
         // should be the events page itself, and unattended AI burns money silently.
         const fetcher = new PageFetcher()
-        const pageRes = await fetcher.get(src.source_url)
+        const pageRes = await fetcher.get(srcUrl)
         if (!pageRes || pageRes.status !== 200) throw new Error(`page fetch ${pageRes?.status ?? 'failed'}`)
-        const { events: mapped, method } = await extractFromPage(fetcher, src.source_url, pageRes.text, now, maxOut)
+        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOut)
         result.found = mapped.length
 
         // 2. Dedupe — venue_id + Portland calendar date + case-insensitive title,
