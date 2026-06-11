@@ -95,13 +95,16 @@ interface SourceResult {
   error?: string
   rewriteFailures?: number
   rewriteError?: string
+  enriched?: number
+  enrichTried?: number
 }
 
 // Budgeted page fetcher: PlasterBot UA first; ONE browser-UA retry on
 // 403/404/network-fail. A logical fetch (incl. its retry) costs 1 budget unit.
 class PageFetcher {
-  remaining = PAGE_FETCH_BUDGET
+  remaining: number
   notes: string[] = []
+  constructor(budget = PAGE_FETCH_BUDGET) { this.remaining = budget }
   async get(url: string): Promise<{ status: number; text: string; contentType: string } | null> {
     if (this.remaining <= 0) { this.notes.push(`budget exhausted, skipped ${url}`); return null }
     this.remaining--
@@ -357,6 +360,39 @@ function ogMeta(html: string, property: string): string | null {
   const re1 = new RegExp(`<meta[^>]*property\\s*=\\s*["']${property}["'][^>]*content\\s*=\\s*["']([^"']+)["']`, 'i')
   const re2 = new RegExp(`<meta[^>]*content\\s*=\\s*["']([^"']+)["'][^>]*property\\s*=\\s*["']${property}["']`, 'i')
   return html.match(re1)?.[1] ?? html.match(re2)?.[1] ?? null
+}
+
+function metaName(html: string, name: string): string | null {
+  const re1 = new RegExp(`<meta[^>]*name\\s*=\\s*["']${name}["'][^>]*content\\s*=\\s*["']([^"']+)["']`, 'i')
+  const re2 = new RegExp(`<meta[^>]*content\\s*=\\s*["']([^"']+)["'][^>]*name\\s*=\\s*["']${name}["']`, 'i')
+  return html.match(re1)?.[1] ?? html.match(re2)?.[1] ?? null
+}
+
+// Per-event detail-page enrichment (import time only, NO AI here): fetch the
+// event's own page and pull a description by priority — Event JSON-LD description
+// → og:description / meta description → nothing. Opportunistically grab JSON-LD /
+// og:image while there when the event has no poster.
+async function enrichFromDetailPage(fetcher: PageFetcher, eventUrl: string): Promise<{ description: string | null; image: string | null }> {
+  const page = await fetcher.get(eventUrl)
+  if (!page || page.status !== 200) return { description: null, image: null }
+  const html = page.text
+  let description: string | null = null
+  let image: string | null = null
+  const rawEvents: Record<string, unknown>[] = []
+  for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
+  for (const ev of rawEvents) {
+    if (!description && typeof ev.description === 'string' && ev.description.trim()) {
+      description = stripTags(ev.description).slice(0, 400) || null
+    }
+    if (!image) image = pickImage(ev.image)
+    if (description && image) break
+  }
+  if (!description) {
+    const og = ogMeta(html, 'og:description') ?? metaName(html, 'description')
+    if (og) description = decodeEntities(og).trim().slice(0, 400) || null
+  }
+  if (!image) image = ogMeta(html, 'og:image')
+  return { description, image: image ? resolveUrl(image, eventUrl) : null }
 }
 
 // AI text fallback. Returns [] when the page genuinely has no events — never invents.
@@ -703,7 +739,10 @@ serve(async (req) => {
         let inserted = 0, skipped = 0
         let rewriteFailures = 0
         let rewriteError: string | undefined
+        let enrichTried = 0, enriched = 0
         const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+        // Detail-page enrichment gets its own budget: selected count + 2, capped.
+        const detailFetcher = new PageFetcher(Math.min(postedEvents.length + 2, 25))
         const idxByVenue = new Map<string, DedupeIndex>()
         for (const ev of postedEvents.slice(0, MAX_ADHOC_EVENTS)) {
           const venueId = ev.venue_id || forcedVenueId
@@ -714,8 +753,19 @@ serve(async (req) => {
           if (isDuplicate(idx, pDate, ev.title)) { skipped++; continue }
           addToIndex(idx, pDate, ev.title)
 
-          const posterUrl = await rehostImage(supabaseService, ev.image ?? null, imageDeadline)
-          const rw = await rewriteDescription(ev.description ?? null, ev.title, ev.venue_name ?? '')
+          // Detail-page enrichment: only when the listing gave no description and
+          // the event has its own page (no AI in this step).
+          let description = ev.description ?? null
+          let image = ev.image ?? null
+          if ((!description || !description.trim()) && ev.event_url && ev.event_url !== adhocUrl) {
+            enrichTried++
+            const det = await enrichFromDetailPage(detailFetcher, ev.event_url)
+            if (det.description) { description = det.description; enriched++ }
+            if (!image && det.image) image = det.image
+          }
+
+          const posterUrl = await rehostImage(supabaseService, image, imageDeadline)
+          const rw = await rewriteDescription(description, ev.title, ev.venue_name ?? '')
           if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
           const { error: insErr } = await supabaseService.from('events').insert({
             venue_id: venueId,
@@ -735,7 +785,11 @@ serve(async (req) => {
           inserted++
         }
         return new Response(JSON.stringify({
-          adhoc: { url: adhocUrl, inserted, skipped, ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}) },
+          adhoc: {
+            url: adhocUrl, inserted, skipped,
+            ...(enrichTried ? { enriched, enrichTried } : {}),
+            ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}),
+          },
         }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
@@ -951,14 +1005,24 @@ serve(async (req) => {
           continue
         }
 
-        // 4. Real run: re-host image + insert pending
+        // 4. Real run: detail-enrich (no AI) + re-host image + insert pending
         let inserted = 0
         let rewriteFailures = 0
         let rewriteError: string | undefined
+        let enrichTried = 0, enriched = 0
         const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+        const detailFetcher = new PageFetcher(Math.min(fresh.length + 2, 25))
         for (const ev of fresh) {
-          const posterUrl = await rehostImage(supabaseService, ev.image, imageDeadline)
-          const rw = await rewriteDescription(ev.description, ev.title, venueName)
+          let description = ev.description
+          let image = ev.image
+          if ((!description || !description.trim()) && ev.event_url && ev.event_url !== srcUrl) {
+            enrichTried++
+            const det = await enrichFromDetailPage(detailFetcher, ev.event_url)
+            if (det.description) { description = det.description; enriched++ }
+            if (!image && det.image) image = det.image
+          }
+          const posterUrl = await rehostImage(supabaseService, image, imageDeadline)
+          const rw = await rewriteDescription(description, ev.title, venueName)
           if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
           const { error: insErr } = await supabaseService.from('events').insert({
             venue_id: src.venue_id,
@@ -982,12 +1046,14 @@ serve(async (req) => {
         result.inserted = inserted
         result.skipped = skipped
         if (rewriteFailures) { result.rewriteFailures = rewriteFailures; result.rewriteError = rewriteError }
+        if (enrichTried) { result.enriched = enriched; result.enrichTried = enrichTried }
 
-        // 5. Stamp the source row (winning extraction method + rewrite failures)
+        // 5. Stamp the source row (method + enrichment + rewrite failures)
+        const enrichNote = enrichTried ? ` · enriched ${enriched}/${enrichTried} from detail pages` : ''
         const rwNote = rewriteFailures ? ` · descriptions failed: ${rewriteFailures} (${rewriteError})` : ''
         await supabaseService.from('venue_sources').update({
           last_run_at: new Date().toISOString(),
-          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${rwNote}`,
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${enrichNote}${rwNote}`,
         }).eq('id', src.id)
       } catch (err) {
         // Per-source failure is a note, not a batch failure
