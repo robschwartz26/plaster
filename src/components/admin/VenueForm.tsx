@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { NEIGHBORHOODS, inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
+import { callScrapeFn } from '@/components/admin/AdminAutoIngest'
 
 export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
   const [form, setForm] = useState({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
@@ -23,7 +24,7 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       if (coords) { location_lat = coords.lat; location_lng = coords.lng }
     }
 
-    const { error } = await supabaseAdmin.from('venues').insert({
+    const { data, error } = await supabaseAdmin.from('venues').insert({
       name: form.name.trim(),
       neighborhood: form.neighborhood || null,
       address: form.address.trim() || null,
@@ -32,7 +33,7 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       hours: form.hours.trim() || null,
       location_lat,
       location_lng,
-    })
+    }).select('id').single()
 
     if (error) {
       setStatus('error')
@@ -42,6 +43,12 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       setForm({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
       onVenueAdded()
       setTimeout(() => setStatus('idle'), 3000)
+      // Orphan auto-relink: fuzzy-match any parked scraped events against the new
+      // venue's name (fire-and-forget — the Orphans section in Auto-Ingest shows state).
+      if (data?.id) {
+        callScrapeFn({ relinkOrphans: { venueId: data.id } })
+          .catch(err => console.warn('[VenueForm] orphan relink failed', err))
+      }
     }
   }
 

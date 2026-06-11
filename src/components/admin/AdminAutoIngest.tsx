@@ -80,6 +80,7 @@ interface AdhocResponse {
   events?: AdhocEvent[]
   inserted?: number
   skipped?: number
+  parked?: number
   notes?: string[]
   rewriteFailures?: number
   rewriteError?: string
@@ -96,7 +97,11 @@ interface VenueDraft {
   location_lng: number | null
 }
 
-async function callScrapeFn(body: Record<string, unknown>): Promise<{ results?: ScrapeResult[]; adhoc?: AdhocResponse }> {
+export interface RelinkResult { linked: number; duplicates: number; remaining: number }
+
+// Exported so other admin surfaces (VenueForm) can fire relinkOrphans after a
+// client-side venue create.
+export async function callScrapeFn(body: Record<string, unknown>): Promise<{ results?: ScrapeResult[]; adhoc?: AdhocResponse; relink?: RelinkResult }> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const { data: { session } } = await supabaseAdmin.auth.getSession()
   if (!session?.access_token) throw new Error('Not signed in')
@@ -169,7 +174,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   const [adhocParsed, setAdhocParsed] = useState<AdhocResponse | null>(null)
   const [adhocChecked, setAdhocChecked] = useState<Set<number>>(new Set())
   const [adhocVenueFix, setAdhocVenueFix] = useState<Record<number, string>>({})
-  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number; rewriteFailures?: number; rewriteError?: string; enriched?: number; enrichTried?: number } | null>(null)
+  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number; parked?: number; rewriteFailures?: number; rewriteError?: string; enriched?: number; enrichTried?: number } | null>(null)
   // New-venue-from-URL enrichment state
   const [draft, setDraft] = useState<{ name: string; address: string; neighborhood: string; website: string; instagram: string; lat: number | null; lng: number | null } | null>(null)
   const [draftBusy, setDraftBusy] = useState(false)
@@ -179,6 +184,48 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   const [createdVenues, setCreatedVenues] = useState<Array<{ id: string; name: string }>>([])
   const allVenueOptions = [...venues.map(v => ({ id: v.id, name: v.name })), ...createdVenues]
   const [bulkVenueId, setBulkVenueId] = useState('')
+  // Orphan queue (scraped events at unknown venues, parked at import)
+  interface OrphanRow { id: string; title: string; starts_at: string; raw_venue_name: string | null }
+  const [orphans, setOrphans] = useState<OrphanRow[]>([])
+  const [orphanAssign, setOrphanAssign] = useState<Record<string, string>>({}) // group key → venue id
+  const [orphanMsg, setOrphanMsg] = useState<Record<string, string>>({}) // group key → result line
+  const [orphanBusy, setOrphanBusy] = useState<string | null>(null)
+  // Set when the create-venue draft was seeded from an orphan group — on create,
+  // that group force-relinks to the new venue.
+  const [pendingRelinkIds, setPendingRelinkIds] = useState<string[] | null>(null)
+
+  const fetchOrphans = useCallback(async () => {
+    const { data } = await supabaseAdmin
+      .from('ingest_orphans')
+      .select('id, title, starts_at, raw_venue_name')
+      .eq('status', 'open')
+      .order('created_at', { ascending: true })
+    if (data) setOrphans(data as OrphanRow[])
+  }, [])
+
+  useEffect(() => { fetchOrphans() }, [fetchOrphans])
+
+  async function runRelink(groupKey: string, venueId: string, orphanIds: string[] | undefined, forceAll: boolean) {
+    setOrphanBusy(groupKey)
+    try {
+      const { relink } = await callScrapeFn({ relinkOrphans: { venueId, forceAll, ...(orphanIds ? { orphanIds } : {}) } })
+      setOrphanMsg(prev => ({
+        ...prev,
+        [groupKey]: relink
+          ? `linked ${relink.linked} → pending${relink.duplicates ? ` · ${relink.duplicates} duplicate${relink.duplicates !== 1 ? 's' : ''} skipped` : ''}`
+          : 'relink returned nothing',
+      }))
+      fetchOrphans()
+    } catch (e) {
+      setOrphanMsg(prev => ({ ...prev, [groupKey]: e instanceof Error ? e.message : String(e) }))
+    } finally { setOrphanBusy(null) }
+  }
+
+  async function discardGroup(ids: string[]) {
+    if (!window.confirm(`Discard ${ids.length} parked event${ids.length !== 1 ? 's' : ''}?`)) return
+    await supabaseAdmin.from('ingest_orphans').update({ status: 'discarded' }).in('id', ids)
+    fetchOrphans()
+  }
 
   const fetchSources = useCallback(async () => {
     const { data } = await supabaseAdmin
@@ -271,12 +318,13 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
       .filter(({ i }) => adhocChecked.has(i))
       .map(({ ev, i }) => ({ ...ev, venue_id: adhocVenueFix[i] || ev.venue_id }))
     if (selection.length === 0) { setAdhocError('Nothing selected.'); return }
-    if (selection.some(ev => !ev.venue_id)) { setAdhocError('Assign a venue to every selected event first.'); return }
+    // Venueless rows no longer block — the server parks them in the orphan queue.
     setAdhocBusy(true); setAdhocError('')
     try {
       const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false, maxDays: adhocMaxDays })
-      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0, rewriteFailures: adhoc?.rewriteFailures, rewriteError: adhoc?.rewriteError, enriched: adhoc?.enriched, enrichTried: adhoc?.enrichTried })
+      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0, parked: adhoc?.parked, rewriteFailures: adhoc?.rewriteFailures, rewriteError: adhoc?.rewriteError, enriched: adhoc?.enriched, enrichTried: adhoc?.enrichTried })
       setAdhocParsed(null)
+      fetchOrphans()
     } catch (e) {
       setAdhocError(e instanceof Error ? e.message : String(e))
     } finally { setAdhocBusy(false) }
@@ -347,6 +395,15 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     assignVenueToNeedsRows(data.id)
     setDraft(null)
     setDraftBusy(false)
+    // Auto-relink: a draft seeded from an orphan group force-relinks that group;
+    // any other create runs a fuzzy relink across all open orphans.
+    if (pendingRelinkIds) {
+      const ids = pendingRelinkIds
+      setPendingRelinkIds(null)
+      runRelink(`created:${data.id}`, data.id, ids, true)
+    } else {
+      runRelink(`created:${data.id}`, data.id, undefined, false)
+    }
   }
 
   function renderResult(r: ScrapeResult | { error: string }) {
@@ -440,6 +497,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
         {adhocDone && (
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
             inserted {adhocDone.inserted} · skipped {adhocDone.skipped}
+            {!!adhocDone.parked && <span style={{ color: '#fbbf24' }}> · parked {adhocDone.parked}</span>}
             {adhocDone.enrichTried !== undefined && adhocDone.enrichTried > 0 && (
               <span> · enriched {adhocDone.enriched}/{adhocDone.enrichTried} from detail pages</span>
             )}
@@ -536,9 +594,9 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
             {(adhocParsed.events ?? []).length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button onClick={handleAdhocImport} disabled={adhocBusy || adhocChecked.size === 0} style={{ ...smallBtn, padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy || adhocChecked.size === 0 ? 0.5 : 1 }}>
-                  {adhocBusy ? 'Importing…' : `Import selected (${adhocChecked.size})`}
+                  {adhocBusy ? 'Importing…' : `Import ${adhocChecked.size}`}
                 </button>
-                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>duplicates are re-checked on import</span>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>unmatched will be parked · duplicates re-checked on import</span>
               </div>
             )}
             {(adhocParsed.events ?? []).length === 0 && (
@@ -547,6 +605,76 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
           </div>
         )}
       </div>
+
+      {/* Orphan queue — parked events at unknown venues; hidden when empty */}
+      {orphans.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 16, borderBottom: '1px solid var(--fg-08)' }}>
+          <label style={labelStyle}>Orphans · {orphans.length} parked</label>
+          {(() => {
+            const groups = new Map<string, OrphanRow[]>()
+            for (const o of orphans) {
+              const key = o.raw_venue_name?.trim() || '(no venue name)'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key)!.push(o)
+            }
+            return [...groups.entries()].map(([key, group]) => {
+              const busy = orphanBusy === key
+              return (
+                <div key={key} style={{ padding: '8px 0', borderBottom: '1px solid var(--fg-08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+                      {key} <span style={{ color: 'var(--fg-40)', fontWeight: 500 }}>×{group.length}</span>
+                    </span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => {
+                          setPendingRelinkIds(group.map(o => o.id))
+                          setDraft({ name: key === '(no venue name)' ? '' : key, address: '', neighborhood: '', website: '', instagram: '', lat: null, lng: null })
+                          setDraftNotes([])
+                        }}
+                        disabled={busy}
+                        style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: busy ? 0.5 : 1 }}
+                      >
+                        Create venue…
+                      </button>
+                      <select
+                        value={orphanAssign[key] ?? ''}
+                        onChange={e => setOrphanAssign(prev => ({ ...prev, [key]: e.target.value }))}
+                        style={{ ...inputStyle, width: 150, padding: '4px 8px', fontSize: 11 }}
+                      >
+                        <option value="">Assign to existing…</option>
+                        {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      <button
+                        onClick={() => { const vid = orphanAssign[key]; if (vid) runRelink(key, vid, group.map(o => o.id), true) }}
+                        disabled={busy || !orphanAssign[key]}
+                        style={{ ...smallBtn, opacity: busy || !orphanAssign[key] ? 0.5 : 1 }}
+                      >
+                        {busy ? '…' : 'Apply'}
+                      </button>
+                      <button onClick={() => discardGroup(group.map(o => o.id))} disabled={busy} style={{ ...smallBtn, color: 'var(--fg-30)', borderColor: 'var(--fg-08)' }}>
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                    {group.slice(0, 3).map(o => o.title).join(' · ')}{group.length > 3 ? ' · …' : ''}
+                  </div>
+                  {orphanMsg[key] && (
+                    <div style={{ marginTop: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)' }}>{orphanMsg[key]}</div>
+                  )}
+                </div>
+              )
+            })
+          })()}
+        </div>
+      )}
+
+      {/* Relink results from venue creation (keys created:<venueId>) — rendered
+          outside the orphans block so they survive the queue emptying. */}
+      {Object.entries(orphanMsg).filter(([k]) => k.startsWith('created:')).map(([k, msg]) => (
+        <div key={k} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)' }}>relink: {msg}</div>
+      ))}
 
       {/* Add-source row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

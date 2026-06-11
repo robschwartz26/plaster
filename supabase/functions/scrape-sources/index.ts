@@ -771,6 +771,76 @@ serve(async (req) => {
       }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ RELINK-ORPHANS MODE: convert parked orphans into pending events ══════
+    // { relinkOrphans: { venueId, forceAll?, orphanIds? } } — fuzzy-match open
+    // orphans' raw_venue_name against the venue (≥ threshold), or take them all
+    // when forceAll (admin explicitly assigned a group, optionally scoped by ids).
+    // Matches run the FULL insert pipeline: dedupe (incl. similarity), image
+    // re-host, voice rewrite, status='pending'. Duplicates → discarded.
+    if (body.relinkOrphans && typeof body.relinkOrphans.venueId === 'string') {
+      const { venueId, forceAll, orphanIds } = body.relinkOrphans as { venueId: string; forceAll?: boolean; orphanIds?: string[] }
+      const { data: venue } = await supabaseService.from('venues').select('id, name').eq('id', venueId).single()
+      if (!venue) throw new Error('relink: venue not found')
+
+      let oq = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
+      if (Array.isArray(orphanIds) && orphanIds.length > 0) oq = oq.in('id', orphanIds)
+      const { data: orphans, error: oErr } = await oq
+      if (oErr) throw oErr
+
+      interface OrphanRow {
+        id: string; title: string; starts_at: string; raw_venue_name: string | null
+        image_url: string | null; description: string | null; source_url: string | null
+        event_url: string | null; sold_out: boolean | null; confidence: number | null
+      }
+      const matches = ((orphans ?? []) as OrphanRow[]).filter(o =>
+        forceAll === true || (o.raw_venue_name && nameSimilarity(o.raw_venue_name, venue.name) >= VENUE_AUTOMATCH_THRESHOLD),
+      )
+
+      const idx = await existingIndex(supabaseService, venueId, now)
+      const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+      let linked = 0, duplicates = 0
+      for (const o of matches) {
+        const pDate = portlandDate(new Date(o.starts_at))
+        if (isDuplicate(idx, pDate, o.title)) {
+          duplicates++
+          await supabaseService.from('ingest_orphans')
+            .update({ status: 'discarded', linked_venue_id: venueId })
+            .eq('id', o.id)
+          continue
+        }
+        addToIndex(idx, pDate, o.title)
+        const posterUrl = await rehostImage(supabaseService, o.image_url, imageDeadline)
+        const rw = await rewriteDescription(o.description, o.title, venue.name)
+        const { data: insData, error: insErr } = await supabaseService.from('events').insert({
+          venue_id: venueId,
+          title: o.title,
+          category: 'Live Music',
+          poster_url: posterUrl,
+          starts_at: o.starts_at,
+          description: rw.text,
+          view_count: 0,
+          like_count: 0,
+          status: 'pending', // explicit — service role bypasses the 063 trigger
+          sold_out: o.sold_out ?? false,
+          created_by: user.id, // the relinking admin
+          source_url: o.event_url || o.source_url,
+          ai_confidence: o.confidence ?? CONFIDENCE_AI,
+        }).select('id').single()
+        if (insErr) throw new Error(`relink insert: ${insErr.message}`)
+        linked++
+        await supabaseService.from('ingest_orphans')
+          .update({ status: 'linked', linked_venue_id: venueId, linked_event_id: insData.id })
+          .eq('id', o.id)
+      }
+
+      const { count: remaining } = await supabaseService
+        .from('ingest_orphans').select('*', { count: 'exact', head: true }).eq('status', 'open')
+
+      return new Response(JSON.stringify({ relink: { linked, duplicates, remaining: remaining ?? 0 } }), {
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
     // ═══ AD-HOC MODE: paste any event page URL ═══════════════════════════════
     if (typeof body.adhocUrl === 'string' && body.adhocUrl.trim()) {
       const adhocUrl = ensureScheme(body.adhocUrl)
@@ -782,7 +852,7 @@ serve(async (req) => {
 
       // ── Import step: insert the posted-back selection (no re-parse/AI) ──
       if (!dryRun && postedEvents) {
-        let inserted = 0, skipped = 0
+        let inserted = 0, skipped = 0, parked = 0
         let rewriteFailures = 0
         let rewriteError: string | undefined
         let enrichTried = 0, enriched = 0
@@ -791,8 +861,28 @@ serve(async (req) => {
         const detailFetcher = new PageFetcher(Math.min(postedEvents.length + 2, 25))
         const idxByVenue = new Map<string, DedupeIndex>()
         for (const ev of postedEvents.slice(0, MAX_ADHOC_EVENTS)) {
+          if (!ev.title || !ev.starts_at) { skipped++; continue }
           const venueId = ev.venue_id || forcedVenueId
-          if (!venueId || !ev.title || !ev.starts_at) { skipped++; continue }
+          if (!venueId) {
+            // ORPHAN QUEUE: unknown venue → park instead of drop. Raw extraction
+            // verbatim — remote image_url not rehosted, description NOT rewritten;
+            // both happen at relink when the venue exists.
+            const { error: orphErr } = await supabaseService.from('ingest_orphans').insert({
+              title: ev.title.trim(),
+              starts_at: ev.starts_at,
+              raw_venue_name: ev.venue_name ?? null,
+              image_url: ev.image ?? null,
+              description: ev.description ?? null,
+              source_url: adhocUrl,
+              event_url: ev.event_url ?? null,
+              sold_out: ev.soldOut ?? false,
+              confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
+              created_by: user.id,
+            })
+            if (orphErr) throw new Error(`park orphan: ${orphErr.message}`)
+            parked++
+            continue
+          }
           if (!idxByVenue.has(venueId)) idxByVenue.set(venueId, await existingIndex(supabaseService, venueId, now))
           const idx = idxByVenue.get(venueId)!
           const pDate = portlandDate(new Date(ev.starts_at))
@@ -834,6 +924,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({
           adhoc: {
             url: adhocUrl, inserted, skipped,
+            ...(parked ? { parked } : {}),
             ...(enrichTried ? { enriched, enrichTried } : {}),
             ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}),
           },

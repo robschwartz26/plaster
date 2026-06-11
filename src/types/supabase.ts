@@ -588,6 +588,68 @@ export type Database = {
           },
         ]
       }
+      ingest_orphans: {
+        Row: {
+          id: string
+          title: string
+          starts_at: string
+          raw_venue_name: string | null
+          image_url: string | null
+          description: string | null
+          source_url: string | null
+          event_url: string | null
+          sold_out: boolean | null
+          confidence: number | null
+          created_by: string | null
+          created_at: string | null
+          status: string
+          linked_venue_id: string | null
+          linked_event_id: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          starts_at: string
+          raw_venue_name?: string | null
+          image_url?: string | null
+          description?: string | null
+          source_url?: string | null
+          event_url?: string | null
+          sold_out?: boolean | null
+          confidence?: number | null
+          created_by?: string | null
+          created_at?: string | null
+          status?: string
+          linked_venue_id?: string | null
+          linked_event_id?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          starts_at?: string
+          raw_venue_name?: string | null
+          image_url?: string | null
+          description?: string | null
+          source_url?: string | null
+          event_url?: string | null
+          sold_out?: boolean | null
+          confidence?: number | null
+          created_by?: string | null
+          created_at?: string | null
+          status?: string
+          linked_venue_id?: string | null
+          linked_event_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingest_orphans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string | null
