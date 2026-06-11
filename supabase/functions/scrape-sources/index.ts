@@ -209,9 +209,25 @@ function resolveUrl(maybe: unknown, base: string): string {
   try { return new URL(maybe, base).href } catch { return base }
 }
 
+// Decode HTML entities — venue feeds are full of them ("Kelly&#8217;s Olympian",
+// "CARL &#038; WES"). Without this, fuzzy venue matching and dedupe keys see
+// "kelly8217s olympian" and fail. Numeric decimal/hex via fromCodePoint (invalid
+// → left as-is); a pragmatic named set; unknown named entities pass through.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', nbsp: ' ', quot: '"', apos: "'", rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  hellip: '…', ndash: '–', mdash: '—', eacute: 'é', egrave: 'è', agrave: 'à',
+  ouml: 'ö', uuml: 'ü', ntilde: 'ñ', ccedil: 'ç',
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (m, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return m } })
+    .replace(/&#(\d+);/g, (m, dec) => { try { return String.fromCodePoint(parseInt(dec, 10)) } catch { return m } })
+    .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
+}
+
 function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-    .replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim()
+  return decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
 }
 
 // JSON-LD on a page → ScrapedEvents within the ingest window.
@@ -220,12 +236,12 @@ function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: num
   for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
   const mapped: ScrapedEvent[] = []
   for (const ev of rawEvents) {
-    const title = typeof ev.name === 'string' ? ev.name.trim() : ''
+    const title = typeof ev.name === 'string' ? decodeEntities(ev.name).trim() : ''
     const start = parseStartDate(ev.startDate)
     if (!title || !start || !inWindow(start, now, maxOut)) continue
     const desc = typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) : null
     const loc = ev.location as Record<string, unknown> | undefined
-    const venueName = loc && typeof loc.name === 'string' ? loc.name.trim() : undefined
+    const venueName = loc && typeof loc.name === 'string' ? decodeEntities(loc.name).trim() : undefined
     mapped.push({
       title,
       starts_at: start.toISOString(),
@@ -262,7 +278,7 @@ async function probeTribe(fetcher: PageFetcher, origin: string, now: number, max
       event_url: typeof ev.url === 'string' ? ev.url : origin,
       image: img && typeof img.url === 'string' ? img.url : null,
       description: typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) || null : null,
-      ...(venue && typeof venue.venue === 'string' ? { _venue_name: venue.venue } : {}),
+      ...(venue && typeof venue.venue === 'string' ? { _venue_name: decodeEntities(venue.venue).trim() } : {}),
     })
   }
   return out
@@ -280,7 +296,7 @@ async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: numb
   const origin = new URL(pageUrl).origin
   const out: ScrapedEvent[] = []
   for (const it of items) {
-    const title = typeof it.title === 'string' ? it.title.trim() : ''
+    const title = typeof it.title === 'string' ? decodeEntities(it.title).trim() : ''
     // Squarespace startDate is epoch milliseconds.
     const start = typeof it.startDate === 'number' ? new Date(it.startDate) : null
     if (!title || !start || isNaN(start.getTime()) || !inWindow(start, now, maxOut)) continue
@@ -324,11 +340,12 @@ function huntEventsLink(html: string, pageUrl: string): string | null {
 // page with every event removed — and the non-greedy regex was unsafe on nested
 // tags anyway. The AI prompt already instructs ignoring nav/footer junk.
 function htmlToText(html: string): string {
-  return html
-    .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"')
+  return decodeEntities(
+    html
+      .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, AI_TEXT_CAP)
@@ -541,7 +558,8 @@ serve(async (req) => {
       const notes: string[] = [...fetcher.notes]
 
       // name: og:site_name → JSON-LD Organization/Place name → cleaned <title>
-      let name: string | null = ogMeta(html, 'og:site_name')
+      const ogSiteName = ogMeta(html, 'og:site_name')
+      let name: string | null = ogSiteName ? decodeEntities(ogSiteName).trim() : null
       if (!name) {
         for (const block of extractJsonLdBlocks(html)) {
           const stack = [block]
