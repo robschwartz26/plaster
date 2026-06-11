@@ -38,6 +38,9 @@ function fmtTime(iso: string) {
 function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' })
 }
+function fmtMD(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric' })
+}
 
 function StatusPill({ status }: { status: string }) {
   const cfg: Record<string, { color: string; bg: string; border: string; label: string }> = {
@@ -195,6 +198,14 @@ export function VenueBoard() {
                     const maxCreatedAt = hasShows ? Math.max(...venueEvents.map(e => new Date(e.created_at).getTime())) : 0
                     const isStale = !hasShows || (Date.now() - maxCreatedAt > STALE_MS)
 
+                    // Coverage high-water mark: latest pending/published show — quiet
+                    // visibility for "how far ahead is this venue ingested" (NOT a
+                    // gate; dedupe remains the overlap protection).
+                    const coveredEvents = venueEvents.filter(e => e.status === 'pending' || e.status === 'published')
+                    const coveredThru = coveredEvents.length
+                      ? coveredEvents.reduce((max, e) => e.starts_at > max ? e.starts_at : max, coveredEvents[0].starts_at)
+                      : null
+
                     const nextShow = venueEvents[0]
 
                     return (
@@ -235,6 +246,9 @@ export function VenueBoard() {
                           >
                             <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                               {venue.name}
+                              <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 500, color: 'var(--fg-30)' }}>
+                                {coveredThru ? `thru ${fmtMD(coveredThru)}` : '—'}
+                              </span>
                             </span>
                             {isStale && (
                               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', background: 'var(--fg-08)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>

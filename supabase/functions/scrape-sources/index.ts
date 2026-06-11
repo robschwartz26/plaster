@@ -60,6 +60,7 @@ interface AdhocEvent extends ScrapedEvent {
   confidence: number
   suggested_venue_id?: string
   suggested_venue_name?: string
+  venue_latest?: string | null // coverage high-water mark (informational)
 }
 
 // Normalize a venue/title for matching + dedupe: lowercase, straighten curly
@@ -544,6 +545,9 @@ async function rehostImage(supabaseService: any, imageUrl: string | null, deadli
 interface DedupeIndex {
   keys: Set<string> // exact `${portland_date}|${normalized title}`
   byDate: Map<string, string[]> // portland_date → normalized titles that day
+  // Coverage high-water mark: the venue's max starts_at over pending/published
+  // (visibility only — dedupe remains the overlap protection).
+  maxStartsAt: string | null
 }
 
 const DUP_SIMILARITY_THRESHOLD = 0.8
@@ -552,12 +556,15 @@ const DUP_SIMILARITY_THRESHOLD = 0.8
 async function existingIndex(supabaseService: any, venueId: string, now: number): Promise<DedupeIndex> {
   const { data: existing } = await supabaseService
     .from('events')
-    .select('title, starts_at')
+    .select('title, starts_at, status')
     .eq('venue_id', venueId)
     .gte('starts_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
-  const idx: DedupeIndex = { keys: new Set(), byDate: new Map() }
-  for (const e of (existing ?? []) as Array<{ title: string; starts_at: string }>) {
+  const idx: DedupeIndex = { keys: new Set(), byDate: new Map(), maxStartsAt: null }
+  for (const e of (existing ?? []) as Array<{ title: string; starts_at: string; status: string }>) {
     addToIndex(idx, portlandDate(new Date(e.starts_at)), e.title)
+    if ((e.status === 'pending' || e.status === 'published') && (!idx.maxStartsAt || e.starts_at > idx.maxStartsAt)) {
+      idx.maxStartsAt = e.starts_at
+    }
   }
   return idx
 }
@@ -907,13 +914,15 @@ serve(async (req) => {
       const annotated = [] as Array<AdhocEvent & { duplicate: boolean }>
       for (const ev of adhocEvents) {
         let duplicate = false
+        let venueLatest: string | null = null
         if (ev.venue_id) {
           if (!idxByVenue.has(ev.venue_id)) idxByVenue.set(ev.venue_id, await existingIndex(supabaseService, ev.venue_id, now))
           const idx = idxByVenue.get(ev.venue_id)!
+          venueLatest = idx.maxStartsAt
           duplicate = isDuplicate(idx, ev.portland_date, ev.title)
           if (!duplicate) { addToIndex(idx, ev.portland_date, ev.title); wouldInsert++ }
         }
-        annotated.push({ ...ev, duplicate })
+        annotated.push({ ...ev, duplicate, venue_latest: venueLatest })
       }
 
       if (dryRun) {

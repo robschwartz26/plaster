@@ -230,6 +230,22 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
     finally { setScheduleLoading(false) }
   }, [])
 
+  // Coverage high-water mark for the selected venue — one max query, shown under
+  // the picker ("Covered through 8/15" / "No events yet"). Visibility, not a gate.
+  const [coveredThru, setCoveredThru] = useState<string | 'none' | null>(null)
+  useEffect(() => {
+    if (!form.venue_id) { setCoveredThru(null); return }
+    let cancelled = false
+    supabaseAdmin.from('events')
+      .select('starts_at')
+      .eq('venue_id', form.venue_id)
+      .in('status', ['pending', 'published'])
+      .order('starts_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => { if (!cancelled) setCoveredThru(data?.[0]?.starts_at ?? 'none') })
+    return () => { cancelled = true }
+  }, [form.venue_id])
+
   const handleVenueChange = (venueId: string) => {
     if (venueId) setVenueMismatch(null)
     const v = venues.find(v => v.id === venueId)
@@ -873,6 +889,13 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
             </select>
             {form.venue_id && !nearDuplicate && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>existing venue · address &amp; details auto-filled</p>
+            )}
+            {form.venue_id && coveredThru && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '4px 0 0 0' }}>
+                {coveredThru === 'none'
+                  ? 'No events yet'
+                  : `Covered through ${new Date(coveredThru).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric' })}`}
+              </p>
             )}
             {venueMismatch && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)', margin: '6px 0 0 0' }}>

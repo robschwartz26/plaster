@@ -67,6 +67,7 @@ interface AdhocEvent {
   duplicate: boolean
   suggested_venue_id?: string
   suggested_venue_name?: string
+  venue_latest?: string | null
 }
 
 interface AdhocResponse {
@@ -489,6 +490,11 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                     {ev.portland_date} · {portlandTime(ev.starts_at)}
                     {ev.venue_name && !ev.needsVenue && <> · {ev.venue_name}</>}
                     {ev.duplicate && <span style={{ color: '#fbbf24' }}> · duplicate</span>}
+                    {/* Informational only — new shows get announced inside covered
+                        windows; the duplicate badge is the real verdict. */}
+                    {!ev.duplicate && ev.venue_latest && ev.starts_at <= ev.venue_latest && (
+                      <span style={{ color: 'var(--fg-30)' }}> · within covered range</span>
+                    )}
                   </div>
                   {ev.needsVenue && (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
