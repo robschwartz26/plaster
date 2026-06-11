@@ -955,6 +955,7 @@ export type Database = {
           source_type: string
           default_category: string
           enabled: boolean
+          horizon_days: number
           last_run_at: string | null
           last_run_note: string | null
         }
@@ -965,6 +966,7 @@ export type Database = {
           source_type?: string
           default_category?: string
           enabled?: boolean
+          horizon_days?: number
           last_run_at?: string | null
           last_run_note?: string | null
         }
@@ -975,6 +977,7 @@ export type Database = {
           source_type?: string
           default_category?: string
           enabled?: boolean
+          horizon_days?: number
           last_run_at?: string | null
           last_run_note?: string | null
         }

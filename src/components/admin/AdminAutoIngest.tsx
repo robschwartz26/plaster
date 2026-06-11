@@ -15,10 +15,19 @@ interface SourceRow {
   source_type: string
   default_category: string
   enabled: boolean
+  horizon_days: number
   last_run_at: string | null
   last_run_note: string | null
   venues: { name: string } | null
 }
+
+// Ingest horizon choices — how far ahead a fetch/source looks.
+const HORIZON_OPTIONS = [
+  { days: 30, label: '1 month' },
+  { days: 60, label: '2 months' },
+  { days: 90, label: '3 months' },
+  { days: 120, label: '4 months' },
+]
 
 interface ScrapeResult {
   sourceId: string
@@ -143,6 +152,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   const [addVenueId, setAddVenueId] = useState('')
   const [addUrl, setAddUrl] = useState('')
   const [addCategory, setAddCategory] = useState('Live Music')
+  const [addHorizon, setAddHorizon] = useState(60) // new sources default 60 — far-future events roll in on later sweeps
   const [addBusy, setAddBusy] = useState(false)
   const [addError, setAddError] = useState('')
   // Per-source inline result / error / busy state, keyed by source id ('*' = run-all)
@@ -151,6 +161,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   // Ad-hoc "Import from URL" state
   const [adhocUrl, setAdhocUrl] = useState('')
   const [adhocVenueId, setAdhocVenueId] = useState('')
+  const [adhocMaxDays, setAdhocMaxDays] = useState(60)
   const [adhocBusy, setAdhocBusy] = useState(false)
   const [adhocError, setAdhocError] = useState('')
   const [adhocParsed, setAdhocParsed] = useState<AdhocResponse | null>(null)
@@ -191,11 +202,16 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     if (!addVenueId || !addUrl.trim()) { setAddError('Pick a venue and enter a URL.'); return }
     setAddBusy(true); setAddError('')
     const { error } = await supabaseAdmin.from('venue_sources').insert({
-      venue_id: addVenueId, source_url: addUrl.trim(), default_category: addCategory,
+      venue_id: addVenueId, source_url: addUrl.trim(), default_category: addCategory, horizon_days: addHorizon,
     })
     if (error) setAddError(error.message)
-    else { setAddVenueId(''); setAddUrl(''); setAddCategory('Live Music'); fetchSources() }
+    else { setAddVenueId(''); setAddUrl(''); setAddCategory('Live Music'); setAddHorizon(60); fetchSources() }
     setAddBusy(false)
+  }
+
+  async function handleHorizonChange(src: SourceRow, days: number) {
+    await supabaseAdmin.from('venue_sources').update({ horizon_days: days }).eq('id', src.id)
+    fetchSources()
   }
 
   async function handleToggle(src: SourceRow) {
@@ -233,7 +249,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     if (!adhocUrl.trim()) { setAdhocError('Paste an event page URL.'); return }
     setAdhocBusy(true); setAdhocError(''); setAdhocParsed(null); setAdhocDone(null)
     try {
-      const { adhoc } = await callScrapeFn({ adhocUrl: adhocUrl.trim(), venueId: adhocVenueId || undefined, dryRun: true })
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocUrl.trim(), venueId: adhocVenueId || undefined, dryRun: true, maxDays: adhocMaxDays })
       setAdhocParsed(adhoc ?? null)
       // Default-check everything insertable (venue resolved + not a duplicate)
       const checked = new Set<number>()
@@ -256,7 +272,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     if (selection.some(ev => !ev.venue_id)) { setAdhocError('Assign a venue to every selected event first.'); return }
     setAdhocBusy(true); setAdhocError('')
     try {
-      const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false })
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false, maxDays: adhocMaxDays })
       setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0, rewriteFailures: adhoc?.rewriteFailures, rewriteError: adhoc?.rewriteError, enriched: adhoc?.enriched, enrichTried: adhoc?.enrichTried })
       setAdhocParsed(null)
     } catch (e) {
@@ -366,6 +382,9 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
           <select value={adhocVenueId} onChange={e => setAdhocVenueId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             <option value="">Venue (optional — auto-match)</option>
             {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <select value={adhocMaxDays} onChange={e => setAdhocMaxDays(Number(e.target.value))} title="Ingest horizon" style={{ ...inputStyle, width: 110, flexShrink: 0 }}>
+            {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
           </select>
           <button onClick={handleEnrichVenue} disabled={draftBusy || !adhocUrl.trim()} style={{ ...smallBtn, opacity: draftBusy || !adhocUrl.trim() ? 0.5 : 1 }}>
             {draftBusy ? '…' : 'New venue from this site'}
@@ -530,6 +549,9 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
           <select value={addCategory} onChange={e => setAddCategory(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+          <select value={addHorizon} onChange={e => setAddHorizon(Number(e.target.value))} title="Ingest horizon" style={{ ...inputStyle, width: 110, flexShrink: 0 }}>
+            {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
+          </select>
           <button onClick={handleAdd} disabled={addBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: addBusy ? 0.6 : 1 }}>
             {addBusy ? 'Adding…' : 'Add'}
           </button>
@@ -556,6 +578,17 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                     {shortUrl(src.source_url)}
                   </a>
                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <select
+                      value={src.horizon_days}
+                      onChange={e => handleHorizonChange(src, Number(e.target.value))}
+                      title="Ingest horizon"
+                      style={{ ...inputStyle, width: 96, padding: '3px 6px', fontSize: 11 }}
+                    >
+                      {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
+                      {!HORIZON_OPTIONS.some(h => h.days === src.horizon_days) && (
+                        <option value={src.horizon_days}>{src.horizon_days}d</option>
+                      )}
+                    </select>
                     <button onClick={() => handleToggle(src)} style={{ ...smallBtn, color: src.enabled ? '#86efac' : 'var(--fg-40)' }}>
                       {src.enabled ? 'on' : 'off'}
                     </button>

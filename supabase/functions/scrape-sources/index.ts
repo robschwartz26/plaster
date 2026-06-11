@@ -25,7 +25,14 @@ const corsHeaders = {
 const BOT_UA = 'PlasterBot/0.1 (+https://plasterthewall.com)'
 const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024
-const MAX_DAYS_OUT = 120
+const MAX_DAYS_OUT = 120 // default ingest horizon (days); see clampDays
+
+// Configurable horizon: integer clamp 1..180, default 120 (missing/invalid input).
+function clampDays(n: unknown): number {
+  const v = typeof n === 'number' ? Math.round(n) : parseInt(String(n ?? ''), 10)
+  if (!Number.isFinite(v)) return MAX_DAYS_OUT
+  return Math.min(180, Math.max(1, v))
+}
 const PAGE_TIMEOUT_MS = 10000
 const PAGE_FETCH_BUDGET = 5
 const IMAGE_TOTAL_BUDGET_MS = 25000
@@ -625,7 +632,6 @@ serve(async (req) => {
   try {
     const body = await req.json().catch(() => ({}))
     const now = Date.now()
-    const maxOut = now + MAX_DAYS_OUT * 24 * 60 * 60 * 1000
 
     // ═══ VENUE ENRICHMENT MODE: draft a venue from its site, NO inserts ══════
     if (typeof body.enrichVenueFromUrl === 'string' && body.enrichVenueFromUrl.trim()) {
@@ -733,6 +739,8 @@ serve(async (req) => {
       const forcedVenueId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
       const dryRun: boolean = body.dryRun === true
       const postedEvents: AdhocEvent[] | null = Array.isArray(body.events) ? body.events : null
+      // Configurable ingest horizon for this request (UI sends maxDays; default 120)
+      const maxOut = now + clampDays(body.maxDays) * 24 * 60 * 60 * 1000
 
       // ── Import step: insert the posted-back selection (no re-parse/AI) ──
       if (!dryRun && postedEvents) {
@@ -959,7 +967,7 @@ serve(async (req) => {
 
     let q = supabaseService
       .from('venue_sources')
-      .select('id, venue_id, source_url, source_type, default_category, enabled, venues(name)')
+      .select('id, venue_id, source_url, source_type, default_category, enabled, horizon_days, venues(name)')
       .eq('enabled', true)
       .eq('source_type', 'jsonld')
     if (sourceId) q = q.eq('id', sourceId)
@@ -983,7 +991,9 @@ serve(async (req) => {
         const fetcher = new PageFetcher()
         const pageRes = await fetcher.get(srcUrl)
         if (!pageRes || pageRes.status !== 200) throw new Error(`page fetch ${pageRes?.status ?? 'failed'}`)
-        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOut)
+        // Per-source ingest horizon (venue_sources.horizon_days, default 120)
+        const maxOutSrc = now + clampDays(src.horizon_days) * 24 * 60 * 60 * 1000
+        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOutSrc)
         result.found = mapped.length
 
         // 2. Dedupe — venue + Portland date, exact normalized title OR similarity
