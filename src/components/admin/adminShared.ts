@@ -8,7 +8,7 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 export const IS_DEV = window.location.hostname === 'localhost'
 
 export const NEIGHBORHOODS = [
-  'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest',
+  'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',
   'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
   'Division', 'Burnside',
 ]
