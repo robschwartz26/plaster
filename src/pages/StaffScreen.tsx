@@ -62,14 +62,19 @@ export function LiveClock({ compact = false }: { compact?: boolean }) {
 }
 
 // ── Panel shell (narrow / non-resizable layout) ──────────────
-function PanelShell({ header, children, bodyPadding = 16 }: {
-  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number
+// maxHeight bounds a long panel so it can't swallow the whole page — content past
+// the cap scrolls inside the panel; shorter panels render at natural height.
+function PanelShell({ header, children, bodyPadding = 16, onMinimize, maxHeight }: {
+  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number; onMinimize?: () => void; maxHeight?: string | number
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ flexShrink: 0, maxHeight, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
       {header != null && (
-        <div style={{ padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-          {header}
+        <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{header}</span>
+          {onMinimize && (
+            <button onClick={onMinimize} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>–</button>
+          )}
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: bodyPadding }}>{children}</div>
@@ -241,6 +246,25 @@ function StaffDashboard() {
         { key: 'team', label: 'Team' },
       ]
 
+  // Chip buttons — identical at every width; the wrapper differs (inline in the
+  // top bar when wide, a scrollable row under it when narrow).
+  const chipButtons = chipDefs.map(({ key, label }) => (
+    <button
+      key={key}
+      onClick={() => togglePanel(key)}
+      style={{
+        padding: '4px 10px', borderRadius: 6, flexShrink: 0,
+        border: open[key] ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)',
+        background: open[key] ? 'rgba(168,85,247,0.1)' : 'transparent',
+        color: open[key] ? '#A855F7' : 'var(--fg-30)',
+        fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
+        cursor: 'pointer', transition: 'all 0.15s',
+      }}
+    >
+      {label}
+    </button>
+  ))
+
   // ── Top bar ──────────────────────────────────────────────
   const teamMinimizedSection = isWide && !open.team ? (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -264,25 +288,10 @@ function StaffDashboard() {
         <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A855F7', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 8px', borderRadius: 4 }}>STAFF</span>
       </div>
 
-      {/* Middle: panel toggle chips (wide only) */}
+      {/* Middle: panel toggle chips (wide — inline; narrow chips live below the bar) */}
       {isWide && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', padding: '0 8px' }}>
-          {chipDefs.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => togglePanel(key)}
-              style={{
-                padding: '4px 10px', borderRadius: 6, flexShrink: 0,
-                border: open[key] ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)',
-                background: open[key] ? 'rgba(168,85,247,0.1)' : 'transparent',
-                color: open[key] ? '#A855F7' : 'var(--fg-30)',
-                fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {chipButtons}
         </div>
       )}
 
@@ -361,6 +370,29 @@ function StaffDashboard() {
     }
   }
 
+  // One stacked narrow panel. Preview keeps its fixed 480px block; every other
+  // open panel is bounded (70vh) and scrolls internally so one long panel can't
+  // swallow the page. All carry the – minimize button (toggles open state).
+  function renderNarrowPanel(key: keyof PanelOpen): React.ReactNode {
+    if (key === 'preview') {
+      return (
+        <div key="preview" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+          <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Preview</span>
+            <button onClick={() => togglePanel('preview')} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}>–</button>
+          </div>
+          <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview scope={isAdmin ? 'all' : 'mine'} /></div>
+        </div>
+      )
+    }
+    const label = chipDefs.find(c => c.key === key)?.label ?? key
+    return (
+      <PanelShell key={key} header={label} onMinimize={() => togglePanel(key)} maxHeight="70vh">
+        {renderPanelBody(key as PanelKey)}
+      </PanelShell>
+    )
+  }
+
   return (
     <div style={{ height: '100dvh', background: 'var(--bg)', color: 'var(--fg)', display: 'flex', flexDirection: 'column' }}>
       {topBar}
@@ -409,24 +441,23 @@ function StaffDashboard() {
           )}
         </div>
       ) : (
-        /* ── Narrow: stacked (minimize not active on narrow) ── */
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 12, overflowY: 'auto' }}>
-          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Preview</div>
-            <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview scope={isAdmin ? 'all' : 'mine'} /></div>
+        /* ── Narrow: chip-driven stack (respects open state + role order) ── */
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Chip bar — horizontally scrollable row under the top bar */}
+          <div className="hide-scrollbar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid var(--fg-08)' }}>
+            {chipButtons}
           </div>
-          {isAdmin && <PanelShell header="Review"><AdminPendingEvents /></PanelShell>}
-          <PanelShell header={panelLabels.ingester}><ImportForm staffMode={!isAdmin} /></PanelShell>
-          {isAdmin && <PanelShell header="Auto-Ingest"><AutoIngestPanel /></PanelShell>}
-          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}><VenueBoard /></div>
-          </div>
-          {isAdmin ? (
-            <PanelShell header="Tools"><AdminTools /></PanelShell>
+          {chipDefs.some(c => open[c.key]) ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 12, overflowY: 'auto' }}>
+              {chipDefs.filter(c => open[c.key]).map(c => renderNarrowPanel(c.key))}
+            </div>
           ) : (
-            <PanelShell header="Upload history"><UploadHistory /></PanelShell>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
+                All panels hidden — tap a chip above to open one.
+              </p>
+            </div>
           )}
-          <PanelShell header="Team">{teamContent}</PanelShell>
         </div>
       )}
 
