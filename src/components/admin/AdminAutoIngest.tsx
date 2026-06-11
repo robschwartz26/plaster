@@ -68,6 +68,7 @@ interface AdhocEvent {
   suggested_venue_id?: string
   suggested_venue_name?: string
   venue_latest?: string | null
+  soldOut?: boolean
 }
 
 interface AdhocResponse {
@@ -485,7 +486,14 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                   <img src={ev.image} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }} />
                 )}
                 <div style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-80)' }}>
-                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{ev.title}</div>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                    {ev.title}
+                    {ev.soldOut && (
+                      <span style={{ marginLeft: 6, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', padding: '1px 5px', borderRadius: 3, verticalAlign: 'middle' }}>
+                        SOLD OUT
+                      </span>
+                    )}
+                  </div>
                   <div style={{ color: 'var(--fg-40)', fontSize: 11 }}>
                     {ev.portland_date} · {portlandTime(ev.starts_at)}
                     {ev.venue_name && !ev.needsVenue && <> · {ev.venue_name}</>}

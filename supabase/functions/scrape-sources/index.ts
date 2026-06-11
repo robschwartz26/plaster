@@ -50,7 +50,32 @@ interface ScrapedEvent {
   event_url: string
   image: string | null
   description: string | null
+  soldOut?: boolean
   _venue_name?: string
+}
+
+// schema.org offers.availability → sold out ("SoldOut" or the URL form;
+// offers may be a single object or an array).
+function offersSoldOut(offers: unknown): boolean {
+  const list = Array.isArray(offers) ? offers : offers ? [offers] : []
+  for (const o of list) {
+    const av = (o as Record<string, unknown>)?.availability
+    if (typeof av === 'string' && /soldout/i.test(av)) return true
+  }
+  return false
+}
+
+// Title-level sold-out detection + conservative cleanup: strip a parenthesized
+// "(sold out)" / "[sold out]" or a trailing "- sold out" so dedupe stays
+// consistent (normalizeName comparisons keep working — both sides cleaned).
+function detectSoldOut(rawTitle: string): { title: string; soldOut: boolean } {
+  if (!/\bsold[\s-]?out\b/i.test(rawTitle)) return { title: rawTitle, soldOut: false }
+  const cleaned = rawTitle
+    .replace(/\s*[([]\s*sold[\s-]?out\s*[)\]]/gi, '')
+    .replace(/\s*[-–—:|·]+\s*sold[\s-]?out\s*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return { title: cleaned || rawTitle, soldOut: true }
 }
 
 interface AdhocEvent extends ScrapedEvent {
@@ -249,7 +274,8 @@ function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: num
   for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
   const mapped: ScrapedEvent[] = []
   for (const ev of rawEvents) {
-    const title = typeof ev.name === 'string' ? decodeEntities(ev.name).trim() : ''
+    const rawTitle = typeof ev.name === 'string' ? decodeEntities(ev.name).trim() : ''
+    const { title, soldOut: titleSold } = detectSoldOut(rawTitle)
     const start = parseStartDate(ev.startDate)
     if (!title || !start || !inWindow(start, now, maxOut)) continue
     const desc = typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) : null
@@ -262,6 +288,7 @@ function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: num
       event_url: resolveUrl(ev.url, baseUrl),
       image: pickImage(ev.image),
       description: desc || null,
+      soldOut: titleSold || offersSoldOut(ev.offers),
       ...(venueName ? { _venue_name: venueName } : {}),
     })
   }
@@ -276,7 +303,7 @@ async function probeTribe(fetcher: PageFetcher, origin: string, now: number, max
   try { json = JSON.parse(res.text) } catch { return [] }
   const out: ScrapedEvent[] = []
   for (const ev of json?.events ?? []) {
-    const title = typeof ev.title === 'string' ? stripTags(ev.title) : ''
+    const { title, soldOut } = detectSoldOut(typeof ev.title === 'string' ? stripTags(ev.title) : '')
     // Tribe start_date is venue-local ("YYYY-MM-DD HH:MM:SS") — Portland venues → PT.
     const sd = typeof ev.start_date === 'string' ? ev.start_date : ''
     const [date, timeFull] = sd.split(' ')
@@ -291,6 +318,7 @@ async function probeTribe(fetcher: PageFetcher, origin: string, now: number, max
       event_url: typeof ev.url === 'string' ? ev.url : origin,
       image: img && typeof img.url === 'string' ? img.url : null,
       description: typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) || null : null,
+      soldOut,
       ...(venue && typeof venue.venue === 'string' ? { _venue_name: decodeEntities(venue.venue).trim() } : {}),
     })
   }
@@ -309,7 +337,7 @@ async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: numb
   const origin = new URL(pageUrl).origin
   const out: ScrapedEvent[] = []
   for (const it of items) {
-    const title = typeof it.title === 'string' ? decodeEntities(it.title).trim() : ''
+    const { title, soldOut } = detectSoldOut(typeof it.title === 'string' ? decodeEntities(it.title).trim() : '')
     // Squarespace startDate is epoch milliseconds.
     const start = typeof it.startDate === 'number' ? new Date(it.startDate) : null
     if (!title || !start || isNaN(start.getTime()) || !inWindow(start, now, maxOut)) continue
@@ -320,6 +348,7 @@ async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: numb
       event_url: typeof it.fullUrl === 'string' ? resolveUrl(it.fullUrl, origin) : pageUrl,
       image: typeof it.assetUrl === 'string' ? it.assetUrl : null,
       description: typeof it.excerpt === 'string' ? stripTags(it.excerpt).slice(0, 400) || null : null,
+      soldOut,
     })
   }
   return out
@@ -423,13 +452,14 @@ async function aiExtractEvents(pageText: string, pageUrl: string, now: number, m
         role: 'user',
         content: `Today is ${portlandToday()} in Portland, Oregon. The following is the readable text of an events web page (${pageUrl}). ${jsonFeed ? "The input is a JSON feed from a venue's calendar system — extract the events from it. " : ''}Extract every distinct UPCOMING event as a JSON array — respond with ONLY the JSON array, no markdown fences, no commentary:
 
-[{"title": string, "date": "YYYY-MM-DD", "time": "HH:mm" | null, "venue_name": string | null, "description": string | null, "image_url": string | null}]
+[{"title": string, "date": "YYYY-MM-DD", "time": "HH:mm" | null, "venue_name": string | null, "description": string | null, "image_url": string | null, "sold_out": boolean}]
 
 Rules:
 - Only real events — no nav/footer/membership/newsletter junk.
 - description ≤ 2 sentences.
 - Dates without a year roll FORWARD to the next future occurrence from today.
 - Skip anything without a discernible calendar date.
+- Mark sold_out true only if the page explicitly says the event is sold out.
 - If the page has no events, return [] — never invent events.`,
       }],
     }),
@@ -448,7 +478,7 @@ Rules:
 
   const mapped: ScrapedEvent[] = []
   for (const ev of parsed as Record<string, unknown>[]) {
-    const title = typeof ev.title === 'string' ? ev.title.trim() : ''
+    const { title, soldOut: titleSold } = detectSoldOut(typeof ev.title === 'string' ? ev.title.trim() : '')
     const date = typeof ev.date === 'string' ? ev.date.trim() : ''
     if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue // discard rows without a parseable date
     const time = typeof ev.time === 'string' && /^\d{2}:\d{2}$/.test(ev.time) ? ev.time : null
@@ -456,6 +486,7 @@ Rules:
     if (!start || !inWindow(start, now, maxOut)) continue
     mapped.push({
       title,
+      soldOut: titleSold || ev.sold_out === true,
       starts_at: start.toISOString(),
       portland_date: portlandDate(start),
       event_url: pageUrl,
@@ -792,6 +823,7 @@ serve(async (req) => {
             view_count: 0,
             like_count: 0,
             status: 'pending', // explicit — service role bypasses the 063 trigger
+            sold_out: ev.soldOut ?? false,
             created_by: user.id,
             source_url: ev.event_url || adhocUrl,
             ai_confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
@@ -951,6 +983,7 @@ serve(async (req) => {
           view_count: 0,
           like_count: 0,
           status: 'pending',
+          sold_out: ev.soldOut ?? false,
           created_by: user.id,
           source_url: ev.event_url || sourcePage,
           ai_confidence: ev.confidence,
@@ -1054,6 +1087,7 @@ serve(async (req) => {
             like_count: 0,
             // Service-role inserts BYPASS the 063 staging trigger — set explicitly:
             status: 'pending',
+            sold_out: ev.soldOut ?? false,
             created_by: user.id, // the calling admin, so review groups under them
             source_url: ev.event_url,
             ai_confidence: CONFIDENCE_STRUCTURED,
