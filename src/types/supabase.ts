@@ -947,6 +947,47 @@ export type Database = {
         }
         Relationships: []
       }
+      venue_sources: {
+        Row: {
+          id: string
+          venue_id: string
+          source_url: string
+          source_type: string
+          default_category: string
+          enabled: boolean
+          last_run_at: string | null
+          last_run_note: string | null
+        }
+        Insert: {
+          id?: string
+          venue_id: string
+          source_url: string
+          source_type?: string
+          default_category?: string
+          enabled?: boolean
+          last_run_at?: string | null
+          last_run_note?: string | null
+        }
+        Update: {
+          id?: string
+          venue_id?: string
+          source_url?: string
+          source_type?: string
+          default_category?: string
+          enabled?: boolean
+          last_run_at?: string | null
+          last_run_note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_sources_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venues: {
         Row: {
           address: string | null
