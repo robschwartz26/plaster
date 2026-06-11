@@ -93,6 +93,8 @@ interface SourceResult {
   inserted?: number
   skipped?: number
   error?: string
+  rewriteFailures?: number
+  rewriteError?: string
 }
 
 // Budgeted page fetcher: PlasterBot UA first; ONE browser-UA retry on
@@ -427,10 +429,13 @@ Rules:
 // failed rewrite → null (the info panel handles null) — never the verbatim source.
 const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
 
-async function rewriteDescription(sourceText: string | null, eventTitle: string, venueName: string): Promise<string | null> {
-  if (!sourceText || !sourceText.trim()) return null // no source prose → no call, store null
+// Returns { text } on success; { text: null, error } on FAILURE — the stored
+// description stays null either way (never verbatim source), but failures must be
+// visible upstream: an out-of-credit run must not look like an empty feed.
+async function rewriteDescription(sourceText: string | null, eventTitle: string, venueName: string): Promise<{ text: string | null; error?: string }> {
+  if (!sourceText || !sourceText.trim()) return { text: null } // no source prose → no call, no failure
   const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!ANTHROPIC_KEY) return null
+  if (!ANTHROPIC_KEY) return { text: null, error: 'ANTHROPIC_API_KEY secret not set' }
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -451,11 +456,18 @@ Source text: ${sourceText.slice(0, 1500)}`,
         }],
       }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const j = await res.json()
+        detail = j?.error?.message ?? j?.error?.type ?? ''
+      } catch { /* non-JSON error body */ }
+      return { text: null, error: `${res.status}${detail ? ` ${String(detail).slice(0, 140)}` : ''}` }
+    }
     const data = await res.json()
     const text = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
-    return text || null
-  } catch { return null }
+    return { text: text || null }
+  } catch (e) { return { text: null, error: e instanceof Error ? e.message : String(e) } }
 }
 
 // Re-host an image into posters/scrape/{uuid}.jpg. Sequential callers share a
@@ -689,6 +701,8 @@ serve(async (req) => {
       // ── Import step: insert the posted-back selection (no re-parse/AI) ──
       if (!dryRun && postedEvents) {
         let inserted = 0, skipped = 0
+        let rewriteFailures = 0
+        let rewriteError: string | undefined
         const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
         const idxByVenue = new Map<string, DedupeIndex>()
         for (const ev of postedEvents.slice(0, MAX_ADHOC_EVENTS)) {
@@ -701,13 +715,15 @@ serve(async (req) => {
           addToIndex(idx, pDate, ev.title)
 
           const posterUrl = await rehostImage(supabaseService, ev.image ?? null, imageDeadline)
+          const rw = await rewriteDescription(ev.description ?? null, ev.title, ev.venue_name ?? '')
+          if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
           const { error: insErr } = await supabaseService.from('events').insert({
             venue_id: venueId,
             title: ev.title.trim(),
             category: 'Live Music',
             poster_url: posterUrl,
             starts_at: ev.starts_at,
-            description: await rewriteDescription(ev.description ?? null, ev.title, ev.venue_name ?? ''),
+            description: rw.text,
             view_count: 0,
             like_count: 0,
             status: 'pending', // explicit — service role bypasses the 063 trigger
@@ -718,9 +734,9 @@ serve(async (req) => {
           if (insErr) throw new Error(`insert: ${insErr.message}`)
           inserted++
         }
-        return new Response(JSON.stringify({ adhoc: { url: adhocUrl, inserted, skipped } }), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        })
+        return new Response(JSON.stringify({
+          adhoc: { url: adhocUrl, inserted, skipped, ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}) },
+        }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
       // ── Parse step: JSON-LD → probes → one-hop hunt → AI → empty ──
@@ -846,17 +862,21 @@ serve(async (req) => {
 
       // Real run without a posted selection: insert every resolved, non-dup event
       let inserted = 0, skipped = 0
+      let rewriteFailures = 0
+      let rewriteError: string | undefined
       const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
       for (const ev of annotated) {
         if (ev.needsVenue || ev.duplicate) { skipped++; continue }
         const posterUrl = await rehostImage(supabaseService, ev.image, imageDeadline)
+        const rw = await rewriteDescription(ev.description, ev.title, ev.venue_name ?? '')
+        if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
         const { error: insErr } = await supabaseService.from('events').insert({
           venue_id: ev.venue_id,
           title: ev.title,
           category: 'Live Music',
           poster_url: posterUrl,
           starts_at: ev.starts_at,
-          description: await rewriteDescription(ev.description, ev.title, ev.venue_name ?? ''),
+          description: rw.text,
           view_count: 0,
           like_count: 0,
           status: 'pending',
@@ -867,9 +887,9 @@ serve(async (req) => {
         if (insErr) throw new Error(`insert: ${insErr.message}`)
         inserted++
       }
-      return new Response(JSON.stringify({ adhoc: { url: adhocUrl, sourcePage, method, inserted, skipped, notes: fetcher.notes } }), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-      })
+      return new Response(JSON.stringify({
+        adhoc: { url: adhocUrl, sourcePage, method, inserted, skipped, notes: fetcher.notes, ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}) },
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ REGISTERED-SOURCES MODE (unchanged behavior) ════════════════════════
@@ -933,16 +953,20 @@ serve(async (req) => {
 
         // 4. Real run: re-host image + insert pending
         let inserted = 0
+        let rewriteFailures = 0
+        let rewriteError: string | undefined
         const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
         for (const ev of fresh) {
           const posterUrl = await rehostImage(supabaseService, ev.image, imageDeadline)
+          const rw = await rewriteDescription(ev.description, ev.title, venueName)
+          if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
           const { error: insErr } = await supabaseService.from('events').insert({
             venue_id: src.venue_id,
             title: ev.title,
             category: src.default_category,
             poster_url: posterUrl,
             starts_at: ev.starts_at,
-            description: await rewriteDescription(ev.description, ev.title, venueName),
+            description: rw.text,
             view_count: 0,
             like_count: 0,
             // Service-role inserts BYPASS the 063 staging trigger — set explicitly:
@@ -957,11 +981,13 @@ serve(async (req) => {
 
         result.inserted = inserted
         result.skipped = skipped
+        if (rewriteFailures) { result.rewriteFailures = rewriteFailures; result.rewriteError = rewriteError }
 
-        // 5. Stamp the source row (winning extraction method included)
+        // 5. Stamp the source row (winning extraction method + rewrite failures)
+        const rwNote = rewriteFailures ? ` · descriptions failed: ${rewriteFailures} (${rewriteError})` : ''
         await supabaseService.from('venue_sources').update({
           last_run_at: new Date().toISOString(),
-          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}`,
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${rwNote}`,
         }).eq('id', src.id)
       } catch (err) {
         // Per-source failure is a note, not a batch failure

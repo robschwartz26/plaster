@@ -30,6 +30,16 @@ interface ScrapeResult {
   inserted?: number
   skipped?: number
   error?: string
+  rewriteFailures?: number
+  rewriteError?: string
+}
+
+// friendlyExtractionError-style mapping for description-rewrite failures.
+function friendlyRewriteError(n: number, msg?: string): string {
+  const m = (msg ?? '').toLowerCase()
+  if (m.includes('credit balance') || m.includes('credit')) return `descriptions failed: ${n} (${msg} — tell Rob)`
+  if (m.includes('429') || m.includes('rate limit')) return `descriptions failed: ${n} (rate limit — retry in a minute)`
+  return `descriptions failed: ${n}${msg ? ` (${msg})` : ''}`
 }
 
 interface AdhocEvent {
@@ -58,6 +68,8 @@ interface AdhocResponse {
   inserted?: number
   skipped?: number
   notes?: string[]
+  rewriteFailures?: number
+  rewriteError?: string
 }
 
 interface VenueDraft {
@@ -140,7 +152,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   const [adhocParsed, setAdhocParsed] = useState<AdhocResponse | null>(null)
   const [adhocChecked, setAdhocChecked] = useState<Set<number>>(new Set())
   const [adhocVenueFix, setAdhocVenueFix] = useState<Record<number, string>>({})
-  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number } | null>(null)
+  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number; rewriteFailures?: number; rewriteError?: string } | null>(null)
   // New-venue-from-URL enrichment state
   const [draft, setDraft] = useState<{ name: string; address: string; neighborhood: string; website: string; instagram: string; lat: number | null; lng: number | null } | null>(null)
   const [draftBusy, setDraftBusy] = useState(false)
@@ -241,7 +253,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     setAdhocBusy(true); setAdhocError('')
     try {
       const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false })
-      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0 })
+      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0, rewriteFailures: adhoc?.rewriteFailures, rewriteError: adhoc?.rewriteError })
       setAdhocParsed(null)
     } catch (e) {
       setAdhocError(e instanceof Error ? e.message : String(e))
@@ -326,6 +338,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
         <span>found {res.found}</span>
         {res.wouldInsert !== undefined && <span> · would insert {res.wouldInsert}</span>}
         {res.inserted !== undefined && <span> · inserted {res.inserted} · skipped {res.skipped}</span>}
+        {!!res.rewriteFailures && <span style={{ color: '#fca5a5' }}> · {friendlyRewriteError(res.rewriteFailures, res.rewriteError)}</span>}
         {res.samples && res.samples.length > 0 && (
           <div style={{ marginTop: 2, color: 'var(--fg-40)' }}>
             {res.samples.map((s, i) => <div key={i}>· {s.title} — {s.date}</div>)}
@@ -400,8 +413,11 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
 
         {adhocDone && (
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
-            inserted {adhocDone.inserted} · skipped {adhocDone.skipped} ·{' '}
-            <a href="/staff" style={{ color: '#A855F7' }}>Review pending →</a>
+            inserted {adhocDone.inserted} · skipped {adhocDone.skipped}
+            {!!adhocDone.rewriteFailures && (
+              <span style={{ color: '#fca5a5' }}> · {friendlyRewriteError(adhocDone.rewriteFailures, adhocDone.rewriteError)}</span>
+            )}
+            {' · '}<a href="/staff" style={{ color: '#A855F7' }}>Review pending →</a>
           </p>
         )}
 
