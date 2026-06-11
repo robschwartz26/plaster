@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
-import { inputStyle, labelStyle, type Venue } from '@/components/admin/adminShared'
+import { inputStyle, labelStyle, NEIGHBORHOODS, neighborhoodFromAddress, venueSimilarity, type Venue } from '@/components/admin/adminShared'
 
 // ── Auto-Ingest admin section ──────────────────────────────────────────────────
 // Manages venue_sources rows and drives the scrape-sources edge function.
@@ -48,12 +48,23 @@ interface AdhocEvent {
 
 interface AdhocResponse {
   url: string
-  method?: 'jsonld' | 'ai'
+  sourcePage?: string
+  method?: string
   found?: number
   wouldInsert?: number
   events?: AdhocEvent[]
   inserted?: number
   skipped?: number
+  notes?: string[]
+}
+
+interface VenueDraft {
+  name: string | null
+  website: string | null
+  instagram: string | null
+  address: string | null
+  location_lat: number | null
+  location_lng: number | null
 }
 
 async function callScrapeFn(body: Record<string, unknown>): Promise<{ results?: ScrapeResult[]; adhoc?: AdhocResponse }> {
@@ -121,6 +132,14 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   const [adhocChecked, setAdhocChecked] = useState<Set<number>>(new Set())
   const [adhocVenueFix, setAdhocVenueFix] = useState<Record<number, string>>({})
   const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number } | null>(null)
+  // New-venue-from-URL enrichment state
+  const [draft, setDraft] = useState<{ name: string; address: string; neighborhood: string; website: string; instagram: string; lat: number | null; lng: number | null } | null>(null)
+  const [draftBusy, setDraftBusy] = useState(false)
+  const [draftError, setDraftError] = useState('')
+  const [draftNotes, setDraftNotes] = useState<string[]>([])
+  // Venues created in-session (merged into selects + assignment options)
+  const [createdVenues, setCreatedVenues] = useState<Array<{ id: string; name: string }>>([])
+  const allVenueOptions = [...venues.map(v => ({ id: v.id, name: v.name })), ...createdVenues]
 
   const fetchSources = useCallback(async () => {
     const { data } = await supabaseAdmin
@@ -219,6 +238,73 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     } finally { setAdhocBusy(false) }
   }
 
+  // ── New venue from this site: enrichment draft (NO inserts server-side) ──
+  async function handleEnrichVenue() {
+    if (!adhocUrl.trim()) { setDraftError('Paste a URL first.'); return }
+    setDraftBusy(true); setDraftError(''); setDraft(null)
+    try {
+      const json = await callScrapeFn({ enrichVenueFromUrl: adhocUrl.trim() }) as { venueDraft?: VenueDraft; notes?: string[] }
+      const d = json.venueDraft
+      if (!d) throw new Error('No venue draft returned')
+      setDraft({
+        name: d.name ?? '',
+        address: d.address ?? '',
+        // neighborhood derived client-side via the importer's existing helper
+        neighborhood: d.address ? neighborhoodFromAddress(d.address) : '',
+        website: d.website ?? '',
+        instagram: d.instagram ?? '',
+        lat: d.location_lat,
+        lng: d.location_lng,
+      })
+      setDraftNotes(json.notes ?? [])
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : String(e))
+    } finally { setDraftBusy(false) }
+  }
+
+  // Duplicate guard: best similarity match against existing venues for the draft name.
+  const draftSimilar = draft?.name
+    ? allVenueOptions
+        .map(v => ({ v, score: venueSimilarity(draft.name, v.name) }))
+        .sort((a, b) => b.score - a.score)
+        .find(({ score }) => score >= 0.5)?.v ?? null
+    : null
+
+  // Assign a venue id to every currently-needsVenue row in the checklist.
+  function assignVenueToNeedsRows(venueId: string) {
+    if (!adhocParsed?.events) return
+    setAdhocVenueFix(prev => {
+      const next = { ...prev }
+      adhocParsed.events!.forEach((ev, i) => { if (ev.needsVenue && !next[i]) next[i] = venueId })
+      return next
+    })
+    // Newly assignable rows become checkable defaults
+    setAdhocChecked(prev => {
+      const next = new Set(prev)
+      adhocParsed.events!.forEach((ev, i) => { if (ev.needsVenue && !ev.duplicate) next.add(i) })
+      return next
+    })
+  }
+
+  async function handleCreateVenue() {
+    if (!draft?.name.trim()) { setDraftError('Venue needs a name.'); return }
+    setDraftBusy(true); setDraftError('')
+    const { data, error } = await supabaseAdmin.from('venues').insert({
+      name: draft.name.trim(),
+      address: draft.address.trim() || null,
+      neighborhood: draft.neighborhood || null,
+      website: draft.website.trim() || null,
+      instagram: draft.instagram.trim() || null,
+      location_lat: draft.lat,
+      location_lng: draft.lng,
+    }).select('id, name').single()
+    if (error) { setDraftError(error.message); setDraftBusy(false); return }
+    setCreatedVenues(prev => [...prev, { id: data.id, name: data.name }])
+    assignVenueToNeedsRows(data.id)
+    setDraft(null)
+    setDraftBusy(false)
+  }
+
   function renderResult(r: ScrapeResult | { error: string }) {
     if ('error' in r && r.error && !('found' in r)) {
       return <span style={{ color: '#fca5a5' }}>{r.error}</span>
@@ -251,13 +337,56 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
         <div style={{ display: 'flex', gap: 8 }}>
           <select value={adhocVenueId} onChange={e => setAdhocVenueId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
             <option value="">Venue (optional — auto-match)</option>
-            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
           </select>
+          <button onClick={handleEnrichVenue} disabled={draftBusy || !adhocUrl.trim()} style={{ ...smallBtn, opacity: draftBusy || !adhocUrl.trim() ? 0.5 : 1 }}>
+            {draftBusy ? '…' : 'New venue from this site'}
+          </button>
           <button onClick={handleAdhocFetch} disabled={adhocBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy ? 0.6 : 1 }}>
             {adhocBusy ? 'Fetching…' : 'Fetch'}
           </button>
         </div>
         {adhocError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{adhocError}</p>}
+        {draftError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{draftError}</p>}
+
+        {/* New-venue draft — prefilled from the site, editable; nulls stay blank */}
+        {draft && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid var(--fg-15)', borderRadius: 8 }}>
+            <label style={labelStyle}>New venue (prefilled from site — edit before creating)</label>
+            <input value={draft.name} onChange={e => setDraft(d => d && { ...d, name: e.target.value })} placeholder="Name" style={inputStyle} />
+            <input value={draft.address} onChange={e => setDraft(d => d && { ...d, address: e.target.value, neighborhood: e.target.value ? neighborhoodFromAddress(e.target.value) : d.neighborhood })} placeholder="Address" style={inputStyle} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={draft.neighborhood} onChange={e => setDraft(d => d && { ...d, neighborhood: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+                <option value="">Neighborhood…</option>
+                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', alignSelf: 'center', whiteSpace: 'nowrap' }}>
+                {draft.lat != null && draft.lng != null ? `${draft.lat.toFixed(4)}, ${draft.lng.toFixed(4)}` : 'no coords'}
+              </span>
+            </div>
+            <input value={draft.website} onChange={e => setDraft(d => d && { ...d, website: e.target.value })} placeholder="Website" style={inputStyle} />
+            <input value={draft.instagram} onChange={e => setDraft(d => d && { ...d, instagram: e.target.value })} placeholder="Instagram" style={inputStyle} />
+            {draftNotes.length > 0 && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>{draftNotes.join(' · ')}</p>
+            )}
+            {/* Duplicate guard — the warning renders BEFORE the create button */}
+            {draftSimilar && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fbbf24' }}>
+                Did you mean <strong>{draftSimilar.name}</strong>?{' '}
+                <button
+                  onClick={() => { assignVenueToNeedsRows(draftSimilar.id); setAdhocVenueId(draftSimilar.id); setDraft(null) }}
+                  style={{ ...smallBtn, padding: '2px 8px', fontSize: 11, color: '#fbbf24', borderColor: 'rgba(251,191,36,0.4)' }}
+                >Use existing</button>
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleCreateVenue} disabled={draftBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: draftBusy ? 0.6 : 1 }}>
+                {draftBusy ? 'Creating…' : draftSimilar ? 'Create anyway' : 'Create venue'}
+              </button>
+              <button onClick={() => setDraft(null)} style={{ ...smallBtn, color: 'var(--fg-40)' }}>Cancel</button>
+            </div>
+          </div>
+        )}
 
         {adhocDone && (
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
@@ -269,7 +398,9 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
         {adhocParsed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
-              {adhocParsed.method === 'ai' ? 'AI extraction' : 'JSON-LD'} · found {adhocParsed.found} · insertable {adhocParsed.wouldInsert}
+              {adhocParsed.method} · found {adhocParsed.found} · insertable {adhocParsed.wouldInsert}
+              {adhocParsed.sourcePage && adhocParsed.sourcePage !== adhocParsed.url && <> · read {adhocParsed.sourcePage}</>}
+              {(adhocParsed.notes ?? []).length > 0 && <> · {adhocParsed.notes!.join(' · ')}</>}
             </p>
             {(adhocParsed.events ?? []).map((ev, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--fg-08)' }}>
@@ -300,7 +431,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
                       style={{ ...inputStyle, marginTop: 4, fontSize: 11, padding: '4px 8px' }}
                     >
                       <option value="">⚠ needs venue{ev.venue_name ? ` ("${ev.venue_name}" unmatched)` : ''} — pick…</option>
-                      {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                   )}
                 </div>
