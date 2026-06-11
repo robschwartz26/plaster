@@ -127,6 +127,20 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
+  async function rejectAll() {
+    if (!user || rows.length === 0) return
+    if (!window.confirm(`Reject all ${rows.length} pending events? They never appeared publicly.`)) return
+    setBusyGroup('*')
+    const now = new Date().toISOString()
+    // Batched: one update over every listed pending event
+    const { error } = await supabase.from('events')
+      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now })
+      .in('id', rows.map(e => e.id))
+    if (error) console.error('[AdminPendingEvents] reject all failed', error)
+    setBusyGroup(null)
+    fetchPending()
+  }
+
   async function rejectDuplicates(group: PendingEvent[]) {
     if (!user) return
     const dupes = group.filter(e => e.is_duplicate)
@@ -191,7 +205,16 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {statsStrip}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        {statsStrip}
+        <button
+          onClick={rejectAll}
+          disabled={busyGroup === '*'}
+          style={{ padding: '5px 10px', background: 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1, flexShrink: 0 }}
+        >
+          {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
+        </button>
+      </div>
       {groupOrder.map(key => {
         const group = groupMap[key]
         const isGroupBusy = busyGroup === key
