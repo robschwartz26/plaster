@@ -32,7 +32,31 @@ interface ScrapeResult {
   error?: string
 }
 
-async function callScrapeSources(body: { sourceId?: string; all?: boolean; dryRun?: boolean }): Promise<ScrapeResult[]> {
+interface AdhocEvent {
+  title: string
+  starts_at: string
+  portland_date: string
+  event_url: string
+  image: string | null
+  description: string | null
+  venue_id: string | null
+  venue_name: string | null
+  needsVenue: boolean
+  confidence: number
+  duplicate: boolean
+}
+
+interface AdhocResponse {
+  url: string
+  method?: 'jsonld' | 'ai'
+  found?: number
+  wouldInsert?: number
+  events?: AdhocEvent[]
+  inserted?: number
+  skipped?: number
+}
+
+async function callScrapeFn(body: Record<string, unknown>): Promise<{ results?: ScrapeResult[]; adhoc?: AdhocResponse }> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const { data: { session } } = await supabaseAdmin.auth.getSession()
   if (!session?.access_token) throw new Error('Not signed in')
@@ -43,7 +67,15 @@ async function callScrapeSources(body: { sourceId?: string; all?: boolean; dryRu
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error(json.error || `scrape-sources failed: ${res.status}`)
-  return (json.results ?? []) as ScrapeResult[]
+  return json
+}
+
+async function callScrapeSources(body: { sourceId?: string; all?: boolean; dryRun?: boolean }): Promise<ScrapeResult[]> {
+  return (await callScrapeFn(body)).results ?? []
+}
+
+function portlandTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true })
 }
 
 function shortUrl(url: string): string {
@@ -80,6 +112,15 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
   // Per-source inline result / error / busy state, keyed by source id ('*' = run-all)
   const [rowResults, setRowResults] = useState<Record<string, ScrapeResult | { error: string }>>({})
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+  // Ad-hoc "Import from URL" state
+  const [adhocUrl, setAdhocUrl] = useState('')
+  const [adhocVenueId, setAdhocVenueId] = useState('')
+  const [adhocBusy, setAdhocBusy] = useState(false)
+  const [adhocError, setAdhocError] = useState('')
+  const [adhocParsed, setAdhocParsed] = useState<AdhocResponse | null>(null)
+  const [adhocChecked, setAdhocChecked] = useState<Set<number>>(new Set())
+  const [adhocVenueFix, setAdhocVenueFix] = useState<Record<number, string>>({})
+  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number } | null>(null)
 
   const fetchSources = useCallback(async () => {
     const { data } = await supabaseAdmin
@@ -142,6 +183,42 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
     }
   }
 
+  // ── Ad-hoc: Fetch (dryRun parse) ──
+  async function handleAdhocFetch() {
+    if (!adhocUrl.trim()) { setAdhocError('Paste an event page URL.'); return }
+    setAdhocBusy(true); setAdhocError(''); setAdhocParsed(null); setAdhocDone(null)
+    try {
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocUrl.trim(), venueId: adhocVenueId || undefined, dryRun: true })
+      setAdhocParsed(adhoc ?? null)
+      // Default-check everything insertable (venue resolved + not a duplicate)
+      const checked = new Set<number>()
+      adhoc?.events?.forEach((ev, i) => { if (!ev.needsVenue && !ev.duplicate) checked.add(i) })
+      setAdhocChecked(checked)
+      setAdhocVenueFix({})
+    } catch (e) {
+      setAdhocError(e instanceof Error ? e.message : String(e))
+    } finally { setAdhocBusy(false) }
+  }
+
+  // ── Ad-hoc: Import selected (posts the parsed selection back) ──
+  async function handleAdhocImport() {
+    if (!adhocParsed?.events) return
+    const selection = adhocParsed.events
+      .map((ev, i) => ({ ev, i }))
+      .filter(({ i }) => adhocChecked.has(i))
+      .map(({ ev, i }) => ({ ...ev, venue_id: adhocVenueFix[i] || ev.venue_id }))
+    if (selection.length === 0) { setAdhocError('Nothing selected.'); return }
+    if (selection.some(ev => !ev.venue_id)) { setAdhocError('Assign a venue to every selected event first.'); return }
+    setAdhocBusy(true); setAdhocError('')
+    try {
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false })
+      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0 })
+      setAdhocParsed(null)
+    } catch (e) {
+      setAdhocError(e instanceof Error ? e.message : String(e))
+    } finally { setAdhocBusy(false) }
+  }
+
   function renderResult(r: ScrapeResult | { error: string }) {
     if ('error' in r && r.error && !('found' in r)) {
       return <span style={{ color: '#fca5a5' }}>{r.error}</span>
@@ -164,6 +241,86 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Import from URL — one-off ingest of any event page, no registered source */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 16, borderBottom: '1px solid var(--fg-08)' }}>
+        <label style={labelStyle}>Import from URL</label>
+        <input
+          type="url" value={adhocUrl} onChange={e => setAdhocUrl(e.target.value)}
+          placeholder="https://… any event page (venue site, Eventbrite…)" style={inputStyle}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={adhocVenueId} onChange={e => setAdhocVenueId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+            <option value="">Venue (optional — auto-match)</option>
+            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <button onClick={handleAdhocFetch} disabled={adhocBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy ? 0.6 : 1 }}>
+            {adhocBusy ? 'Fetching…' : 'Fetch'}
+          </button>
+        </div>
+        {adhocError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{adhocError}</p>}
+
+        {adhocDone && (
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
+            inserted {adhocDone.inserted} · skipped {adhocDone.skipped} ·{' '}
+            <a href="/staff" style={{ color: '#A855F7' }}>Review pending →</a>
+          </p>
+        )}
+
+        {adhocParsed && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+              {adhocParsed.method === 'ai' ? 'AI extraction' : 'JSON-LD'} · found {adhocParsed.found} · insertable {adhocParsed.wouldInsert}
+            </p>
+            {(adhocParsed.events ?? []).map((ev, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--fg-08)' }}>
+                <input
+                  type="checkbox"
+                  checked={adhocChecked.has(i)}
+                  disabled={ev.duplicate}
+                  onChange={e => setAdhocChecked(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(i); else next.delete(i)
+                    return next
+                  })}
+                />
+                {ev.image && (
+                  <img src={ev.image} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-80)' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{ev.title}</div>
+                  <div style={{ color: 'var(--fg-40)', fontSize: 11 }}>
+                    {ev.portland_date} · {portlandTime(ev.starts_at)}
+                    {ev.venue_name && !ev.needsVenue && <> · {ev.venue_name}</>}
+                    {ev.duplicate && <span style={{ color: '#fbbf24' }}> · duplicate</span>}
+                  </div>
+                  {ev.needsVenue && (
+                    <select
+                      value={adhocVenueFix[i] ?? ''}
+                      onChange={e => setAdhocVenueFix(prev => ({ ...prev, [i]: e.target.value }))}
+                      style={{ ...inputStyle, marginTop: 4, fontSize: 11, padding: '4px 8px' }}
+                    >
+                      <option value="">⚠ needs venue{ev.venue_name ? ` ("${ev.venue_name}" unmatched)` : ''} — pick…</option>
+                      {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                  )}
+                </div>
+                <span style={{ flexShrink: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: ev.confidence >= 95 ? '#86efac' : '#fbbf24' }}>
+                  {ev.confidence >= 95 ? 'high' : 'med'}
+                </span>
+              </div>
+            ))}
+            {(adhocParsed.events ?? []).length > 0 && (
+              <button onClick={handleAdhocImport} disabled={adhocBusy || adhocChecked.size === 0} style={{ ...smallBtn, alignSelf: 'flex-start', padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy || adhocChecked.size === 0 ? 0.5 : 1 }}>
+                {adhocBusy ? 'Importing…' : `Import selected (${adhocChecked.size})`}
+              </button>
+            )}
+            {(adhocParsed.events ?? []).length === 0 && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>No upcoming events found on that page.</p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Add-source row */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <label style={labelStyle}>Add source</label>
