@@ -748,6 +748,9 @@ Hard-won rules and anti-patterns discovered across development sessions.
 
 - **Auto-ingest legal:** add a takedown / third-party-content clause to TermsOfUse (scraped posters + event data are venue-owned content; need a documented removal path) BEFORE auto-ingest scales past the pilot.
 
+### Auto-Ingest self-test recipe (standing)
+`public/dev/jsonld-fixture.html` is the permanent scrape-pipeline self-test page (3 schema.org events: 2 in-window, 1 past — exercises @graph, ImageObject, date-only parsing; static dates, refresh if older than the 120-day window). To verify the pipeline after any change: in /admin → Auto-Ingest, add a source pointing a throwaway test venue at `https://plasterthewall.com/dev/jsonld-fixture.html`, then Test (expect found 3 · would insert 2) → Run (inserted 2) → Run again (inserted 0, skipped 2 — idempotency). Verified PASS 2026-06-10. Clean up after: delete the test events + venue (cascades the source) and the `scrape/…jpg` posters via `npx supabase storage rm ss:///posters/scrape/… --linked --experimental` (SQL deletes on storage.objects are blocked by a protect trigger).
+
 ## Known issues & diagnostics
 
 ### Tearlab — 1-col rendering diagnostic
