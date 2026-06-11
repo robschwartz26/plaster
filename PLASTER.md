@@ -758,6 +758,11 @@ Archived at tag `tearlab-v1` (branch archive/tearlab). A ?tearlab URL-param over
 
 ## Session log
 
+### 2026-06-10
+- **Shipped:** tearlab archived (tag tearlab-v1) + removed, 1-col clean at baseline (56e905f); AUTO-INGEST pilot — migration 076 venue_sources, scrape-sources edge fn (JSON-LD→tribe/squarespace probes→link-hunt→AI, dedupe, re-host, Haiku voice rewrite), /admin Auto-Ingest UI, Import-from-URL (+fuzzy venue match, entity decode, scheme fix, json-feed, htmlToText fix); Tier-1.5 audit script (Goodfoot+Kelly's have live Tribe APIs); ADMIN DASHBOARD UNIFIED — /admin = staff shell, AdminTools panel, StaffPreview scope='all' (d050fe4..c9adaf0); QC fixes — status='published' on every public surface + cache v3 (403cce1), similarity dedupe ≥0.8 (e883753), Reject all (4f1e788), visible rewrite failures (f90d4fa).
+- **In-flight / unverified:** ~20 commits UNPUSHED (414be92..HEAD) — edge fn deployed but UI not on prod; on-device 1-col/dashboard checks pending.
+- **Next step:** push, then QC the unified dashboard + Kelly's similarity-dedupe fetch live.
+
 ### 2026-06-09
 - **Shipped:** wall VT filter glide (110fe9f) + query slim 200→500 (b556688); iOS 1-col tearing fixed — final approach = ACTIVE-card GPU promotion (b4fd486), removed permanent willChange (supersedes gesture-scoped dba195b; prefetch+defer 8c11dfa); BATCH 4 — recurringDates.ts + vitest 7 green (8c899cf), verify-staging.sql ran PASS on prod (3dbef55), real importer error msgs (a0f24fc); WALL SCALE — windowed infinite load 300/page (b6efbf6) + multi-col lazy img/content-visibility (252e62d).
 - **In-flight / unverified:** on-device check needed for 1-col tearing, VT filter glide, windowed scroll-append, content-visibility cards. Commits 8c11dfa→252e62d NOT pushed.
