@@ -311,9 +311,14 @@ function huntEventsLink(html: string, pageUrl: string): string | null {
   return best?.url ?? null
 }
 
+// Strip ONLY non-content blocks (script/style/noscript/svg + comments). Do NOT
+// strip <nav>/<header>/<footer>: many venue themes (Mississippi Studios, confirmed)
+// render the show list inside hero/header markup, so stripping them handed the AI a
+// page with every event removed — and the non-greedy regex was unsafe on nested
+// tags anyway. The AI prompt already instructs ignoring nav/footer junk.
 function htmlToText(html: string): string {
   return html
-    .replace(/<(script|style|noscript|svg|nav|header|footer)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ')
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&rsquo;/g, "'").replace(/&quot;/g, '"')
