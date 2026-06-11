@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
+import { AdminAutoIngest } from '@/components/admin/AdminAutoIngest'
+import { AdminTools } from '@/components/admin/AdminTools'
+import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
+import { type Venue } from '@/components/admin/adminShared'
 import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
@@ -10,6 +15,18 @@ import { StaffChat } from '@/components/StaffChat'
 import { UploadHistory } from '@/components/UploadHistory'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
+
+// ── Auto-Ingest panel wrapper — fetches the venues list it needs ──
+function AutoIngestPanel() {
+  const [venues, setVenues] = useState<Venue[]>([])
+  useEffect(() => {
+    supabase.from('venues')
+      .select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours')
+      .order('name', { ascending: true })
+      .then(({ data }) => { if (data) setVenues(data) })
+  }, [])
+  return <AdminAutoIngest venues={venues} />
+}
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsWide(breakpoint = 900) {
@@ -95,23 +112,38 @@ function ResizeSeam() {
 }
 
 // ── Panel open/closed persistence ───────────────────────────
-const OPEN_KEY = 'staff-panel-open'
+// Admins get their own bumped key (new panel set — stale saved state from the old
+// admin set must not leak into the new one); workers keep the original key.
+const OPEN_KEY_WORKER = 'staff-panel-open'
+const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v2'
 
 interface PanelOpen {
   preview: boolean; ingester: boolean; board: boolean; history: boolean; review: boolean; team: boolean
+  autoingest: boolean; tools: boolean
 }
 
-function loadPanelOpen(): PanelOpen {
+const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, autoingest: false, tools: false }
+const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, autoingest: false, board: false, tools: true, team: true, history: false }
+
+function loadPanelOpen(key: string, defaults: PanelOpen): PanelOpen {
   try {
-    const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}')
-    return { preview: saved.preview ?? true, ingester: saved.ingester ?? true, board: saved.board ?? true, history: saved.history ?? false, review: saved.review ?? true, team: saved.team ?? true }
-  } catch { return { preview: true, ingester: true, board: true, history: false, review: true, team: true } }
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}')
+    const out = { ...defaults }
+    for (const k of Object.keys(defaults) as (keyof PanelOpen)[]) {
+      if (typeof saved[k] === 'boolean') out[k] = saved[k]
+    }
+    return out
+  } catch { return { ...defaults } }
 }
-function savePanelOpen(o: PanelOpen) { try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)) } catch { /* noop */ } }
+function makeSavePanelOpen(key: string) {
+  return (o: PanelOpen) => { try { localStorage.setItem(key, JSON.stringify(o)) } catch { /* noop */ } }
+}
 
 // ── Width-layout persistence ─────────────────────────────────
+// Admin key bumped: the v1 layout was saved for the old 4-panel set and would
+// corrupt the new 6-panel group.
 const LAYOUT_KEY_WORKER = 'staff-dashboard-cols-worker'
-const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin'
+const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin-v2'
 
 function loadSavedLayout(key: string): Layout | undefined {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : undefined } catch { return undefined }
@@ -121,21 +153,26 @@ function makeSaveLayout(key: string) {
 }
 
 // ── Panel config ─────────────────────────────────────────────
-type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team'
+type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'autoingest' | 'tools'
 
-const PANEL_LABELS: Record<PanelKey, string> = {
-  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team',
+// Workers keep their original labels; admins get the unified-dashboard names.
+const PANEL_LABELS_WORKER: Record<PanelKey, string> = {
+  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', autoingest: 'Auto-Ingest', tools: 'Tools',
+}
+const PANEL_LABELS_ADMIN: Record<PanelKey, string> = {
+  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', autoingest: 'Auto-Ingest', tools: 'Tools',
 }
 
-// Worker: 3 core panels + optional history; Admin: 4 core panels + optional history
-const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22 }
-const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 24, board: 34, history: 26, review: 24, team: 18 }
-const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12 }
+// Worker: 3 core panels + optional history; Admin: review/ingester/tools/team core
+// + optional autoingest/board.
+const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, autoingest: 0, tools: 0 }
+const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, autoingest: 24, tools: 26 }
+const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, autoingest: 16, tools: 16 }
 
 // ── Preview header with minimize ─────────────────────────────
-function PreviewCard({ children, onMinimize }: { children: React.ReactNode; onMinimize: () => void }) {
+function PreviewCard({ children, onMinimize, width = 360 }: { children: React.ReactNode; onMinimize: () => void; width?: number }) {
   return (
-    <div style={{ width: 360, flexShrink: 0, minHeight: 0, marginRight: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ width, flexShrink: 0, minHeight: 0, marginRight: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
       <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Preview</span>
         <button onClick={onMinimize} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>–</button>
@@ -146,11 +183,23 @@ function PreviewCard({ children, onMinimize }: { children: React.ReactNode; onMi
 }
 
 // ── Main screen ──────────────────────────────────────────────
+// Thin gate: the dashboard's role-keyed persistence (open-state + layout keys)
+// initializes in useState on first render, so the role must be RESOLVED before
+// the dashboard mounts — otherwise a direct reload of /admin would initialize an
+// admin with worker keys.
 export function StaffScreen() {
-  const { canIngest, isAdmin, loading, signOut, profile } = useAuth()
+  const { loading } = useAuth()
+  if (loading) return null
+  return <StaffDashboard />
+}
+
+function StaffDashboard() {
+  const { canIngest, isAdmin, signOut, profile } = useAuth()
   const isWide = useIsWide(900)
 
-  const [open, setOpen] = useState<PanelOpen>(loadPanelOpen)
+  const openKey = isAdmin ? OPEN_KEY_ADMIN : OPEN_KEY_WORKER
+  const [open, setOpen] = useState<PanelOpen>(() => loadPanelOpen(openKey, isAdmin ? DEFAULT_OPEN_ADMIN : DEFAULT_OPEN_WORKER))
+  const savePanelOpen = makeSavePanelOpen(openKey)
 
   const layoutKey = isAdmin ? LAYOUT_KEY_ADMIN : LAYOUT_KEY_WORKER
   const [savedLayout] = useState<Layout | undefined>(() => loadSavedLayout(layoutKey))
@@ -162,8 +211,6 @@ export function StaffScreen() {
     setOpen(prev => { const next = { ...prev, [key]: !prev[key] }; savePanelOpen(next); return next })
   }
 
-  if (loading) return null
-
   if (!canIngest) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg)', background: 'var(--bg)' }}>
@@ -174,14 +221,25 @@ export function StaffScreen() {
   }
 
   // ── Panel chips for top bar (role-aware) ─────────────────
-  const chipDefs: { key: keyof PanelOpen; label: string }[] = [
-    { key: 'preview', label: 'Preview' },
-    { key: 'ingester', label: 'Add a show' },
-    { key: 'board', label: 'Venue board' },
-    { key: 'history', label: 'Upload history' },
-    ...(isAdmin ? [{ key: 'review' as keyof PanelOpen, label: 'Review' }] : []),
-    { key: 'team', label: 'Team' },
-  ]
+  // Admin: Preview · Review · Ingester · Auto-Ingest · Venues · Tools · Team.
+  // Worker: unchanged from the original staff dashboard.
+  const chipDefs: { key: keyof PanelOpen; label: string }[] = isAdmin
+    ? [
+        { key: 'preview', label: 'Preview' },
+        { key: 'review', label: 'Review' },
+        { key: 'ingester', label: 'Ingester' },
+        { key: 'autoingest', label: 'Auto-Ingest' },
+        { key: 'board', label: 'Venues' },
+        { key: 'tools', label: 'Tools' },
+        { key: 'team', label: 'Team' },
+      ]
+    : [
+        { key: 'preview', label: 'Preview' },
+        { key: 'ingester', label: 'Add a show' },
+        { key: 'board', label: 'Venue board' },
+        { key: 'history', label: 'Upload history' },
+        { key: 'team', label: 'Team' },
+      ]
 
   // ── Top bar ──────────────────────────────────────────────
   const teamMinimizedSection = isWide && !open.team ? (
@@ -268,30 +326,38 @@ export function StaffScreen() {
 
   // ── Resizable panel group (wide layout) ──────────────────
   const defaultSizes = isAdmin ? DEFAULT_SIZES_ADMIN : DEFAULT_SIZES_WORKER
-  // history is optional/togglable; core panels are the always-default-open set
+  const panelLabels = isAdmin ? PANEL_LABELS_ADMIN : PANEL_LABELS_WORKER
+  // Optional panels are togglable extras; core panels are the always-default-open set
   const resizablePanelOrder: PanelKey[] = isAdmin
-    ? ['ingester', 'board', 'review', 'history', 'team']
+    ? ['review', 'ingester', 'autoingest', 'board', 'tools', 'team']
     : ['ingester', 'board', 'history', 'team']
   const corePanelOrder: PanelKey[] = isAdmin
-    ? ['ingester', 'board', 'review', 'team']
+    ? ['review', 'ingester', 'tools', 'team']
     : ['ingester', 'board', 'team']
+  const optionalPanels: PanelKey[] = isAdmin
+    ? ['autoingest', 'board']
+    : ['history']
 
   const openResizable = resizablePanelOrder.filter(k => open[k])
 
-  // Save/restore layout only when core panels are all open AND history is closed.
-  // history is an optional panel — when it's open, each panel falls back to defaultSize
-  // so the saved core-panel widths aren't corrupted by a panel-count mismatch in v4.
-  const isCoreFullOpen = corePanelOrder.every(k => open[k]) && !open.history
+  // Save/restore layout only when core panels are all open AND every optional
+  // panel is closed — when an optional panel is open, each panel falls back to
+  // defaultSize so the saved core-panel widths aren't corrupted by a
+  // panel-count mismatch in v4.
+  const isCoreFullOpen = corePanelOrder.every(k => open[k]) && optionalPanels.every(k => !open[k])
   const layoutToPass = isCoreFullOpen ? savedLayout : undefined
   const handleLayoutChanged = isCoreFullOpen ? saveLayout : () => { /* noop */ }
 
   function renderPanelBody(key: PanelKey): React.ReactNode {
     switch (key) {
-      case 'ingester': return <ImportForm staffMode />
-      case 'board':    return <VenueBoard />
-      case 'history':  return <UploadHistory />
-      case 'review':   return <AdminPendingEvents />
-      case 'team':     return teamContent
+      // Admin ingester runs the FULL admin importer (not staffMode)
+      case 'ingester':   return <ImportForm staffMode={!isAdmin} />
+      case 'board':      return <VenueBoard />
+      case 'history':    return <UploadHistory />
+      case 'review':     return <AdminPendingEvents />
+      case 'autoingest': return <AutoIngestPanel />
+      case 'tools':      return <AdminTools />
+      case 'team':       return teamContent
     }
   }
 
@@ -303,10 +369,10 @@ export function StaffScreen() {
         /* ── Wide layout ── */
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', padding: 12, gap: 0, overflow: 'hidden' }}>
 
-          {/* Preview — fixed 360px, conditionally shown */}
+          {/* Preview — fixed width (admins get the widest panel), conditionally shown */}
           {open.preview && (
-            <PreviewCard onMinimize={() => togglePanel('preview')}>
-              <StaffPreview />
+            <PreviewCard onMinimize={() => togglePanel('preview')} width={isAdmin ? 420 : 360}>
+              <StaffPreview scope={isAdmin ? 'all' : 'mine'} />
             </PreviewCard>
           )}
 
@@ -322,7 +388,7 @@ export function StaffScreen() {
                   // React.Fragment with key for seam+panel pairs
                   idx === 0 ? (
                     <ResizablePanel key={panelKey} id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                      <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={panelKey === 'team' ? 16 : 16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
+                      <PanelCard header={panelLabels[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={panelKey === 'team' ? 16 : 16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                         {renderPanelBody(panelKey)}
                       </PanelCard>
                     </ResizablePanel>
@@ -331,7 +397,7 @@ export function StaffScreen() {
                     <React.Fragment key={panelKey}>
                       <ResizeSeam />
                       <ResizablePanel id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                        <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
+                        <PanelCard header={panelLabels[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                           {renderPanelBody(panelKey)}
                         </PanelCard>
                       </ResizablePanel>
@@ -347,17 +413,25 @@ export function StaffScreen() {
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 12, overflowY: 'auto' }}>
           <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
             <div style={{ padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Preview</div>
-            <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview /></div>
+            <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview scope={isAdmin ? 'all' : 'mine'} /></div>
           </div>
-          <PanelShell header="Add a show"><ImportForm staffMode /></PanelShell>
+          {isAdmin && <PanelShell header="Review"><AdminPendingEvents /></PanelShell>}
+          <PanelShell header={panelLabels.ingester}><ImportForm staffMode={!isAdmin} /></PanelShell>
+          {isAdmin && <PanelShell header="Auto-Ingest"><AutoIngestPanel /></PanelShell>}
           <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}><VenueBoard /></div>
           </div>
-          <PanelShell header="Upload history"><UploadHistory /></PanelShell>
-          {isAdmin && <PanelShell header="Review"><AdminPendingEvents /></PanelShell>}
+          {isAdmin ? (
+            <PanelShell header="Tools"><AdminTools /></PanelShell>
+          ) : (
+            <PanelShell header="Upload history"><UploadHistory /></PanelShell>
+          )}
           <PanelShell header="Team">{teamContent}</PanelShell>
         </div>
       )}
+
+      {/* Back-compat: admins keep the app bottom nav on narrow/mobile */}
+      {isAdmin && !isWide && <AdminBottomNav />}
     </div>
   )
 }
