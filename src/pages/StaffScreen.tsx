@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { supabase } from '@/lib/supabase'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
-import { AdminAutoIngest } from '@/components/admin/AdminAutoIngest'
 import { AdminTools } from '@/components/admin/AdminTools'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
-import { type Venue } from '@/components/admin/adminShared'
 import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
@@ -16,17 +13,8 @@ import { UploadHistory } from '@/components/UploadHistory'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
 
-// ── Auto-Ingest panel wrapper — fetches the venues list it needs ──
-function AutoIngestPanel() {
-  const [venues, setVenues] = useState<Venue[]>([])
-  useEffect(() => {
-    supabase.from('venues')
-      .select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours')
-      .order('name', { ascending: true })
-      .then(({ data }) => { if (data) setVenues(data) })
-  }, [])
-  return <AdminAutoIngest venues={venues} />
-}
+// Auto-Ingest panel mothballed — AdminAutoIngest + scrape-sources kept on disk,
+// just no longer surfaced in the staff dashboard.
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsWide(breakpoint = 900) {
@@ -120,15 +108,15 @@ function ResizeSeam() {
 // Admins get their own bumped key (new panel set — stale saved state from the old
 // admin set must not leak into the new one); workers keep the original key.
 const OPEN_KEY_WORKER = 'staff-panel-open'
-const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v2'
+const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v3'
 
 interface PanelOpen {
   preview: boolean; ingester: boolean; board: boolean; history: boolean; review: boolean; team: boolean
-  autoingest: boolean; tools: boolean
+  tools: boolean
 }
 
-const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, autoingest: false, tools: false }
-const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, autoingest: false, board: false, tools: true, team: true, history: false }
+const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, tools: false }
+const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, board: false, tools: true, team: true, history: false }
 
 function loadPanelOpen(key: string, defaults: PanelOpen): PanelOpen {
   try {
@@ -145,10 +133,10 @@ function makeSavePanelOpen(key: string) {
 }
 
 // ── Width-layout persistence ─────────────────────────────────
-// Admin key bumped: the v1 layout was saved for the old 4-panel set and would
-// corrupt the new 6-panel group.
+// Admin key bumped to v3: removing the Auto-Ingest panel changes the resizable
+// group's panel count, so a v2 layout would corrupt the new group.
 const LAYOUT_KEY_WORKER = 'staff-dashboard-cols-worker'
-const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin-v2'
+const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin-v3'
 
 function loadSavedLayout(key: string): Layout | undefined {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : undefined } catch { return undefined }
@@ -158,21 +146,21 @@ function makeSaveLayout(key: string) {
 }
 
 // ── Panel config ─────────────────────────────────────────────
-type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'autoingest' | 'tools'
+type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'tools'
 
 // Workers keep their original labels; admins get the unified-dashboard names.
 const PANEL_LABELS_WORKER: Record<PanelKey, string> = {
-  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', autoingest: 'Auto-Ingest', tools: 'Tools',
+  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
 }
 const PANEL_LABELS_ADMIN: Record<PanelKey, string> = {
-  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', autoingest: 'Auto-Ingest', tools: 'Tools',
+  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
 }
 
 // Worker: 3 core panels + optional history; Admin: review/ingester/tools/team core
-// + optional autoingest/board.
-const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, autoingest: 0, tools: 0 }
-const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, autoingest: 24, tools: 26 }
-const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, autoingest: 16, tools: 16 }
+// + optional board.
+const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, tools: 0 }
+const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, tools: 26 }
+const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, tools: 16 }
 
 // ── Preview header with minimize ─────────────────────────────
 function PreviewCard({ children, onMinimize, width = 360 }: { children: React.ReactNode; onMinimize: () => void; width?: number }) {
@@ -226,14 +214,13 @@ function StaffDashboard() {
   }
 
   // ── Panel chips for top bar (role-aware) ─────────────────
-  // Admin: Preview · Review · Ingester · Auto-Ingest · Venues · Tools · Team.
+  // Admin: Preview · Review · Ingester · Venues · Tools · Team.
   // Worker: unchanged from the original staff dashboard.
   const chipDefs: { key: keyof PanelOpen; label: string }[] = isAdmin
     ? [
         { key: 'preview', label: 'Preview' },
         { key: 'review', label: 'Review' },
         { key: 'ingester', label: 'Ingester' },
-        { key: 'autoingest', label: 'Auto-Ingest' },
         { key: 'board', label: 'Venues' },
         { key: 'tools', label: 'Tools' },
         { key: 'team', label: 'Team' },
@@ -338,13 +325,13 @@ function StaffDashboard() {
   const panelLabels = isAdmin ? PANEL_LABELS_ADMIN : PANEL_LABELS_WORKER
   // Optional panels are togglable extras; core panels are the always-default-open set
   const resizablePanelOrder: PanelKey[] = isAdmin
-    ? ['review', 'ingester', 'autoingest', 'board', 'tools', 'team']
+    ? ['review', 'ingester', 'board', 'tools', 'team']
     : ['ingester', 'board', 'history', 'team']
   const corePanelOrder: PanelKey[] = isAdmin
     ? ['review', 'ingester', 'tools', 'team']
     : ['ingester', 'board', 'team']
   const optionalPanels: PanelKey[] = isAdmin
-    ? ['autoingest', 'board']
+    ? ['board']
     : ['history']
 
   const openResizable = resizablePanelOrder.filter(k => open[k])
@@ -364,7 +351,6 @@ function StaffDashboard() {
       case 'board':      return <VenueBoard />
       case 'history':    return <UploadHistory />
       case 'review':     return <AdminPendingEvents />
-      case 'autoingest': return <AutoIngestPanel />
       case 'tools':      return <AdminTools />
       case 'team':       return teamContent
     }
