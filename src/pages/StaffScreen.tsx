@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { ImportForm } from '@/components/admin/ImportForm'
+import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { AdminTools } from '@/components/admin/AdminTools'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
@@ -347,7 +347,7 @@ function StaffDashboard() {
   function renderPanelBody(key: PanelKey): React.ReactNode {
     switch (key) {
       // Admin ingester runs the FULL admin importer (not staffMode)
-      case 'ingester':   return <ImportForm staffMode={!isAdmin} />
+      case 'ingester':   return <Ingester staffMode={!isAdmin} />
       case 'board':      return <VenueBoard />
       case 'history':    return <UploadHistory />
       case 'review':     return <AdminPendingEvents />
