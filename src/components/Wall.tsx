@@ -291,21 +291,13 @@ export function Wall() {
         </div>
       )}
 
-      {/* Neighborhood chip — opens the region community wall */}
-      {profile?.home_neighborhood && profile?.home_sextant && (
-        <div style={{ flexShrink: 0, padding: '8px 16px 0' }}>
-          <button
-            onClick={() => setCommunityOpen(true)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)', color: '#A855F7', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-          >
-            <span style={{ width: 7, height: 7, background: '#A855F7', transform: 'rotate(45deg)', display: 'inline-block' }} />
-            {profile.home_neighborhood}
-            <span style={{ fontWeight: 500, color: 'var(--fg-40)' }}>· neighborhood wall</span>
-          </button>
-        </div>
-      )}
-
-      <FilterBar active={activeFilter} onChange={(f) => withWallTransition(() => setActiveFilter(f))} activePosterCategory={activePosterCategory ?? undefined} />
+      <FilterBar
+        active={activeFilter}
+        onChange={(f) => withWallTransition(() => setActiveFilter(f))}
+        activePosterCategory={activePosterCategory ?? undefined}
+        neighborhood={profile?.home_neighborhood ?? null}
+        onOpenNeighborhood={(profile?.home_neighborhood && profile?.home_sextant) ? () => setCommunityOpen(true) : undefined}
+      />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 

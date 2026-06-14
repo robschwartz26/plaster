@@ -12,9 +12,11 @@ interface Props {
   active: string
   onChange: (chip: string) => void
   activePosterCategory?: string
+  neighborhood?: string | null
+  onOpenNeighborhood?: () => void
 }
 
-export function FilterBar({ active, onChange, activePosterCategory }: Props) {
+export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
@@ -228,6 +230,21 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
           })}
         </div>
       </div>
+
+      {/* Neighborhood chip — pinned at the end of the genre list. Ordinary chip
+          styling (not an accent), with a little diamond; opens the region wall. */}
+      {neighborhood && onOpenNeighborhood && (
+        <div style={{ display: 'flex', flexShrink: 0, paddingRight: 12, paddingLeft: 2, background: 'var(--bg)', position: 'relative', zIndex: 10 }}>
+          <button
+            onClick={onOpenNeighborhood}
+            className="font-body font-medium"
+            style={{ ...chipStyle(false), display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          >
+            <span style={{ width: 6, height: 6, background: 'var(--fg-40)', transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0 }} />
+            {neighborhood}
+          </button>
+        </div>
+      )}
 
     </div>
   )
