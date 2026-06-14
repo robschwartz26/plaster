@@ -98,32 +98,27 @@ export async function slapFriends(params: {
     const { data: allMemb } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', myConvIds)
     for (const r of allMemb ?? []) (setByConv[r.conversation_id] ??= new Set()).add(r.user_id)
 
-    // 1. Exact member-set match → reuse as-is.
-    for (const [cid, set] of Object.entries(setByConv)) {
-      if (set.size === want.size && [...want].every(id => set.has(id))) { convId = cid; break }
-    }
-
-    // 2. A thread already slapped for THIS event whose members ⊆ want → add the new people.
-    if (!convId) {
-      const { data: slapMsgs } = await supabase
-        .from('messages')
-        .select('conversation_id')
-        .eq('event_id', eventId)
-        .eq('message_type', 'slap')
-        .in('conversation_id', myConvIds)
-      for (const cid of [...new Set((slapMsgs ?? []).map(m => m.conversation_id))]) {
-        const set = setByConv[cid]
-        if (set && [...set].every(id => want.has(id))) {
-          const toAdd = targets.filter(id => !set.has(id))
-          if (toAdd.length) await supabase.rpc('add_members_to_conversation', { p_conversation_id: cid, p_member_ids: toAdd })
-          convId = cid
-          break
-        }
+    // Reuse ONLY an existing slap thread for THIS event whose members ⊆ the new
+    // selection → add any newly-slapped friends. A matching member-set for a
+    // DIFFERENT event does NOT reuse — each event gets its own thread.
+    const { data: slapMsgs } = await supabase
+      .from('messages')
+      .select('conversation_id')
+      .eq('event_id', eventId)
+      .eq('message_type', 'slap')
+      .in('conversation_id', myConvIds)
+    for (const cid of [...new Set((slapMsgs ?? []).map(m => m.conversation_id))]) {
+      const set = setByConv[cid]
+      if (set && [...set].every(id => want.has(id))) {
+        const toAdd = targets.filter(id => !set.has(id))
+        if (toAdd.length) await supabase.rpc('add_members_to_conversation', { p_conversation_id: cid, p_member_ids: toAdd })
+        convId = cid
+        break
       }
     }
   }
 
-  // 3. Otherwise create a fresh, event-titled thread.
+  // Otherwise create a fresh, event-titled thread.
   if (!convId) {
     const { data, error } = await supabase.rpc('create_conversation_with_members', { p_member_ids: targets, p_name: eventTitle })
     if (error) throw error

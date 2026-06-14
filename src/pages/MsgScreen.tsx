@@ -217,6 +217,7 @@ export function MsgScreen() {
   const [slapEvents,   setSlapEvents]   = useState<Record<string, { id: string; title: string; poster_url: string | null }>>({})
   const [goingEventIds, setGoingEventIds] = useState<Set<string>>(new Set())
   const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
+  const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
@@ -747,6 +748,30 @@ export function MsgScreen() {
     if (!error || error.code === '23505') setGoingEventIds(prev => new Set([...prev, eventId]))
   }
 
+  // Poster thumbnail for slap-originated conversations (shown at the row's right).
+  const convIdsKey = conversations.map(c => c.id).join(',')
+  useEffect(() => {
+    const ids = conversations.map(c => c.id)
+    if (!ids.length) { setConvSlapPoster({}); return }
+    let cancelled = false
+    supabase.from('messages').select('conversation_id, event_id, created_at').eq('message_type', 'slap').in('conversation_id', ids).order('created_at', { ascending: false })
+      .then(async ({ data }) => {
+        if (cancelled || !data?.length) return
+        const evByConv: Record<string, string> = {}
+        for (const m of data) { if (m.event_id && !evByConv[m.conversation_id]) evByConv[m.conversation_id] = m.event_id as string }
+        const evIds = [...new Set(Object.values(evByConv))]
+        if (!evIds.length) return
+        const { data: evs } = await supabase.from('events').select('id, poster_url').in('id', evIds)
+        if (cancelled) return
+        const posterById: Record<string, string> = {}
+        for (const e of evs ?? []) if (e.poster_url) posterById[e.id] = e.poster_url
+        const map: Record<string, string> = {}
+        for (const [cid, eid] of Object.entries(evByConv)) { const p = posterById[eid]; if (p) map[cid] = p }
+        setConvSlapPoster(map)
+      })
+    return () => { cancelled = true }
+  }, [convIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function closeConv() {
     setOpenConvId(null)
     setMessages([])
@@ -906,7 +931,7 @@ export function MsgScreen() {
           {/* Shouts section */}
           {notifications.length > 0 && (
             <div style={{ padding: '10px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-65)' }}>
                 shouts{notifications.length > 1 ? ` (${notifications.length})` : ''}
               </span>
               {notifications.length > 1 && (
@@ -948,13 +973,27 @@ export function MsgScreen() {
                     size={40}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {notifCopy(notif)}
-                    </p>
-                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
-                      <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        "{notif.body_preview}"
-                      </p>
+                    {notif.kind === 'slap' ? (
+                      <>
+                        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          <span><span style={{ fontWeight: 700 }}>@{notif.sender?.username ?? 'someone'}</span> slapped you</span>
+                          <SlapHand size={15} />
+                        </p>
+                        <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          to go to <strong style={{ fontWeight: 700, color: 'var(--fg)' }}>{notif.event?.title ?? 'a show'}</strong>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {notifCopy(notif)}
+                        </p>
+                        {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
+                          <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            "{notif.body_preview}"
+                          </p>
+                        )}
+                      </>
                     )}
                     {isEventEnded(notif.event?.starts_at) && notif.event?.starts_at && (
                       <div style={{
@@ -1010,7 +1049,7 @@ export function MsgScreen() {
             {/* Section header — "messages" normally, "people & chats" when searching */}
             {!convLoading && (
               <div style={{ padding: '10px 16px 6px' }}>
-                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-65)' }}>
                   {searchQuery.trim().length >= 1 ? 'people & chats' : 'messages'}
                 </span>
               </div>
@@ -1065,7 +1104,7 @@ export function MsgScreen() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                       <span style={{
                         fontFamily: '"Playfair Display", serif',
-                        fontWeight: 700, fontSize: 15,
+                        fontWeight: 700, fontSize: 16,
                         color: 'var(--fg)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
@@ -1097,6 +1136,14 @@ export function MsgScreen() {
                         : 'No messages yet'}
                     </p>
                   </div>
+                  {convSlapPoster[conv.id] && (
+                    <img
+                      src={posterThumb(convSlapPoster[conv.id], 120) ?? convSlapPoster[conv.id]}
+                      onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = convSlapPoster[conv.id] }}
+                      alt=""
+                      style={{ flexShrink: 0, width: 38, height: 52, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--fg-08)' }}
+                    />
+                  )}
                 </div>
               )
               return (
