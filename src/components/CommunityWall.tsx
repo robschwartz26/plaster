@@ -109,6 +109,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [postType, setPostType] = useState<'personal' | 'lost_pet'>('personal')
   const [done, setDone] = useState<{ published: boolean } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -124,7 +125,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
     try {
       const optimized = await optimizeImage(file)
       const base64 = await blobToBase64(optimized)
-      const result = await submitCommunityPost({ base64, mimeType: 'image/jpeg', title: title.trim() || undefined, body: body.trim() || undefined, post_type: 'personal' })
+      const result = await submitCommunityPost({ base64, mimeType: 'image/jpeg', title: title.trim() || undefined, body: body.trim() || undefined, post_type: postType })
       setDone({ published: result.status === 'published' })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.')
@@ -145,7 +146,9 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
             <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', lineHeight: 1.5 }}>
               {done.published
                 ? "It's live on your neighborhood wall."
-                : "We give some posts a quick look before they go public — yours will appear shortly. You can see it on your wall marked “In review.”"}
+                : postType === 'lost_pet'
+                  ? `As soon as it's approved, everyone in ${neighborhood} gets a lost-pet alert. We review these fast.`
+                  : "We give some posts a quick look before they go public — yours will appear shortly. You can see it on your wall marked “In review.”"}
             </p>
             <button onClick={onPosted} style={primaryBtn}>Done</button>
           </div>
@@ -155,6 +158,20 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>Post to {neighborhood}</span>
               <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer' }}>✕</button>
             </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {([['personal', 'Personal'], ['lost_pet', 'Lost pet']] as const).map(([val, label]) => {
+                const on = postType === val
+                return (
+                  <button key={val} onClick={() => setPostType(val)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${on ? 'var(--fg-55)' : 'var(--fg-15)'}`, background: on ? 'var(--fg-08)' : 'transparent', color: on ? 'var(--fg)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>
+                )
+              })}
+            </div>
+            {postType === 'lost_pet' && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Animals only. Once an admin approves it, everyone in {neighborhood} gets an alert — so we review these fast.
+              </p>
+            )}
 
             {preview ? (
               <div style={{ position: 'relative', width: 140, margin: '0 auto 14px' }}>

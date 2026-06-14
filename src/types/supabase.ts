@@ -776,6 +776,7 @@ export type Database = {
           read_at: string | null
           recipient_id: string
           sender_id: string | null
+          target_community_post_id: string | null
           target_event_id: string | null
           target_post_id: string | null
         }
@@ -787,6 +788,7 @@ export type Database = {
           read_at?: string | null
           recipient_id: string
           sender_id?: string | null
+          target_community_post_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -798,6 +800,7 @@ export type Database = {
           read_at?: string | null
           recipient_id?: string
           sender_id?: string | null
+          target_community_post_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -814,6 +817,13 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_community_post_id_fkey"
+            columns: ["target_community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
             referencedColumns: ["id"]
           },
           {

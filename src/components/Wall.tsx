@@ -62,6 +62,12 @@ export function Wall() {
   const navigate = useNavigate()
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
+  const openCommunity = (location.state as { openCommunity?: boolean } | null)?.openCommunity ?? false
+
+  // Deep-link from a lost-pet notification → open the neighborhood wall.
+  useEffect(() => {
+    if (openCommunity && profile?.home_neighborhood && profile?.home_sextant) setCommunityOpen(true)
+  }, [openCommunity, profile?.home_neighborhood, profile?.home_sextant])
 
   // Windowed infinite loading: cursor = last loaded row's starts_at; pages append.
   const cursorRef = useRef<string | null>(null)

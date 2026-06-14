@@ -104,7 +104,11 @@ Return ONLY a JSON object, no markdown:
   }
 
   // Clean + moderation succeeded → publish; otherwise → pending review.
-  const status = (moderationOk && !flagged) ? 'published' : 'pending'
+  // Lost-pet posts ALWAYS go through admin approval — approval is what fires the
+  // neighborhood-wide alert, so it must be a human decision.
+  const status = postType === 'lost_pet'
+    ? 'pending'
+    : ((moderationOk && !flagged) ? 'published' : 'pending')
   const expiresAt = body.expires_at ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
 
   const { data: inserted, error: insErr } = await supa.from('community_posts').insert({

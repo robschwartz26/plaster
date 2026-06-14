@@ -64,6 +64,7 @@ interface AppNotification {
   kind: string
   target_event_id: string | null
   target_post_id: string | null
+  target_community_post_id: string | null
   body_preview: string | null
   read_at: string | null
   created_at: string
@@ -130,6 +131,7 @@ function notifCopy(notif: AppNotification) {
     case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
     case 'show_reminder': return <>Show today: {eventNode}</>
     case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
+    case 'lost_pet': return <>🐾 Lost pet in your neighborhood — {notif.body_preview ?? 'a neighbor needs help'}</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -282,7 +284,7 @@ export function MsgScreen() {
     const { data, error } = await supabase
       .from('notifications')
       .select(`
-        id, sender_id, kind, target_event_id, target_post_id,
+        id, sender_id, kind, target_event_id, target_post_id, target_community_post_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
         event:events!target_event_id(id, title, starts_at, poster_url)
@@ -330,6 +332,10 @@ export function MsgScreen() {
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
           navigate('/', { state: { openEventId: notif.target_event_id } })
         }
+        return
+      case 'lost_pet':
+        // Deep-link to the neighborhood wall, where the lost-pet post is shown.
+        navigate('/', { state: { openCommunity: true } })
         return
       default:
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
