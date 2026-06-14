@@ -2,6 +2,7 @@ import { useState, useRef } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { inputStyle, labelStyle, fieldStyle, type Venue } from '@/components/admin/adminShared'
+import { optimizeImage } from '@/lib/cropUtils'
 
 export function EventForm({ venues }: { venues: Venue[] }) {
   const [form, setForm] = useState({ venue_id: '', title: '', category: '', date: '', start_time: '', description: '', is_recurring: false, recurrence_rule: '' })
@@ -29,9 +30,10 @@ export function EventForm({ venues }: { venues: Venue[] }) {
     let poster_url: string | null = null
 
     if (posterFile) {
-      const ext = posterFile.name.split('.').pop()
-      const filename = `${crypto.randomUUID()}.${ext}`
-      const { error: uploadError } = await supabaseAdmin.storage.from('posters').upload(filename, posterFile, { contentType: posterFile.type, upsert: false })
+      // Canvas re-encode strips EXIF/source metadata (and downscales) before upload.
+      const optimized = await optimizeImage(posterFile)
+      const filename = `${crypto.randomUUID()}.jpg`
+      const { error: uploadError } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) { setStatus('error'); setErrorMsg(`Poster upload failed: ${uploadError.message}`); return }
       const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
       poster_url = urlData.publicUrl

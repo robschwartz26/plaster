@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { Image as ScriptImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts"
 
 // ── scrape-sources ─────────────────────────────────────────────────────────────
 // Auto-ingest: scrape structured event data into the pending review pipeline.
@@ -565,6 +566,25 @@ Source text: ${sourceText.slice(0, 1500)}`,
   } catch (e) { return { text: null, error: e instanceof Error ? e.message : String(e) } }
 }
 
+// Best-effort EXIF/metadata strip: decode + re-encode drops all embedded
+// metadata. Time-guarded and fail-open — on any error, timeout, or unsupported
+// format the caller keeps the original bytes, so ingestion is never blocked or
+// slowed. Returns null to signal "use the original bytes".
+const EXIF_STRIP_BUDGET_MS = 1500
+async function stripMetadataBestEffort(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    return await Promise.race([
+      (async () => {
+        const img = await ScriptImage.decode(bytes)
+        return await img.encodeJPEG(85)
+      })(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), EXIF_STRIP_BUDGET_MS)),
+    ])
+  } catch {
+    return null
+  }
+}
+
 // Re-host an image into posters/scrape/{uuid}.jpg. Sequential callers share a
 // deadline (IMAGE_TOTAL_BUDGET_MS): past it, fall back to the remote URL so
 // posters can never time out the whole request.
@@ -580,10 +600,14 @@ async function rehostImage(supabaseService: any, imageUrl: string | null, deadli
     if (!imgRes.ok) return imageUrl
     const bytes = new Uint8Array(await imgRes.arrayBuffer())
     if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return imageUrl
+    // Best-effort metadata strip (decode + re-encode); fall back to original bytes.
+    let outBytes = bytes
+    let outType = imgRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+    const stripped = await stripMetadataBestEffort(bytes)
+    if (stripped && stripped.byteLength > 0) { outBytes = stripped; outType = 'image/jpeg' }
     const path = `scrape/${crypto.randomUUID()}.jpg`
-    const contentType = imgRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
     const { error: upErr } = await supabaseService.storage
-      .from('posters').upload(path, bytes, { contentType, upsert: false })
+      .from('posters').upload(path, outBytes, { contentType: outType, upsert: false })
     if (upErr) return imageUrl
     return supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
   } catch { return imageUrl }
