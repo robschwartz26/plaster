@@ -44,6 +44,8 @@ interface Message {
   media_type?: string | null
   media_width?: number | null
   media_height?: number | null
+  message_type?: string | null
+  event_id?: string | null
   deleted_at?: string | null
 }
 
@@ -65,6 +67,7 @@ interface AppNotification {
   target_event_id: string | null
   target_post_id: string | null
   target_community_post_id: string | null
+  target_conversation_id: string | null
   body_preview: string | null
   read_at: string | null
   created_at: string
@@ -132,6 +135,7 @@ function notifCopy(notif: AppNotification) {
     case 'show_reminder': return <>Show today: {eventNode}</>
     case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
     case 'lost_pet': return <>🐾 Lost pet in your neighborhood — {notif.body_preview ?? 'a neighbor needs help'}</>
+    case 'slap': return <>🤚 {senderNode} slapped you to a show — tap to plan</>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -209,6 +213,9 @@ export function MsgScreen() {
   const [notifications,    setNotifications]    = useState<AppNotification[]>([])
   const [conversations,    setConversations]    = useState<ConversationRow[]>([])
   const [convLoading,      setConvLoading]      = useState(true)
+  const [slapEvents,   setSlapEvents]   = useState<Record<string, { id: string; title: string; poster_url: string | null }>>({})
+  const [goingEventIds, setGoingEventIds] = useState<Set<string>>(new Set())
+  const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
@@ -284,7 +291,7 @@ export function MsgScreen() {
     const { data, error } = await supabase
       .from('notifications')
       .select(`
-        id, sender_id, kind, target_event_id, target_post_id, target_community_post_id,
+        id, sender_id, kind, target_event_id, target_post_id, target_community_post_id, target_conversation_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
         event:events!target_event_id(id, title, starts_at, poster_url)
@@ -336,6 +343,9 @@ export function MsgScreen() {
       case 'lost_pet':
         // Deep-link to the neighborhood wall, where the lost-pet post is shown.
         navigate('/', { state: { openCommunity: true } })
+        return
+      case 'slap':
+        if (notif.target_conversation_id) navigate('/msg', { state: { openConversationId: notif.target_conversation_id } })
         return
       default:
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
@@ -470,7 +480,7 @@ export function MsgScreen() {
 
     const { data } = await supabase
       .from('messages')
-      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, deleted_at')
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
@@ -706,6 +716,34 @@ export function MsgScreen() {
     }
 
     setSending(false)
+  }
+
+  // ── Plaster Slap: event details for banners + in-chat RSVP ──────────────────
+  useEffect(() => {
+    const ids = [...new Set(messages.filter(m => m.message_type === 'slap' && m.event_id).map(m => m.event_id as string))]
+    const missing = ids.filter(id => !slapEvents[id])
+    if (!missing.length) return
+    supabase.from('events').select('id, title, poster_url').in('id', missing).then(({ data }) => {
+      if (data?.length) setSlapEvents(prev => { const n = { ...prev }; for (const e of data) n[e.id] = e as { id: string; title: string; poster_url: string | null }; return n })
+    })
+  }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The event the open thread was slapped to (most recent slap message).
+  const threadSlapEventId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) { const m = messages[i]; if (m.message_type === 'slap' && m.event_id) return m.event_id }
+    return null
+  })()
+
+  useEffect(() => {
+    if (!user || !threadSlapEventId) return
+    supabase.from('attendees').select('event_id').eq('user_id', user.id).eq('event_id', threadSlapEventId).maybeSingle()
+      .then(({ data }) => { if (data) setGoingEventIds(prev => new Set([...prev, threadSlapEventId])) })
+  }, [threadSlapEventId, user?.id])
+
+  async function rsvpFromChat(eventId: string) {
+    if (!user) return
+    const { error } = await supabase.from('attendees').insert({ event_id: eventId, user_id: user.id })
+    if (!error || error.code === '23505') setGoingEventIds(prev => new Set([...prev, eventId]))
   }
 
   function closeConv() {
@@ -1220,6 +1258,32 @@ export function MsgScreen() {
                   const prev = messages[i - 1]
                   const isHighlighted = highlightedMessageId === msg.id
                   const isDeleted = !!msg.deleted_at
+
+                  // Slap banner — distinct, full-width, tappable → event page.
+                  if (msg.message_type === 'slap' && !isDeleted) {
+                    const ev = msg.event_id ? slapEvents[msg.event_id] : null
+                    return (
+                      <div key={msg.id} ref={el => { messageRefs.current.set(msg.id, el) }} style={{ margin: '12px 0' }}>
+                        {showTimestampBefore(msg, prev) && (
+                          <p style={{ textAlign: 'center', margin: '10px 0 4px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 10, color: 'var(--fg-25)', letterSpacing: '0.05em' }}>{fmtMsgTime(msg.created_at)}</p>
+                        )}
+                        <button
+                          onClick={() => msg.event_id && navigate('/', { state: { openEventId: msg.event_id } })}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <div style={{ width: 46, height: 64, borderRadius: 7, overflow: 'hidden', flexShrink: 0, background: 'var(--fg-15)' }}>
+                            {ev?.poster_url && <img src={ev.poster_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>🤚 {isMine ? 'You slapped the crew' : 'You got slapped'}</p>
+                            <p style={{ margin: '3px 0 0', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.15 }}>{ev?.title ?? 'a show'}</p>
+                            <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)' }}>Tap to see the event →</p>
+                          </div>
+                        </button>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div
                       key={msg.id}
@@ -1310,6 +1374,24 @@ export function MsgScreen() {
                       }}
                     >×</button>
                   </div>
+                </div>
+              )}
+
+              {/* Slap RSVP — floats above the composer while the thread has a slap
+                  and the user hasn't gone or dismissed it this session */}
+              {threadSlapEventId && openConvId && !slapDismissed.has(openConvId) && !goingEventIds.has(threadSlapEventId) && (
+                <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => rsvpFromChat(threadSlapEventId)}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    Going to {slapEvents[threadSlapEventId]?.title ?? 'this show'} ✓
+                  </button>
+                  <button
+                    onClick={() => setSlapDismissed(prev => new Set([...prev, openConvId]))}
+                    aria-label="Dismiss"
+                    style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >✕</button>
                 </div>
               )}
 

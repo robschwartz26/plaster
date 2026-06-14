@@ -11,6 +11,7 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
+import { SlapSheet } from '@/components/SlapSheet'
 import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -179,6 +180,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
+  const [slapOpen, setSlapOpen] = useState(false)
+  const [slapCount, setSlapCount] = useState<number | null>(null)
   const [popHeart, setPopHeart] = useState<PickedHeart | null>(null)
 
 
@@ -1015,6 +1018,15 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>sign in to say you're going</p>
               )}
 
+              {user && (
+                <button
+                  onClick={() => setSlapOpen(true)}
+                  style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                >
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>🤚</span> Slap your friends
+                </button>
+              )}
+
               {user && (() => {
                 const reportLabel = reportCount >= 15
                   ? `${reportCount} users have flagged this event as sold out`
@@ -1033,6 +1045,19 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </button>
                 )
               })()}
+
+              {slapOpen && (
+                <SlapSheet
+                  event={{ id: event.id, title: event.title, venue_name: event.venue_name ?? null, starts_at: event.starts_at ?? null }}
+                  onClose={() => setSlapOpen(false)}
+                  onSlapped={(_, count) => { setSlapOpen(false); setSlapCount(count); setTimeout(() => setSlapCount(null), 2200) }}
+                />
+              )}
+              {slapCount !== null && (
+                <div style={{ position: 'fixed', left: '50%', bottom: 90, transform: 'translateX(-50%)', zIndex: 90, background: '#2a2622', color: '#fff', padding: '10px 18px', borderRadius: 999, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+                  Slapped {slapCount} friend{slapCount !== 1 ? 's' : ''} — chat's open
+                </div>
+              )}
             </>
           ) : (
             <>

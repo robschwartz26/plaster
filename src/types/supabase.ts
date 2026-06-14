@@ -723,12 +723,14 @@ export type Database = {
           conversation_id: string
           created_at: string
           deleted_at: string | null
+          event_id: string | null
           id: string
           media_height: number | null
           media_source_id: string | null
           media_type: string | null
           media_url: string | null
           media_width: number | null
+          message_type: string
           sender_id: string
         }
         Insert: {
@@ -736,12 +738,14 @@ export type Database = {
           conversation_id: string
           created_at?: string
           deleted_at?: string | null
+          event_id?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
           media_type?: string | null
           media_url?: string | null
           media_width?: number | null
+          message_type?: string
           sender_id: string
         }
         Update: {
@@ -749,12 +753,14 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           deleted_at?: string | null
+          event_id?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
           media_type?: string | null
           media_url?: string | null
           media_width?: number | null
+          message_type?: string
           sender_id?: string
         }
         Relationships: [
@@ -763,6 +769,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -777,6 +790,7 @@ export type Database = {
           recipient_id: string
           sender_id: string | null
           target_community_post_id: string | null
+          target_conversation_id: string | null
           target_event_id: string | null
           target_post_id: string | null
         }
@@ -789,6 +803,7 @@ export type Database = {
           recipient_id: string
           sender_id?: string | null
           target_community_post_id?: string | null
+          target_conversation_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -801,6 +816,7 @@ export type Database = {
           recipient_id?: string
           sender_id?: string | null
           target_community_post_id?: string | null
+          target_conversation_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -824,6 +840,13 @@ export type Database = {
             columns: ["target_community_post_id"]
             isOneToOne: false
             referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_conversation_id_fkey"
+            columns: ["target_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
           {
