@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
+import { CommunityWall } from '@/components/CommunityWall'
 
 const WALL_CACHE_KEY = 'wall-cache-v3' // v3: status-filtered — flush cached admin walls holding pending events
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
@@ -52,11 +53,12 @@ export function Wall() {
     [events, activeFilter, likedIds, searchQuery],
   )
   const [searchOpen, setSearchOpen] = useState(false)
+  const [communityOpen, setCommunityOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
@@ -289,9 +291,31 @@ export function Wall() {
         </div>
       )}
 
+      {/* Neighborhood chip — opens the region community wall */}
+      {profile?.home_neighborhood && profile?.home_sextant && (
+        <div style={{ flexShrink: 0, padding: '8px 16px 0' }}>
+          <button
+            onClick={() => setCommunityOpen(true)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '5px 12px', borderRadius: 20, border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)', color: '#A855F7', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+          >
+            <span style={{ width: 7, height: 7, background: '#A855F7', transform: 'rotate(45deg)', display: 'inline-block' }} />
+            {profile.home_neighborhood}
+            <span style={{ fontWeight: 500, color: 'var(--fg-40)' }}>· neighborhood wall</span>
+          </button>
+        </div>
+      )}
+
       <FilterBar active={activeFilter} onChange={(f) => withWallTransition(() => setActiveFilter(f))} activePosterCategory={activePosterCategory ?? undefined} />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
+
+      {communityOpen && profile?.home_neighborhood && profile?.home_sextant && (
+        <CommunityWall
+          sextant={profile.home_sextant}
+          neighborhood={profile.home_neighborhood}
+          onClose={() => setCommunityOpen(false)}
+        />
+      )}
 
       {visibleEvents.length === 0 && events.length > 0 ? (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

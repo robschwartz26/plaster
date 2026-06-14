@@ -118,6 +118,84 @@ export type Database = {
           },
         ]
       }
+      community_posts: {
+        Row: {
+          author_id: string
+          body: string | null
+          created_at: string
+          expires_at: string | null
+          flag_reason: string | null
+          flagged: boolean
+          id: string
+          image_url: string | null
+          is_paid: boolean
+          neighborhood: string
+          post_type: string
+          rejection_note: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sextant: string
+          status: string
+          title: string | null
+        }
+        Insert: {
+          author_id: string
+          body?: string | null
+          created_at?: string
+          expires_at?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          image_url?: string | null
+          is_paid?: boolean
+          neighborhood: string
+          post_type?: string
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sextant: string
+          status?: string
+          title?: string | null
+        }
+        Update: {
+          author_id?: string
+          body?: string | null
+          created_at?: string
+          expires_at?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          image_url?: string | null
+          is_paid?: boolean
+          neighborhood?: string
+          post_type?: string
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sextant?: string
+          status?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_reports: {
         Row: {
           admin_notes: string | null

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
+import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
 import { AdminTools } from '@/components/admin/AdminTools'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueBoard } from '@/components/VenueBoard'
@@ -350,7 +351,7 @@ function StaffDashboard() {
       case 'ingester':   return <Ingester staffMode={!isAdmin} />
       case 'board':      return <VenueBoard />
       case 'history':    return <UploadHistory />
-      case 'review':     return <AdminPendingEvents />
+      case 'review':     return <><AdminCommunityPosts /><AdminPendingEvents /></>
       case 'tools':      return <AdminTools />
       case 'team':       return teamContent
     }
