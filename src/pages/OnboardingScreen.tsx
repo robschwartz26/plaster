@@ -11,13 +11,15 @@ import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploa
 import { FindFriends } from '@/components/FindFriends'
 import { NearbyVenues } from '@/components/NearbyVenues'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
+import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
   'Food & Drink', 'Sports', 'Community', 'Outdoors', 'Tech',
 ]
 
-type Step = 'username' | 'account_type' | 'avatar' | 'interests' | 'phone' | 'find_friends' | 'nearby_venues' | 'welcome'
+type Step = 'username' | 'account_type' | 'neighborhood' | 'avatar' | 'interests' | 'phone' | 'find_friends' | 'nearby_venues' | 'welcome'
 
 export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('username')
@@ -27,6 +29,8 @@ export function OnboardingScreen() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const uploaderRef = useRef<AvatarUploaderRef>(null)
+  const [neighborhood, setNeighborhood] = useState<string | null>(null)
+  const [sextant, setSextant] = useState<Sextant | null>(null)
   const [interests, setInterests] = useState<string[]>([])
   const [phone, setPhone] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
@@ -80,6 +84,20 @@ export function OnboardingScreen() {
     // For 'person', no DB write needed — account_type already defaults to 'person'
 
     setBusy(false)
+    setStep('neighborhood')
+  }
+
+  // ── Step 3: neighborhood ─────────────────────────────────────
+  async function submitNeighborhood() {
+    if (!user || !neighborhood || !sextant) return
+    setBusy(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ home_neighborhood: neighborhood, home_sextant: sextant })
+      .eq('id', user.id)
+    setBusy(false)
+    if (error) { console.error('[Onboarding] neighborhood update failed:', error.message); return }
+    await refreshProfile()
     setStep('avatar')
   }
 
@@ -191,7 +209,7 @@ export function OnboardingScreen() {
 
       {/* Step counter */}
       <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
-        step {step === 'phone' ? 5 : step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 6
+        step {step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'neighborhood' ? 3 : step === 'avatar' ? 4 : step === 'interests' ? 5 : 6} of 7
       </p>
 
       {/* Centered content */}
@@ -250,6 +268,21 @@ export function OnboardingScreen() {
             disabled={busy || !accountChoice}
             style={{ ...btnStyle(busy), marginTop: 8, opacity: (busy || !accountChoice) ? 0.5 : 1 }}
           >
+            {busy ? '…' : 'Continue'}
+          </button>
+        </div>
+      )}
+
+      {step === 'neighborhood' && (
+        <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 style={headingStyle}>Which neighborhood is yours?</h2>
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', textAlign: 'center', margin: '-4px 0 4px', lineHeight: 1.5 }}>
+            {sextant
+              ? <>Your chip shows <strong style={{ color: 'var(--fg)' }}>{neighborhood}</strong> · your community wall covers all of {SEXTANT_LABELS[sextant]} Portland. Change it anytime.</>
+              : "You'll see your community wall and local alerts for here — change it anytime."}
+          </p>
+          <NeighborhoodPicker value={neighborhood} onChange={(name, sx) => { setNeighborhood(name); setSextant(sx) }} />
+          <button onClick={submitNeighborhood} disabled={busy || !neighborhood} style={{ ...btnStyle(busy), opacity: (busy || !neighborhood) ? 0.5 : 1 }}>
             {busy ? '…' : 'Continue'}
           </button>
         </div>

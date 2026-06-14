@@ -14,6 +14,8 @@ import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
 import { BannerUploader } from '@/components/BannerUploader'
@@ -58,6 +60,7 @@ type DisplayProfile = {
   account_type: string | null
   banner_url: string | null
   banner_focal_y: number
+  home_neighborhood: string | null
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -98,10 +101,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         account_type: selfProfile.account_type ?? null,
         banner_url: (selfProfile as unknown as { banner_url?: string | null }).banner_url ?? null,
         banner_focal_y: (selfProfile as unknown as { banner_focal_y?: number }).banner_focal_y ?? 0.5,
+        home_neighborhood: selfProfile.home_neighborhood ?? null,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -113,11 +117,15 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [busy,     setBusy]     = useState(false)
   const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
   const [pendingBannerFocalY, setPendingBannerFocalY] = useState(0.5)
+  const [homeNbhd,    setHomeNbhd]    = useState<string | null>(null)
+  const [homeSextant, setHomeSextant] = useState<Sextant | null>(null)
 
   useEffect(() => {
     setBio(selfProfile?.bio ?? '')
     setIsPublic(selfProfile?.is_public ?? true)
-  }, [selfProfile?.bio, selfProfile?.is_public])
+    setHomeNbhd(selfProfile?.home_neighborhood ?? null)
+    setHomeSextant((selfProfile?.home_sextant ?? null) as Sextant | null)
+  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant])
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
@@ -204,7 +212,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!user) return
     setBusy(true)
 
-    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number } = { bio, is_public: isPublic }
+    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant }
 
     if (pendingBannerBlob) {
       const path = `${user.id}/banner.jpg`
@@ -369,6 +377,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+                {displayProfile.home_neighborhood && (
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
+                    {displayProfile.home_neighborhood}
+                  </span>
+                )}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -424,6 +437,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+                {displayProfile.home_neighborhood && (
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
+                    {displayProfile.home_neighborhood}
+                  </span>
+                )}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -520,6 +538,17 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                   <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>
                     <div style={{ position: 'absolute', top: 3, left: isPublic ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--bg)', transition: 'left 200ms ease' }} />
                   </div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
+                    Neighborhood
+                  </p>
+                  {homeNbhd && homeSextant && (
+                    <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+                      {homeNbhd} · community wall covers {SEXTANT_LABELS[homeSextant]} Portland
+                    </p>
+                  )}
+                  <NeighborhoodPicker value={homeNbhd} onChange={(name, sx) => { setHomeNbhd(name); setHomeSextant(sx) }} />
                 </div>
                 {(selfProfile?.account_type === 'venue' || selfProfile?.account_type === 'artist') && (
                   <div style={{ marginBottom: 14 }}>

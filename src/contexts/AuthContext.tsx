@@ -16,6 +16,8 @@ export interface Profile {
   created_at: string
   account_type: string | null
   pending_account_type: string | null
+  home_neighborhood?: string | null
+  home_sextant?: string | null
 }
 
 interface AuthContextValue {

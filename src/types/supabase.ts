@@ -794,6 +794,8 @@ export type Database = {
           bio: string | null
           created_at: string
           email_hash: string | null
+          home_neighborhood: string | null
+          home_sextant: string | null
           id: string
           interests: string[]
           is_admin: boolean
@@ -816,6 +818,8 @@ export type Database = {
           bio?: string | null
           created_at?: string
           email_hash?: string | null
+          home_neighborhood?: string | null
+          home_sextant?: string | null
           id: string
           interests?: string[]
           is_admin?: boolean
@@ -838,6 +842,8 @@ export type Database = {
           bio?: string | null
           created_at?: string
           email_hash?: string | null
+          home_neighborhood?: string | null
+          home_sextant?: string | null
           id?: string
           interests?: string[]
           is_admin?: boolean
