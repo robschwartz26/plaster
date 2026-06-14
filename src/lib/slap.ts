@@ -131,7 +131,7 @@ export async function slapFriends(params: {
   }
 
   const dateStr = startsAt ? new Date(startsAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''
-  const fallback = `🤚 slapped you all to go to ${eventTitle}${venueName ? ` at ${venueName}` : ''}${dateStr ? ` on ${dateStr}` : ''} — who's in?`
+  const fallback = `slapped you all to go to ${eventTitle}${venueName ? ` at ${venueName}` : ''}${dateStr ? ` on ${dateStr}` : ''} — who's in?`
   const { error: msgErr } = await supabase.from('messages').insert({
     conversation_id: convId, sender_id: userId, body: fallback, message_type: 'slap', event_id: eventId,
   })

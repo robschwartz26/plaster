@@ -10,6 +10,7 @@ import { UserPicker, type PickedUser } from '@/components/UserPicker'
 import { BottomSheet } from '@/components/BottomSheet'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
+import { SlapHand } from '@/components/SlapHand'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
@@ -135,7 +136,7 @@ function notifCopy(notif: AppNotification) {
     case 'show_reminder': return <>Show today: {eventNode}</>
     case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
     case 'lost_pet': return <>🐾 Lost pet in your neighborhood — {notif.body_preview ?? 'a neighbor needs help'}</>
-    case 'slap': return <>🤚 {senderNode} slapped you to a show — tap to plan</>
+    case 'slap': return <>{senderNode} slapped you to a show <SlapHand size={14} style={{ marginLeft: 3 }} /></>
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -1275,7 +1276,7 @@ export function MsgScreen() {
                             {ev?.poster_url && <img src={ev.poster_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>🤚 {isMine ? 'You slapped the crew' : 'You got slapped'}</p>
+                            <p style={{ margin: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', gap: 4 }}><SlapHand size={13} />{isMine ? 'You slapped the crew' : 'You got slapped'}</p>
                             <p style={{ margin: '3px 0 0', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.15 }}>{ev?.title ?? 'a show'}</p>
                             <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)' }}>Tap to see the event →</p>
                           </div>
@@ -1383,7 +1384,7 @@ export function MsgScreen() {
                 <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => rsvpFromChat(threadSlapEventId)}
-                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#16a34a', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#16482e', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   >
                     Going to {slapEvents[threadSlapEventId]?.title ?? 'this show'} ✓
                   </button>

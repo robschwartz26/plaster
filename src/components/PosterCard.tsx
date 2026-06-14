@@ -12,6 +12,7 @@ import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
 import { SlapSheet } from '@/components/SlapSheet'
+import { SlapHand } from '@/components/SlapHand'
 import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -1023,7 +1024,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   onClick={() => setSlapOpen(true)}
                   style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
-                  <span style={{ fontSize: 16, lineHeight: 1 }}>🤚</span> Slap your friends
+                  <SlapHand size={18} /> Slap your friends
                 </button>
               )}
 
