@@ -3,7 +3,6 @@ import { CATEGORIES } from '@/lib/categories'
 
 const CATS = CATEGORIES
 type Cat = typeof CATS[number]
-const TRIPLE_CATS = [...CATS, ...CATS, ...CATS]
 
 const SAFE = 1
 const GAP = 6
@@ -15,6 +14,10 @@ interface Props {
   neighborhood?: string | null
   onOpenNeighborhood?: () => void
 }
+
+// Carousel items: the genres, plus the neighborhood chip appended at the end of
+// each copy (so it scrolls + infinite-loops like an ordinary chip).
+type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' }
 
 export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
@@ -30,13 +33,24 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
   const draggedRef         = useRef(false)
   const DRAG_THRESHOLD     = 5
 
-  // Measure one copy width and seed offset to middle copy
+  const showNbhd = !!(neighborhood && onOpenNeighborhood)
+  const baseItems: ChipItem[] = [
+    ...CATS.map((c): ChipItem => ({ kind: 'cat', cat: c })),
+    ...(showNbhd ? [{ kind: 'nbhd' } as ChipItem] : []),
+  ]
+  const copyLen = baseItems.length
+  const tripleItems = [...baseItems, ...baseItems, ...baseItems]
+  const copyLenRef = useRef(copyLen)
+  copyLenRef.current = copyLen
+
+  // Measure one copy width and seed offset to the middle copy. Re-runs if the
+  // per-copy count changes (e.g. the neighborhood chip appears once it loads).
   useEffect(() => {
     const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
-    if (chipEls.length < TRIPLE_CATS.length) return
+    if (chipEls.length < copyLen * 3) return
 
     let copyWidth = 0
-    for (let i = 0; i < CATS.length; i++) {
+    for (let i = 0; i < copyLen; i++) {
       copyWidth += chipEls[i].offsetWidth + GAP
     }
     oneCopyWidthRef.current = copyWidth
@@ -44,7 +58,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
     setAnimating(false)
     setOffset(-copyWidth)
     requestAnimationFrame(() => setAnimating(true))
-  }, [])
+  }, [copyLen])
 
   const snapToCategory = useCallback((cat: string) => {
     const catIdx = CATS.indexOf(cat as Cat)
@@ -53,7 +67,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
     requestAnimationFrame(() => {
       const sa      = scrollAreaRef.current
       const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
-      if (!sa || chipEls.length < TRIPLE_CATS.length) return
+      if (!sa || chipEls.length < copyLenRef.current * 3) return
 
       // Build left-edge positions for every chip
       const positions: number[] = [0]
@@ -61,8 +75,8 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
         positions.push(positions[i - 1] + chipEls[i - 1].offsetWidth + GAP)
       }
 
-      // Target index = middle copy of the active chip
-      const targetI  = CATS.length + catIdx
+      // Target index = middle copy of the active chip (genres lead each copy)
+      const targetI  = copyLenRef.current + catIdx
       const chipW    = chipEls[targetI].offsetWidth
       const saW      = sa.offsetWidth
       const RIGHT_MARGIN = 16
@@ -182,7 +196,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
             className="font-body font-medium"
             style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
-            {chip === '♥' ? '♥\uFE0E' : chip}
+            {chip === '♥' ? '♥︎' : chip}
           </button>
         ))}
       </div>
@@ -214,7 +228,24 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
             willChange: 'transform',
           }}
         >
-          {TRIPLE_CATS.map((cat, i) => {
+          {tripleItems.map((item, i) => {
+            // Neighborhood chip — ordinary chip style (neutral, not an accent) with
+            // a little diamond; opens the region wall instead of filtering.
+            if (item.kind === 'nbhd') {
+              return (
+                <button
+                  key={`nbhd-${i}`}
+                  ref={el => { chipElsRef.current[i] = el }}
+                  onClick={() => { if (!draggedRef.current) onOpenNeighborhood?.() }}
+                  className="font-body font-medium"
+                  style={{ ...chipStyle(false), display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                >
+                  <span style={{ width: 6, height: 6, background: 'var(--fg-40)', transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0 }} />
+                  {neighborhood}
+                </button>
+              )
+            }
+            const cat = item.cat
             const highlighted = cat === active || cat === activePosterCategory
             return (
               <button
@@ -230,21 +261,6 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
           })}
         </div>
       </div>
-
-      {/* Neighborhood chip — pinned at the end of the genre list. Ordinary chip
-          styling (not an accent), with a little diamond; opens the region wall. */}
-      {neighborhood && onOpenNeighborhood && (
-        <div style={{ display: 'flex', flexShrink: 0, paddingRight: 12, paddingLeft: 2, background: 'var(--bg)', position: 'relative', zIndex: 10 }}>
-          <button
-            onClick={onOpenNeighborhood}
-            className="font-body font-medium"
-            style={{ ...chipStyle(false), display: 'inline-flex', alignItems: 'center', gap: 5 }}
-          >
-            <span style={{ width: 6, height: 6, background: 'var(--fg-40)', transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0 }} />
-            {neighborhood}
-          </button>
-        </div>
-      )}
 
     </div>
   )
