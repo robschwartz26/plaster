@@ -109,7 +109,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [postType, setPostType] = useState<'personal' | 'lost_pet'>('personal')
+  const [postType, setPostType] = useState<'personal' | 'lost_pet' | 'business'>('personal')
   const [done, setDone] = useState<{ published: boolean } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -138,6 +138,21 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--bg)', borderRadius: '16px 16px 0 0', padding: '18px 18px calc(18px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }}>
         {done ? (
+          postType === 'business' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '24px 0', textAlign: 'center' }}>
+              <span style={{ fontSize: 34 }}>💳</span>
+              <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)' }}>Almost there — complete payment</p>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', lineHeight: 1.5 }}>
+                Your business post is saved. Pay to send it for review — we'll publish it once it's approved.
+              </p>
+              {STRIPE_BUSINESS_POST_URL ? (
+                <a href={STRIPE_BUSINESS_POST_URL} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-block' }}>Complete payment</a>
+              ) : (
+                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)' }}>Payment isn't set up yet — an admin will reach out to finish it.</p>
+              )}
+              <button onClick={onPosted} style={ghostBtn}>Done</button>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '24px 0', textAlign: 'center' }}>
             <span style={{ fontSize: 36 }}>{done.published ? '✓' : '⏳'}</span>
             <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)' }}>
@@ -152,6 +167,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
             </p>
             <button onClick={onPosted} style={primaryBtn}>Done</button>
           </div>
+          )
         ) : (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -160,7 +176,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
             </div>
 
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {([['personal', 'Personal'], ['lost_pet', 'Lost pet']] as const).map(([val, label]) => {
+              {([['personal', 'Personal'], ['lost_pet', 'Lost pet'], ['business', 'Business']] as const).map(([val, label]) => {
                 const on = postType === val
                 return (
                   <button key={val} onClick={() => setPostType(val)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${on ? 'var(--fg-55)' : 'var(--fg-15)'}`, background: on ? 'var(--fg-08)' : 'transparent', color: on ? 'var(--fg)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>
@@ -170,6 +186,11 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
             {postType === 'lost_pet' && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px', lineHeight: 1.5 }}>
                 Animals only. Once an admin approves it, everyone in {neighborhood} gets an alert — so we review these fast.
+              </p>
+            )}
+            {postType === 'business' && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Business posts are paid. After you submit, you'll complete a quick payment — we send it for review once it's paid.
               </p>
             )}
 
@@ -204,6 +225,12 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
     </div>
   )
 }
+
+// TODO(business-billing): v1 stub — one Stripe Payment Link opened in the
+// browser; an admin manually flips is_paid after payment. Later: per-post
+// Checkout Session + webhook that sets is_paid automatically. Configure via
+// VITE_STRIPE_BUSINESS_POST_URL.
+const STRIPE_BUSINESS_POST_URL = import.meta.env.VITE_STRIPE_BUSINESS_POST_URL as string | undefined
 
 const primaryBtn: React.CSSProperties = { padding: '11px 22px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 8, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }
 const ghostBtn: React.CSSProperties = { padding: '7px 0', background: 'transparent', border: '1px solid var(--fg-18)', borderRadius: 6, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }

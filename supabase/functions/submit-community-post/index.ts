@@ -104,9 +104,10 @@ Return ONLY a JSON object, no markdown:
   }
 
   // Clean + moderation succeeded → publish; otherwise → pending review.
-  // Lost-pet posts ALWAYS go through admin approval — approval is what fires the
-  // neighborhood-wide alert, so it must be a human decision.
-  const status = postType === 'lost_pet'
+  // Lost-pet broadcasts and business posts always go through admin approval:
+  // lost-pet because approval fires the neighborhood alert, business because it
+  // is gated on payment (admin flips is_paid, then approves).
+  const status = (postType === 'lost_pet' || postType === 'business')
     ? 'pending'
     : ((moderationOk && !flagged) ? 'published' : 'pending')
   const expiresAt = body.expires_at ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()

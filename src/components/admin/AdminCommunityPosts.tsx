@@ -39,6 +39,17 @@ export function AdminCommunityPosts() {
     setRows(prev => prev.filter(r => r.id !== id))
   }
 
+  // v1 business billing: admin manually confirms the Stripe payment, which
+  // releases the post for normal approval. (Webhook auto-flip is a later TODO.)
+  async function markPaid(id: string) {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('community_posts').update({ is_paid: true }).eq('id', id)
+    setBusyId(null)
+    if (error) { console.error('[AdminCommunityPosts] markPaid failed', error); return }
+    setRows(prev => prev.map(r => r.id === id ? { ...r, is_paid: true } : r))
+  }
+
   if (loading) return null
   if (rows.length === 0) return null
 
@@ -60,15 +71,27 @@ export function AdminCommunityPosts() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>{p.title || '(no title)'}</span>
                   {p.post_type === 'lost_pet' && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(217,119,6,0.95)', background: 'rgba(217,119,6,0.14)', border: '1px solid rgba(217,119,6,0.4)', padding: '1px 5px', borderRadius: 3 }}>🐾 Lost pet — alerts {p.neighborhood}</span>}
+                  {p.post_type === 'business' && (
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: p.is_paid ? 'var(--fg-55)' : 'rgba(217,119,6,0.95)', background: p.is_paid ? 'var(--fg-08)' : 'rgba(217,119,6,0.14)', border: `1px solid ${p.is_paid ? 'var(--fg-18)' : 'rgba(217,119,6,0.4)'}`, padding: '1px 5px', borderRadius: 3 }}>
+                      Business{p.is_paid ? ' · paid' : ' · unpaid'}
+                    </span>
+                  )}
                   {p.flagged && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 3 }}>AI flagged</span>}
                 </div>
                 <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>@{p.author?.username ?? 'someone'} · {p.neighborhood} · {p.post_type}</span>
                 {p.body && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.body}</p>}
                 {p.flagged && p.flag_reason && <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(239,68,68,0.9)' }}>⚑ {p.flag_reason}</p>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  <button onClick={() => decide(p.id, 'published')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Approve</button>
-                  <button onClick={() => decide(p.id, 'rejected')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Reject</button>
-                </div>
+                {p.post_type === 'business' && !p.is_paid ? (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+                    <button onClick={() => markPaid(p.id)} disabled={busy} style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid rgba(217,119,6,0.5)', background: 'rgba(217,119,6,0.1)', color: 'rgba(217,119,6,0.95)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Mark paid → release</button>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>awaiting Stripe payment</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <button onClick={() => decide(p.id, 'published')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Approve</button>
+                    <button onClick={() => decide(p.id, 'rejected')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Reject</button>
+                  </div>
+                )}
               </div>
             </div>
           )
