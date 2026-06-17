@@ -406,14 +406,12 @@ export function MsgScreen() {
       .in('conversation_id', convIds)
       .neq('user_id', user.id)
 
-    // 4. Profiles for those users
-    const otherUserIds = [...new Set((allMembers ?? []).map((m: { user_id: string }) => m.user_id))]
-    const { data: profiles } = otherUserIds.length
-      ? await supabase
-          .from('profiles')
-          .select('id, username, avatar_diamond_url, avatar_url')
-          .in('id', otherUserIds)
-      : { data: [] }
+    // 4. Identity for co-members. Use the conversation-scoped SECURITY DEFINER
+    //    RPC, not a plain profiles read — the is_public RLS would otherwise hide
+    //    private members of your own groups, making them vanish from the roster,
+    //    title, and message bubbles. Shared membership is the consent; this
+    //    returns identity fields only (the full portrait stays is_public-gated).
+    const { data: profiles } = await supabase.rpc('get_my_conversation_members')
 
     const profileMap: Record<string, OtherUser> = {}
     for (const p of (profiles ?? []) as OtherUser[]) profileMap[p.id] = p

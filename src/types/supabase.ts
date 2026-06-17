@@ -1496,6 +1496,15 @@ export type Database = {
         Returns: undefined
       }
       follow_status: { Args: { other_user_id: string }; Returns: string }
+      get_my_conversation_members: {
+        Args: never
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          id: string
+          username: string
+        }[]
+      }
       get_unread_count: { Args: never; Returns: number }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
