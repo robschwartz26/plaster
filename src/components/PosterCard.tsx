@@ -854,11 +854,16 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     >
       {event.poster_url ? (
         <>
-          {/* Blurred backdrop — tiny thumbnail (40px via Supabase render endpoint), blurred to 24px */}
+          {/* Blurred backdrop — tiny thumbnail (40px via Supabase render endpoint), blurred to 24px.
+              MUST be loading="lazy" — without it every mounted card (the whole wall, since
+              content-visibility only skips paint, not network) eagerly hits the Supabase
+              render endpoint at once → hundreds of parallel requests → ERR_INSUFFICIENT_RESOURCES. */}
           <img
             src={event.poster_url.replace('/object/public/', '/render/image/public/') + '?width=40&quality=20'}
             alt=""
             aria-hidden="true"
+            loading="lazy"
+            decoding="async"
             style={{
               position: 'absolute',
               inset: 0,
