@@ -1258,9 +1258,11 @@ export function MsgScreen() {
 
                 {openConv && (() => {
                   const display = getConversationDisplay(openConv)
+                  // On a slap thread the event poster (above) replaces the avatar.
+                  const headerSlapPoster = (threadSlapEventId && slapEvents[threadSlapEventId]?.poster_url) || (openConvId ? convSlapPoster[openConvId] : null) || null
                   return (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                      {display.isGroup && openConv.members.length >= 2 ? (
+                      {!headerSlapPoster && (display.isGroup && openConv.members.length >= 2 ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                           {openConv.members.slice(0, 3).map(m => (
                             <Diamond key={m.id} diamondUrl={m.avatar_diamond_url} size={28} />
@@ -1272,7 +1274,7 @@ export function MsgScreen() {
                           fallbackUrl={display.primaryUser?.avatar_url ?? null}
                           size={36}
                         />
-                      )}
+                      ))}
                       <span style={{
                         fontFamily: '"Playfair Display", serif',
                         fontWeight: 700, fontSize: 16,
@@ -1440,9 +1442,9 @@ export function MsgScreen() {
                 <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => rsvpFromChat(threadSlapEventId)}
-                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ flex: 1, padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
                   >
-                    Going to {slapEvents[threadSlapEventId]?.title ?? 'this show'} ✓
+                    Going ✓
                   </button>
                   <button
                     onClick={() => setSlapDismissed(prev => new Set([...prev, openConvId]))}
