@@ -1240,6 +1240,22 @@ export function MsgScreen() {
                   }}
                 >← BACK</button>
 
+                {/* Slap thread → event poster in the header (taps to the event) */}
+                {(() => {
+                  const evId = threadSlapEventId
+                  const poster = (evId && slapEvents[evId]?.poster_url) || (openConvId ? convSlapPoster[openConvId] : null) || null
+                  if (!poster) return null
+                  return (
+                    <button
+                      onClick={() => evId && navigate('/', { state: { openEventId: evId } })}
+                      aria-label="See the event"
+                      style={{ flexShrink: 0, padding: 0, border: 'none', background: 'none', cursor: evId ? 'pointer' : 'default', lineHeight: 0 }}
+                    >
+                      <img src={poster} alt="" style={{ width: 38, height: 52, borderRadius: 6, objectFit: 'cover', display: 'block', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
+                    </button>
+                  )
+                })()}
+
                 {openConv && (() => {
                   const display = getConversationDisplay(openConv)
                   return (
@@ -1298,27 +1314,29 @@ export function MsgScreen() {
                   const isHighlighted = highlightedMessageId === msg.id
                   const isDeleted = !!msg.deleted_at
 
-                  // Slap banner — distinct, full-width, tappable → event page.
+                  // Slap message — compact centered text, no card; poster lives in the header.
                   if (msg.message_type === 'slap' && !isDeleted) {
                     const ev = msg.event_id ? slapEvents[msg.event_id] : null
+                    const senderName = openConv?.members.find(m => m.id === msg.sender_id)?.username ?? 'someone'
                     return (
                       <div key={msg.id} ref={el => { messageRefs.current.set(msg.id, el) }} style={{ margin: '12px 0' }}>
                         {showTimestampBefore(msg, prev) && (
                           <p style={{ textAlign: 'center', margin: '10px 0 4px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 10, color: 'var(--fg-25)', letterSpacing: '0.05em' }}>{fmtMsgTime(msg.created_at)}</p>
                         )}
-                        <button
-                          onClick={() => msg.event_id && navigate('/', { state: { openEventId: msg.event_id } })}
-                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 12, borderRadius: 14, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          <div style={{ width: 46, height: 64, borderRadius: 7, overflow: 'hidden', flexShrink: 0, background: 'var(--fg-15)' }}>
-                            {ev?.poster_url && <img src={ev.poster_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p style={{ margin: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', gap: 4 }}><SlapHand size={13} />{isMine ? 'You slapped the crew' : 'You got slapped'}</p>
-                            <p style={{ margin: '3px 0 0', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.15 }}>{ev?.title ?? 'a show'}</p>
-                            <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)' }}>Tap to see the event →</p>
-                          </div>
-                        </button>
+                        <div style={{ padding: '22px 36px', textAlign: 'center' }}>
+                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'var(--fg-62)', lineHeight: 1.4 }}>
+                            {isMine
+                              ? <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>You</span> want to go with the crew to</>
+                              : <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>@{senderName}</span> wants to go with you to</>}
+                          </p>
+                          <button
+                            onClick={() => msg.event_id && navigate('/', { state: { openEventId: msg.event_id } })}
+                            style={{ display: 'block', width: '100%', background: 'none', border: 'none', padding: 0, margin: '6px 0 0', cursor: 'pointer', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.25, textAlign: 'center' }}
+                          >
+                            {ev?.title ?? 'a show'}
+                          </button>
+                          <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>tap to see the event →</p>
+                        </div>
                       </div>
                     )
                   }
@@ -1422,7 +1440,7 @@ export function MsgScreen() {
                 <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => rsvpFromChat(threadSlapEventId)}
-                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', background: '#16482e', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   >
                     Going to {slapEvents[threadSlapEventId]?.title ?? 'this show'} ✓
                   </button>

@@ -33,6 +33,12 @@
   --badge-bg: #ffffff;
   --badge-fg: #000000;
 
+  --fg-62: rgba(240,236,227,0.62);
+  --fg-82: rgba(240,236,227,0.82);
+  /* Slap "Going" outline — legible greens on the dark MSG surface */
+  --slap-green-border: #5fb98a;
+  --slap-green-text: #7fd0a3;
+
   --sold-out: #f0463c;
 }
 
@@ -56,6 +62,12 @@
   /* Badge — pure black on white for max contrast (day mode) */
   --badge-bg: #000000;
   --badge-fg: #ffffff;
+
+  --fg-62: rgba(12,11,11,0.62);
+  --fg-82: rgba(12,11,11,0.82);
+  /* Slap "Going" outline — deep forest on the light surface */
+  --slap-green-border: #16482e;
+  --slap-green-text: #16482e;
 
   --sold-out: #c0392b;
 }
