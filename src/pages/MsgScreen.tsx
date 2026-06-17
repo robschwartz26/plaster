@@ -11,6 +11,8 @@ import { BottomSheet } from '@/components/BottomSheet'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { SlapHand } from '@/components/SlapHand'
+import { GroupEditSheet } from '@/components/GroupEditSheet'
+import { createPortal } from 'react-dom'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
@@ -29,6 +31,7 @@ interface OtherUser {
 interface ConversationRow {
   id: string
   name: string | null
+  avatarUrl: string | null
   lastMessageAt: string
   lastReadAt: string
   members: OtherUser[]
@@ -155,13 +158,14 @@ function showTimestampBefore(cur: Message, prev: Message | undefined): boolean {
   return new Date(cur.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
 }
 
-function getConversationDisplay(conv: ConversationRow): { title: string; isGroup: boolean; primaryUser: OtherUser | null } {
-  if (conv.name) return { title: conv.name, isGroup: true, primaryUser: conv.members[0] ?? null }
-  if (conv.members.length === 0) return { title: '(empty)', isGroup: false, primaryUser: null }
-  if (conv.members.length === 1) return { title: `@${conv.members[0].username ?? 'user'}`, isGroup: false, primaryUser: conv.members[0] }
+function getConversationDisplay(conv: ConversationRow): { title: string; isGroup: boolean; primaryUser: OtherUser | null; avatarUrl: string | null } {
+  // Identity is always PEOPLE (or a custom group name/image) — never an event.
+  if (conv.name) return { title: conv.name, isGroup: true, primaryUser: conv.members[0] ?? null, avatarUrl: conv.avatarUrl }
+  if (conv.members.length === 0) return { title: '(empty)', isGroup: false, primaryUser: null, avatarUrl: null }
+  if (conv.members.length === 1) return { title: `@${conv.members[0].username ?? 'user'}`, isGroup: false, primaryUser: conv.members[0], avatarUrl: null }
   const names = conv.members.slice(0, 3).map(m => `@${m.username ?? 'user'}`).join(', ')
   const more = conv.members.length > 3 ? `, +${conv.members.length - 3}` : ''
-  return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0] }
+  return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0], avatarUrl: conv.avatarUrl }
 }
 
 // Build a snippet centered on the matched query with surrounding context.
@@ -211,7 +215,7 @@ function HighlightedSnippet({ body, query }: { body: string; query: string }) {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function MsgScreen() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { openConversationId: routeConvId } = (location.state ?? {}) as { openConversationId?: string }
@@ -223,6 +227,7 @@ export function MsgScreen() {
   const [goingEventIds, setGoingEventIds] = useState<Set<string>>(new Set())
   const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
   const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
+  const [groupEditOpen, setGroupEditOpen] = useState(false)
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
@@ -386,7 +391,7 @@ export function MsgScreen() {
     // 2. Conversations sorted by last_message_at
     const { data: convRows } = await supabase
       .from('conversations')
-      .select('id, name, last_message_at')
+      .select('id, name, avatar_url, last_message_at')
       .in('id', convIds)
       .order('last_message_at', { ascending: false })
 
@@ -440,7 +445,7 @@ export function MsgScreen() {
       membershipMap[m.conversation_id] = m.last_read_at
     }
 
-    const rows: ConversationRow[] = (convRows as { id: string; name: string | null; last_message_at: string }[]).map(conv => {
+    const rows: ConversationRow[] = (convRows as { id: string; name: string | null; avatar_url: string | null; last_message_at: string }[]).map(conv => {
       const lastReadAt = membershipMap[conv.id] ?? conv.last_message_at
       const lastMsg = lastMsgMap[conv.id] ?? null
       const memberIds = membersByConvId[conv.id] ?? []
@@ -451,6 +456,7 @@ export function MsgScreen() {
       return {
         id: conv.id,
         name: conv.name,
+        avatarUrl: conv.avatar_url,
         lastMessageAt: conv.last_message_at,
         lastReadAt,
         members,
@@ -1073,8 +1079,10 @@ export function MsgScreen() {
                     }} />
                   )}
 
-                  {/* Avatar — stacked diamonds for groups */}
-                  {display.isGroup && conv.members.length >= 2 ? (
+                  {/* Avatar — custom group image, else stacked diamonds, else single */}
+                  {display.avatarUrl ? (
+                    <img src={display.avatarUrl} alt="" style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                  ) : display.isGroup && conv.members.length >= 2 ? (
                     <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0 }}>
                         <Diamond diamondUrl={conv.members[0]?.avatar_diamond_url ?? null} size={28} />
@@ -1127,7 +1135,7 @@ export function MsgScreen() {
                         : 'No messages yet'}
                     </p>
                   </div>
-                  {convSlapPoster[conv.id] && (
+                  {conv.unread && convSlapPoster[conv.id] && (
                     <img
                       src={posterThumb(convSlapPoster[conv.id], 120) ?? convSlapPoster[conv.id]}
                       onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = convSlapPoster[conv.id] }}
@@ -1240,29 +1248,16 @@ export function MsgScreen() {
                   }}
                 >← BACK</button>
 
-                {/* Slap thread → event poster in the header (taps to the event) */}
-                {(() => {
-                  const evId = threadSlapEventId
-                  const poster = (evId && slapEvents[evId]?.poster_url) || (openConvId ? convSlapPoster[openConvId] : null) || null
-                  if (!poster) return null
-                  return (
-                    <button
-                      onClick={() => evId && navigate('/', { state: { openEventId: evId } })}
-                      aria-label="See the event"
-                      style={{ flexShrink: 0, padding: 0, border: 'none', background: 'none', cursor: evId ? 'pointer' : 'default', lineHeight: 0 }}
-                    >
-                      <img src={poster} alt="" style={{ width: 38, height: 52, borderRadius: 6, objectFit: 'cover', display: 'block', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }} />
-                    </button>
-                  )
-                })()}
-
                 {openConv && (() => {
                   const display = getConversationDisplay(openConv)
-                  // On a slap thread the event poster (above) replaces the avatar.
-                  const headerSlapPoster = (threadSlapEventId && slapEvents[threadSlapEventId]?.poster_url) || (openConvId ? convSlapPoster[openConvId] : null) || null
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                      {!headerSlapPoster && (display.isGroup && openConv.members.length >= 2 ? (
+                    <button
+                      onClick={() => { if (display.isGroup) setGroupEditOpen(true) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: display.isGroup ? 'pointer' : 'default', textAlign: 'left' }}
+                    >
+                      {display.avatarUrl ? (
+                        <img src={display.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      ) : display.isGroup && openConv.members.length >= 2 ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                           {openConv.members.slice(0, 3).map(m => (
                             <Diamond key={m.id} diamondUrl={m.avatar_diamond_url} size={28} />
@@ -1274,7 +1269,7 @@ export function MsgScreen() {
                           fallbackUrl={display.primaryUser?.avatar_url ?? null}
                           size={36}
                         />
-                      ))}
+                      )}
                       <span style={{
                         fontFamily: '"Playfair Display", serif',
                         fontWeight: 700, fontSize: 16,
@@ -1284,7 +1279,7 @@ export function MsgScreen() {
                       }}>
                         {display.title}
                       </span>
-                    </div>
+                    </button>
                   )
                 })()}
 
@@ -1302,6 +1297,17 @@ export function MsgScreen() {
                 </button>
               </div>
 
+              {groupEditOpen && openConv && createPortal(
+                <GroupEditSheet
+                  conversationId={openConv.id}
+                  currentName={openConv.name}
+                  currentAvatarUrl={openConv.avatarUrl}
+                  onClose={() => setGroupEditOpen(false)}
+                  onSaved={() => { setGroupEditOpen(false); loadInbox() }}
+                />,
+                document.body
+              )}
+
               {/* Messages */}
               <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div ref={messagesInnerRef} style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
@@ -1316,28 +1322,30 @@ export function MsgScreen() {
                   const isHighlighted = highlightedMessageId === msg.id
                   const isDeleted = !!msg.deleted_at
 
-                  // Slap message — compact centered text, no card; poster lives in the header.
+                  // Slap message — event poster centered above the same third-person
+                  // line for everyone (including the sender). Poster + title → event.
                   if (msg.message_type === 'slap' && !isDeleted) {
                     const ev = msg.event_id ? slapEvents[msg.event_id] : null
-                    const senderName = openConv?.members.find(m => m.id === msg.sender_id)?.username ?? 'someone'
-                    // The crew = the other thread members (the people the sender slapped).
-                    const crew = openConv?.members ?? []
-                    const crewNames = crew.length
-                      ? crew.slice(0, 3).map(m => `@${m.username ?? 'someone'}`).join(', ') + (crew.length > 3 ? ` +${crew.length - 3} more` : '')
-                      : 'the crew'
+                    const senderName = isMine
+                      ? (profile?.username ?? 'someone')
+                      : (openConv?.members.find(m => m.id === msg.sender_id)?.username ?? 'someone')
+                    const goToEvent = () => { if (msg.event_id) navigate('/', { state: { openEventId: msg.event_id } }) }
                     return (
                       <div key={msg.id} ref={el => { messageRefs.current.set(msg.id, el) }} style={{ margin: '12px 0' }}>
                         {showTimestampBefore(msg, prev) && (
                           <p style={{ textAlign: 'center', margin: '10px 0 4px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 10, color: 'var(--fg-25)', letterSpacing: '0.05em' }}>{fmtMsgTime(msg.created_at)}</p>
                         )}
-                        <div style={{ padding: '22px 36px', textAlign: 'center' }}>
+                        <div style={{ padding: '14px 36px 22px', textAlign: 'center' }}>
+                          {ev?.poster_url && (
+                            <button onClick={goToEvent} style={{ display: 'block', margin: '0 auto 12px', padding: 0, border: 'none', background: 'none', cursor: 'pointer', lineHeight: 0 }}>
+                              <img src={ev.poster_url} alt="" style={{ height: 96, borderRadius: 8, objectFit: 'cover', display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.28)' }} />
+                            </button>
+                          )}
                           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'var(--fg-62)', lineHeight: 1.4 }}>
-                            {isMine
-                              ? <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>You</span> wanna go with {crewNames} to</>
-                              : <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>@{senderName}</span> wants to go with you to</>}
+                            <span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>@{senderName}</span> wants to go with you to
                           </p>
                           <button
-                            onClick={() => msg.event_id && navigate('/', { state: { openEventId: msg.event_id } })}
+                            onClick={goToEvent}
                             style={{ display: 'block', width: '100%', background: 'none', border: 'none', padding: 0, margin: '6px 0 0', cursor: 'pointer', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.25, textAlign: 'center' }}
                           >
                             {ev?.title ?? 'a show'}

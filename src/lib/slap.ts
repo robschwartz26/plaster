@@ -120,7 +120,9 @@ export async function slapFriends(params: {
 
   // Otherwise create a fresh, event-titled thread.
   if (!convId) {
-    const { data, error } = await supabase.rpc('create_conversation_with_members', { p_member_ids: targets, p_name: eventTitle })
+    // A conversation is identified by its PEOPLE, not the event — leave it
+    // unnamed (people-titled) so the event lives only as the slap message inside.
+    const { data, error } = await supabase.rpc('create_conversation_with_members', { p_member_ids: targets, p_name: undefined })
     if (error) throw error
     convId = data as string
   }

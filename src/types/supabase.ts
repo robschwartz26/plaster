@@ -275,6 +275,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          avatar_url: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -282,6 +283,7 @@ export type Database = {
           name: string | null
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -289,6 +291,7 @@ export type Database = {
           name?: string | null
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
