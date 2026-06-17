@@ -6,7 +6,7 @@
  * practices or features change. Do NOT add features that don't exist.
  */
 
-const EFFECTIVE_DATE = 'June 4, 2026'
+const EFFECTIVE_DATE = 'June 16, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function PrivacyPolicy() {
@@ -57,6 +57,7 @@ export function PrivacyPolicy() {
       <ul style={ul}>
         <li>Events you mark as attended or interested</li>
         <li>Wall posts you write on event pages</li>
+        <li>Community wall posts you create, including neighborhood notices, items for sale, and lost-pet alerts</li>
         <li>Likes and reactions you give to posts and events</li>
         <li>Direct messages you send and the conversations you're part of</li>
         <li>People you follow and friend connections</li>
@@ -179,12 +180,33 @@ export function PrivacyPolicy() {
 
       <h3 style={h3}>Other Plaster users</h3>
       <p>
-        Some information you create in Plaster is, by design, visible to
-        other users:
+        Some information you create in Plaster is, by design, visible to other
+        users. How much is visible depends on whether your account is public or
+        private — a setting you control on the You tab:
       </p>
       <ul style={ul}>
-        <li>Your username, profile photo, bio, and interests are visible to anyone with an account</li>
+        <li>
+          <strong>Public accounts</strong> (the default): your username, profile
+          photo, bio, and interests are visible to other signed-in Plaster users.
+        </li>
+        <li>
+          <strong>Private accounts</strong>: your profile is hidden from other
+          users — only you can see it. (Our administrators can access profiles
+          when necessary to enforce safety and our community rules.)
+        </li>
+        <li>
+          Either way, people in a group conversation with you can see your
+          username and profile photo, because shared membership is necessary for
+          the conversation to work — but your full-size profile photo follows the
+          public/private setting above.
+        </li>
         <li>Wall posts, replies, and likes are visible to others who can see the related event</li>
+        <li>
+          Posts you make on a neighborhood community wall (including notices and
+          items for sale) are visible to other Plaster users in that region. If
+          you post a lost-pet alert, Plaster users in that specific neighborhood
+          are notified.
+        </li>
         <li>Direct messages are visible only to the people in that conversation</li>
         <li>You can choose whether your follower and following lists are public in your settings</li>
       </ul>
