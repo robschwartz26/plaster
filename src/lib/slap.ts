@@ -90,38 +90,33 @@ export async function slapFriends(params: {
   const want = new Set([userId, ...targets])
   let convId: string | null = null
 
-  // Load my conversations + their full member sets.
+  // Reuse a conversation whose member set EXACTLY equals the target participants
+  // (the same people — no more, no fewer), regardless of whether it's a DM, group,
+  // slap thread, or plain chat, and regardless of any event. The thread IS the
+  // people; the event is just a message inside. Only a genuinely new combination
+  // of people creates a new conversation.
   const { data: mine } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', userId)
   const myConvIds = [...new Set((mine ?? []).map(r => r.conversation_id))]
-  const setByConv: Record<string, Set<string>> = {}
   if (myConvIds.length) {
     const { data: allMemb } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', myConvIds)
+    const setByConv: Record<string, Set<string>> = {}
     for (const r of allMemb ?? []) (setByConv[r.conversation_id] ??= new Set()).add(r.user_id)
 
-    // Reuse ONLY an existing slap thread for THIS event whose members ⊆ the new
-    // selection → add any newly-slapped friends. A matching member-set for a
-    // DIFFERENT event does NOT reuse — each event gets its own thread.
-    const { data: slapMsgs } = await supabase
-      .from('messages')
-      .select('conversation_id')
-      .eq('event_id', eventId)
-      .eq('message_type', 'slap')
-      .in('conversation_id', myConvIds)
-    for (const cid of [...new Set((slapMsgs ?? []).map(m => m.conversation_id))]) {
-      const set = setByConv[cid]
-      if (set && [...set].every(id => want.has(id))) {
-        const toAdd = targets.filter(id => !set.has(id))
-        if (toAdd.length) await supabase.rpc('add_members_to_conversation', { p_conversation_id: cid, p_member_ids: toAdd })
-        convId = cid
-        break
-      }
+    const matches = Object.entries(setByConv)
+      .filter(([, set]) => set.size === want.size && [...want].every(id => set.has(id)))
+      .map(([cid]) => cid)
+
+    if (matches.length === 1) {
+      convId = matches[0]
+    } else if (matches.length > 1) {
+      // Shouldn't happen once this rule is in place, but consolidate onto the oldest.
+      const { data: oldest } = await supabase.from('conversations').select('id').in('id', matches).order('created_at', { ascending: true }).limit(1).maybeSingle()
+      convId = (oldest?.id as string | undefined) ?? matches[0]
     }
   }
 
-  // Otherwise create a fresh, event-titled thread.
+  // No conversation with this exact set of people → create one (people-titled).
   if (!convId) {
-    // A conversation is identified by its PEOPLE, not the event — leave it
-    // unnamed (people-titled) so the event lives only as the slap message inside.
     const { data, error } = await supabase.rpc('create_conversation_with_members', { p_member_ids: targets, p_name: undefined })
     if (error) throw error
     convId = data as string
