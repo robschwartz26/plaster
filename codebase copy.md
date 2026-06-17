@@ -1,77 +1,10 @@
 # Plaster — FULL codebase dump
-# Generated: Tue Jun  9 17:22:35 PDT 2026
-
-=== .claude/settings.local.json ===
-{
-  "permissions": {
-    "allow": [
-      "Bash(cat ~/plaster/PLASTER.md)",
-      "Bash(cat ~/plaster/PLASTER_VISION.md)",
-      "Bash(npm run *)",
-      "Bash(chmod +x /tmp/dump_plaster.sh)",
-      "Bash(/tmp/dump_plaster.sh)",
-      "Bash(npx supabase *)",
-      "Bash(textutil -convert txt -stdout \"/Users/robertschwartz/Desktop/full chat new.rtfd/TXT.rtf\")",
-      "Bash(node -e ' *)",
-      "Bash(npx tsc *)",
-      "Bash(npx cap *)",
-      "mcp__plugin_supabase_supabase__execute_sql",
-      "mcp__plugin_supabase_supabase__apply_migration"
-    ]
-  }
-}
+# Generated: Tue Jun 16 22:06:23 PDT 2026
 
 
-=== .gitignore ===
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+===== ./capacitor.config.ts =====
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.vercel
-supabase/.temp
-
-# Capacitor / iOS build artifacts
-ios/App/Pods/
-ios/App/build/
-ios/App/App.xcworkspace/xcuserdata/
-ios/App/App.xcodeproj/xcuserdata/
-ios/DerivedData/
-*.xcuserstate
-CODE_DUMP.md
-plaster-date-identifier-dump.md
-plaster-current-dump.md
-SESSION_NOTES.md
-
-# Code dumps for AI assistance (keep in ~/plaster-scratch/ instead)
-PLASTER_CODE_DUMP.md
-plaster-dump.md
-plaster_dump.md
-*-code-dump.md
-*-dump.md
-scripts/plaster-dump.md
-
-
-=== capacitor.config.ts ===
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -97,7 +30,38 @@ const config: CapacitorConfig = {
 export default config;
 
 
-=== eslint.config.js ===
+===== ./CLAUDE.md =====
+
+# Plaster — Claude Code project rules
+
+## Database migrations (standing rule)
+
+Schema changes go through **numbered migration files** in `supabase/migrations/`
+applied with **`npx supabase db push`**. The numbered files + remote migration
+history are the source of truth and must stay in sync.
+
+The Supabase **MCP may be used to INSPECT prod** (read-only queries, schema
+checks, advisors) freely. But any **MCP-applied DDL** (`apply_migration`, or
+`execute_sql` that changes schema) **must be immediately followed by**:
+
+1. a matching **numbered migration file** committed to `supabase/migrations/`, and
+2. a migration-history reconciliation so the numbered version — not the MCP's
+   auto-generated timestamp entry — is what remote records:
+   - `npx supabase migration repair --linked --status applied <NNN>` for the new
+     numbered file, and
+   - `npx supabase migration repair --linked --status reverted <timestamp>` to
+     drop the timestamp entry the MCP created.
+
+Skipping this makes the local numbered files and the remote migration history
+diverge, which makes `supabase db push` unusable.
+
+> History: 067–081 were MCP/dashboard-applied without numbered-file
+> reconciliation, diverging the history. Reconciled via `migration repair` on
+> 2026-06-11; `db push` reports "up to date" when alignment holds.
+
+
+===== ./eslint.config.js =====
+
 import js from '@eslint/js'
 import globals from 'globals'
 import reactHooks from 'eslint-plugin-react-hooks'
@@ -123,7 +87,8 @@ export default defineConfig([
 ])
 
 
-=== index.html ===
+===== ./index.html =====
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -155,878 +120,8 @@ export default defineConfig([
 </html>
 
 
-=== ios/.gitignore ===
-App/build
-App/Pods
-App/output
-App/App/public
-DerivedData
-xcuserdata
+===== ./package.json =====
 
-# Cordova plugins for Capacitor
-capacitor-cordova-ios-plugins
-
-# Generated Config files
-App/App/capacitor.config.json
-App/App/config.xml
-
-
-=== ios/App/App.xcodeproj/project.pbxproj ===
-// !$*UTF8*$!
-{
-	archiveVersion = 1;
-	classes = {
-	};
-	objectVersion = 60;
-	objects = {
-
-/* Begin PBXBuildFile section */
-		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
-		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
-		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
-		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
-		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
-		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
-		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
-		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
-/* End PBXBuildFile section */
-
-/* Begin PBXFileReference section */
-		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
-		3BF317CB2FB3F85300FE60F6 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
-		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
-		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		504EC3071FED79650016851F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		504EC3131FED79650016851F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		50B271D01FEDC1A000F3C39B /* public */ = {isa = PBXFileReference; lastKnownFileType = folder; path = public; sourceTree = "<group>"; };
-		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
-/* End PBXFileReference section */
-
-/* Begin PBXFrameworksBuildPhase section */
-		504EC3011FED79650016851F /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXFrameworksBuildPhase section */
-
-/* Begin PBXGroup section */
-		504EC2FB1FED79650016851F = {
-			isa = PBXGroup;
-			children = (
-				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
-				504EC3061FED79650016851F /* App */,
-				504EC3051FED79650016851F /* Products */,
-			);
-			sourceTree = "<group>";
-		};
-		504EC3051FED79650016851F /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				504EC3041FED79650016851F /* App.app */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		504EC3061FED79650016851F /* App */ = {
-			isa = PBXGroup;
-			children = (
-				3BF317CB2FB3F85300FE60F6 /* App.entitlements */,
-				50379B222058CBB4000EE86E /* capacitor.config.json */,
-				504EC3071FED79650016851F /* AppDelegate.swift */,
-				504EC30B1FED79650016851F /* Main.storyboard */,
-				504EC30E1FED79650016851F /* Assets.xcassets */,
-				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
-				504EC3131FED79650016851F /* Info.plist */,
-				2FAD9762203C412B000D30F8 /* config.xml */,
-				50B271D01FEDC1A000F3C39B /* public */,
-			);
-			path = App;
-			sourceTree = "<group>";
-		};
-/* End PBXGroup section */
-
-/* Begin PBXNativeTarget section */
-		504EC3031FED79650016851F /* App */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "App" */;
-			buildPhases = (
-				504EC3001FED79650016851F /* Sources */,
-				504EC3011FED79650016851F /* Frameworks */,
-				504EC3021FED79650016851F /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = App;
-			packageProductDependencies = (
-				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
-			);
-			productName = App;
-			productReference = 504EC3041FED79650016851F /* App.app */;
-			productType = "com.apple.product-type.application";
-		};
-/* End PBXNativeTarget section */
-
-/* Begin PBXProject section */
-		504EC2FC1FED79650016851F /* Project object */ = {
-			isa = PBXProject;
-			attributes = {
-				LastSwiftUpdateCheck = 0920;
-				LastUpgradeCheck = 0920;
-				TargetAttributes = {
-					504EC3031FED79650016851F = {
-						CreatedOnToolsVersion = 9.2;
-						LastSwiftMigration = 1100;
-						ProvisioningStyle = Automatic;
-					};
-				};
-			};
-			buildConfigurationList = 504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */;
-			compatibilityVersion = "Xcode 8.0";
-			developmentRegion = en;
-			hasScannedForEncodings = 0;
-			knownRegions = (
-				en,
-				Base,
-			);
-			mainGroup = 504EC2FB1FED79650016851F;
-			packageReferences = (
-				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
-			);
-			productRefGroup = 504EC3051FED79650016851F /* Products */;
-			projectDirPath = "";
-			projectRoot = "";
-			targets = (
-				504EC3031FED79650016851F /* App */,
-			);
-		};
-/* End PBXProject section */
-
-/* Begin PBXResourcesBuildPhase section */
-		504EC3021FED79650016851F /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */,
-				50B271D11FEDC1A000F3C39B /* public in Resources */,
-				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
-				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
-				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
-				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
-
-/* Begin PBXSourcesBuildPhase section */
-		504EC3001FED79650016851F /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXSourcesBuildPhase section */
-
-/* Begin PBXVariantGroup section */
-		504EC30B1FED79650016851F /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				504EC30C1FED79650016851F /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		504EC3101FED79650016851F /* LaunchScreen.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				504EC3111FED79650016851F /* Base */,
-			);
-			name = LaunchScreen.storyboard;
-			sourceTree = "<group>";
-		};
-/* End PBXVariantGroup section */
-
-/* Begin XCBuildConfiguration section */
-		504EC3141FED79650016851F /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MTL_ENABLE_DEBUG_INFO = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = iphoneos;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-			};
-			name = Debug;
-		};
-		504EC3151FED79650016851F /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
-				COPY_PHASE_STRIP = NO;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				SDKROOT = iphoneos;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				VALIDATE_PRODUCT = YES;
-			};
-			name = Release;
-		};
-		504EC3171FED79650016851F /* Debug */ = {
-			isa = XCBuildConfiguration;
-			baseConfigurationReference = 958DCC722DB07C7200EA8C5F /* debug.xcconfig */;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3Z7BXJ6N6A;
-				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
-				PRODUCT_BUNDLE_IDENTIFIER = com.plaster.the.wall.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		504EC3181FED79650016851F /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3Z7BXJ6N6A;
-				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.plaster.the.wall.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
-/* End XCBuildConfiguration section */
-
-/* Begin XCConfigurationList section */
-		504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				504EC3141FED79650016851F /* Debug */,
-				504EC3151FED79650016851F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		504EC3161FED79650016851F /* Build configuration list for PBXNativeTarget "App" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				504EC3171FED79650016851F /* Debug */,
-				504EC3181FED79650016851F /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-/* End XCConfigurationList section */
-
-/* Begin XCLocalSwiftPackageReference section */
-		D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "CapApp-SPM";
-		};
-/* End XCLocalSwiftPackageReference section */
-
-/* Begin XCSwiftPackageProductDependency section */
-		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
-			productName = "CapApp-SPM";
-		};
-/* End XCSwiftPackageProductDependency section */
-	};
-	rootObject = 504EC2FC1FED79650016851F /* Project object */;
-}
-
-
-=== ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist ===
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>IDEDidComputeMac32BitWarning</key>
-	<true/>
-</dict>
-</plist>
-
-
-=== ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved ===
-{
-  "originHash" : "3aeab6e2698cee46b203cd6f44bdd547bac55436595106e0ba153092ab6b13e5",
-  "pins" : [
-    {
-      "identity" : "capacitor-swift-pm",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ionic-team/capacitor-swift-pm.git",
-      "state" : {
-        "revision" : "f1a8fadf1437c23b825c818fb6509c9dbbae2f61",
-        "version" : "8.3.1"
-      }
-    },
-    {
-      "identity" : "ion-ios-camera",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/ionic-team/ion-ios-camera.git",
-      "state" : {
-        "revision" : "2cd4f06b0ece21b6458e23357280c51f94bfceb8",
-        "version" : "1.0.4"
-      }
-    }
-  ],
-  "version" : 3
-}
-
-
-=== ios/App/App.xcodeproj/xcuserdata/robertschwartz.xcuserdatad/xcschemes/xcschememanagement.plist ===
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>SchemeUserState</key>
-	<dict>
-		<key>App.xcscheme_^#shared#^_</key>
-		<dict>
-			<key>orderHint</key>
-			<integer>0</integer>
-		</dict>
-	</dict>
-</dict>
-</plist>
-
-
-=== ios/App/App/App.entitlements ===
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>aps-environment</key>
-	<string>development</string>
-</dict>
-</plist>
-
-
-=== ios/App/App/AppDelegate.swift ===
-import UIKit
-import Capacitor
-
-@UIApplicationMain
-class AppDelegate: UIResponder, UIApplicationDelegate {
-
-    var window: UIWindow?
-
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
-        return true
-    }
-
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-    }
-
-    func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
-    }
-
-    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-        NotificationCenter.default.post(name: .capacitorDidRegisterForRemoteNotifications, object: deviceToken)
-    }
-
-    func application(_ application: UIApplication, didFailToRegisterForRemoteNotificationsWithError error: Error) {
-        NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
-    }
-
-    func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
-        return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
-    }
-
-    func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-        // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
-        return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
-    }
-
-}
-
-
-
-=== ios/App/App/Assets.xcassets/AppIcon.appiconset/Contents.json ===
-{
-  "images": [
-    {
-      "idiom": "universal",
-      "size": "1024x1024",
-      "filename": "AppIcon-512@2x.png",
-      "platform": "ios"
-    }
-  ],
-  "info": {
-    "author": "xcode",
-    "version": 1
-  }
-}
-
-=== ios/App/App/Assets.xcassets/Contents.json ===
-{
-  "info" : {
-    "version" : 1,
-    "author" : "xcode"
-  }
-}
-
-=== ios/App/App/Assets.xcassets/Splash.imageset/Contents.json ===
-{
-  "images": [
-    {
-      "idiom": "universal",
-      "filename": "Default@1x~universal~anyany.png",
-      "scale": "1x"
-    },
-    {
-      "idiom": "universal",
-      "filename": "Default@2x~universal~anyany.png",
-      "scale": "2x"
-    },
-    {
-      "idiom": "universal",
-      "filename": "Default@3x~universal~anyany.png",
-      "scale": "3x"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
-      "idiom": "universal",
-      "scale": "1x",
-      "filename": "Default@1x~universal~anyany-dark.png"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
-      "idiom": "universal",
-      "scale": "2x",
-      "filename": "Default@2x~universal~anyany-dark.png"
-    },
-    {
-      "appearances": [
-        {
-          "appearance": "luminosity",
-          "value": "dark"
-        }
-      ],
-      "idiom": "universal",
-      "scale": "3x",
-      "filename": "Default@3x~universal~anyany-dark.png"
-    }
-  ],
-  "info": {
-    "version": 1,
-    "author": "xcode"
-  }
-}
-
-=== ios/App/App/Base.lproj/LaunchScreen.storyboard ===
-<?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="17132" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
-    <device id="retina4_7" orientation="portrait" appearance="light"/>
-    <dependencies>
-        <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="17105"/>
-        <capability name="System colors in document resources" minToolsVersion="11.0"/>
-        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
-    </dependencies>
-    <scenes>
-        <!--View Controller-->
-        <scene sceneID="EHf-IW-A2E">
-            <objects>
-                <viewController id="01J-lp-oVM" sceneMemberID="viewController">
-                    <imageView key="view" userInteractionEnabled="NO" contentMode="scaleAspectFill" horizontalHuggingPriority="251" verticalHuggingPriority="251" image="Splash" id="snD-IY-ifK">
-                        <rect key="frame" x="0.0" y="0.0" width="375" height="667"/>
-                        <autoresizingMask key="autoresizingMask"/>
-                        <color key="backgroundColor" red="0.039215686274509803" green="0.039215686274509803" blue="0.039215686274509803" alpha="1" colorSpace="custom" customColorSpace="sRGB"/>
-                    </imageView>
-                </viewController>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
-            </objects>
-            <point key="canvasLocation" x="53" y="375"/>
-        </scene>
-    </scenes>
-    <resources>
-        <image name="Splash" width="1366" height="1366"/>
-    </resources>
-</document>
-
-
-=== ios/App/App/Base.lproj/Main.storyboard ===
-<?xml version="1.0" encoding="UTF-8"?>
-<document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
-    <device id="retina4_7" orientation="portrait">
-        <adaptation id="fullscreen"/>
-    </device>
-    <dependencies>
-        <deployment identifier="iOS"/>
-        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
-    </dependencies>
-    <scenes>
-        <!--Bridge View Controller-->
-        <scene sceneID="tne-QT-ifu">
-            <objects>
-                <viewController id="BYZ-38-t0r" customClass="CAPBridgeViewController" customModule="Capacitor" sceneMemberID="viewController"/>
-                <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
-            </objects>
-        </scene>
-    </scenes>
-</document>
-
-
-=== ios/App/App/capacitor.config.json ===
-{
-	"appId": "com.plaster.the.wall.app",
-	"appName": "plaster",
-	"webDir": "dist",
-	"ios": {
-		"contentInset": "never",
-		"allowsInlineMediaPlayback": true
-	},
-	"plugins": {
-		"SplashScreen": {
-			"launchShowDuration": 0,
-			"launchAutoHide": true,
-			"launchFadeOutDuration": 0,
-			"backgroundColor": "#0a0a0a",
-			"showSpinner": false,
-			"iosSplashResourceName": "Splash"
-		}
-	},
-	"packageClassList": [
-		"ContactsPlugin",
-		"CAPCameraPlugin",
-		"KeyboardPlugin",
-		"PushNotificationsPlugin",
-		"SharePlugin",
-		"SplashScreenPlugin",
-		"StatusBarPlugin"
-	]
-}
-
-
-=== ios/App/App/config.xml ===
-<?xml version='1.0' encoding='utf-8'?>
-<widget version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-  <access origin="*" />
-  
-  
-</widget>
-
-=== ios/App/App/Info.plist ===
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>CAPACITOR_DEBUG</key>
-	<string>$(CAPACITOR_DEBUG)</string>
-	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
-	<key>CFBundleDisplayName</key>
-	<string>plaster</string>
-	<key>CFBundleExecutable</key>
-	<string>$(EXECUTABLE_NAME)</string>
-	<key>CFBundleIdentifier</key>
-	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-	<key>CFBundleInfoDictionaryVersion</key>
-	<string>6.0</string>
-	<key>CFBundleName</key>
-	<string>$(PRODUCT_NAME)</string>
-	<key>CFBundlePackageType</key>
-	<string>APPL</string>
-	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
-	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>remote-notification</string>
-	</array>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIMainStoryboardFile</key>
-	<string>Main</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>armv7</string>
-	</array>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Plaster uses your location to suggest music venues near you, so you can follow your local spots. Your location is never stored or shared.</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Plaster uses your contacts to help you find friends who are already on Plaster and invite others to join.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Plaster uses your camera so you can take a profile photo and capture moments to share.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Plaster needs access to your photo library so you can choose a profile photo and add photos to posts.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Plaster saves photos to your library when you choose to download them.</string>
-</dict>
-</plist>
-
-
-=== ios/App/CapApp-SPM/.gitignore ===
-.DS_Store
-/.build
-/Packages
-/*.xcodeproj
-xcuserdata/
-DerivedData/
-.swiftpm/config/registries.json
-.swiftpm/xcode/package.xcworkspace/contents.xcworkspacedata
-.netrc
-
-
-=== ios/App/CapApp-SPM/.swiftpm/xcode/xcuserdata/robertschwartz.xcuserdatad/xcschemes/xcschememanagement.plist ===
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>SchemeUserState</key>
-	<dict>
-		<key>CapApp-SPM.xcscheme_^#shared#^_</key>
-		<dict>
-			<key>orderHint</key>
-			<integer>2</integer>
-		</dict>
-	</dict>
-</dict>
-</plist>
-
-
-=== ios/App/CapApp-SPM/Package.swift ===
-// swift-tools-version: 5.9
-import PackageDescription
-
-// DO NOT MODIFY THIS FILE - managed by Capacitor CLI commands
-let package = Package(
-    name: "CapApp-SPM",
-    platforms: [.iOS(.v15)],
-    products: [
-        .library(
-            name: "CapApp-SPM",
-            targets: ["CapApp-SPM"])
-    ],
-    dependencies: [
-        .package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", exact: "8.3.1"),
-        .package(name: "CapacitorCommunityContacts", path: "../../../node_modules/@capacitor-community/contacts"),
-        .package(name: "CapacitorCamera", path: "../../../node_modules/@capacitor/camera"),
-        .package(name: "CapacitorKeyboard", path: "../../../node_modules/@capacitor/keyboard"),
-        .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
-        .package(name: "CapacitorShare", path: "../../../node_modules/@capacitor/share"),
-        .package(name: "CapacitorSplashScreen", path: "../../../node_modules/@capacitor/splash-screen"),
-        .package(name: "CapacitorStatusBar", path: "../../../node_modules/@capacitor/status-bar")
-    ],
-    targets: [
-        .target(
-            name: "CapApp-SPM",
-            dependencies: [
-                .product(name: "Capacitor", package: "capacitor-swift-pm"),
-                .product(name: "Cordova", package: "capacitor-swift-pm"),
-                .product(name: "CapacitorCommunityContacts", package: "CapacitorCommunityContacts"),
-                .product(name: "CapacitorCamera", package: "CapacitorCamera"),
-                .product(name: "CapacitorKeyboard", package: "CapacitorKeyboard"),
-                .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
-                .product(name: "CapacitorShare", package: "CapacitorShare"),
-                .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
-                .product(name: "CapacitorStatusBar", package: "CapacitorStatusBar")
-            ]
-        )
-    ]
-)
-
-
-=== ios/App/CapApp-SPM/README.md ===
-# CapApp-SPM
-
-This package is used to host SPM dependencies for your Capacitor project
-
-Do not modify the contents of it or there may be unintended consequences.
-
-
-=== ios/App/CapApp-SPM/Sources/CapApp-SPM/CapApp-SPM.swift ===
-public let isCapacitorApp = true
-
-
-=== ios/capacitor-cordova-ios-plugins/CordovaPluginsResources.podspec ===
-Pod::Spec.new do |s|
-  s.name = 'CordovaPluginsResources'
-  s.version = '0.0.105'
-  s.summary = 'Resources for Cordova plugins'
-  s.license = 'MIT'
-  s.homepage = 'https://capacitorjs.com/'
-  s.authors = { 'Ionic Team' => 'hi@ionicframework.com' }
-  s.source = { :git => 'https://github.com/ionic-team/capacitor.git', :tag => s.version.to_s }
-  s.resources = ['resources/*']
-end
-
-
-=== ios/debug.xcconfig ===
-CAPACITOR_DEBUG = true
-
-
-=== package.json ===
 {
   "name": "plaster",
   "private": true,
@@ -1036,6 +131,7 @@ CAPACITOR_DEBUG = true
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "TZ=America/Los_Angeles vitest run",
     "preview": "vite preview",
     "types:gen": "npx supabase gen types typescript --linked 2>/dev/null > src/types/supabase.ts",
     "ios": "npm run build && npx cap sync ios && npx cap open ios",
@@ -1093,12 +189,14 @@ CAPACITOR_DEBUG = true
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.4"
+    "vite": "^8.0.4",
+    "vitest": "^4.1.8"
   }
 }
 
 
-=== PLASTER_VISION.md ===
+===== ./PLASTER_VISION.md =====
+
 # PLASTER — Vision, Values & Product Soul
 This document captures the why behind every decision. Read alongside PLASTER.md.
 
@@ -1231,7 +329,8 @@ That is the whole product. That is what every decision should serve.
 *Last updated: April 16, 2026*
 
 
-=== PLASTER.md ===
+===== ./PLASTER.md =====
+
 # PLASTER — Complete Project Brief
 **Last updated: April 17, 2026 — Sessions 1–10 complete**
 Read this entire document before touching any code.
@@ -1978,8 +1077,34 @@ Hard-won rules and anti-patterns discovered across development sessions.
 - `~/plaster/src/pages/YouScreen.tsx`
 - `~/plaster/src/components/BottomNav.tsx`
 
+## Backlog
 
-=== postcss.config.js ===
+- ✅ **Auto-ingest legal (DONE 2026-06-11):** takedown / third-party-content clause added to TermsOfUse — see the "Event listings and third-party content" section (listings compiled from venue/public/staff/user sources, accuracy not guaranteed, poster artwork belongs to venues/artists/promoters, documented correction/removal path via Contact, no implied affiliation/endorsement).
+- ✅ **Community/UGC legal (DONE 2026-06-16):** community-wall/marketplace clause added to TermsOfUse — "Community posts and neighborhood content" section (UGC = poster's responsibility; prohibited goods/content list; Plaster not a party to any sale/transaction, meet-in-public/at-own-risk; lost-pet posts are courtesy, no guaranteed outcome; non-exclusive display license + removal path). Effective date bumped to June 16, 2026.
+
+### Auto-Ingest self-test recipe (standing)
+`public/dev/jsonld-fixture.html` is the permanent scrape-pipeline self-test page (3 schema.org events: 2 in-window, 1 past — exercises @graph, ImageObject, date-only parsing; static dates, refresh if older than the 120-day window). To verify the pipeline after any change: in /admin → Auto-Ingest, add a source pointing a throwaway test venue at `https://plasterthewall.com/dev/jsonld-fixture.html`, then Test (expect found 3 · would insert 2) → Run (inserted 2) → Run again (inserted 0, skipped 2 — idempotency). Verified PASS 2026-06-10. Clean up after: delete the test events + venue (cascades the source) and the `scrape/…jpg` posters via `npx supabase storage rm ss:///posters/scrape/… --linked --experimental` (SQL deletes on storage.objects are blocked by a protect trigger).
+
+## Known issues & diagnostics
+
+### Tearlab — 1-col rendering diagnostic
+Archived at tag `tearlab-v1` (branch archive/tearlab). A ?tearlab URL-param overlay with 5 toggles isolating 1-col tear causes: A=static content (fetch timing), B=no inner scroller, C=scroller paint-poke on arrival, D=remove root fade/filter residue, E=translateZ on inner scroller. Repro recipe: fresh load → 1-col → poster→info ×5 → info→info scroll ×5. To resurrect: cherry-pick the lab commit from the tag, or git diff the tag against its parent for the patch. History: the original weeks-long tear = 200 permanent willChange strip layers (fixed); later tear-fix machinery (prefetch debounce, defer-commit, panel promotion) manufactured its own artifacts and was reverted 2026-06-09; clean at stripped baseline.
+
+## Session log
+
+### 2026-06-10
+- **Shipped:** tearlab archived (tag tearlab-v1) + removed, 1-col clean at baseline (56e905f); AUTO-INGEST pilot — migration 076 venue_sources, scrape-sources edge fn (JSON-LD→tribe/squarespace probes→link-hunt→AI, dedupe, re-host, Haiku voice rewrite), /admin Auto-Ingest UI, Import-from-URL (+fuzzy venue match, entity decode, scheme fix, json-feed, htmlToText fix); Tier-1.5 audit script (Goodfoot+Kelly's have live Tribe APIs); ADMIN DASHBOARD UNIFIED — /admin = staff shell, AdminTools panel, StaffPreview scope='all' (d050fe4..c9adaf0); QC fixes — status='published' on every public surface + cache v3 (403cce1), similarity dedupe ≥0.8 (e883753), Reject all (4f1e788), visible rewrite failures (f90d4fa).
+- **In-flight / unverified:** ~20 commits UNPUSHED (414be92..HEAD) — edge fn deployed but UI not on prod; on-device 1-col/dashboard checks pending.
+- **Next step:** push, then QC the unified dashboard + Kelly's similarity-dedupe fetch live.
+
+### 2026-06-09
+- **Shipped:** wall VT filter glide (110fe9f) + query slim 200→500 (b556688); iOS 1-col tearing fixed — final approach = ACTIVE-card GPU promotion (b4fd486), removed permanent willChange (supersedes gesture-scoped dba195b; prefetch+defer 8c11dfa); BATCH 4 — recurringDates.ts + vitest 7 green (8c899cf), verify-staging.sql ran PASS on prod (3dbef55), real importer error msgs (a0f24fc); WALL SCALE — windowed infinite load 300/page (b6efbf6) + multi-col lazy img/content-visibility (252e62d).
+- **In-flight / unverified:** on-device check needed for 1-col tearing, VT filter glide, windowed scroll-append, content-visibility cards. Commits 8c11dfa→252e62d NOT pushed.
+- **Next step:** verify the above on a phone, then `git push`.
+
+
+===== ./postcss.config.js =====
+
 export default {
   plugins: {
     tailwindcss: {},
@@ -1988,289 +1113,8 @@ export default {
 }
 
 
-=== public/favicon.svg ===
-<svg xmlns="http://www.w3.org/2000/svg" width="48" height="46" fill="none" viewBox="0 0 48 46"><path fill="#863bff" d="M25.946 44.938c-.664.845-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.287c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.497 0-3.578-1.842-3.578H1.237c-.92 0-1.456-1.04-.92-1.788L10.013.474c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.579 1.842 3.579h11.377c.943 0 1.473 1.088.89 1.83L25.947 44.94z" style="fill:#863bff;fill:color(display-p3 .5252 .23 1);fill-opacity:1"/><mask id="a" width="48" height="46" x="0" y="0" maskUnits="userSpaceOnUse" style="mask-type:alpha"><path fill="#000" d="M25.842 44.938c-.664.844-2.021.375-2.021-.698V33.937a2.26 2.26 0 0 0-2.262-2.262H10.183c-.92 0-1.456-1.04-.92-1.788l7.48-10.471c1.07-1.498 0-3.579-1.842-3.579H1.133c-.92 0-1.456-1.04-.92-1.787L9.91.473c.214-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.471c-1.07 1.498 0 3.578 1.842 3.578h11.377c.943 0 1.473 1.088.89 1.832L25.843 44.94z" style="fill:#000;fill-opacity:1"/></mask><g mask="url(#a)"><g filter="url(#b)"><ellipse cx="5.508" cy="14.704" fill="#ede6ff" rx="5.508" ry="14.704" style="fill:#ede6ff;fill:color(display-p3 .9275 .9033 1);fill-opacity:1" transform="matrix(.00324 1 1 -.00324 -4.47 31.516)"/></g><g filter="url(#c)"><ellipse cx="10.399" cy="29.851" fill="#ede6ff" rx="10.399" ry="29.851" style="fill:#ede6ff;fill:color(display-p3 .9275 .9033 1);fill-opacity:1" transform="matrix(.00324 1 1 -.00324 -39.328 7.883)"/></g><g filter="url(#d)"><ellipse cx="5.508" cy="30.487" fill="#7e14ff" rx="5.508" ry="30.487" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(89.814 -25.913 -14.639)scale(1 -1)"/></g><g filter="url(#e)"><ellipse cx="5.508" cy="30.599" fill="#7e14ff" rx="5.508" ry="30.599" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(89.814 -32.644 -3.334)scale(1 -1)"/></g><g filter="url(#f)"><ellipse cx="5.508" cy="30.599" fill="#7e14ff" rx="5.508" ry="30.599" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="matrix(.00324 1 1 -.00324 -34.34 30.47)"/></g><g filter="url(#g)"><ellipse cx="14.072" cy="22.078" fill="#ede6ff" rx="14.072" ry="22.078" style="fill:#ede6ff;fill:color(display-p3 .9275 .9033 1);fill-opacity:1" transform="rotate(93.35 24.506 48.493)scale(-1 1)"/></g><g filter="url(#h)"><ellipse cx="3.47" cy="21.501" fill="#7e14ff" rx="3.47" ry="21.501" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(89.009 28.708 47.59)scale(-1 1)"/></g><g filter="url(#i)"><ellipse cx="3.47" cy="21.501" fill="#7e14ff" rx="3.47" ry="21.501" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(89.009 28.708 47.59)scale(-1 1)"/></g><g filter="url(#j)"><ellipse cx=".387" cy="8.972" fill="#7e14ff" rx="4.407" ry="29.108" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(39.51 .387 8.972)"/></g><g filter="url(#k)"><ellipse cx="47.523" cy="-6.092" fill="#7e14ff" rx="4.407" ry="29.108" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(37.892 47.523 -6.092)"/></g><g filter="url(#l)"><ellipse cx="41.412" cy="6.333" fill="#47bfff" rx="5.971" ry="9.665" style="fill:#47bfff;fill:color(display-p3 .2799 .748 1);fill-opacity:1" transform="rotate(37.892 41.412 6.333)"/></g><g filter="url(#m)"><ellipse cx="-1.879" cy="38.332" fill="#7e14ff" rx="4.407" ry="29.108" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(37.892 -1.88 38.332)"/></g><g filter="url(#n)"><ellipse cx="-1.879" cy="38.332" fill="#7e14ff" rx="4.407" ry="29.108" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(37.892 -1.88 38.332)"/></g><g filter="url(#o)"><ellipse cx="35.651" cy="29.907" fill="#7e14ff" rx="4.407" ry="29.108" style="fill:#7e14ff;fill:color(display-p3 .4922 .0767 1);fill-opacity:1" transform="rotate(37.892 35.651 29.907)"/></g><g filter="url(#p)"><ellipse cx="38.418" cy="32.4" fill="#47bfff" rx="5.971" ry="15.297" style="fill:#47bfff;fill:color(display-p3 .2799 .748 1);fill-opacity:1" transform="rotate(37.892 38.418 32.4)"/></g></g><defs><filter id="b" width="60.045" height="41.654" x="-19.77" y="16.149" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="7.659"/></filter><filter id="c" width="90.34" height="51.437" x="-54.613" y="-7.533" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="7.659"/></filter><filter id="d" width="79.355" height="29.4" x="-49.64" y="2.03" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="e" width="79.579" height="29.4" x="-45.045" y="20.029" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="f" width="79.579" height="29.4" x="-43.513" y="21.178" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="g" width="74.749" height="58.852" x="15.756" y="-17.901" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="7.659"/></filter><filter id="h" width="61.377" height="25.362" x="23.548" y="2.284" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="i" width="61.377" height="25.362" x="23.548" y="2.284" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="j" width="56.045" height="63.649" x="-27.636" y="-22.853" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="k" width="54.814" height="64.646" x="20.116" y="-38.415" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="l" width="33.541" height="35.313" x="24.641" y="-11.323" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="m" width="54.814" height="64.646" x="-29.286" y="6.009" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="n" width="54.814" height="64.646" x="-29.286" y="6.009" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="o" width="54.814" height="64.646" x="8.244" y="-2.416" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter><filter id="p" width="39.409" height="43.623" x="18.713" y="10.588" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17158" stdDeviation="4.596"/></filter></defs></svg>
+===== ./README.md =====
 
-=== public/Fully Black Logo.svg ===
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Generator: Adobe Illustrator 28.0.0, SVG Export Plug-In . SVG Version: 6.00 Build 0)  -->
-<svg version="1.1" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
-	 viewBox="0 0 397.7 137.1" style="enable-background:new 0 0 397.7 137.1;" xml:space="preserve">
-<g>
-	<path d="M217.8,137.1h-21c-2.4,0-4.3-1.9-4.3-4.3V42.9c0-2.4,1.9-4.3,4.3-4.3h21c2.4,0,4.3,1.9,4.3,4.3v89.9
-		C222.1,135.2,220.2,137.1,217.8,137.1z"/>
-	<path d="M144.8,106.9v-64c0-2.4-1.9-4.3-4.3-4.3h-21c-2.4,0-4.3,1.9-4.3,4.3v68.3v21.6c0,2.4,1.9,4.3,4.3,4.3h25.2H182
-		c2.4,0,4.3-1.9,4.3-4.3v-17.3c0-2.4-1.9-4.3-4.3-4.3h-33C146.7,111.2,144.8,109.3,144.8,106.9z"/>
-	<path d="M269.3,38.6c-1.1,0-3.4,0-3.5,0h-10.4h-23.1c-2.4,0-4.3,1.9-4.3,4.3v89.9c0,2.4,1.9,4.3,4.3,4.3h21c2.4,0,4.3-1.9,4.3-4.3
-		V108c0-0.8,0.7-1.3,1.4-1.1c10.5,3.1,24.3,3.4,36.2-8.4C320.5,73.2,296.6,38.6,269.3,38.6z M276.7,81.8
-		c-11.2,7.9-23.6-4.5-15.7-15.7c0.3-0.4,0.6-0.7,1-1c11.2-7.9,23.6,4.5,15.7,15.7C277.4,81.2,277,81.5,276.7,81.8z"/>
-	<path d="M396.5,54.2l-14.4-14.4c-1.6-1.6-4.2-1.6-5.9,0l-23,23c-0.6,0.6-1.7,0.6-2.3,0l-23-23c-1.6-1.6-4.2-1.6-5.9,0l-14.4,14.4
-		c-1.6,1.6-1.6,4.2,0,5.9l29.6,29.6c0.3,0.3,0.5,0.8,0.5,1.2l0,42.1c0,2.3,1.9,4.1,4.1,4.1h20.4c2.3,0,4.1-1.9,4.1-4.1l0-42.1
-		c0-0.5,0.2-0.9,0.5-1.2l29.6-29.6C398.1,58.5,398.1,55.8,396.5,54.2z"/>
-	<g>
-		<g>
-			<g>
-				<path d="M107.9,133.3L79,88.7c-0.5-0.8-0.5-1.8,0-2.6l27.1-44.6c1-1.7-0.2-3.8-2.1-3.8l-17.1,3.9c-13.6,3.1-17.6,11-25.8,22.3
-					c-1.6,2.2-2.6,3.7-2.6,3.7c-1.2,2.3-4.7,1.4-4.7-1.2V29.7c-10.4,0-15.8,3.8-20,7.3C20.8,47.7,18,61,18,77.9v56.7
-					c0,1.4,1.1,2.5,2.5,2.5h30.9c1.4,0,2.5-1.1,2.5-2.5v-28.3c0-2.5,3.3-3.4,4.6-1.3L69,135.9c0.5,0.8,1.3,1.2,2.1,1.2h34.8
-					C107.8,137.1,109,134.9,107.9,133.3z M46.6,42.7c-1.9,0-3.4-1.5-3.4-3.4s1.5-3.4,3.4-3.4s3.4,1.5,3.4,3.4S48.5,42.7,46.6,42.7z"
-					/>
-			</g>
-			<path d="M13.5,62.4c0.3,0.7,2.7-38,40.6-38.3c0,0-30.7-36-42.1-20c0,0-5.6,8.8,5.2,11.6c0,0-17.5,4.6-17.2,16.8
-				c0.1,3.8,4,6.3,7.5,4.8c2-0.9,4.6-2.6,7.9-5.7C15.4,31.5,7.7,46.9,13.5,62.4z"/>
-		</g>
-		<path d="M57.9,31.2v9.4c0,0.7,0.7,1.1,1.3,0.7l9-6l-9-4.9C58.6,30.2,57.9,30.6,57.9,31.2z"/>
-	</g>
-</g>
-</svg>
-
-
-=== public/icons.svg ===
-<svg xmlns="http://www.w3.org/2000/svg">
-  <symbol id="bluesky-icon" viewBox="0 0 16 17">
-    <g clip-path="url(#bluesky-clip)"><path fill="#08060d" d="M7.75 7.735c-.693-1.348-2.58-3.86-4.334-5.097-1.68-1.187-2.32-.981-2.74-.79C.188 2.065.1 2.812.1 3.251s.241 3.602.398 4.13c.52 1.744 2.367 2.333 4.07 2.145-2.495.37-4.71 1.278-1.805 4.512 3.196 3.309 4.38-.71 4.987-2.746.608 2.036 1.307 5.91 4.93 2.746 2.72-2.746.747-4.143-1.747-4.512 1.702.189 3.55-.4 4.07-2.145.156-.528.397-3.691.397-4.13s-.088-1.186-.575-1.406c-.42-.19-1.06-.395-2.741.79-1.755 1.24-3.64 3.752-4.334 5.099"/></g>
-    <defs><clipPath id="bluesky-clip"><path fill="#fff" d="M.1.85h15.3v15.3H.1z"/></clipPath></defs>
-  </symbol>
-  <symbol id="discord-icon" viewBox="0 0 20 19">
-    <path fill="#08060d" d="M16.224 3.768a14.5 14.5 0 0 0-3.67-1.153c-.158.286-.343.67-.47.976a13.5 13.5 0 0 0-4.067 0c-.128-.306-.317-.69-.476-.976A14.4 14.4 0 0 0 3.868 3.77C1.546 7.28.916 10.703 1.231 14.077a14.7 14.7 0 0 0 4.5 2.306q.545-.748.965-1.587a9.5 9.5 0 0 1-1.518-.74q.191-.14.372-.293c2.927 1.369 6.107 1.369 8.999 0q.183.152.372.294-.723.437-1.52.74.418.838.963 1.588a14.6 14.6 0 0 0 4.504-2.308c.37-3.911-.63-7.302-2.644-10.309m-9.13 8.234c-.878 0-1.599-.82-1.599-1.82 0-.998.705-1.82 1.6-1.82.894 0 1.614.82 1.599 1.82.001 1-.705 1.82-1.6 1.82m5.91 0c-.878 0-1.599-.82-1.599-1.82 0-.998.705-1.82 1.6-1.82.893 0 1.614.82 1.599 1.82 0 1-.706 1.82-1.6 1.82"/>
-  </symbol>
-  <symbol id="documentation-icon" viewBox="0 0 21 20">
-    <path fill="none" stroke="#aa3bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" d="m15.5 13.333 1.533 1.322c.645.555.967.833.967 1.178s-.322.623-.967 1.179L15.5 18.333m-3.333-5-1.534 1.322c-.644.555-.966.833-.966 1.178s.322.623.966 1.179l1.534 1.321"/>
-    <path fill="none" stroke="#aa3bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" d="M17.167 10.836v-4.32c0-1.41 0-2.117-.224-2.68-.359-.906-1.118-1.621-2.08-1.96-.599-.21-1.349-.21-2.848-.21-2.623 0-3.935 0-4.983.369-1.684.591-3.013 1.842-3.641 3.428C3 6.449 3 7.684 3 10.154v2.122c0 2.558 0 3.838.706 4.726q.306.383.713.671c.76.536 1.79.64 3.581.66"/>
-    <path fill="none" stroke="#aa3bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" d="M3 10a2.78 2.78 0 0 1 2.778-2.778c.555 0 1.209.097 1.748-.047.48-.129.854-.503.982-.982.145-.54.048-1.194.048-1.749a2.78 2.78 0 0 1 2.777-2.777"/>
-  </symbol>
-  <symbol id="github-icon" viewBox="0 0 19 19">
-    <path fill="#08060d" fill-rule="evenodd" d="M9.356 1.85C5.05 1.85 1.57 5.356 1.57 9.694a7.84 7.84 0 0 0 5.324 7.44c.387.079.528-.168.528-.376 0-.182-.013-.805-.013-1.454-2.165.467-2.616-.935-2.616-.935-.349-.91-.864-1.143-.864-1.143-.71-.48.051-.48.051-.48.787.051 1.2.805 1.2.805.695 1.194 1.817.857 2.268.649.064-.507.27-.857.49-1.052-1.728-.182-3.545-.857-3.545-3.87 0-.857.31-1.558.8-2.104-.078-.195-.349-1 .077-2.078 0 0 .657-.208 2.14.805a7.5 7.5 0 0 1 1.946-.26c.657 0 1.328.092 1.946.26 1.483-1.013 2.14-.805 2.14-.805.426 1.078.155 1.883.078 2.078.502.546.799 1.247.799 2.104 0 3.013-1.818 3.675-3.558 3.87.284.247.528.714.528 1.454 0 1.052-.012 1.896-.012 2.156 0 .208.142.455.528.377a7.84 7.84 0 0 0 5.324-7.441c.013-4.338-3.48-7.844-7.773-7.844" clip-rule="evenodd"/>
-  </symbol>
-  <symbol id="social-icon" viewBox="0 0 20 20">
-    <path fill="none" stroke="#aa3bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" d="M12.5 6.667a4.167 4.167 0 1 0-8.334 0 4.167 4.167 0 0 0 8.334 0"/>
-    <path fill="none" stroke="#aa3bff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.35" d="M2.5 16.667a5.833 5.833 0 0 1 8.75-5.053m3.837.474.513 1.035c.07.144.257.282.414.309l.93.155c.596.1.736.536.307.965l-.723.73a.64.64 0 0 0-.152.531l.207.903c.164.715-.213.991-.84.618l-.872-.52a.63.63 0 0 0-.577 0l-.872.52c-.624.373-1.003.094-.84-.618l.207-.903a.64.64 0 0 0-.152-.532l-.723-.729c-.426-.43-.289-.864.306-.964l.93-.156a.64.64 0 0 0 .412-.31l.513-1.034c.28-.562.735-.562 1.012 0"/>
-  </symbol>
-  <symbol id="x-icon" viewBox="0 0 19 19">
-    <path fill="#08060d" fill-rule="evenodd" d="M1.893 1.98c.052.072 1.245 1.769 2.653 3.77l2.892 4.114c.183.261.333.48.333.486s-.068.089-.152.183l-.522.593-.765.867-3.597 4.087c-.375.426-.734.834-.798.905a1 1 0 0 0-.118.148c0 .01.236.017.664.017h.663l.729-.83c.4-.457.796-.906.879-.999a692 692 0 0 0 1.794-2.038c.034-.037.301-.34.594-.675l.551-.624.345-.392a7 7 0 0 1 .34-.374c.006 0 .93 1.306 2.052 2.903l2.084 2.965.045.063h2.275c1.87 0 2.273-.003 2.266-.021-.008-.02-1.098-1.572-3.894-5.547-2.013-2.862-2.28-3.246-2.273-3.266.008-.019.282-.332 2.085-2.38l2-2.274 1.567-1.782c.022-.028-.016-.03-.65-.03h-.674l-.3.342a871 871 0 0 1-1.782 2.025c-.067.075-.405.458-.75.852a100 100 0 0 1-.803.91c-.148.172-.299.344-.99 1.127-.304.343-.32.358-.345.327-.015-.019-.904-1.282-1.976-2.808L6.365 1.85H1.8zm1.782.91 8.078 11.294c.772 1.08 1.413 1.973 1.425 1.984.016.017.241.02 1.05.017l1.03-.004-2.694-3.766L7.796 5.75 5.722 2.852l-1.039-.004-1.039-.004z" clip-rule="evenodd"/>
-  </symbol>
-</svg>
-
-
-=== public/klipy-attribution.svg ===
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2335.63 396.67">
-  <defs>
-    <style>
-      .cls-1 {
-        fill: #6d6d6d;
-      }
-    </style>
-  </defs>
-  <g id="Layer_1-2" data-name="Layer 1">
-    <g>
-      <g>
-        <path class="cls-1" d="M82.4,203.22c7.32,7.05,10.99,16.84,10.99,29.38,0,8.32-1.69,15.48-5.08,21.47-3.39,5.99-8.1,10.54-14.15,13.65-6.05,3.11-13.01,4.66-20.89,4.66h-28.63v44.78H0v-124.51h53.27c12.09,0,21.81,3.52,29.13,10.57ZM50.27,250.58c5.21,0,9.51-1.58,12.9-4.74,3.38-3.16,5.08-7.57,5.08-13.23s-1.69-10.24-5.08-13.4c-3.39-3.16-7.69-4.74-12.9-4.74h-25.63v36.12h25.63Z"/>
-        <path class="cls-1" d="M207.16,198.81c9.71,5.22,17.34,12.65,22.89,22.31,5.55,9.65,8.32,20.92,8.32,33.79s-2.78,24.14-8.32,33.79c-5.55,9.65-13.18,17.09-22.89,22.31-9.71,5.22-20.72,7.82-33.04,7.82s-23.55-2.61-33.38-7.82c-9.82-5.21-17.51-12.65-23.05-22.31-5.55-9.65-8.32-20.92-8.32-33.79s2.77-24.14,8.32-33.79c5.55-9.65,13.23-17.09,23.05-22.31,9.82-5.21,20.95-7.82,33.38-7.82s23.33,2.61,33.04,7.82ZM139.66,277.38c3.33,6.33,7.96,11.18,13.9,14.56,5.94,3.39,12.79,5.08,20.56,5.08s14.45-1.69,20.39-5.08c5.94-3.38,10.54-8.24,13.82-14.56,3.27-6.33,4.91-13.82,4.91-22.47s-1.64-16.15-4.91-22.47c-3.27-6.33-7.88-11.18-13.82-14.56-5.94-3.38-12.73-5.08-20.39-5.08s-14.62,1.69-20.56,5.08c-5.94,3.39-10.57,8.24-13.9,14.56-3.33,6.33-4.99,13.82-4.99,22.47s1.66,16.15,4.99,22.47Z"/>
-        <path class="cls-1" d="M339.91,235.93l-27.13,81.23h-20.81l-43.45-124.51h27.13l26.97,83.56,27.13-83.56h20.31l27.13,83.56,27.13-83.56h26.97l-43.45,124.51h-20.81l-27.13-81.23Z"/>
-        <path class="cls-1" d="M474.24,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M552.98,192.65h52.6c11.99,0,21.64,3.5,28.96,10.49s10.99,16.7,10.99,29.13c0,8.55-1.78,15.84-5.33,21.89-3.55,6.05-8.55,10.57-14.98,13.57l26.97,49.44h-27.97l-24.64-45.28h-21.97v45.28h-24.64v-124.51ZM602.58,250.08c5.33,0,9.65-1.55,12.98-4.66,3.33-3.11,4.99-7.49,4.99-13.15s-1.66-10.04-4.99-13.15c-3.33-3.11-7.66-4.66-12.98-4.66h-24.97v35.62h24.97Z"/>
-        <path class="cls-1" d="M698.3,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M859.6,200.14c9.32,4.99,16.65,12.18,21.97,21.56,5.33,9.38,7.99,20.45,7.99,33.21s-2.66,23.83-7.99,33.21c-5.33,9.38-12.68,16.56-22.06,21.56-9.38,4.99-19.95,7.49-31.71,7.49h-50.77v-124.51h50.94c11.76,0,22.31,2.5,31.63,7.49ZM827.97,295.85c11.43,0,20.47-3.5,27.13-10.49,6.66-6.99,9.99-17.15,9.99-30.46s-3.3-23.47-9.9-30.46c-6.6-6.99-15.62-10.49-27.05-10.49h-26.47v81.9h26.3Z"/>
-        <path class="cls-1" d="M1031.3,201.39c7.05,5.83,10.57,14.4,10.57,25.72,0,5.66-1.06,10.52-3.16,14.57-2.11,4.05-4.88,7.41-8.32,10.07,4.66,2.11,8.57,5.69,11.74,10.74,3.16,5.05,4.74,11.24,4.74,18.56,0,11.65-3.64,20.59-10.9,26.8-7.27,6.22-16.95,9.32-29.05,9.32h-55.26v-124.51h51.44c11.76,0,21.17,2.91,28.21,8.74ZM1001.92,242.92c4.55,0,8.13-1.14,10.74-3.41,2.61-2.27,3.91-5.8,3.91-10.57s-1.44-8.38-4.33-10.82c-2.89-2.44-6.88-3.66-11.99-3.66h-23.97v28.46h25.63ZM1003.92,295.19c5.44,0,9.76-1.27,12.98-3.83,3.22-2.55,4.83-6.43,4.83-11.65s-1.58-9.26-4.74-11.82c-3.16-2.55-7.35-3.83-12.57-3.83h-28.13v31.13h27.63Z"/>
-        <path class="cls-1" d="M1104.29,317.16v-48.27l-47.27-76.24h28.63l30.96,51.77,30.8-51.77h28.63l-47.11,76.24v48.27h-24.64Z"/>
-      </g>
-      <g>
-        <rect class="cls-1" x="1742.19" y="111.85" width="85.35" height="284.82" rx="4.27" ry="4.27"/>
-        <path class="cls-1" d="M1603.91,309.45V124.2c0-6.82-5.53-12.36-12.36-12.36h-60.64c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h180.82c6.82,0,12.36-5.53,12.36-12.36v-50.15c0-6.82-5.53-12.36-12.36-12.36h-95.46c-6.82,0-12.36-5.53-12.36-12.36Z"/>
-        <path class="cls-1" d="M1964.12,111.82c-3.2,0-9.84.03-10.02.03h-29.97s-66.71,0-66.71,0c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h60.64c6.82,0,12.36-5.53,12.36-12.36v-71.89c0-2.18,2.09-3.79,4.18-3.17,30.52,8.94,70.45,9.83,104.71-24.43,72.96-72.96,3.73-173.01-75.18-173.01ZM1985.45,236.59c-32.47,22.93-68.34-12.95-45.41-45.41.75-1.06,1.69-2,2.75-2.75,32.47-22.93,68.34,12.94,45.41,45.41-.75,1.06-1.69,2-2.75,2.75Z"/>
-        <path class="cls-1" d="M2332.11,156.92l-41.66-41.66c-4.69-4.69-12.29-4.69-16.97,0l-66.55,66.55c-1.84,1.84-4.83,1.84-6.67,0l-66.55-66.55c-4.69-4.69-12.29-4.69-16.97,0l-41.66,41.66c-4.69,4.69-4.69,12.29,0,16.97l85.61,85.61c.93.93,1.45,2.19,1.45,3.5v121.66c0,6.63,5.37,12,12,12h58.91c6.63,0,12-5.37,12-12v-121.66c0-1.31.52-2.57,1.45-3.5l85.61-85.61c4.69-4.69,4.69-12.29,0-16.97Z"/>
-        <g>
-          <g>
-            <path class="cls-1" d="M1496.99,385.59l-83.53-128.94c-1.49-2.3-1.53-5.25-.08-7.63l78.43-129.01c2.91-4.83-.54-11-6.17-11l-49.54,11.23c-39.39,8.89-51.04,31.84-74.64,64.6-4.64,6.44-7.63,10.81-7.63,10.81-3.6,6.59-13.56,4.02-13.56-3.41v-106.37c-30.04,0-45.75,10.96-57.97,21.04-37.59,31.04-45.83,69.51-45.83,118.4v164.15c0,3.98,3.22,7.2,7.2,7.2h89.43c3.95,0,7.17-3.22,7.17-7.2v-81.84c0-7.32,9.62-9.96,13.37-3.72l30.5,89.28c1.3,2.18,3.68,3.49,6.17,3.49h100.62c5.75.04,9.2-6.28,6.05-11.07ZM1319.78,123.51c-5.4,0-9.81-4.41-9.81-9.81s4.41-9.77,9.81-9.77,9.77,4.37,9.77,9.77-4.37,9.81-9.77,9.81Z"/>
-            <path class="cls-1" d="M1223.83,180.64c.8,2.11,7.78-109.85,117.36-110.93,0,0-88.93-104.18-121.85-57.82,0,0-16.32,25.6,15.17,33.45,0,0-50.73,13.26-49.7,48.59.34,11.04,11.53,18.16,21.65,13.76,5.86-2.57,13.33-7.59,22.72-16.48.04-.04-22.19,44.6-5.36,89.43Z"/>
-          </g>
-          <path class="cls-1" d="M1352.46,90.36v27.17c0,1.95,2.15,3.1,3.76,2.03l25.94-17.24-26.13-14.06c-1.61-.88-3.56.27-3.56,2.11Z"/>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
-
-=== public/klipy-watermark-white.svg ===
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2335.63 396.67">
-  <defs>
-    <style>
-      .cls-1 {
-        fill: #fff;
-      }
-    </style>
-  </defs>
-  <g id="Layer_1-2" data-name="Layer 1">
-    <g>
-      <g>
-        <path class="cls-1" d="M82.4,203.22c7.32,7.05,10.99,16.84,10.99,29.38,0,8.32-1.69,15.48-5.08,21.47-3.39,5.99-8.1,10.54-14.15,13.65-6.05,3.11-13.01,4.66-20.89,4.66h-28.63v44.78H0v-124.51h53.27c12.09,0,21.81,3.52,29.13,10.57ZM50.27,250.58c5.21,0,9.51-1.58,12.9-4.74,3.38-3.16,5.08-7.57,5.08-13.23s-1.69-10.24-5.08-13.4c-3.39-3.16-7.69-4.74-12.9-4.74h-25.63v36.12h25.63Z"/>
-        <path class="cls-1" d="M207.16,198.81c9.71,5.22,17.34,12.65,22.89,22.31,5.55,9.65,8.32,20.92,8.32,33.79s-2.78,24.14-8.32,33.79c-5.55,9.65-13.18,17.09-22.89,22.31-9.71,5.22-20.72,7.82-33.04,7.82s-23.55-2.61-33.38-7.82c-9.82-5.21-17.51-12.65-23.05-22.31-5.55-9.65-8.32-20.92-8.32-33.79s2.77-24.14,8.32-33.79c5.55-9.65,13.23-17.09,23.05-22.31,9.82-5.21,20.95-7.82,33.38-7.82s23.33,2.61,33.04,7.82ZM139.66,277.38c3.33,6.33,7.96,11.18,13.9,14.56,5.94,3.39,12.79,5.08,20.56,5.08s14.45-1.69,20.39-5.08c5.94-3.38,10.54-8.24,13.82-14.56,3.27-6.33,4.91-13.82,4.91-22.47s-1.64-16.15-4.91-22.47c-3.27-6.33-7.88-11.18-13.82-14.56-5.94-3.38-12.73-5.08-20.39-5.08s-14.62,1.69-20.56,5.08c-5.94,3.39-10.57,8.24-13.9,14.56-3.33,6.33-4.99,13.82-4.99,22.47s1.66,16.15,4.99,22.47Z"/>
-        <path class="cls-1" d="M339.91,235.93l-27.13,81.23h-20.81l-43.45-124.51h27.13l26.97,83.56,27.13-83.56h20.31l27.13,83.56,27.13-83.56h26.97l-43.45,124.51h-20.81l-27.13-81.23Z"/>
-        <path class="cls-1" d="M474.24,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M552.98,192.65h52.6c11.99,0,21.64,3.5,28.96,10.49s10.99,16.7,10.99,29.13c0,8.55-1.78,15.84-5.33,21.89-3.55,6.05-8.55,10.57-14.98,13.57l26.97,49.44h-27.97l-24.64-45.28h-21.97v45.28h-24.64v-124.51ZM602.58,250.08c5.33,0,9.65-1.55,12.98-4.66,3.33-3.11,4.99-7.49,4.99-13.15s-1.66-10.04-4.99-13.15c-3.33-3.11-7.66-4.66-12.98-4.66h-24.97v35.62h24.97Z"/>
-        <path class="cls-1" d="M698.3,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M859.6,200.14c9.32,4.99,16.65,12.18,21.97,21.56,5.33,9.38,7.99,20.45,7.99,33.21s-2.66,23.83-7.99,33.21c-5.33,9.38-12.68,16.56-22.06,21.56-9.38,4.99-19.95,7.49-31.71,7.49h-50.77v-124.51h50.94c11.76,0,22.31,2.5,31.63,7.49ZM827.97,295.85c11.43,0,20.47-3.5,27.13-10.49,6.66-6.99,9.99-17.15,9.99-30.46s-3.3-23.47-9.9-30.46c-6.6-6.99-15.62-10.49-27.05-10.49h-26.47v81.9h26.3Z"/>
-        <path class="cls-1" d="M1031.3,201.39c7.05,5.83,10.57,14.4,10.57,25.72,0,5.66-1.06,10.52-3.16,14.57-2.11,4.05-4.88,7.41-8.32,10.07,4.66,2.11,8.57,5.69,11.74,10.74,3.16,5.05,4.74,11.24,4.74,18.56,0,11.65-3.64,20.59-10.9,26.8-7.27,6.22-16.95,9.32-29.05,9.32h-55.26v-124.51h51.44c11.76,0,21.17,2.91,28.21,8.74ZM1001.92,242.92c4.55,0,8.13-1.14,10.74-3.41,2.61-2.27,3.91-5.8,3.91-10.57s-1.44-8.38-4.33-10.82c-2.89-2.44-6.88-3.66-11.99-3.66h-23.97v28.46h25.63ZM1003.92,295.19c5.44,0,9.76-1.27,12.98-3.83,3.22-2.55,4.83-6.43,4.83-11.65s-1.58-9.26-4.74-11.82c-3.16-2.55-7.35-3.83-12.57-3.83h-28.13v31.13h27.63Z"/>
-        <path class="cls-1" d="M1104.29,317.16v-48.27l-47.27-76.24h28.63l30.96,51.77,30.8-51.77h28.63l-47.11,76.24v48.27h-24.64Z"/>
-      </g>
-      <g>
-        <rect class="cls-1" x="1742.19" y="111.85" width="85.35" height="284.82" rx="4.27" ry="4.27"/>
-        <path class="cls-1" d="M1603.91,309.45V124.2c0-6.82-5.53-12.36-12.36-12.36h-60.64c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h180.82c6.82,0,12.36-5.53,12.36-12.36v-50.15c0-6.82-5.53-12.36-12.36-12.36h-95.46c-6.82,0-12.36-5.53-12.36-12.36Z"/>
-        <path class="cls-1" d="M1964.12,111.82c-3.2,0-9.84.03-10.02.03h-29.97s-66.71,0-66.71,0c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h60.64c6.82,0,12.36-5.53,12.36-12.36v-71.89c0-2.18,2.09-3.79,4.18-3.17,30.52,8.94,70.45,9.83,104.71-24.43,72.96-72.96,3.73-173.01-75.18-173.01ZM1985.45,236.59c-32.47,22.93-68.34-12.95-45.41-45.41.75-1.06,1.69-2,2.75-2.75,32.47-22.93,68.34,12.94,45.41,45.41-.75,1.06-1.69,2-2.75,2.75Z"/>
-        <path class="cls-1" d="M2332.11,156.92l-41.66-41.66c-4.69-4.69-12.29-4.69-16.97,0l-66.55,66.55c-1.84,1.84-4.83,1.84-6.67,0l-66.55-66.55c-4.69-4.69-12.29-4.69-16.97,0l-41.66,41.66c-4.69,4.69-4.69,12.29,0,16.97l85.61,85.61c.93.93,1.45,2.19,1.45,3.5v121.66c0,6.63,5.37,12,12,12h58.91c6.63,0,12-5.37,12-12v-121.66c0-1.31.52-2.57,1.45-3.5l85.61-85.61c4.69-4.69,4.69-12.29,0-16.97Z"/>
-        <g>
-          <g>
-            <path class="cls-1" d="M1496.99,385.59l-83.53-128.94c-1.49-2.3-1.53-5.25-.08-7.63l78.43-129.01c2.91-4.83-.54-11-6.17-11l-49.54,11.23c-39.39,8.89-51.04,31.84-74.64,64.6-4.64,6.44-7.63,10.81-7.63,10.81-3.6,6.59-13.56,4.02-13.56-3.41v-106.37c-30.04,0-45.75,10.96-57.97,21.04-37.59,31.04-45.83,69.51-45.83,118.4v164.15c0,3.98,3.22,7.2,7.2,7.2h89.43c3.95,0,7.17-3.22,7.17-7.2v-81.84c0-7.32,9.62-9.96,13.37-3.72l30.5,89.28c1.3,2.18,3.68,3.49,6.17,3.49h100.62c5.75.04,9.2-6.28,6.05-11.07ZM1319.78,123.51c-5.4,0-9.81-4.41-9.81-9.81s4.41-9.77,9.81-9.77,9.77,4.37,9.77,9.77-4.37,9.81-9.77,9.81Z"/>
-            <path class="cls-1" d="M1223.83,180.64c.8,2.11,7.78-109.85,117.36-110.93,0,0-88.93-104.18-121.85-57.82,0,0-16.32,25.6,15.17,33.45,0,0-50.73,13.26-49.7,48.59.34,11.04,11.53,18.16,21.65,13.76,5.86-2.57,13.33-7.59,22.72-16.48.04-.04-22.19,44.6-5.36,89.43Z"/>
-          </g>
-          <path class="cls-1" d="M1352.46,90.36v27.17c0,1.95,2.15,3.1,3.76,2.03l25.94-17.24-26.13-14.06c-1.61-.88-3.56.27-3.56,2.11Z"/>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
-
-=== public/manifest.json ===
-{
-  "name": "plaster",
-  "short_name": "plaster",
-  "description": "Portland's event poster wall",
-  "start_url": "/",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#0c0b0b",
-  "theme_color": "#0c0b0b",
-  "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
-}
-
-
-=== public/Powered by KLIPY  - black.svg ===
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2335.63 396.67">
-  <g id="Layer_1-2" data-name="Layer 1">
-    <g>
-      <g>
-        <path d="M82.4,203.22c7.32,7.05,10.99,16.84,10.99,29.38,0,8.32-1.69,15.48-5.08,21.47-3.39,5.99-8.1,10.54-14.15,13.65-6.05,3.11-13.01,4.66-20.89,4.66h-28.63v44.78H0v-124.51h53.27c12.09,0,21.81,3.52,29.13,10.57ZM50.27,250.58c5.21,0,9.51-1.58,12.9-4.74,3.38-3.16,5.08-7.57,5.08-13.23s-1.69-10.24-5.08-13.4c-3.39-3.16-7.69-4.74-12.9-4.74h-25.63v36.12h25.63Z"/>
-        <path d="M207.16,198.81c9.71,5.22,17.34,12.65,22.89,22.31,5.55,9.65,8.32,20.92,8.32,33.79s-2.78,24.14-8.32,33.79c-5.55,9.65-13.18,17.09-22.89,22.31-9.71,5.22-20.72,7.82-33.04,7.82s-23.55-2.61-33.38-7.82c-9.82-5.21-17.51-12.65-23.05-22.31-5.55-9.65-8.32-20.92-8.32-33.79s2.77-24.14,8.32-33.79c5.55-9.65,13.23-17.09,23.05-22.31,9.82-5.21,20.95-7.82,33.38-7.82s23.33,2.61,33.04,7.82ZM139.66,277.38c3.33,6.33,7.96,11.18,13.9,14.56,5.94,3.39,12.79,5.08,20.56,5.08s14.45-1.69,20.39-5.08c5.94-3.38,10.54-8.24,13.82-14.56,3.27-6.33,4.91-13.82,4.91-22.47s-1.64-16.15-4.91-22.47c-3.27-6.33-7.88-11.18-13.82-14.56-5.94-3.38-12.73-5.08-20.39-5.08s-14.62,1.69-20.56,5.08c-5.94,3.39-10.57,8.24-13.9,14.56-3.33,6.33-4.99,13.82-4.99,22.47s1.66,16.15,4.99,22.47Z"/>
-        <path d="M339.91,235.93l-27.13,81.23h-20.81l-43.45-124.51h27.13l26.97,83.56,27.13-83.56h20.31l27.13,83.56,27.13-83.56h26.97l-43.45,124.51h-20.81l-27.13-81.23Z"/>
-        <path d="M474.24,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path d="M552.98,192.65h52.6c11.99,0,21.64,3.5,28.96,10.49s10.99,16.7,10.99,29.13c0,8.55-1.78,15.84-5.33,21.89-3.55,6.05-8.55,10.57-14.98,13.57l26.97,49.44h-27.97l-24.64-45.28h-21.97v45.28h-24.64v-124.51ZM602.58,250.08c5.33,0,9.65-1.55,12.98-4.66,3.33-3.11,4.99-7.49,4.99-13.15s-1.66-10.04-4.99-13.15c-3.33-3.11-7.66-4.66-12.98-4.66h-24.97v35.62h24.97Z"/>
-        <path d="M698.3,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path d="M859.6,200.14c9.32,4.99,16.65,12.18,21.97,21.56,5.33,9.38,7.99,20.45,7.99,33.21s-2.66,23.83-7.99,33.21c-5.33,9.38-12.68,16.56-22.06,21.56-9.38,4.99-19.95,7.49-31.71,7.49h-50.77v-124.51h50.94c11.76,0,22.31,2.5,31.63,7.49ZM827.97,295.85c11.43,0,20.47-3.5,27.13-10.49,6.66-6.99,9.99-17.15,9.99-30.46s-3.3-23.47-9.9-30.46c-6.6-6.99-15.62-10.49-27.05-10.49h-26.47v81.9h26.3Z"/>
-        <path d="M1031.3,201.39c7.05,5.83,10.57,14.4,10.57,25.72,0,5.66-1.06,10.52-3.16,14.57-2.11,4.05-4.88,7.41-8.32,10.07,4.66,2.11,8.57,5.69,11.74,10.74,3.16,5.05,4.74,11.24,4.74,18.56,0,11.65-3.64,20.59-10.9,26.8-7.27,6.22-16.95,9.32-29.05,9.32h-55.26v-124.51h51.44c11.76,0,21.17,2.91,28.21,8.74ZM1001.92,242.92c4.55,0,8.13-1.14,10.74-3.41,2.61-2.27,3.91-5.8,3.91-10.57s-1.44-8.38-4.33-10.82c-2.89-2.44-6.88-3.66-11.99-3.66h-23.97v28.46h25.63ZM1003.92,295.19c5.44,0,9.76-1.27,12.98-3.83,3.22-2.55,4.83-6.43,4.83-11.65s-1.58-9.26-4.74-11.82c-3.16-2.55-7.35-3.83-12.57-3.83h-28.13v31.13h27.63Z"/>
-        <path d="M1104.29,317.16v-48.27l-47.27-76.24h28.63l30.96,51.77,30.8-51.77h28.63l-47.11,76.24v48.27h-24.64Z"/>
-      </g>
-      <g>
-        <rect x="1742.19" y="111.85" width="85.35" height="284.82" rx="4.27" ry="4.27"/>
-        <path d="M1603.91,309.45V124.2c0-6.82-5.53-12.36-12.36-12.36h-60.64c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h180.82c6.82,0,12.36-5.53,12.36-12.36v-50.15c0-6.82-5.53-12.36-12.36-12.36h-95.46c-6.82,0-12.36-5.53-12.36-12.36Z"/>
-        <path d="M1964.12,111.82c-3.2,0-9.84.03-10.02.03h-29.97s-66.71,0-66.71,0c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h60.64c6.82,0,12.36-5.53,12.36-12.36v-71.89c0-2.18,2.09-3.79,4.18-3.17,30.52,8.94,70.45,9.83,104.71-24.43,72.96-72.96,3.73-173.01-75.18-173.01ZM1985.45,236.59c-32.47,22.93-68.34-12.95-45.41-45.41.75-1.06,1.69-2,2.75-2.75,32.47-22.93,68.34,12.94,45.41,45.41-.75,1.06-1.69,2-2.75,2.75Z"/>
-        <path d="M2332.11,156.92l-41.66-41.66c-4.69-4.69-12.29-4.69-16.97,0l-66.55,66.55c-1.84,1.84-4.83,1.84-6.67,0l-66.55-66.55c-4.69-4.69-12.29-4.69-16.97,0l-41.66,41.66c-4.69,4.69-4.69,12.29,0,16.97l85.61,85.61c.93.93,1.45,2.19,1.45,3.5v121.66c0,6.63,5.37,12,12,12h58.91c6.63,0,12-5.37,12-12v-121.66c0-1.31.52-2.57,1.45-3.5l85.61-85.61c4.69-4.69,4.69-12.29,0-16.97Z"/>
-        <g>
-          <g>
-            <path d="M1496.99,385.59l-83.53-128.94c-1.49-2.3-1.53-5.25-.08-7.63l78.43-129.01c2.91-4.83-.54-11-6.17-11l-49.54,11.23c-39.39,8.89-51.04,31.84-74.64,64.6-4.64,6.44-7.63,10.81-7.63,10.81-3.6,6.59-13.56,4.02-13.56-3.41v-106.37c-30.04,0-45.75,10.96-57.97,21.04-37.59,31.04-45.83,69.51-45.83,118.4v164.15c0,3.98,3.22,7.2,7.2,7.2h89.43c3.95,0,7.17-3.22,7.17-7.2v-81.84c0-7.32,9.62-9.96,13.37-3.72l30.5,89.28c1.3,2.18,3.68,3.49,6.17,3.49h100.62c5.75.04,9.2-6.28,6.05-11.07ZM1319.78,123.51c-5.4,0-9.81-4.41-9.81-9.81s4.41-9.77,9.81-9.77,9.77,4.37,9.77,9.77-4.37,9.81-9.77,9.81Z"/>
-            <path d="M1223.83,180.64c.8,2.11,7.78-109.85,117.36-110.93,0,0-88.93-104.18-121.85-57.82,0,0-16.32,25.6,15.17,33.45,0,0-50.73,13.26-49.7,48.59.34,11.04,11.53,18.16,21.65,13.76,5.86-2.57,13.33-7.59,22.72-16.48.04-.04-22.19,44.6-5.36,89.43Z"/>
-          </g>
-          <path d="M1352.46,90.36v27.17c0,1.95,2.15,3.1,3.76,2.03l25.94-17.24-26.13-14.06c-1.61-.88-3.56.27-3.56,2.11Z"/>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
-
-=== public/Powered by KLIPY  - gray.svg ===
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2335.63 396.67">
-  <defs>
-    <style>
-      .cls-1 {
-        fill: #6d6d6d;
-      }
-    </style>
-  </defs>
-  <g id="Layer_1-2" data-name="Layer 1">
-    <g>
-      <g>
-        <path class="cls-1" d="M82.4,203.22c7.32,7.05,10.99,16.84,10.99,29.38,0,8.32-1.69,15.48-5.08,21.47-3.39,5.99-8.1,10.54-14.15,13.65-6.05,3.11-13.01,4.66-20.89,4.66h-28.63v44.78H0v-124.51h53.27c12.09,0,21.81,3.52,29.13,10.57ZM50.27,250.58c5.21,0,9.51-1.58,12.9-4.74,3.38-3.16,5.08-7.57,5.08-13.23s-1.69-10.24-5.08-13.4c-3.39-3.16-7.69-4.74-12.9-4.74h-25.63v36.12h25.63Z"/>
-        <path class="cls-1" d="M207.16,198.81c9.71,5.22,17.34,12.65,22.89,22.31,5.55,9.65,8.32,20.92,8.32,33.79s-2.78,24.14-8.32,33.79c-5.55,9.65-13.18,17.09-22.89,22.31-9.71,5.22-20.72,7.82-33.04,7.82s-23.55-2.61-33.38-7.82c-9.82-5.21-17.51-12.65-23.05-22.31-5.55-9.65-8.32-20.92-8.32-33.79s2.77-24.14,8.32-33.79c5.55-9.65,13.23-17.09,23.05-22.31,9.82-5.21,20.95-7.82,33.38-7.82s23.33,2.61,33.04,7.82ZM139.66,277.38c3.33,6.33,7.96,11.18,13.9,14.56,5.94,3.39,12.79,5.08,20.56,5.08s14.45-1.69,20.39-5.08c5.94-3.38,10.54-8.24,13.82-14.56,3.27-6.33,4.91-13.82,4.91-22.47s-1.64-16.15-4.91-22.47c-3.27-6.33-7.88-11.18-13.82-14.56-5.94-3.38-12.73-5.08-20.39-5.08s-14.62,1.69-20.56,5.08c-5.94,3.39-10.57,8.24-13.9,14.56-3.33,6.33-4.99,13.82-4.99,22.47s1.66,16.15,4.99,22.47Z"/>
-        <path class="cls-1" d="M339.91,235.93l-27.13,81.23h-20.81l-43.45-124.51h27.13l26.97,83.56,27.13-83.56h20.31l27.13,83.56,27.13-83.56h26.97l-43.45,124.51h-20.81l-27.13-81.23Z"/>
-        <path class="cls-1" d="M474.24,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M552.98,192.65h52.6c11.99,0,21.64,3.5,28.96,10.49s10.99,16.7,10.99,29.13c0,8.55-1.78,15.84-5.33,21.89-3.55,6.05-8.55,10.57-14.98,13.57l26.97,49.44h-27.97l-24.64-45.28h-21.97v45.28h-24.64v-124.51ZM602.58,250.08c5.33,0,9.65-1.55,12.98-4.66,3.33-3.11,4.99-7.49,4.99-13.15s-1.66-10.04-4.99-13.15c-3.33-3.11-7.66-4.66-12.98-4.66h-24.97v35.62h24.97Z"/>
-        <path class="cls-1" d="M698.3,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M859.6,200.14c9.32,4.99,16.65,12.18,21.97,21.56,5.33,9.38,7.99,20.45,7.99,33.21s-2.66,23.83-7.99,33.21c-5.33,9.38-12.68,16.56-22.06,21.56-9.38,4.99-19.95,7.49-31.71,7.49h-50.77v-124.51h50.94c11.76,0,22.31,2.5,31.63,7.49ZM827.97,295.85c11.43,0,20.47-3.5,27.13-10.49,6.66-6.99,9.99-17.15,9.99-30.46s-3.3-23.47-9.9-30.46c-6.6-6.99-15.62-10.49-27.05-10.49h-26.47v81.9h26.3Z"/>
-        <path class="cls-1" d="M1031.3,201.39c7.05,5.83,10.57,14.4,10.57,25.72,0,5.66-1.06,10.52-3.16,14.57-2.11,4.05-4.88,7.41-8.32,10.07,4.66,2.11,8.57,5.69,11.74,10.74,3.16,5.05,4.74,11.24,4.74,18.56,0,11.65-3.64,20.59-10.9,26.8-7.27,6.22-16.95,9.32-29.05,9.32h-55.26v-124.51h51.44c11.76,0,21.17,2.91,28.21,8.74ZM1001.92,242.92c4.55,0,8.13-1.14,10.74-3.41,2.61-2.27,3.91-5.8,3.91-10.57s-1.44-8.38-4.33-10.82c-2.89-2.44-6.88-3.66-11.99-3.66h-23.97v28.46h25.63ZM1003.92,295.19c5.44,0,9.76-1.27,12.98-3.83,3.22-2.55,4.83-6.43,4.83-11.65s-1.58-9.26-4.74-11.82c-3.16-2.55-7.35-3.83-12.57-3.83h-28.13v31.13h27.63Z"/>
-        <path class="cls-1" d="M1104.29,317.16v-48.27l-47.27-76.24h28.63l30.96,51.77,30.8-51.77h28.63l-47.11,76.24v48.27h-24.64Z"/>
-      </g>
-      <g>
-        <rect class="cls-1" x="1742.19" y="111.85" width="85.35" height="284.82" rx="4.27" ry="4.27"/>
-        <path class="cls-1" d="M1603.91,309.45V124.2c0-6.82-5.53-12.36-12.36-12.36h-60.64c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h180.82c6.82,0,12.36-5.53,12.36-12.36v-50.15c0-6.82-5.53-12.36-12.36-12.36h-95.46c-6.82,0-12.36-5.53-12.36-12.36Z"/>
-        <path class="cls-1" d="M1964.12,111.82c-3.2,0-9.84.03-10.02.03h-29.97s-66.71,0-66.71,0c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h60.64c6.82,0,12.36-5.53,12.36-12.36v-71.89c0-2.18,2.09-3.79,4.18-3.17,30.52,8.94,70.45,9.83,104.71-24.43,72.96-72.96,3.73-173.01-75.18-173.01ZM1985.45,236.59c-32.47,22.93-68.34-12.95-45.41-45.41.75-1.06,1.69-2,2.75-2.75,32.47-22.93,68.34,12.94,45.41,45.41-.75,1.06-1.69,2-2.75,2.75Z"/>
-        <path class="cls-1" d="M2332.11,156.92l-41.66-41.66c-4.69-4.69-12.29-4.69-16.97,0l-66.55,66.55c-1.84,1.84-4.83,1.84-6.67,0l-66.55-66.55c-4.69-4.69-12.29-4.69-16.97,0l-41.66,41.66c-4.69,4.69-4.69,12.29,0,16.97l85.61,85.61c.93.93,1.45,2.19,1.45,3.5v121.66c0,6.63,5.37,12,12,12h58.91c6.63,0,12-5.37,12-12v-121.66c0-1.31.52-2.57,1.45-3.5l85.61-85.61c4.69-4.69,4.69-12.29,0-16.97Z"/>
-        <g>
-          <g>
-            <path class="cls-1" d="M1496.99,385.59l-83.53-128.94c-1.49-2.3-1.53-5.25-.08-7.63l78.43-129.01c2.91-4.83-.54-11-6.17-11l-49.54,11.23c-39.39,8.89-51.04,31.84-74.64,64.6-4.64,6.44-7.63,10.81-7.63,10.81-3.6,6.59-13.56,4.02-13.56-3.41v-106.37c-30.04,0-45.75,10.96-57.97,21.04-37.59,31.04-45.83,69.51-45.83,118.4v164.15c0,3.98,3.22,7.2,7.2,7.2h89.43c3.95,0,7.17-3.22,7.17-7.2v-81.84c0-7.32,9.62-9.96,13.37-3.72l30.5,89.28c1.3,2.18,3.68,3.49,6.17,3.49h100.62c5.75.04,9.2-6.28,6.05-11.07ZM1319.78,123.51c-5.4,0-9.81-4.41-9.81-9.81s4.41-9.77,9.81-9.77,9.77,4.37,9.77,9.77-4.37,9.81-9.77,9.81Z"/>
-            <path class="cls-1" d="M1223.83,180.64c.8,2.11,7.78-109.85,117.36-110.93,0,0-88.93-104.18-121.85-57.82,0,0-16.32,25.6,15.17,33.45,0,0-50.73,13.26-49.7,48.59.34,11.04,11.53,18.16,21.65,13.76,5.86-2.57,13.33-7.59,22.72-16.48.04-.04-22.19,44.6-5.36,89.43Z"/>
-          </g>
-          <path class="cls-1" d="M1352.46,90.36v27.17c0,1.95,2.15,3.1,3.76,2.03l25.94-17.24-26.13-14.06c-1.61-.88-3.56.27-3.56,2.11Z"/>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
-
-=== public/Powered by KLIPY  - white.svg ===
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2335.63 396.67">
-  <defs>
-    <style>
-      .cls-1 {
-        fill: #fff;
-      }
-    </style>
-  </defs>
-  <g id="Layer_1-2" data-name="Layer 1">
-    <g>
-      <g>
-        <path class="cls-1" d="M82.4,203.22c7.32,7.05,10.99,16.84,10.99,29.38,0,8.32-1.69,15.48-5.08,21.47-3.39,5.99-8.1,10.54-14.15,13.65-6.05,3.11-13.01,4.66-20.89,4.66h-28.63v44.78H0v-124.51h53.27c12.09,0,21.81,3.52,29.13,10.57ZM50.27,250.58c5.21,0,9.51-1.58,12.9-4.74,3.38-3.16,5.08-7.57,5.08-13.23s-1.69-10.24-5.08-13.4c-3.39-3.16-7.69-4.74-12.9-4.74h-25.63v36.12h25.63Z"/>
-        <path class="cls-1" d="M207.16,198.81c9.71,5.22,17.34,12.65,22.89,22.31,5.55,9.65,8.32,20.92,8.32,33.79s-2.78,24.14-8.32,33.79c-5.55,9.65-13.18,17.09-22.89,22.31-9.71,5.22-20.72,7.82-33.04,7.82s-23.55-2.61-33.38-7.82c-9.82-5.21-17.51-12.65-23.05-22.31-5.55-9.65-8.32-20.92-8.32-33.79s2.77-24.14,8.32-33.79c5.55-9.65,13.23-17.09,23.05-22.31,9.82-5.21,20.95-7.82,33.38-7.82s23.33,2.61,33.04,7.82ZM139.66,277.38c3.33,6.33,7.96,11.18,13.9,14.56,5.94,3.39,12.79,5.08,20.56,5.08s14.45-1.69,20.39-5.08c5.94-3.38,10.54-8.24,13.82-14.56,3.27-6.33,4.91-13.82,4.91-22.47s-1.64-16.15-4.91-22.47c-3.27-6.33-7.88-11.18-13.82-14.56-5.94-3.38-12.73-5.08-20.39-5.08s-14.62,1.69-20.56,5.08c-5.94,3.39-10.57,8.24-13.9,14.56-3.33,6.33-4.99,13.82-4.99,22.47s1.66,16.15,4.99,22.47Z"/>
-        <path class="cls-1" d="M339.91,235.93l-27.13,81.23h-20.81l-43.45-124.51h27.13l26.97,83.56,27.13-83.56h20.31l27.13,83.56,27.13-83.56h26.97l-43.45,124.51h-20.81l-27.13-81.23Z"/>
-        <path class="cls-1" d="M474.24,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M552.98,192.65h52.6c11.99,0,21.64,3.5,28.96,10.49s10.99,16.7,10.99,29.13c0,8.55-1.78,15.84-5.33,21.89-3.55,6.05-8.55,10.57-14.98,13.57l26.97,49.44h-27.97l-24.64-45.28h-21.97v45.28h-24.64v-124.51ZM602.58,250.08c5.33,0,9.65-1.55,12.98-4.66,3.33-3.11,4.99-7.49,4.99-13.15s-1.66-10.04-4.99-13.15c-3.33-3.11-7.66-4.66-12.98-4.66h-24.97v35.62h24.97Z"/>
-        <path class="cls-1" d="M698.3,242.59h47.61v21.47h-47.61v31.13h54.93v21.97h-79.57v-124.51h79.4v21.81h-54.77v28.13Z"/>
-        <path class="cls-1" d="M859.6,200.14c9.32,4.99,16.65,12.18,21.97,21.56,5.33,9.38,7.99,20.45,7.99,33.21s-2.66,23.83-7.99,33.21c-5.33,9.38-12.68,16.56-22.06,21.56-9.38,4.99-19.95,7.49-31.71,7.49h-50.77v-124.51h50.94c11.76,0,22.31,2.5,31.63,7.49ZM827.97,295.85c11.43,0,20.47-3.5,27.13-10.49,6.66-6.99,9.99-17.15,9.99-30.46s-3.3-23.47-9.9-30.46c-6.6-6.99-15.62-10.49-27.05-10.49h-26.47v81.9h26.3Z"/>
-        <path class="cls-1" d="M1031.3,201.39c7.05,5.83,10.57,14.4,10.57,25.72,0,5.66-1.06,10.52-3.16,14.57-2.11,4.05-4.88,7.41-8.32,10.07,4.66,2.11,8.57,5.69,11.74,10.74,3.16,5.05,4.74,11.24,4.74,18.56,0,11.65-3.64,20.59-10.9,26.8-7.27,6.22-16.95,9.32-29.05,9.32h-55.26v-124.51h51.44c11.76,0,21.17,2.91,28.21,8.74ZM1001.92,242.92c4.55,0,8.13-1.14,10.74-3.41,2.61-2.27,3.91-5.8,3.91-10.57s-1.44-8.38-4.33-10.82c-2.89-2.44-6.88-3.66-11.99-3.66h-23.97v28.46h25.63ZM1003.92,295.19c5.44,0,9.76-1.27,12.98-3.83,3.22-2.55,4.83-6.43,4.83-11.65s-1.58-9.26-4.74-11.82c-3.16-2.55-7.35-3.83-12.57-3.83h-28.13v31.13h27.63Z"/>
-        <path class="cls-1" d="M1104.29,317.16v-48.27l-47.27-76.24h28.63l30.96,51.77,30.8-51.77h28.63l-47.11,76.24v48.27h-24.64Z"/>
-      </g>
-      <g>
-        <rect class="cls-1" x="1742.19" y="111.85" width="85.35" height="284.82" rx="4.27" ry="4.27"/>
-        <path class="cls-1" d="M1603.91,309.45V124.2c0-6.82-5.53-12.36-12.36-12.36h-60.64c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h180.82c6.82,0,12.36-5.53,12.36-12.36v-50.15c0-6.82-5.53-12.36-12.36-12.36h-95.46c-6.82,0-12.36-5.53-12.36-12.36Z"/>
-        <path class="cls-1" d="M1964.12,111.82c-3.2,0-9.84.03-10.02.03h-29.97s-66.71,0-66.71,0c-6.82,0-12.36,5.53-12.36,12.36v260.11c0,6.82,5.53,12.36,12.36,12.36h60.64c6.82,0,12.36-5.53,12.36-12.36v-71.89c0-2.18,2.09-3.79,4.18-3.17,30.52,8.94,70.45,9.83,104.71-24.43,72.96-72.96,3.73-173.01-75.18-173.01ZM1985.45,236.59c-32.47,22.93-68.34-12.95-45.41-45.41.75-1.06,1.69-2,2.75-2.75,32.47-22.93,68.34,12.94,45.41,45.41-.75,1.06-1.69,2-2.75,2.75Z"/>
-        <path class="cls-1" d="M2332.11,156.92l-41.66-41.66c-4.69-4.69-12.29-4.69-16.97,0l-66.55,66.55c-1.84,1.84-4.83,1.84-6.67,0l-66.55-66.55c-4.69-4.69-12.29-4.69-16.97,0l-41.66,41.66c-4.69,4.69-4.69,12.29,0,16.97l85.61,85.61c.93.93,1.45,2.19,1.45,3.5v121.66c0,6.63,5.37,12,12,12h58.91c6.63,0,12-5.37,12-12v-121.66c0-1.31.52-2.57,1.45-3.5l85.61-85.61c4.69-4.69,4.69-12.29,0-16.97Z"/>
-        <g>
-          <g>
-            <path class="cls-1" d="M1496.99,385.59l-83.53-128.94c-1.49-2.3-1.53-5.25-.08-7.63l78.43-129.01c2.91-4.83-.54-11-6.17-11l-49.54,11.23c-39.39,8.89-51.04,31.84-74.64,64.6-4.64,6.44-7.63,10.81-7.63,10.81-3.6,6.59-13.56,4.02-13.56-3.41v-106.37c-30.04,0-45.75,10.96-57.97,21.04-37.59,31.04-45.83,69.51-45.83,118.4v164.15c0,3.98,3.22,7.2,7.2,7.2h89.43c3.95,0,7.17-3.22,7.17-7.2v-81.84c0-7.32,9.62-9.96,13.37-3.72l30.5,89.28c1.3,2.18,3.68,3.49,6.17,3.49h100.62c5.75.04,9.2-6.28,6.05-11.07ZM1319.78,123.51c-5.4,0-9.81-4.41-9.81-9.81s4.41-9.77,9.81-9.77,9.77,4.37,9.77,9.77-4.37,9.81-9.77,9.81Z"/>
-            <path class="cls-1" d="M1223.83,180.64c.8,2.11,7.78-109.85,117.36-110.93,0,0-88.93-104.18-121.85-57.82,0,0-16.32,25.6,15.17,33.45,0,0-50.73,13.26-49.7,48.59.34,11.04,11.53,18.16,21.65,13.76,5.86-2.57,13.33-7.59,22.72-16.48.04-.04-22.19,44.6-5.36,89.43Z"/>
-          </g>
-          <path class="cls-1" d="M1352.46,90.36v27.17c0,1.95,2.15,3.1,3.76,2.03l25.94-17.24-26.13-14.06c-1.61-.88-3.56.27-3.56,2.11Z"/>
-        </g>
-      </g>
-    </g>
-  </g>
-</svg>
-
-=== README.md ===
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
@@ -2346,607 +1190,8 @@ export default defineConfig([
 ```
 
 
-=== scripts/dump-code.sh ===
-#!/usr/bin/env bash
-# Generates a complete concatenated markdown dump of the Plaster codebase.
-# Output: scripts/plaster-dump.md
+===== ./SESSION_NOTES.md =====
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="$REPO_ROOT/scripts/plaster-dump.md"
-
-emit() {
-  local file="$1"
-  local rel="${file#$REPO_ROOT/}"
-  local ext="${file##*.}"
-  case "$ext" in
-    ts|tsx)   lang="typescript" ;;
-    js)       lang="javascript" ;;
-    sql)      lang="sql" ;;
-    json)     lang="json" ;;
-    html)     lang="html" ;;
-    css)      lang="css" ;;
-    sh)       lang="bash" ;;
-    md)       lang="markdown" ;;
-    *)        lang="" ;;
-  esac
-  echo "## $rel" >> "$OUT"
-  echo "" >> "$OUT"
-  echo "\`\`\`$lang" >> "$OUT"
-  cat "$file" >> "$OUT"
-  echo "" >> "$OUT"
-  echo "\`\`\`" >> "$OUT"
-  echo "" >> "$OUT"
-}
-
-echo "# Plaster — Complete Codebase Dump" > "$OUT"
-echo "Generated: $(date)" >> "$OUT"
-echo "" >> "$OUT"
-
-# src/
-while IFS= read -r -d '' f; do
-  emit "$f"
-done < <(find "$REPO_ROOT/src" -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.css" \) -print0 | sort -z)
-
-# supabase/migrations/
-while IFS= read -r -d '' f; do
-  emit "$f"
-done < <(find "$REPO_ROOT/supabase/migrations" -type f -name "*.sql" -print0 | sort -z)
-
-# supabase/functions/
-while IFS= read -r -d '' f; do
-  emit "$f"
-done < <(find "$REPO_ROOT/supabase/functions" -type f -print0 2>/dev/null | sort -z)
-
-# Config files
-for f in \
-  "$REPO_ROOT/package.json" \
-  "$REPO_ROOT/tsconfig.json" \
-  "$REPO_ROOT/vite.config.ts" \
-  "$REPO_ROOT/capacitor.config.ts" \
-  "$REPO_ROOT/index.html" \
-  "$REPO_ROOT/tailwind.config.js" \
-  "$REPO_ROOT/README.md"; do
-  [ -f "$f" ] && emit "$f"
-done
-
-echo "Done: $OUT"
-
-
-=== scripts/generate-splash.cjs ===
-// One-shot splash generator. Outputs:
-//   resources/splash.png       — 2732x2732, black wordmark on cream (#f0ece3)
-//   resources/splash-dark.png  — 2732x2732, cream wordmark on #0a0a0a
-//
-// Embeds Playfair Display Black 900 TTF as base64 inside the SVG so
-// the rendered output matches the in-app PlasterHeader exactly,
-// regardless of host system font availability.
-//
-// Letter-spacing matches the CSS -0.02em used by PlasterHeader.
-//
-// Run once with: node scripts/generate-splash.cjs
-
-const fs = require('fs')
-const path = require('path')
-const sharp = require('sharp')
-
-const SIZE = 2732
-const FONT_SIZE = 360            // Adjust here for visual sizing
-const TEXT_COLOR_LIGHT = '#0a0a0a'
-const BG_LIGHT = '#f0ece3'
-const TEXT_COLOR_DARK = '#f0ece3'
-const BG_DARK = '#0a0a0a'
-
-// Read and base64-encode the font
-const fontPath = path.join(__dirname, 'fonts', 'PlayfairDisplay-Black.ttf')
-if (!fs.existsSync(fontPath)) {
-  console.error(`Font not found at ${fontPath}. Run the curl from Step 1 first.`)
-  process.exit(1)
-}
-const fontB64 = fs.readFileSync(fontPath).toString('base64')
-
-// Letter-spacing: PlasterHeader uses -0.02em. In SVG pixels at this font size:
-const letterSpacingPx = -FONT_SIZE * 0.02
-
-function buildSvg(textColor, bgColor) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${SIZE}" height="${SIZE}" viewBox="0 0 ${SIZE} ${SIZE}">
-  <defs>
-    <style type="text/css">
-      @font-face {
-        font-family: 'PlayfairDisplayEmbedded';
-        font-weight: 900;
-        src: url(data:font/truetype;charset=utf-8;base64,${fontB64}) format('truetype');
-      }
-    </style>
-  </defs>
-  <rect width="${SIZE}" height="${SIZE}" fill="${bgColor}"/>
-  <text
-    x="${SIZE / 2}"
-    y="${SIZE / 2}"
-    font-family="PlayfairDisplayEmbedded"
-    font-weight="900"
-    font-size="${FONT_SIZE}"
-    fill="${textColor}"
-    text-anchor="middle"
-    dominant-baseline="central"
-    letter-spacing="${letterSpacingPx}"
-  >plaster</text>
-</svg>`
-}
-
-async function main() {
-  const outDir = path.join(__dirname, '..', 'resources')
-  fs.mkdirSync(outDir, { recursive: true })
-
-  await sharp(Buffer.from(buildSvg(TEXT_COLOR_LIGHT, BG_LIGHT)))
-    .png()
-    .toFile(path.join(outDir, 'splash.png'))
-  console.log('✓ resources/splash.png')
-
-  await sharp(Buffer.from(buildSvg(TEXT_COLOR_DARK, BG_DARK)))
-    .png()
-    .toFile(path.join(outDir, 'splash-dark.png'))
-  console.log('✓ resources/splash-dark.png')
-}
-
-main().catch(err => { console.error(err); process.exit(1) })
-
-
-=== scripts/ingest.js ===
-#!/usr/bin/env node
-/**
- * Plaster — AI Poster Ingestion Script
- *
- * Usage: node scripts/ingest.js ~/Desktop/posters/
- *
- * Reads every jpg/jpeg/png/webp from the given folder, uses Claude vision
- * to extract event details, optimizes the image with sharp, uploads it to
- * Supabase storage, and inserts the event (and venue if needed) into the DB.
- */
-
-import { readdir, readFile, writeFile } from 'fs/promises';
-import { extname, join, resolve, dirname, basename } from 'path';
-import { fileURLToPath } from 'url';
-import { randomUUID } from 'crypto';
-import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
-import sharp from 'sharp';
-import dotenv from 'dotenv';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// Load .env.local from the project root (one level up from scripts/)
-dotenv.config({ path: join(__dirname, '..', '.env.local') });
-
-const {
-  VITE_SUPABASE_URL: SUPABASE_URL,
-  VITE_SUPABASE_SERVICE_KEY: SUPABASE_SERVICE_KEY,
-  ANTHROPIC_API_KEY,
-} = process.env;
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY || !ANTHROPIC_API_KEY) {
-  console.error('Missing required environment variables. Check .env.local:');
-  if (!SUPABASE_URL)          console.error('  - VITE_SUPABASE_URL');
-  if (!SUPABASE_SERVICE_KEY)  console.error('  - VITE_SUPABASE_SERVICE_KEY');
-  if (!ANTHROPIC_API_KEY)     console.error('  - ANTHROPIC_API_KEY');
-  process.exit(1);
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
-
-const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
-const VALID_CATEGORIES = ['Music', 'Drag', 'Dance', 'Comedy', 'Art', 'Film', 'Literary', 'Trivia', 'Other'];
-const CURRENT_YEAR = new Date().getFullYear();
-
-// ── Timestamp helpers ──────────────────────────────────────────────────────────
-
-/**
- * Portland uses PDT (UTC-7) from mid-March through early November, PST (UTC-8)
- * otherwise. We apply a simple month-based heuristic since we don't know the
- * exact DST boundary for a given year.
- */
-function portlandOffset(dateStr) {
-  const month = parseInt(dateStr.split('-')[1], 10);
-  return month >= 3 && month <= 10 ? '-07:00' : '-08:00';
-}
-
-function buildTimestamp(dateStr, timeStr) {
-  if (!dateStr) return null;
-  const time = timeStr || '00:00';
-  // Validate the date string looks like YYYY-MM-DD
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-  const combined = `${dateStr}T${time}:00`;
-  const probe = new Date(combined);
-  if (isNaN(probe.getTime())) return null;
-  return `${combined}${portlandOffset(dateStr)}`;
-}
-
-// ── Claude vision extraction ───────────────────────────────────────────────────
-
-async function extractEventData(imageBuffer, filename) {
-  const base64 = imageBuffer.toString('base64');
-  const ext = extname(filename).slice(1).toLowerCase();
-  const mediaType =
-    ext === 'png' ? 'image/png' :
-    ext === 'webp' ? 'image/webp' :
-    'image/jpeg';
-
-  const message = await anthropic.messages.create({
-    model: 'claude-opus-4-6',
-    max_tokens: 1024,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: { type: 'base64', media_type: mediaType, data: base64 },
-          },
-          {
-            type: 'text',
-            text: `You are extracting event details from an event poster for a Portland, Oregon events discovery app.
-
-Respond with ONLY a valid JSON object — no markdown fences, no explanation, nothing else.
-
-{
-  "title": string | null,
-  "venue_name": string | null,
-  "date": string | null,
-  "time": string | null,
-  "address": string | null,
-  "category": string,
-  "description": string | null,
-  "uncertain_fields": string[]
-}
-
-Field rules:
-- title: The main event or performer name. null only if truly unreadable.
-- venue_name: Name of the venue or location. null if absent.
-- date: ISO format YYYY-MM-DD. Assume year ${CURRENT_YEAR} if only month/day are shown. null if no date is visible.
-- time: 24-hour HH:MM (e.g. "20:00"). null if no time is shown.
-- address: Full street address if visible, otherwise null.
-- category: Must be exactly one of: Music, Drag, Dance, Comedy, Art, Film, Literary, Trivia, Other. Pick the best fit.
-- description: 1–3 sentences synthesized from any descriptive text on the poster. null if there is nothing to work with.
-- uncertain_fields: Array of field names you are not confident about (e.g. ["date", "time"]). Empty array if you are confident in everything.`,
-          },
-        ],
-      },
-    ],
-  });
-
-  const raw = message.content[0].type === 'text' ? message.content[0].text.trim() : '';
-  // Strip any accidental markdown code fences
-  const cleaned = raw.replace(/^```[a-z]*\n?/gi, '').replace(/```\s*$/g, '').trim();
-  return JSON.parse(cleaned);
-}
-
-// ── Image optimization ─────────────────────────────────────────────────────────
-
-async function optimizeImage(buffer) {
-  return sharp(buffer)
-    .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
-    .jpeg({ quality: 85 })
-    .toBuffer();
-}
-
-// ── Supabase helpers ───────────────────────────────────────────────────────────
-
-async function uploadPoster(buffer) {
-  const storagePath = `ingest/${randomUUID()}.jpg`;
-  const { error } = await supabase.storage
-    .from('posters')
-    .upload(storagePath, buffer, { contentType: 'image/jpeg', upsert: false });
-  if (error) throw new Error(`Storage upload failed: ${error.message}`);
-  const { data: { publicUrl } } = supabase.storage.from('posters').getPublicUrl(storagePath);
-  return publicUrl;
-}
-
-async function findOrCreateVenue(venueName, address) {
-  if (!venueName) return null;
-
-  // Case-insensitive name match
-  const { data: existing } = await supabase
-    .from('venues')
-    .select('id')
-    .ilike('name', venueName.trim())
-    .limit(1)
-    .maybeSingle();
-
-  if (existing) return existing.id;
-
-  // Create a new venue row (created_by is intentionally null for script ingestion)
-  const { data: created, error } = await supabase
-    .from('venues')
-    .insert({ name: venueName.trim(), address: address || null })
-    .select('id')
-    .single();
-
-  if (error) throw new Error(`Venue creation failed for "${venueName}": ${error.message}`);
-  return created.id;
-}
-
-async function insertEvent({ title, venueId, description, category, posterUrl, startsAt, address }) {
-  const { error } = await supabase.from('events').insert({
-    title,
-    venue_id: venueId,
-    description: description || null,
-    category,
-    poster_url: posterUrl,
-    starts_at: startsAt,
-    address: address || null,
-  });
-  if (error) throw new Error(`Event insert failed: ${error.message}`);
-}
-
-// ── Main ───────────────────────────────────────────────────────────────────────
-
-async function main() {
-  const folderArg = process.argv[2];
-  if (!folderArg) {
-    console.error('Usage: node scripts/ingest.js <folder-path>');
-    console.error('Example: node scripts/ingest.js ~/Desktop/posters/');
-    process.exit(1);
-  }
-
-  // Expand ~ manually in case the shell didn't
-  const expanded = folderArg.replace(/^~/, process.env.HOME ?? '');
-  const folderPath = resolve(expanded);
-
-  let files;
-  try {
-    files = await readdir(folderPath);
-  } catch {
-    console.error(`Cannot read folder: ${folderPath}`);
-    process.exit(1);
-  }
-
-  const imageFiles = files
-    .filter(f => IMAGE_EXTENSIONS.has(extname(f).toLowerCase()))
-    .sort();
-
-  if (imageFiles.length === 0) {
-    console.log('No image files (jpg, jpeg, png, webp) found in that folder.');
-    process.exit(0);
-  }
-
-  console.log(`Found ${imageFiles.length} image${imageFiles.length !== 1 ? 's' : ''} to process.\n`);
-
-  const needsReview = [];
-  let processedCount = 0;
-
-  for (const filename of imageFiles) {
-    const filePath = join(folderPath, filename);
-    process.stdout.write(`Processing: ${filename} … `);
-
-    try {
-      const rawBuffer = await readFile(filePath);
-
-      // 1. Claude vision extraction
-      let extracted;
-      try {
-        extracted = await extractEventData(rawBuffer, filename);
-      } catch (err) {
-        console.log('✗');
-        console.log(`  Claude extraction failed: ${err.message}`);
-        needsReview.push({ filename, reason: `Extraction failed: ${err.message}` });
-        continue;
-      }
-
-      // Normalize category
-      const category = VALID_CATEGORIES.includes(extracted.category)
-        ? extracted.category
-        : 'Other';
-
-      // Build timestamp — date is required for a valid insert
-      const startsAt = buildTimestamp(extracted.date, extracted.time);
-      if (!startsAt) {
-        console.log('✗');
-        console.log(`  No parseable date found.`);
-        needsReview.push({ filename, reason: 'No parseable date', extracted });
-        continue;
-      }
-
-      // 2. Optimize image
-      const optimized = await optimizeImage(rawBuffer);
-
-      // 3. Upload poster
-      const posterUrl = await uploadPoster(optimized);
-
-      // 4. Venue lookup / create
-      const venueId = await findOrCreateVenue(extracted.venue_name, extracted.address);
-
-      // 5. Insert event
-      const title = extracted.title || basename(filename, extname(filename));
-      await insertEvent({
-        title,
-        venueId,
-        description: extracted.description,
-        category,
-        posterUrl,
-        startsAt,
-        address: extracted.address,
-      });
-
-      processedCount++;
-      console.log('✓');
-      console.log(`  ✓ Processed: ${title} at ${extracted.venue_name ?? '(no venue)'}`);
-
-      // Flag for review if Claude was uncertain about any fields
-      const uncertain = extracted.uncertain_fields ?? [];
-      if (uncertain.length > 0) {
-        console.log(`  ↳ Uncertain fields: ${uncertain.join(', ')} — added to needs_review.json`);
-        needsReview.push({
-          filename,
-          reason: 'Uncertain fields',
-          uncertain_fields: uncertain,
-          extracted,
-        });
-      }
-
-    } catch (err) {
-      console.log('✗');
-      console.log(`  Error: ${err.message}`);
-      needsReview.push({ filename, reason: err.message });
-    }
-
-    console.log();
-  }
-
-  // Write needs_review.json if there is anything to flag
-  if (needsReview.length > 0) {
-    const reviewPath = join(__dirname, '..', 'needs_review.json');
-    await writeFile(reviewPath, JSON.stringify(needsReview, null, 2), 'utf8');
-    console.log(`Needs-review file written to: needs_review.json\n`);
-  }
-
-  console.log(`── Summary ${'─'.repeat(39)}`);
-  console.log(`Processed ${processedCount} event${processedCount !== 1 ? 's' : ''}, ${needsReview.length} need${needsReview.length !== 1 ? '' : 's'} review`);
-}
-
-main().catch(err => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
-
-
-=== scripts/patch-contacts-cap8.cjs ===
-#!/usr/bin/env node
-// Patches @capacitor-community/contacts@7.2.0 to work with Capacitor 8.
-//
-// The plugin's Package.swift pins capacitor-swift-pm to `from: "7.0.0"`, which
-// Swift PM resolves as >=7.0.0, <8.0.0 — conflicting with our Capacitor 8.3.1
-// and breaking the iOS build ("Missing package product CapApp-SPM").
-//
-// Remove this script once the official Capacitor 8 release lands:
-// https://github.com/capacitor-community/contacts/pull/155
-
-const fs = require('fs')
-const path = require('path')
-
-const target = path.resolve(__dirname, '../node_modules/@capacitor-community/contacts/Package.swift')
-
-if (!fs.existsSync(target)) {
-  console.log('[patch-contacts-cap8] Package.swift not found — skipping')
-  process.exit(0)
-}
-
-const original = fs.readFileSync(target, 'utf8')
-const patched = original.replace(
-  '.package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "7.0.0")',
-  '.package(url: "https://github.com/ionic-team/capacitor-swift-pm.git", from: "8.0.0")'
-)
-
-if (patched === original) {
-  console.log('[patch-contacts-cap8] Already patched — nothing to do')
-} else {
-  fs.writeFileSync(target, patched, 'utf8')
-  console.log('[patch-contacts-cap8] Patched capacitor-swift-pm from: "7.0.0" → "8.0.0"')
-}
-
-
-=== scripts/README.md ===
-# Plaster — AI Poster Ingestion Script
-
-Bulk-import event posters using Claude vision. Drop a folder of poster images and the script will:
-
-1. Send each image to Claude (`claude-opus-4-6`) to extract event title, venue, date, time, address, category, and description
-2. Resize and optimize the image to max 1200 px / 85 % JPEG quality via `sharp`
-3. Upload the optimized image to the `posters` Supabase Storage bucket
-4. Look up the venue by name — create it if it doesn't exist yet
-5. Insert the event row into the `events` table
-6. Write any uncertain or failed extractions to `needs_review.json`
-
----
-
-## Setup
-
-### 1. Add your Anthropic API key to `.env.local`
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
-`VITE_SUPABASE_URL` and `VITE_SUPABASE_SERVICE_KEY` are already expected in `.env.local` — the script uses the service key to bypass RLS.
-
-### 2. Install dependencies (already done if you ran `npm install`)
-
-```bash
-npm install
-```
-
-The script requires `@anthropic-ai/sdk`, `sharp`, and `dotenv` — all listed in `package.json`.
-
----
-
-## Usage
-
-Run from the **project root**:
-
-```bash
-node scripts/ingest.js ~/Desktop/posters/
-```
-
-Supported image formats: `jpg`, `jpeg`, `png`, `webp`.
-
-### Example output
-
-```
-Found 4 images to process.
-
-Processing: fri-night-dj.jpg … ✓
-  ✓ Processed: Friday Night with DJ Lux at Holocene
-  ↳ Uncertain fields: time — added to needs_review.json
-
-Processing: comedy-show.png … ✓
-  ✓ Processed: Open Mic Night at Celt's Pub
-
-Processing: blurry-poster.jpg … ✗
-  Claude extraction failed: No parseable date
-
-Processing: art-opening.webp … ✓
-  ✓ Processed: Spring Invitational at Nationale
-
-Needs-review file written to: needs_review.json
-
-── Summary ───────────────────────────────────────
-Processed 3 events, 2 need review
-```
-
----
-
-## needs_review.json
-
-Created (or overwritten) in the project root whenever any image couldn't be fully processed or Claude flagged uncertainty. Each entry contains:
-
-| Field | Description |
-|-------|-------------|
-| `filename` | Original image filename |
-| `reason` | Why it was flagged (`Uncertain fields`, `No parseable date`, `Extraction failed`, etc.) |
-| `uncertain_fields` | Which fields Claude wasn't confident about (if applicable) |
-| `extracted` | The raw Claude output for manual correction (if applicable) |
-
-Manually review these entries, correct the data in the Supabase dashboard, and re-upload the image if needed.
-
----
-
-## Category values
-
-Claude will pick the best match from:
-
-`Music` · `Drag` · `Dance` · `Comedy` · `Art` · `Film` · `Literary` · `Trivia` · `Other`
-
----
-
-## Notes
-
-- The script uses the **service key** — it bypasses Row Level Security. Keep `.env.local` out of version control (it's in `.gitignore`).
-- Uploaded images go to `posters/ingest/<uuid>.jpg` in Supabase Storage.
-- Venues are matched **case-insensitively** by name. If a venue already exists it will be reused; otherwise a new row is created with `created_by = null`.
-- Timestamps are stored in Portland local time (PDT UTC-7 or PST UTC-8 based on month) and converted to UTC by Postgres.
-
-
-=== SESSION_NOTES.md ===
 # Plaster — Session Notes
 **Date:** 2026-04-14  
 **Branch:** `main`  
@@ -3323,7 +1568,8 @@ Migration 005 (`005_venues_hours.sql`) adds `hours` to `venues` — check if it'
 - `font-body` (Quicksand) — body copy in event details
 
 
-=== src/App.tsx ===
+===== ./src/App.tsx =====
+
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
@@ -3418,14 +1664,8 @@ export default function App() {
 }
 
 
-=== src/assets/react.svg ===
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" aria-hidden="true" role="img" class="iconify iconify--logos" width="35.93" height="32" preserveAspectRatio="xMidYMid meet" viewBox="0 0 256 228"><path fill="#00D8FF" d="M210.483 73.824a171.49 171.49 0 0 0-8.24-2.597c.465-1.9.893-3.777 1.273-5.621c6.238-30.281 2.16-54.676-11.769-62.708c-13.355-7.7-35.196.329-57.254 19.526a171.23 171.23 0 0 0-6.375 5.848a155.866 155.866 0 0 0-4.241-3.917C100.759 3.829 77.587-4.822 63.673 3.233C50.33 10.957 46.379 33.89 51.995 62.588a170.974 170.974 0 0 0 1.892 8.48c-3.28.932-6.445 1.924-9.474 2.98C17.309 83.498 0 98.307 0 113.668c0 15.865 18.582 31.778 46.812 41.427a145.52 145.52 0 0 0 6.921 2.165a167.467 167.467 0 0 0-2.01 9.138c-5.354 28.2-1.173 50.591 12.134 58.266c13.744 7.926 36.812-.22 59.273-19.855a145.567 145.567 0 0 0 5.342-4.923a168.064 168.064 0 0 0 6.92 6.314c21.758 18.722 43.246 26.282 56.54 18.586c13.731-7.949 18.194-32.003 12.4-61.268a145.016 145.016 0 0 0-1.535-6.842c1.62-.48 3.21-.974 4.76-1.488c29.348-9.723 48.443-25.443 48.443-41.52c0-15.417-17.868-30.326-45.517-39.844Zm-6.365 70.984c-1.4.463-2.836.91-4.3 1.345c-3.24-10.257-7.612-21.163-12.963-32.432c5.106-11 9.31-21.767 12.459-31.957c2.619.758 5.16 1.557 7.61 2.4c23.69 8.156 38.14 20.213 38.14 29.504c0 9.896-15.606 22.743-40.946 31.14Zm-10.514 20.834c2.562 12.94 2.927 24.64 1.23 33.787c-1.524 8.219-4.59 13.698-8.382 15.893c-8.067 4.67-25.32-1.4-43.927-17.412a156.726 156.726 0 0 1-6.437-5.87c7.214-7.889 14.423-17.06 21.459-27.246c12.376-1.098 24.068-2.894 34.671-5.345a134.17 134.17 0 0 1 1.386 6.193ZM87.276 214.515c-7.882 2.783-14.16 2.863-17.955.675c-8.075-4.657-11.432-22.636-6.853-46.752a156.923 156.923 0 0 1 1.869-8.499c10.486 2.32 22.093 3.988 34.498 4.994c7.084 9.967 14.501 19.128 21.976 27.15a134.668 134.668 0 0 1-4.877 4.492c-9.933 8.682-19.886 14.842-28.658 17.94ZM50.35 144.747c-12.483-4.267-22.792-9.812-29.858-15.863c-6.35-5.437-9.555-10.836-9.555-15.216c0-9.322 13.897-21.212 37.076-29.293c2.813-.98 5.757-1.905 8.812-2.773c3.204 10.42 7.406 21.315 12.477 32.332c-5.137 11.18-9.399 22.249-12.634 32.792a134.718 134.718 0 0 1-6.318-1.979Zm12.378-84.26c-4.811-24.587-1.616-43.134 6.425-47.789c8.564-4.958 27.502 2.111 47.463 19.835a144.318 144.318 0 0 1 3.841 3.545c-7.438 7.987-14.787 17.08-21.808 26.988c-12.04 1.116-23.565 2.908-34.161 5.309a160.342 160.342 0 0 1-1.76-7.887Zm110.427 27.268a347.8 347.8 0 0 0-7.785-12.803c8.168 1.033 15.994 2.404 23.343 4.08c-2.206 7.072-4.956 14.465-8.193 22.045a381.151 381.151 0 0 0-7.365-13.322Zm-45.032-43.861c5.044 5.465 10.096 11.566 15.065 18.186a322.04 322.04 0 0 0-30.257-.006c4.974-6.559 10.069-12.652 15.192-18.18ZM82.802 87.83a323.167 323.167 0 0 0-7.227 13.238c-3.184-7.553-5.909-14.98-8.134-22.152c7.304-1.634 15.093-2.97 23.209-3.984a321.524 321.524 0 0 0-7.848 12.897Zm8.081 65.352c-8.385-.936-16.291-2.203-23.593-3.793c2.26-7.3 5.045-14.885 8.298-22.6a321.187 321.187 0 0 0 7.257 13.246c2.594 4.48 5.28 8.868 8.038 13.147Zm37.542 31.03c-5.184-5.592-10.354-11.779-15.403-18.433c4.902.192 9.899.29 14.978.29c5.218 0 10.376-.117 15.453-.343c-4.985 6.774-10.018 12.97-15.028 18.486Zm52.198-57.817c3.422 7.8 6.306 15.345 8.596 22.52c-7.422 1.694-15.436 3.058-23.88 4.071a382.417 382.417 0 0 0 7.859-13.026a347.403 347.403 0 0 0 7.425-13.565Zm-16.898 8.101a358.557 358.557 0 0 1-12.281 19.815a329.4 329.4 0 0 1-23.444.823c-7.967 0-15.716-.248-23.178-.732a310.202 310.202 0 0 1-12.513-19.846h.001a307.41 307.41 0 0 1-10.923-20.627a310.278 310.278 0 0 1 10.89-20.637l-.001.001a307.318 307.318 0 0 1 12.413-19.761c7.613-.576 15.42-.876 23.31-.876H128c7.926 0 15.743.303 23.354.883a329.357 329.357 0 0 1 12.335 19.695a358.489 358.489 0 0 1 11.036 20.54a329.472 329.472 0 0 1-11 20.722Zm22.56-122.124c8.572 4.944 11.906 24.881 6.52 51.026c-.344 1.668-.73 3.367-1.15 5.09c-10.622-2.452-22.155-4.275-34.23-5.408c-7.034-10.017-14.323-19.124-21.64-27.008a160.789 160.789 0 0 1 5.888-5.4c18.9-16.447 36.564-22.941 44.612-18.3ZM128 90.808c12.625 0 22.86 10.235 22.86 22.86s-10.235 22.86-22.86 22.86s-22.86-10.235-22.86-22.86s10.235-22.86 22.86-22.86Z"></path></svg>
+===== ./src/components/AccountProfile.tsx =====
 
-=== src/assets/vite.svg ===
-<svg xmlns="http://www.w3.org/2000/svg" width="77" height="47" fill="none" aria-labelledby="vite-logo-title" viewBox="0 0 77 47"><title id="vite-logo-title">Vite</title><style>.parenthesis{fill:#000}@media (prefers-color-scheme:dark){.parenthesis{fill:#fff}}</style><path fill="#9135ff" d="M40.151 45.71c-.663.844-2.02.374-2.02-.699V34.708a2.26 2.26 0 0 0-2.262-2.262H24.493c-.92 0-1.457-1.04-.92-1.788l7.479-10.471c1.07-1.498 0-3.578-1.842-3.578H15.443c-.92 0-1.456-1.04-.92-1.788l9.696-13.576c.213-.297.556-.474.92-.474h28.894c.92 0 1.456 1.04.92 1.788l-7.48 10.472c-1.07 1.497 0 3.578 1.842 3.578h11.376c.944 0 1.474 1.087.89 1.83L40.153 45.712z"/><mask id="a" width="48" height="47" x="14" y="0" maskUnits="userSpaceOnUse" style="mask-type:alpha"><path fill="#000" d="M40.047 45.71c-.663.843-2.02.374-2.02-.699V34.708a2.26 2.26 0 0 0-2.262-2.262H24.389c-.92 0-1.457-1.04-.92-1.788l7.479-10.472c1.07-1.497 0-3.578-1.842-3.578H15.34c-.92 0-1.456-1.04-.92-1.788l9.696-13.575c.213-.297.556-.474.92-.474H53.93c.92 0 1.456 1.04.92 1.788L47.37 13.03c-1.07 1.498 0 3.578 1.842 3.578h11.376c.944 0 1.474 1.088.89 1.831L40.049 45.712z"/></mask><g mask="url(#a)"><g filter="url(#b)"><ellipse cx="5.508" cy="14.704" fill="#eee6ff" rx="5.508" ry="14.704" transform="rotate(269.814 20.96 11.29)scale(-1 1)"/></g><g filter="url(#c)"><ellipse cx="10.399" cy="29.851" fill="#eee6ff" rx="10.399" ry="29.851" transform="rotate(89.814 -16.902 -8.275)scale(1 -1)"/></g><g filter="url(#d)"><ellipse cx="5.508" cy="30.487" fill="#8900ff" rx="5.508" ry="30.487" transform="rotate(89.814 -19.197 -7.127)scale(1 -1)"/></g><g filter="url(#e)"><ellipse cx="5.508" cy="30.599" fill="#8900ff" rx="5.508" ry="30.599" transform="rotate(89.814 -25.928 4.177)scale(1 -1)"/></g><g filter="url(#f)"><ellipse cx="5.508" cy="30.599" fill="#8900ff" rx="5.508" ry="30.599" transform="rotate(89.814 -25.738 5.52)scale(1 -1)"/></g><g filter="url(#g)"><ellipse cx="14.072" cy="22.078" fill="#eee6ff" rx="14.072" ry="22.078" transform="rotate(93.35 31.245 55.578)scale(-1 1)"/></g><g filter="url(#h)"><ellipse cx="3.47" cy="21.501" fill="#8900ff" rx="3.47" ry="21.501" transform="rotate(89.009 35.419 55.202)scale(-1 1)"/></g><g filter="url(#i)"><ellipse cx="3.47" cy="21.501" fill="#8900ff" rx="3.47" ry="21.501" transform="rotate(89.009 35.419 55.202)scale(-1 1)"/></g><g filter="url(#j)"><ellipse cx="14.592" cy="9.743" fill="#8900ff" rx="4.407" ry="29.108" transform="rotate(39.51 14.592 9.743)"/></g><g filter="url(#k)"><ellipse cx="61.728" cy="-5.321" fill="#8900ff" rx="4.407" ry="29.108" transform="rotate(37.892 61.728 -5.32)"/></g><g filter="url(#l)"><ellipse cx="55.618" cy="7.104" fill="#00c2ff" rx="5.971" ry="9.665" transform="rotate(37.892 55.618 7.104)"/></g><g filter="url(#m)"><ellipse cx="12.326" cy="39.103" fill="#8900ff" rx="4.407" ry="29.108" transform="rotate(37.892 12.326 39.103)"/></g><g filter="url(#n)"><ellipse cx="12.326" cy="39.103" fill="#8900ff" rx="4.407" ry="29.108" transform="rotate(37.892 12.326 39.103)"/></g><g filter="url(#o)"><ellipse cx="49.857" cy="30.678" fill="#8900ff" rx="4.407" ry="29.108" transform="rotate(37.892 49.857 30.678)"/></g><g filter="url(#p)"><ellipse cx="52.623" cy="33.171" fill="#00c2ff" rx="5.971" ry="15.297" transform="rotate(37.892 52.623 33.17)"/></g></g><path d="M6.919 0c-9.198 13.166-9.252 33.575 0 46.789h6.215c-9.25-13.214-9.196-33.623 0-46.789zm62.424 0h-6.215c9.198 13.166 9.252 33.575 0 46.789h6.215c9.25-13.214 9.196-33.623 0-46.789" class="parenthesis"/><defs><filter id="b" width="60.045" height="41.654" x="-5.564" y="16.92" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="7.659"/></filter><filter id="c" width="90.34" height="51.437" x="-40.407" y="-6.762" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="7.659"/></filter><filter id="d" width="79.355" height="29.4" x="-35.435" y="2.801" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="e" width="79.579" height="29.4" x="-30.84" y="20.8" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="f" width="79.579" height="29.4" x="-29.307" y="21.949" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="g" width="74.749" height="58.852" x="29.961" y="-17.13" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="7.659"/></filter><filter id="h" width="61.377" height="25.362" x="37.754" y="3.055" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="i" width="61.377" height="25.362" x="37.754" y="3.055" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="j" width="56.045" height="63.649" x="-13.43" y="-22.082" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="k" width="54.814" height="64.646" x="34.321" y="-37.644" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="l" width="33.541" height="35.313" x="38.847" y="-10.552" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="m" width="54.814" height="64.646" x="-15.081" y="6.78" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="n" width="54.814" height="64.646" x="-15.081" y="6.78" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="o" width="54.814" height="64.646" x="22.45" y="-1.645" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter><filter id="p" width="39.409" height="43.623" x="32.919" y="11.36" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape"/><feGaussianBlur result="effect1_foregroundBlur_2002_17286" stdDeviation="4.596"/></filter></defs></svg>
-
-
-=== src/components/AccountProfile.tsx ===
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -3558,6 +1798,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           queries.push(
             supabase.from('events')
               .select('id, title, starts_at, poster_url, category')
+              .eq('status', 'published')
               .eq('venue_id', p.venue_id!)
               .gte('starts_at', new Date().toISOString())
               .order('starts_at', { ascending: true })
@@ -3927,7 +2168,8 @@ const sectionLabel: React.CSSProperties = {
 }
 
 
-=== src/components/AccountTypeBadge.tsx ===
+===== ./src/components/AccountTypeBadge.tsx =====
+
 import type { CSSProperties } from 'react'
 
 interface Props {
@@ -3977,7 +2219,796 @@ export function AccountTypeBadge({ accountType, size = 'sm', style: extraStyle }
 }
 
 
-=== src/components/admin/AdminBottomNav.tsx ===
+===== ./src/components/admin/AdminAutoIngest.tsx =====
+
+import { useState, useEffect, useCallback } from 'react'
+import { supabase as supabaseAdmin } from '@/lib/supabase'
+import { CATEGORIES } from '@/lib/categories'
+import { inputStyle, labelStyle, NEIGHBORHOODS, neighborhoodFromAddress, venueSimilarity, type Venue } from '@/components/admin/adminShared'
+
+// ── Auto-Ingest admin section ──────────────────────────────────────────────────
+// Manages venue_sources rows and drives the scrape-sources edge function.
+// Test = dryRun (found / wouldInsert / sample titles); Run = real insert into the
+// pending review pipeline.
+
+interface SourceRow {
+  id: string
+  venue_id: string
+  source_url: string
+  source_type: string
+  default_category: string
+  enabled: boolean
+  horizon_days: number
+  last_run_at: string | null
+  last_run_note: string | null
+  venues: { name: string } | null
+}
+
+// Ingest horizon choices — how far ahead a fetch/source looks.
+const HORIZON_OPTIONS = [
+  { days: 30, label: '1 month' },
+  { days: 60, label: '2 months' },
+  { days: 90, label: '3 months' },
+  { days: 120, label: '4 months' },
+]
+
+interface ScrapeResult {
+  sourceId: string
+  venue: string
+  url: string
+  found: number
+  wouldInsert?: number
+  samples?: Array<{ title: string; date: string }>
+  inserted?: number
+  skipped?: number
+  error?: string
+  rewriteFailures?: number
+  rewriteError?: string
+  enriched?: number
+  enrichTried?: number
+  beyondHorizon?: number
+  past?: number
+}
+
+// friendlyExtractionError-style mapping for description-rewrite failures.
+function friendlyRewriteError(n: number, msg?: string): string {
+  const m = (msg ?? '').toLowerCase()
+  if (m.includes('credit balance') || m.includes('credit')) return `descriptions failed: ${n} (${msg} — tell Rob)`
+  if (m.includes('429') || m.includes('rate limit')) return `descriptions failed: ${n} (rate limit — retry in a minute)`
+  return `descriptions failed: ${n}${msg ? ` (${msg})` : ''}`
+}
+
+interface AdhocEvent {
+  title: string
+  starts_at: string
+  portland_date: string
+  event_url: string
+  image: string | null
+  description: string | null
+  venue_id: string | null
+  venue_name: string | null
+  needsVenue: boolean
+  confidence: number
+  duplicate: boolean
+  suggested_venue_id?: string
+  suggested_venue_name?: string
+  venue_latest?: string | null
+  soldOut?: boolean
+}
+
+interface AdhocResponse {
+  url: string
+  sourcePage?: string
+  method?: string
+  found?: number
+  wouldInsert?: number
+  events?: AdhocEvent[]
+  inserted?: number
+  skipped?: number
+  parked?: number
+  notes?: string[]
+  rewriteFailures?: number
+  rewriteError?: string
+  enriched?: number
+  enrichTried?: number
+  beyondHorizon?: number
+  past?: number
+  horizonLabel?: string
+}
+
+interface VenueDraft {
+  name: string | null
+  website: string | null
+  instagram: string | null
+  address: string | null
+  location_lat: number | null
+  location_lng: number | null
+}
+
+export interface RelinkResult { linked: number; duplicates: number; remaining: number }
+
+// Exported so other admin surfaces (VenueForm) can fire relinkOrphans after a
+// client-side venue create.
+export async function callScrapeFn(body: Record<string, unknown>): Promise<{ results?: ScrapeResult[]; adhoc?: AdhocResponse; relink?: RelinkResult }> {
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+  const { data: { session } } = await supabaseAdmin.auth.getSession()
+  if (!session?.access_token) throw new Error('Not signed in')
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/scrape-sources`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+    body: JSON.stringify(body),
+  })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(json.error || `scrape-sources failed: ${res.status}`)
+  return json
+}
+
+async function callScrapeSources(body: { sourceId?: string; all?: boolean; dryRun?: boolean }): Promise<ScrapeResult[]> {
+  return (await callScrapeFn(body)).results ?? []
+}
+
+function portlandTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true })
+}
+
+// Mirror of the edge function's URL normalization — scheme-less input
+// ("kellysolympian.com") gets https:// so display parsing and hrefs work.
+function ensureScheme(u: string): string {
+  const t = u.trim()
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
+function shortUrl(url: string): string {
+  try {
+    const u = new URL(ensureScheme(url))
+    const path = u.pathname.length > 24 ? u.pathname.slice(0, 24) + '…' : u.pathname
+    return u.hostname.replace(/^www\./, '') + (path === '/' ? '' : path)
+  } catch { return url.slice(0, 40) }
+}
+
+function relTime(iso: string | null): string {
+  if (!iso) return 'never'
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+const smallBtn: React.CSSProperties = {
+  padding: '4px 12px', borderRadius: 6, border: '1px solid var(--fg-18)',
+  background: 'transparent', color: 'var(--fg-65)',
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+}
+
+export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
+  const [sources, setSources] = useState<SourceRow[]>([])
+  const [addVenueId, setAddVenueId] = useState('')
+  const [addUrl, setAddUrl] = useState('')
+  const [addCategory, setAddCategory] = useState('Live Music')
+  const [addHorizon, setAddHorizon] = useState(60) // new sources default 60 — far-future events roll in on later sweeps
+  const [addBusy, setAddBusy] = useState(false)
+  const [addError, setAddError] = useState('')
+  // Per-source inline result / error / busy state, keyed by source id ('*' = run-all)
+  const [rowResults, setRowResults] = useState<Record<string, ScrapeResult | { error: string }>>({})
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set())
+  // Ad-hoc "Import from URL" state
+  const [adhocUrl, setAdhocUrl] = useState('')
+  const [adhocVenueId, setAdhocVenueId] = useState('')
+  const [adhocMaxDays, setAdhocMaxDays] = useState(60)
+  const [adhocBusy, setAdhocBusy] = useState(false)
+  const [adhocError, setAdhocError] = useState('')
+  const [adhocParsed, setAdhocParsed] = useState<AdhocResponse | null>(null)
+  const [adhocChecked, setAdhocChecked] = useState<Set<number>>(new Set())
+  const [adhocVenueFix, setAdhocVenueFix] = useState<Record<number, string>>({})
+  const [adhocDone, setAdhocDone] = useState<{ inserted: number; skipped: number; parked?: number; rewriteFailures?: number; rewriteError?: string; enriched?: number; enrichTried?: number } | null>(null)
+  // New-venue-from-URL enrichment state
+  const [draft, setDraft] = useState<{ name: string; address: string; neighborhood: string; website: string; instagram: string; lat: number | null; lng: number | null } | null>(null)
+  const [draftBusy, setDraftBusy] = useState(false)
+  const [draftError, setDraftError] = useState('')
+  const [draftNotes, setDraftNotes] = useState<string[]>([])
+  // Venues created in-session (merged into selects + assignment options)
+  const [createdVenues, setCreatedVenues] = useState<Array<{ id: string; name: string }>>([])
+  const allVenueOptions = [...venues.map(v => ({ id: v.id, name: v.name })), ...createdVenues]
+  const [bulkVenueId, setBulkVenueId] = useState('')
+  // Orphan queue (scraped events at unknown venues, parked at import)
+  interface OrphanRow { id: string; title: string; starts_at: string; raw_venue_name: string | null }
+  const [orphans, setOrphans] = useState<OrphanRow[]>([])
+  const [orphanAssign, setOrphanAssign] = useState<Record<string, string>>({}) // group key → venue id
+  const [orphanMsg, setOrphanMsg] = useState<Record<string, string>>({}) // group key → result line
+  const [orphanBusy, setOrphanBusy] = useState<string | null>(null)
+  // Set when the create-venue draft was seeded from an orphan group — on create,
+  // that group force-relinks to the new venue.
+  const [pendingRelinkIds, setPendingRelinkIds] = useState<string[] | null>(null)
+
+  const fetchOrphans = useCallback(async () => {
+    const { data } = await supabaseAdmin
+      .from('ingest_orphans')
+      .select('id, title, starts_at, raw_venue_name')
+      .eq('status', 'open')
+      .order('created_at', { ascending: true })
+    if (data) setOrphans(data as OrphanRow[])
+  }, [])
+
+  useEffect(() => { fetchOrphans() }, [fetchOrphans])
+
+  async function runRelink(groupKey: string, venueId: string, orphanIds: string[] | undefined, forceAll: boolean) {
+    setOrphanBusy(groupKey)
+    try {
+      const { relink } = await callScrapeFn({ relinkOrphans: { venueId, forceAll, ...(orphanIds ? { orphanIds } : {}) } })
+      setOrphanMsg(prev => ({
+        ...prev,
+        [groupKey]: relink
+          ? `linked ${relink.linked} → pending${relink.duplicates ? ` · ${relink.duplicates} duplicate${relink.duplicates !== 1 ? 's' : ''} skipped` : ''}`
+          : 'relink returned nothing',
+      }))
+      fetchOrphans()
+    } catch (e) {
+      setOrphanMsg(prev => ({ ...prev, [groupKey]: e instanceof Error ? e.message : String(e) }))
+    } finally { setOrphanBusy(null) }
+  }
+
+  async function discardGroup(ids: string[]) {
+    if (!window.confirm(`Discard ${ids.length} parked event${ids.length !== 1 ? 's' : ''}?`)) return
+    await supabaseAdmin.from('ingest_orphans').update({ status: 'discarded' }).in('id', ids)
+    fetchOrphans()
+  }
+
+  const fetchSources = useCallback(async () => {
+    const { data } = await supabaseAdmin
+      .from('venue_sources')
+      .select('*, venues(name)')
+    if (data) {
+      const rows = data as unknown as SourceRow[]
+      rows.sort((a, b) => (a.venues?.name ?? '').localeCompare(b.venues?.name ?? ''))
+      setSources(rows)
+    }
+  }, [])
+
+  useEffect(() => { fetchSources() }, [fetchSources])
+
+  // Prefill the URL input from the picked venue's website column
+  function handleVenuePick(venueId: string) {
+    setAddVenueId(venueId)
+    const v = venues.find(v => v.id === venueId)
+    if (v?.website && !addUrl) setAddUrl(v.website)
+  }
+
+  async function handleAdd() {
+    if (!addVenueId || !addUrl.trim()) { setAddError('Pick a venue and enter a URL.'); return }
+    setAddBusy(true); setAddError('')
+    const { error } = await supabaseAdmin.from('venue_sources').insert({
+      venue_id: addVenueId, source_url: addUrl.trim(), default_category: addCategory, horizon_days: addHorizon,
+    })
+    if (error) setAddError(error.message)
+    else { setAddVenueId(''); setAddUrl(''); setAddCategory('Live Music'); setAddHorizon(60); fetchSources() }
+    setAddBusy(false)
+  }
+
+  async function handleHorizonChange(src: SourceRow, days: number) {
+    await supabaseAdmin.from('venue_sources').update({ horizon_days: days }).eq('id', src.id)
+    fetchSources()
+  }
+
+  async function handleToggle(src: SourceRow) {
+    await supabaseAdmin.from('venue_sources').update({ enabled: !src.enabled }).eq('id', src.id)
+    fetchSources()
+  }
+
+  async function handleDelete(src: SourceRow) {
+    if (!window.confirm(`Remove source for ${src.venues?.name ?? 'venue'}?`)) return
+    await supabaseAdmin.from('venue_sources').delete().eq('id', src.id)
+    fetchSources()
+  }
+
+  async function runScrape(key: string, body: { sourceId?: string; all?: boolean; dryRun?: boolean }) {
+    setBusyIds(prev => new Set([...prev, key]))
+    try {
+      const results = await callScrapeSources(body)
+      setRowResults(prev => {
+        const next = { ...prev }
+        for (const r of results) next[r.sourceId] = r
+        return next
+      })
+    } catch (e) {
+      const err = { error: e instanceof Error ? e.message : String(e) }
+      setRowResults(prev => key === '*' ? prev : { ...prev, [key]: err })
+      if (key === '*') setAddError(err.error)
+    } finally {
+      setBusyIds(prev => { const next = new Set(prev); next.delete(key); return next })
+      if (!body.dryRun) fetchSources() // refresh last_run stamps after real runs
+    }
+  }
+
+  // ── Ad-hoc: Fetch (dryRun parse) ──
+  async function handleAdhocFetch() {
+    if (!adhocUrl.trim()) { setAdhocError('Paste an event page URL.'); return }
+    setAdhocBusy(true); setAdhocError(''); setAdhocParsed(null); setAdhocDone(null)
+    try {
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocUrl.trim(), venueId: adhocVenueId || undefined, dryRun: true, maxDays: adhocMaxDays })
+      setAdhocParsed(adhoc ?? null)
+      // Default-check everything insertable (venue resolved + not a duplicate)
+      const checked = new Set<number>()
+      adhoc?.events?.forEach((ev, i) => { if (!ev.needsVenue && !ev.duplicate) checked.add(i) })
+      setAdhocChecked(checked)
+      setAdhocVenueFix({})
+    } catch (e) {
+      setAdhocError(e instanceof Error ? e.message : String(e))
+    } finally { setAdhocBusy(false) }
+  }
+
+  // ── Ad-hoc: Import selected (posts the parsed selection back) ──
+  async function handleAdhocImport() {
+    if (!adhocParsed?.events) return
+    const selection = adhocParsed.events
+      .map((ev, i) => ({ ev, i }))
+      .filter(({ i }) => adhocChecked.has(i))
+      .map(({ ev, i }) => ({ ...ev, venue_id: adhocVenueFix[i] || ev.venue_id }))
+    if (selection.length === 0) { setAdhocError('Nothing selected.'); return }
+    // Venueless rows no longer block — the server parks them in the orphan queue.
+    setAdhocBusy(true); setAdhocError('')
+    try {
+      const { adhoc } = await callScrapeFn({ adhocUrl: adhocParsed.url, events: selection, dryRun: false, maxDays: adhocMaxDays })
+      setAdhocDone({ inserted: adhoc?.inserted ?? 0, skipped: adhoc?.skipped ?? 0, parked: adhoc?.parked, rewriteFailures: adhoc?.rewriteFailures, rewriteError: adhoc?.rewriteError, enriched: adhoc?.enriched, enrichTried: adhoc?.enrichTried })
+      setAdhocParsed(null)
+      fetchOrphans()
+    } catch (e) {
+      setAdhocError(e instanceof Error ? e.message : String(e))
+    } finally { setAdhocBusy(false) }
+  }
+
+  // ── New venue from this site: enrichment draft (NO inserts server-side) ──
+  async function handleEnrichVenue() {
+    if (!adhocUrl.trim()) { setDraftError('Paste a URL first.'); return }
+    setDraftBusy(true); setDraftError(''); setDraft(null)
+    try {
+      const json = await callScrapeFn({ enrichVenueFromUrl: adhocUrl.trim() }) as { venueDraft?: VenueDraft; notes?: string[] }
+      const d = json.venueDraft
+      if (!d) throw new Error('No venue draft returned')
+      setDraft({
+        name: d.name ?? '',
+        address: d.address ?? '',
+        // neighborhood derived client-side via the importer's existing helper
+        neighborhood: d.address ? neighborhoodFromAddress(d.address) : '',
+        website: d.website ?? '',
+        instagram: d.instagram ?? '',
+        lat: d.location_lat,
+        lng: d.location_lng,
+      })
+      setDraftNotes(json.notes ?? [])
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : String(e))
+    } finally { setDraftBusy(false) }
+  }
+
+  // Duplicate guard: best similarity match against existing venues for the draft name.
+  const draftSimilar = draft?.name
+    ? allVenueOptions
+        .map(v => ({ v, score: venueSimilarity(draft.name, v.name) }))
+        .sort((a, b) => b.score - a.score)
+        .find(({ score }) => score >= 0.5)?.v ?? null
+    : null
+
+  // Assign a venue id to every currently-needsVenue row in the checklist.
+  function assignVenueToNeedsRows(venueId: string) {
+    if (!adhocParsed?.events) return
+    setAdhocVenueFix(prev => {
+      const next = { ...prev }
+      adhocParsed.events!.forEach((ev, i) => { if (ev.needsVenue && !next[i]) next[i] = venueId })
+      return next
+    })
+    // Newly assignable rows become checkable defaults
+    setAdhocChecked(prev => {
+      const next = new Set(prev)
+      adhocParsed.events!.forEach((ev, i) => { if (ev.needsVenue && !ev.duplicate) next.add(i) })
+      return next
+    })
+  }
+
+  async function handleCreateVenue() {
+    if (!draft?.name.trim()) { setDraftError('Venue needs a name.'); return }
+    setDraftBusy(true); setDraftError('')
+    const { data, error } = await supabaseAdmin.from('venues').insert({
+      name: draft.name.trim(),
+      address: draft.address.trim() || null,
+      neighborhood: draft.neighborhood || null,
+      website: draft.website.trim() || null,
+      instagram: draft.instagram.trim() || null,
+      location_lat: draft.lat,
+      location_lng: draft.lng,
+    }).select('id, name').single()
+    if (error) { setDraftError(error.message); setDraftBusy(false); return }
+    setCreatedVenues(prev => [...prev, { id: data.id, name: data.name }])
+    assignVenueToNeedsRows(data.id)
+    setDraft(null)
+    setDraftBusy(false)
+    // Auto-relink: a draft seeded from an orphan group force-relinks that group;
+    // any other create runs a fuzzy relink across all open orphans.
+    if (pendingRelinkIds) {
+      const ids = pendingRelinkIds
+      setPendingRelinkIds(null)
+      runRelink(`created:${data.id}`, data.id, ids, true)
+    } else {
+      runRelink(`created:${data.id}`, data.id, undefined, false)
+    }
+  }
+
+  function renderResult(r: ScrapeResult | { error: string }) {
+    if ('error' in r && r.error && !('found' in r)) {
+      return <span style={{ color: '#fca5a5' }}>{r.error}</span>
+    }
+    const res = r as ScrapeResult
+    return (
+      <>
+        {res.error && <span style={{ color: '#fca5a5' }}>{res.error} · </span>}
+        <span>found {res.found}</span>
+        {res.wouldInsert !== undefined && <span> · would insert {res.wouldInsert}</span>}
+        {res.inserted !== undefined && <span> · inserted {res.inserted} · skipped {res.skipped}</span>}
+        {!!res.beyondHorizon && <span> · {res.beyondHorizon} beyond horizon</span>}
+        {!!res.past && <span> · {res.past} already past</span>}
+        {!!res.enrichTried && <span> · enriched {res.enriched}/{res.enrichTried} from detail pages</span>}
+        {!!res.rewriteFailures && <span style={{ color: '#fca5a5' }}> · {friendlyRewriteError(res.rewriteFailures, res.rewriteError)}</span>}
+        {res.samples && res.samples.length > 0 && (
+          <div style={{ marginTop: 2, color: 'var(--fg-40)' }}>
+            {res.samples.map((s, i) => <div key={i}>· {s.title} — {s.date}</div>)}
+          </div>
+        )}
+      </>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Import from URL — one-off ingest of any event page, no registered source */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingBottom: 16, borderBottom: '1px solid var(--fg-08)' }}>
+        <label style={labelStyle}>Import from URL</label>
+        <input
+          type="url" value={adhocUrl} onChange={e => setAdhocUrl(e.target.value)}
+          placeholder="https://… any event page (venue site, Eventbrite…)" style={inputStyle}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={adhocVenueId} onChange={e => setAdhocVenueId(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+            <option value="">Venue (optional — auto-match)</option>
+            {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <select value={adhocMaxDays} onChange={e => setAdhocMaxDays(Number(e.target.value))} title="Ingest horizon" style={{ ...inputStyle, width: 110, flexShrink: 0 }}>
+            {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
+          </select>
+          <button onClick={handleEnrichVenue} disabled={draftBusy || !adhocUrl.trim()} style={{ ...smallBtn, opacity: draftBusy || !adhocUrl.trim() ? 0.5 : 1 }}>
+            {draftBusy ? '…' : 'New venue from this site'}
+          </button>
+          <button onClick={handleAdhocFetch} disabled={adhocBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy ? 0.6 : 1 }}>
+            {adhocBusy ? 'Fetching…' : 'Fetch'}
+          </button>
+        </div>
+        {adhocError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{adhocError}</p>}
+        {draftError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{draftError}</p>}
+
+        {/* New-venue draft — prefilled from the site, editable; nulls stay blank */}
+        {draft && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 12, border: '1px solid var(--fg-15)', borderRadius: 8 }}>
+            <label style={labelStyle}>New venue (prefilled from site — edit before creating)</label>
+            <input value={draft.name} onChange={e => setDraft(d => d && { ...d, name: e.target.value })} placeholder="Name" style={inputStyle} />
+            <input value={draft.address} onChange={e => setDraft(d => d && { ...d, address: e.target.value, neighborhood: e.target.value ? neighborhoodFromAddress(e.target.value) : d.neighborhood })} placeholder="Address" style={inputStyle} />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select value={draft.neighborhood} onChange={e => setDraft(d => d && { ...d, neighborhood: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
+                <option value="">Neighborhood…</option>
+                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', alignSelf: 'center', whiteSpace: 'nowrap' }}>
+                {draft.lat != null && draft.lng != null ? `${draft.lat.toFixed(4)}, ${draft.lng.toFixed(4)}` : 'no coords'}
+              </span>
+            </div>
+            <input value={draft.website} onChange={e => setDraft(d => d && { ...d, website: e.target.value })} placeholder="Website" style={inputStyle} />
+            <input value={draft.instagram} onChange={e => setDraft(d => d && { ...d, instagram: e.target.value })} placeholder="Instagram" style={inputStyle} />
+            {draftNotes.length > 0 && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>{draftNotes.join(' · ')}</p>
+            )}
+            {/* Duplicate guard — the warning renders BEFORE the create button */}
+            {draftSimilar && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fbbf24' }}>
+                Did you mean <strong>{draftSimilar.name}</strong>?{' '}
+                <button
+                  onClick={() => { assignVenueToNeedsRows(draftSimilar.id); setAdhocVenueId(draftSimilar.id); setDraft(null) }}
+                  style={{ ...smallBtn, padding: '2px 8px', fontSize: 11, color: '#fbbf24', borderColor: 'rgba(251,191,36,0.4)' }}
+                >Use existing</button>
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleCreateVenue} disabled={draftBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: draftBusy ? 0.6 : 1 }}>
+                {draftBusy ? 'Creating…' : draftSimilar ? 'Create anyway' : 'Create venue'}
+              </button>
+              <button onClick={() => setDraft(null)} style={{ ...smallBtn, color: 'var(--fg-40)' }}>Cancel</button>
+            </div>
+          </div>
+        )}
+
+        {adhocDone && (
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
+            inserted {adhocDone.inserted} · skipped {adhocDone.skipped}
+            {!!adhocDone.parked && <span style={{ color: '#fbbf24' }}> · parked {adhocDone.parked}</span>}
+            {adhocDone.enrichTried !== undefined && adhocDone.enrichTried > 0 && (
+              <span> · enriched {adhocDone.enriched}/{adhocDone.enrichTried} from detail pages</span>
+            )}
+            {!!adhocDone.rewriteFailures && (
+              <span style={{ color: '#fca5a5' }}> · {friendlyRewriteError(adhocDone.rewriteFailures, adhocDone.rewriteError)}</span>
+            )}
+            {' · '}<a href="/staff" style={{ color: '#A855F7' }}>Review pending →</a>
+          </p>
+        )}
+
+        {adhocParsed && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+              {adhocParsed.method} · found {adhocParsed.found} · insertable {adhocParsed.wouldInsert}
+              {!!adhocParsed.beyondHorizon && <> · {adhocParsed.beyondHorizon} beyond {adhocParsed.horizonLabel ?? ''} horizon</>}
+              {!!adhocParsed.past && <> · {adhocParsed.past} already past</>}
+              {adhocParsed.sourcePage && adhocParsed.sourcePage !== adhocParsed.url && <> · read {adhocParsed.sourcePage}</>}
+              {(adhocParsed.notes ?? []).length > 0 && <> · {adhocParsed.notes!.join(' · ')}</>}
+            </p>
+            {/* Bulk assignment for unmatched rows */}
+            {(adhocParsed.events ?? []).some((ev, i) => ev.needsVenue && !adhocVenueFix[i]) && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', whiteSpace: 'nowrap' }}>Assign all unmatched to:</span>
+                <select value={bulkVenueId} onChange={e => setBulkVenueId(e.target.value)} style={{ ...inputStyle, flex: 1, fontSize: 12, padding: '4px 8px' }}>
+                  <option value="">pick venue…</option>
+                  {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+                <button onClick={() => { if (bulkVenueId) assignVenueToNeedsRows(bulkVenueId) }} disabled={!bulkVenueId} style={{ ...smallBtn, opacity: bulkVenueId ? 1 : 0.5 }}>
+                  Apply
+                </button>
+              </div>
+            )}
+            {(adhocParsed.events ?? []).map((ev, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--fg-08)' }}>
+                <input
+                  type="checkbox"
+                  checked={adhocChecked.has(i)}
+                  disabled={ev.duplicate}
+                  onChange={e => setAdhocChecked(prev => {
+                    const next = new Set(prev)
+                    if (e.target.checked) next.add(i); else next.delete(i)
+                    return next
+                  })}
+                />
+                {ev.image && (
+                  <img src={ev.image} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3, flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-80)' }}>
+                  <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>
+                    {ev.title}
+                    {ev.soldOut && (
+                      <span style={{ marginLeft: 6, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', padding: '1px 5px', borderRadius: 3, verticalAlign: 'middle' }}>
+                        SOLD OUT
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ color: 'var(--fg-40)', fontSize: 11 }}>
+                    {ev.portland_date} · {portlandTime(ev.starts_at)}
+                    {ev.venue_name && !ev.needsVenue && <> · {ev.venue_name}</>}
+                    {ev.duplicate && <span style={{ color: '#fbbf24' }}> · duplicate</span>}
+                    {/* Informational only — new shows get announced inside covered
+                        windows; the duplicate badge is the real verdict. */}
+                    {!ev.duplicate && ev.venue_latest && ev.starts_at <= ev.venue_latest && (
+                      <span style={{ color: 'var(--fg-30)' }}> · within covered range</span>
+                    )}
+                  </div>
+                  {ev.needsVenue && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                      <select
+                        value={adhocVenueFix[i] ?? ''}
+                        onChange={e => setAdhocVenueFix(prev => ({ ...prev, [i]: e.target.value }))}
+                        style={{ ...inputStyle, flex: 1, fontSize: 11, padding: '4px 8px' }}
+                      >
+                        <option value="">⚠ needs venue{ev.venue_name ? ` ("${ev.venue_name}" unmatched)` : ''} — pick…</option>
+                        {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      {ev.suggested_venue_id && !adhocVenueFix[i] && (
+                        <button
+                          onClick={() => {
+                            setAdhocVenueFix(prev => ({ ...prev, [i]: ev.suggested_venue_id! }))
+                            if (!ev.duplicate) setAdhocChecked(prev => new Set([...prev, i]))
+                          }}
+                          style={{ ...smallBtn, fontSize: 11, padding: '3px 8px', whiteSpace: 'nowrap', color: '#c084fc', borderColor: 'rgba(168,85,247,0.4)' }}
+                        >
+                          → {ev.suggested_venue_name}?
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <span style={{ flexShrink: 0, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: ev.confidence >= 95 ? '#86efac' : '#fbbf24' }}>
+                  {ev.confidence >= 95 ? 'high' : 'med'}
+                </span>
+              </div>
+            ))}
+            {(adhocParsed.events ?? []).length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={handleAdhocImport} disabled={adhocBusy || adhocChecked.size === 0} style={{ ...smallBtn, padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: adhocBusy || adhocChecked.size === 0 ? 0.5 : 1 }}>
+                  {adhocBusy ? 'Importing…' : `Import ${adhocChecked.size}`}
+                </button>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>unmatched will be parked · duplicates re-checked on import</span>
+              </div>
+            )}
+            {(adhocParsed.events ?? []).length === 0 && (
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>No upcoming events found on that page.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Orphan queue — parked events at unknown venues; hidden when empty */}
+      {orphans.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 16, borderBottom: '1px solid var(--fg-08)' }}>
+          <label style={labelStyle}>Orphans · {orphans.length} parked</label>
+          {(() => {
+            const groups = new Map<string, OrphanRow[]>()
+            for (const o of orphans) {
+              const key = o.raw_venue_name?.trim() || '(no venue name)'
+              if (!groups.has(key)) groups.set(key, [])
+              groups.get(key)!.push(o)
+            }
+            return [...groups.entries()].map(([key, group]) => {
+              const busy = orphanBusy === key
+              return (
+                <div key={key} style={{ padding: '8px 0', borderBottom: '1px solid var(--fg-08)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>
+                      {key} <span style={{ color: 'var(--fg-40)', fontWeight: 500 }}>×{group.length}</span>
+                    </span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => {
+                          setPendingRelinkIds(group.map(o => o.id))
+                          setDraft({ name: key === '(no venue name)' ? '' : key, address: '', neighborhood: '', website: '', instagram: '', lat: null, lng: null })
+                          setDraftNotes([])
+                        }}
+                        disabled={busy}
+                        style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: busy ? 0.5 : 1 }}
+                      >
+                        Create venue…
+                      </button>
+                      <select
+                        value={orphanAssign[key] ?? ''}
+                        onChange={e => setOrphanAssign(prev => ({ ...prev, [key]: e.target.value }))}
+                        style={{ ...inputStyle, width: 150, padding: '4px 8px', fontSize: 11 }}
+                      >
+                        <option value="">Assign to existing…</option>
+                        {allVenueOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                      </select>
+                      <button
+                        onClick={() => { const vid = orphanAssign[key]; if (vid) runRelink(key, vid, group.map(o => o.id), true) }}
+                        disabled={busy || !orphanAssign[key]}
+                        style={{ ...smallBtn, opacity: busy || !orphanAssign[key] ? 0.5 : 1 }}
+                      >
+                        {busy ? '…' : 'Apply'}
+                      </button>
+                      <button onClick={() => discardGroup(group.map(o => o.id))} disabled={busy} style={{ ...smallBtn, color: 'var(--fg-30)', borderColor: 'var(--fg-08)' }}>
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                    {group.slice(0, 3).map(o => o.title).join(' · ')}{group.length > 3 ? ' · …' : ''}
+                  </div>
+                  {orphanMsg[key] && (
+                    <div style={{ marginTop: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)' }}>{orphanMsg[key]}</div>
+                  )}
+                </div>
+              )
+            })
+          })()}
+        </div>
+      )}
+
+      {/* Relink results from venue creation (keys created:<venueId>) — rendered
+          outside the orphans block so they survive the queue emptying. */}
+      {Object.entries(orphanMsg).filter(([k]) => k.startsWith('created:')).map(([k, msg]) => (
+        <div key={k} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)' }}>relink: {msg}</div>
+      ))}
+
+      {/* Add-source row */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <label style={labelStyle}>Add source</label>
+        <select value={addVenueId} onChange={e => handleVenuePick(e.target.value)} style={inputStyle}>
+          <option value="">Pick a venue…</option>
+          {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select>
+        <input
+          type="url" value={addUrl} onChange={e => setAddUrl(e.target.value)}
+          placeholder="https://venue.com/events" style={inputStyle}
+        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select value={addCategory} onChange={e => setAddCategory(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+          <select value={addHorizon} onChange={e => setAddHorizon(Number(e.target.value))} title="Ingest horizon" style={{ ...inputStyle, width: 110, flexShrink: 0 }}>
+            {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
+          </select>
+          <button onClick={handleAdd} disabled={addBusy} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: addBusy ? 0.6 : 1 }}>
+            {addBusy ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+        {addError && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#fca5a5' }}>{addError}</p>}
+      </div>
+
+      {/* Sources list */}
+      {sources.length === 0 ? (
+        <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>No sources yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {sources.map(src => {
+            const busy = busyIds.has(src.id) || busyIds.has('*')
+            const result = rowResults[src.id]
+            return (
+              <div key={src.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--fg-08)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: src.enabled ? 'var(--fg)' : 'var(--fg-40)' }}>
+                    {src.venues?.name ?? '(venue)'}
+                  </span>
+                  <a href={ensureScheme(src.source_url)} target="_blank" rel="noreferrer"
+                     style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', textDecoration: 'underline', textDecorationColor: 'var(--fg-18)' }}>
+                    {shortUrl(src.source_url)}
+                  </a>
+                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <select
+                      value={src.horizon_days}
+                      onChange={e => handleHorizonChange(src, Number(e.target.value))}
+                      title="Ingest horizon"
+                      style={{ ...inputStyle, width: 96, padding: '3px 6px', fontSize: 11 }}
+                    >
+                      {HORIZON_OPTIONS.map(h => <option key={h.days} value={h.days}>{h.label}</option>)}
+                      {!HORIZON_OPTIONS.some(h => h.days === src.horizon_days) && (
+                        <option value={src.horizon_days}>{src.horizon_days}d</option>
+                      )}
+                    </select>
+                    <button onClick={() => handleToggle(src)} style={{ ...smallBtn, color: src.enabled ? '#86efac' : 'var(--fg-40)' }}>
+                      {src.enabled ? 'on' : 'off'}
+                    </button>
+                    <button onClick={() => runScrape(src.id, { sourceId: src.id, dryRun: true })} disabled={busy || !src.enabled} style={{ ...smallBtn, opacity: busy || !src.enabled ? 0.5 : 1 }}>
+                      Test
+                    </button>
+                    <button onClick={() => runScrape(src.id, { sourceId: src.id, dryRun: false })} disabled={busy || !src.enabled} style={{ ...smallBtn, borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: busy || !src.enabled ? 0.5 : 1 }}>
+                      {busy ? '…' : 'Run'}
+                    </button>
+                    <button onClick={() => handleDelete(src)} style={{ ...smallBtn, color: 'var(--fg-30)', borderColor: 'var(--fg-08)' }}>×</button>
+                  </div>
+                </div>
+                <div style={{ marginTop: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                  {src.last_run_note ? `${src.last_run_note} · ${relTime(src.last_run_at)}` : 'never run'}
+                </div>
+                {result && (
+                  <div style={{ marginTop: 6, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-65)' }}>
+                    {renderResult(result)}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Run all + review link */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={() => runScrape('*', { all: true, dryRun: false })}
+          disabled={busyIds.has('*') || sources.every(s => !s.enabled)}
+          style={{ ...smallBtn, padding: '8px 16px', borderColor: 'rgba(168,85,247,0.55)', color: '#c084fc', opacity: busyIds.has('*') ? 0.6 : 1 }}
+        >
+          {busyIds.has('*') ? 'Running all…' : 'Run all'}
+        </button>
+        <a href="/staff" style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: '#A855F7', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}>
+          Review pending →
+        </a>
+      </div>
+    </div>
+  )
+}
+
+
+===== ./src/components/admin/AdminBottomNav.tsx =====
+
 import { useNavigate } from 'react-router-dom'
 
 // NOTE: tab labels are stale — see KNOWN_BUGS.md
@@ -4012,7 +3043,114 @@ export function AdminBottomNav() {
 }
 
 
-=== src/components/admin/AdminNotifications.tsx ===
+===== ./src/components/admin/AdminCommunityPosts.tsx =====
+
+import { useEffect, useState, useCallback } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/contexts/AuthContext'
+import { type CommunityPost } from '@/lib/communityPosts'
+
+// Admin review for community posts that AI moderation flagged (or that failed
+// moderation). Approve → published; Reject → rejected. Flagged posts get a
+// reason line so the admin knows why it was held.
+export function AdminCommunityPosts() {
+  const { user } = useAuth()
+  const [rows, setRows] = useState<CommunityPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const fetchPending = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('community_posts')
+      .select('*, author:profiles!author_id(username, avatar_diamond_url)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    const list = (data ?? []) as unknown as CommunityPost[]
+    // Lost-pet posts to the top — time matters for a lost animal.
+    list.sort((a, b) => (a.post_type === 'lost_pet' ? 0 : 1) - (b.post_type === 'lost_pet' ? 0 : 1))
+    setRows(list)
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { fetchPending() }, [fetchPending])
+
+  async function decide(id: string, status: 'published' | 'rejected') {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('community_posts')
+      .update({ status, reviewed_by: user.id, reviewed_at: new Date().toISOString() })
+      .eq('id', id)
+    setBusyId(null)
+    if (error) { console.error('[AdminCommunityPosts] decide failed', error); return }
+    setRows(prev => prev.filter(r => r.id !== id))
+  }
+
+  // v1 business billing: admin manually confirms the Stripe payment, which
+  // releases the post for normal approval. (Webhook auto-flip is a later TODO.)
+  async function markPaid(id: string) {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('community_posts').update({ is_paid: true }).eq('id', id)
+    setBusyId(null)
+    if (error) { console.error('[AdminCommunityPosts] markPaid failed', error); return }
+    setRows(prev => prev.map(r => r.id === id ? { ...r, is_paid: true } : r))
+  }
+
+  if (loading) return null
+  if (rows.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)', margin: '0 0 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        Community posts to review
+        <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, color: '#A855F7', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', padding: '1px 7px', borderRadius: 10 }}>{rows.length}</span>
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map(p => {
+          const busy = busyId === p.id
+          return (
+            <div key={p.id} style={{ display: 'flex', gap: 10, padding: 10, borderRadius: 10, border: `1px solid ${p.post_type === 'lost_pet' ? 'rgba(217,119,6,0.55)' : p.flagged ? 'rgba(239,68,68,0.35)' : 'var(--fg-15)'}`, background: p.post_type === 'lost_pet' ? 'rgba(217,119,6,0.06)' : p.flagged ? 'rgba(239,68,68,0.04)' : 'transparent' }}>
+              <div style={{ width: 56, height: 84, borderRadius: 5, overflow: 'hidden', flexShrink: 0, background: 'var(--fg-08)' }}>
+                {p.image_url && <img src={p.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>{p.title || '(no title)'}</span>
+                  {p.post_type === 'lost_pet' && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'rgba(217,119,6,0.95)', background: 'rgba(217,119,6,0.14)', border: '1px solid rgba(217,119,6,0.4)', padding: '1px 5px', borderRadius: 3 }}>🐾 Lost pet — alerts {p.neighborhood}</span>}
+                  {p.post_type === 'business' && (
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: p.is_paid ? 'var(--fg-55)' : 'rgba(217,119,6,0.95)', background: p.is_paid ? 'var(--fg-08)' : 'rgba(217,119,6,0.14)', border: `1px solid ${p.is_paid ? 'var(--fg-18)' : 'rgba(217,119,6,0.4)'}`, padding: '1px 5px', borderRadius: 3 }}>
+                      Business{p.is_paid ? ' · paid' : ' · unpaid'}
+                    </span>
+                  )}
+                  {p.flagged && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#ef4444', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', padding: '1px 5px', borderRadius: 3 }}>AI flagged</span>}
+                </div>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>@{p.author?.username ?? 'someone'} · {p.neighborhood} · {p.post_type}</span>
+                {p.body && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.body}</p>}
+                {p.flagged && p.flag_reason && <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(239,68,68,0.9)' }}>⚑ {p.flag_reason}</p>}
+                {p.post_type === 'business' && !p.is_paid ? (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4, alignItems: 'center' }}>
+                    <button onClick={() => markPaid(p.id)} disabled={busy} style={{ padding: '7px 12px', borderRadius: 6, border: '1px solid rgba(217,119,6,0.5)', background: 'rgba(217,119,6,0.1)', color: 'rgba(217,119,6,0.95)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Mark paid → release</button>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>awaiting Stripe payment</span>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <button onClick={() => decide(p.id, 'published')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Approve</button>
+                    <button onClick={() => decide(p.id, 'rejected')} disabled={busy} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.5 : 1 }}>Reject</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+===== ./src/components/admin/AdminNotifications.tsx =====
+
 import { useState, useEffect } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { generateOccurrenceDates, type AdminNotification, type RecurrenceFrequency } from '@/components/admin/adminShared'
@@ -4135,8 +3273,9 @@ export function AdminNotifications() {
 }
 
 
-=== src/components/admin/AdminPendingEvents.tsx ===
-import { useEffect, useState, useCallback } from 'react'
+===== ./src/components/admin/AdminPendingEvents.tsx =====
+
+import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -4186,6 +3325,74 @@ function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// ── Structured rejection reasons ─────────────────────────────
+type RejectionReason = 'duplicate' | 'wrong_date' | 'bad_image' | 'not_an_event' | 'other'
+
+const QUICK_REASONS: { value: Exclude<RejectionReason, 'other'>; label: string }[] = [
+  { value: 'duplicate', label: 'Duplicate' },
+  { value: 'wrong_date', label: 'Wrong date' },
+  { value: 'bad_image', label: 'Bad image' },
+  { value: 'not_an_event', label: 'Not an event' },
+]
+
+const reasonChip: CSSProperties = {
+  padding: '4px 9px', borderRadius: 5, flexShrink: 0,
+  border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)',
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer',
+}
+
+// Inline reason picker — the four quick reasons reject in one tap; "Other" reveals
+// an optional short note then a confirm. Shared by per-row reject and Reject all.
+function ReasonPicker({ onPick, onCancel, busy }: {
+  onPick: (reason: RejectionReason, note: string | null) => void
+  onCancel: () => void
+  busy: boolean
+}) {
+  const [otherOpen, setOtherOpen] = useState(false)
+  const [note, setNote] = useState('')
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', border: '1px solid var(--fg-15)', borderRadius: 8, background: 'var(--fg-08)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+          Reason for rejection
+        </span>
+        <button onClick={onCancel} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>
+          Cancel
+        </button>
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {QUICK_REASONS.map(r => (
+          <button key={r.value} disabled={busy} onClick={() => onPick(r.value, null)} style={reasonChip}>
+            {r.label}
+          </button>
+        ))}
+        <button
+          disabled={busy}
+          onClick={() => setOtherOpen(o => !o)}
+          style={{ ...reasonChip, ...(otherOpen ? { borderColor: 'rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)', color: '#A855F7' } : null) }}
+        >
+          Other
+        </button>
+      </div>
+      {otherOpen && (
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input
+            autoFocus
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onPick('other', note.trim() || null) }}
+            placeholder="Short note (optional)"
+            style={{ flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--fg-15)', background: 'var(--bg)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, outline: 'none' }}
+          />
+          <button disabled={busy} onClick={() => onPick('other', note.trim() || null)} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#ef4444', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, cursor: busy ? 'wait' : 'pointer', flexShrink: 0 }}>
+            Reject
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const { user } = useAuth()
   const [rows, setRows] = useState<PendingEvent[]>([])
@@ -4193,6 +3400,8 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [busyGroup, setBusyGroup] = useState<string | null>(null)
   const [stats, setStats] = useState<Stats | null>(null)
+  const [rejectingId, setRejectingId] = useState<string | null>(null)
+  const [rejectAllOpen, setRejectAllOpen] = useState(false)
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -4228,15 +3437,18 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
-  async function reject(id: string) {
+  async function reject(id: string, reason: RejectionReason, note: string | null) {
     if (!user) return
     setBusyId(id)
     const { error } = await supabase.from('events').update({
       status: 'rejected',
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),
+      rejection_reason: reason,
+      rejection_note: note,
     }).eq('id', id)
     setBusyId(null)
+    setRejectingId(null)
     if (error) console.error('[AdminPendingEvents] reject failed', error)
     fetchPending()
   }
@@ -4265,6 +3477,20 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
+  async function rejectAll(reason: RejectionReason, note: string | null) {
+    if (!user || rows.length === 0) return
+    setBusyGroup('*')
+    const now = new Date().toISOString()
+    // Batched: one update over every listed pending event, with the shared reason
+    const { error } = await supabase.from('events')
+      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now, rejection_reason: reason, rejection_note: note })
+      .in('id', rows.map(e => e.id))
+    if (error) console.error('[AdminPendingEvents] reject all failed', error)
+    setBusyGroup(null)
+    setRejectAllOpen(false)
+    fetchPending()
+  }
+
   async function rejectDuplicates(group: PendingEvent[]) {
     if (!user) return
     const dupes = group.filter(e => e.is_duplicate)
@@ -4273,7 +3499,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     setBusyGroup(key)
     const now = new Date().toISOString()
     await Promise.all(dupes.map(e =>
-      supabase.from('events').update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now }).eq('id', e.id)
+      supabase.from('events').update({ status: 'rejected', reviewed_by: user.id, reviewed_at: now, rejection_reason: 'duplicate', rejection_note: null }).eq('id', e.id)
     ))
     setBusyGroup(null)
     fetchPending()
@@ -4329,7 +3555,23 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {statsStrip}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+          {statsStrip}
+          <button
+            onClick={() => setRejectAllOpen(o => !o)}
+            disabled={busyGroup === '*'}
+            style={{ padding: '5px 10px', background: rejectAllOpen ? 'rgba(239,68,68,0.1)' : 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1, flexShrink: 0 }}
+          >
+            {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
+          </button>
+        </div>
+        {rejectAllOpen && (
+          <div style={{ marginTop: 10 }}>
+            <ReasonPicker busy={busyGroup === '*'} onCancel={() => setRejectAllOpen(false)} onPick={(reason, note) => rejectAll(reason, note)} />
+          </div>
+        )}
+      </div>
       {groupOrder.map(key => {
         const group = groupMap[key]
         const isGroupBusy = busyGroup === key
@@ -4435,9 +3677,9 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         {busyId === e.id ? '…' : 'Approve'}
                       </button>
                       <button
-                        onClick={() => reject(e.id)}
+                        onClick={() => setRejectingId(prev => prev === e.id ? null : e.id)}
                         disabled={isBusy}
-                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: rejectingId === e.id ? 'var(--fg-08)' : 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
                       >
                         Reject
                       </button>
@@ -4451,6 +3693,13 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         </button>
                       )}
                     </div>
+                    {rejectingId === e.id && (
+                      <ReasonPicker
+                        busy={busyId === e.id}
+                        onCancel={() => setRejectingId(null)}
+                        onPick={(reason, note) => reject(e.id, reason, note)}
+                      />
+                    )}
                   </div>
                 )
               })}
@@ -4463,7 +3712,8 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 }
 
 
-=== src/components/admin/AdminReports.tsx ===
+===== ./src/components/admin/AdminReports.tsx =====
+
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
@@ -4938,7 +4188,8 @@ const btnCancel: React.CSSProperties = {
 }
 
 
-=== src/components/admin/adminShared.ts ===
+===== ./src/components/admin/adminShared.ts =====
+
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { type CropRect } from '@/lib/cropUtils'
 import { type CategoryName } from '@/lib/categories'
@@ -4949,7 +4200,7 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 export const IS_DEV = window.location.hostname === 'localhost'
 
 export const NEIGHBORHOODS = [
-  'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest',
+  'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',
   'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
   'Division', 'Burnside',
 ]
@@ -5209,6 +4460,42 @@ export function fileToDataURL(file: File): Promise<string> {
 
 // ── AI extraction ────────────────────────────────────────────
 
+// Carries the edge function's real failure reason (the `{ error }` body) alongside
+// the HTTP status, so the UI can surface the true cause instead of a bare "500".
+export class ExtractionError extends Error {
+  status: number
+  detail: string
+  constructor(status: number, detail: string) {
+    super(detail || `Extraction failed: ${status}`)
+    this.name = 'ExtractionError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
+// Read the `{ error }` body off a failed extraction response (tolerant of a
+// non-JSON body) and throw an ExtractionError with the real reason + status.
+async function throwExtractionError(response: Response): Promise<never> {
+  let detail = ''
+  try {
+    const body = await response.json()
+    if (typeof body?.error === 'string') detail = body.error
+  } catch { /* non-JSON body — fall back to status */ }
+  throw new ExtractionError(response.status, detail)
+}
+
+// Map an extraction failure to a user-facing message. Two common ops cases get a
+// friendlier first line; everything else surfaces the real reason from the body.
+export function friendlyExtractionError(e: unknown): string {
+  if (e instanceof ExtractionError) {
+    const d = e.detail.toLowerCase()
+    if (d.includes('credit balance')) return 'The AI account is out of credits — tell Rob.'
+    if (e.status === 429 || d.includes('429') || d.includes('rate limit')) return 'AI rate limit hit — wait a minute and retry.'
+    return `Extraction failed — ${e.detail || `error ${e.status}`}`
+  }
+  return e instanceof Error ? e.message : String(e)
+}
+
 export async function extractEventFromImage(payload: ExtractPayload): Promise<ExtractedEvent> {
   const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
   const { data: { session } } = await supabaseAdmin.auth.getSession()
@@ -5226,7 +4513,7 @@ export async function extractEventFromImage(payload: ExtractPayload): Promise<Ex
     body: JSON.stringify(payload),
   })
 
-  if (!response.ok) throw new Error(`Extraction failed: ${response.status}`)
+  if (!response.ok) await throwExtractionError(response)
   return await response.json() as ExtractedEvent
 }
 
@@ -5242,7 +4529,7 @@ export async function extractScheduleFromImage({ base64, mimeType }: { base64: s
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
     body: JSON.stringify({ image: { base64, mimeType }, today }),
   })
-  if (!response.ok) throw new Error(`Schedule extraction failed: ${response.status}`)
+  if (!response.ok) await throwExtractionError(response)
   const data = await response.json()
   return data.occurrences ?? []
 }
@@ -5267,7 +4554,150 @@ export function neighborhoodFromAddress(address: string): string {
 }
 
 
-=== src/components/admin/AdminVARequests.tsx ===
+===== ./src/components/admin/AdminTools.tsx =====
+
+import { useState, useEffect, useCallback } from 'react'
+import { supabase as supabaseAdmin } from '@/lib/supabase'
+import { VenueForm } from '@/components/admin/VenueForm'
+import { EventForm } from '@/components/admin/EventForm'
+import { AdminNotifications } from '@/components/admin/AdminNotifications'
+import { AdminReports } from '@/components/admin/AdminReports'
+import { AdminVARequests } from '@/components/admin/AdminVARequests'
+import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
+import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
+import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
+import { UploadHistory } from '@/components/UploadHistory'
+import {
+  findDuplicateVenueGroups,
+  findDuplicateEventGroups,
+  type Venue,
+  type EventSummary,
+} from '@/components/admin/adminShared'
+
+// ── Section wrapper (moved verbatim from Admin.tsx) ───────────
+function Section({ title, badge, children, collapsible = false, defaultCollapsed = false }:
+  { title: string; badge?: string; children: React.ReactNode; collapsible?: boolean; defaultCollapsed?: boolean }) {
+  const [open, setOpen] = useState(!defaultCollapsed)
+  return (
+    <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
+      <div
+        onClick={collapsible ? () => setOpen(o => !o) : undefined}
+        style={{ display: 'flex', alignItems: 'center', gap: 12, margin: open ? '0 0 24px 0' : 0,
+                 cursor: collapsible ? 'pointer' : 'default', userSelect: 'none' }}
+      >
+        <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>{title}</h2>
+        {badge && (
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600,
+            color: '#dc2626', background: 'rgba(239,68,68,0.12)', padding: '3px 10px',
+            borderRadius: 999, letterSpacing: '0.02em' }}>{badge}</span>
+        )}
+        {collapsible && (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--fg-40)"
+               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+               style={{ marginLeft: 'auto', flexShrink: 0,
+                        transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        )}
+      </div>
+      {(!collapsible || open) && children}
+    </section>
+  )
+}
+
+// ── Tools panel: every admin-exclusive Admin.tsx section, moved verbatim ──
+// (Auto-Ingest and Import Poster are their own dashboard panels.)
+export function AdminTools() {
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [events, setEvents] = useState<EventSummary[]>([])
+  const [venueFormOpen, setVenueFormOpen] = useState(false)
+  const [manualFormOpen, setManualFormOpen] = useState(false)
+  const [openReportCount, setOpenReportCount] = useState<number>(0)
+  const [pendingVACount, setPendingVACount] = useState<number>(0)
+
+  const fetchVenues = useCallback(async () => {
+    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
+    if (data) setVenues(data)
+  }, [])
+
+  const fetchEvents = useCallback(async () => {
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+    const { data } = await supabaseAdmin.from('events')
+      .select('id, title, starts_at, venue_id, poster_url, show_times')
+      .eq('status', 'published')
+      .gte('starts_at', cutoff)
+      .order('starts_at', { ascending: true })
+    if (data) setEvents(data)
+  }, [])
+
+  const fetchOpenReportCount = useCallback(async () => {
+    const { count } = await supabaseAdmin
+      .from('content_reports')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'open')
+    setOpenReportCount(count ?? 0)
+  }, [])
+
+  useEffect(() => { fetchVenues(); fetchEvents(); fetchOpenReportCount() }, [])
+
+  return (
+    <div style={{ maxWidth: 520, margin: '0 auto', width: '100%' }}>
+
+      <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
+      <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
+      <AdminNotifications />
+
+      <Section
+        title="Reports"
+        badge={openReportCount > 0 ? `${openReportCount} open` : undefined}
+      >
+        <AdminReports onReportsChanged={fetchOpenReportCount} />
+      </Section>
+
+      <Section
+        title="VA Requests"
+        badge={pendingVACount > 0 ? `${pendingVACount} pending` : undefined}
+      >
+        <AdminVARequests onCountChange={setPendingVACount} />
+      </Section>
+
+      <Section title="Venue Accounts" collapsible defaultCollapsed>
+        <AdminVenueAccounts />
+      </Section>
+
+      <Section title="Upload history" collapsible defaultCollapsed>
+        <UploadHistory />
+      </Section>
+
+      <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
+        <button
+          onClick={() => setVenueFormOpen(v => !v)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: venueFormOpen ? 24 : 0 }}
+        >
+          <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add a Venue</h2>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{venueFormOpen ? '▾' : '▸'}</span>
+        </button>
+        {venueFormOpen && <VenueForm onVenueAdded={fetchVenues} />}
+      </section>
+
+      <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
+        <button
+          onClick={() => setManualFormOpen(v => !v)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: manualFormOpen ? 24 : 0 }}
+        >
+          <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add an Event</h2>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{manualFormOpen ? '▾' : '▸'}</span>
+        </button>
+        {manualFormOpen && <EventForm venues={venues} />}
+      </section>
+
+    </div>
+  )
+}
+
+
+===== ./src/components/admin/AdminVARequests.tsx =====
+
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
@@ -5435,7 +4865,8 @@ export function AdminVARequests({ onCountChange }: Props = {}) {
 }
 
 
-=== src/components/admin/AdminVenueAccounts.tsx ===
+===== ./src/components/admin/AdminVenueAccounts.tsx =====
+
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -5930,7 +5361,514 @@ function pillStyle(color: string, bg: string): React.CSSProperties {
 }
 
 
-=== src/components/admin/CropPreviewModal.tsx ===
+===== ./src/components/admin/BatchImport.tsx =====
+
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { supabase as supabaseAdmin } from '@/lib/supabase'
+import { CATEGORIES } from '@/lib/categories'
+import { type CropRect, resizeForExtraction, blobToBase64, optimizeImage } from '@/lib/cropUtils'
+import { useAuth } from '@/contexts/AuthContext'
+import {
+  inputStyle,
+  extractEventFromImage, friendlyExtractionError,
+  venueSimilarity, titleSimilarity,
+  type Venue, type ExtractedEvent, type ExtractPayload, type Category,
+} from '@/components/admin/adminShared'
+
+// Batch handles poster + one optional info image per event. Multi-date run/tour
+// schedules stay in single mode (that's what the schedule dropzone is for).
+
+const MAX_GROUPS = 30
+const ACCEPT = 'image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif'
+
+const CONFIDENCE_COLORS = { high: '#4ade80', medium: 'rgba(217,119,6,0.95)', low: '#f87171' } as const
+const CONFIDENCE_LABELS = { high: 'HIGH', medium: 'MEDIUM', low: 'LOW' } as const
+
+function isImage(f: File): boolean {
+  return f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)
+}
+
+function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
+  const name = venueName?.trim().toLowerCase()
+  if (!name || name.length < 3) return undefined
+  return venues.find(v => {
+    const vn = v.name.toLowerCase()
+    return vn.includes(name) || name.includes(vn)
+  })
+}
+
+interface PairGroup {
+  id: string
+  poster: File
+  info: File | null
+  posterPreview: string
+  infoPreview: string | null
+}
+
+type RowStatus = 'pending' | 'extracting' | 'done' | 'failed' | 'submitted'
+
+interface BatchRow {
+  id: string
+  poster: File
+  posterPreview: string
+  status: RowStatus
+  error?: string
+  // editable parsed fields
+  title: string
+  date: string
+  time: string
+  description: string
+  category: Category
+  venue_id: string
+  venue_name: string
+  suggested_venue_id?: string
+  suggested_venue_name?: string
+  sold_out: boolean
+  crop?: CropRect
+  uncertain: string[]
+  confidence?: 'high' | 'medium' | 'low'
+  duplicateOf?: { id: string; title: string; starts_at: string } | null
+  checked: boolean
+  descExpanded: boolean
+}
+
+type Phase = 'idle' | 'pairing' | 'processing' | 'review' | 'submitting' | 'done'
+
+export function BatchImport({ staffMode = false }: { staffMode?: boolean } = {}) {
+  void staffMode // batch always submits as 'pending'; the trigger handles role
+  const { user } = useAuth()
+  const [venues, setVenues] = useState<Venue[]>([])
+  const [phase, setPhase] = useState<Phase>('idle')
+  const [groups, setGroups] = useState<PairGroup[]>([])
+  const [rows, setRows] = useState<BatchRow[]>([])
+  const [progress, setProgress] = useState<{ done: number; total: number }>({ done: 0, total: 0 })
+  const [submittedCount, setSubmittedCount] = useState(0)
+  const [dragging, setDragging] = useState(false)
+  const [bulkVenue, setBulkVenue] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    supabaseAdmin.from('venues')
+      .select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours')
+      .order('name', { ascending: true })
+      .then(({ data }) => { if (data) setVenues(data) })
+  }, [])
+
+  // Folder picker uses non-standard attributes — set them on the DOM node directly.
+  useEffect(() => {
+    if (folderRef.current) {
+      folderRef.current.setAttribute('webkitdirectory', '')
+      folderRef.current.setAttribute('directory', '')
+    }
+  }, [phase])
+
+  // ── Auto-pairing: sort by lastModified (tiebreak filename), pair every two ──
+  const buildGroups = useCallback((files: File[]) => {
+    const imgs = files.filter(isImage)
+    if (!imgs.length) return
+    const sorted = [...imgs].sort((a, b) => (a.lastModified - b.lastModified) || a.name.localeCompare(b.name))
+    const next: PairGroup[] = []
+    for (let i = 0; i < sorted.length; i += 2) {
+      next.push({
+        id: crypto.randomUUID(),
+        poster: sorted[i],
+        info: sorted[i + 1] ?? null,
+        posterPreview: URL.createObjectURL(sorted[i]),
+        infoPreview: sorted[i + 1] ? URL.createObjectURL(sorted[i + 1]) : null,
+      })
+    }
+    setGroups(next)
+    setPhase('pairing')
+  }, [])
+
+  function reset() {
+    groups.forEach(g => { URL.revokeObjectURL(g.posterPreview); if (g.infoPreview) URL.revokeObjectURL(g.infoPreview) })
+    setGroups([]); setRows([]); setPhase('idle'); setProgress({ done: 0, total: 0 }); setSubmittedCount(0); setBulkVenue('')
+  }
+
+  // ── Pairing edits ──
+  function splitGroup(idx: number) {
+    setGroups(prev => {
+      const g = prev[idx]
+      if (!g.info) return prev
+      const newGroup: PairGroup = { id: crypto.randomUUID(), poster: g.info, info: null, posterPreview: g.infoPreview!, infoPreview: null }
+      const updated: PairGroup = { ...g, info: null, infoPreview: null }
+      return [...prev.slice(0, idx), updated, newGroup, ...prev.slice(idx + 1)]
+    })
+  }
+  function mergeWithPrevious(idx: number) {
+    setGroups(prev => {
+      if (idx === 0) return prev
+      const cur = prev[idx], pre = prev[idx - 1]
+      if (pre.info || cur.info) return prev // only a lone poster into an info-less previous group
+      const merged: PairGroup = { ...pre, info: cur.poster, infoPreview: cur.posterPreview }
+      return [...prev.slice(0, idx - 1), merged, ...prev.slice(idx + 1)]
+    })
+  }
+
+  // ── Duplicate check: same venue + date ±1 day + similar title ──
+  async function checkDuplicate(venue_id: string, date: string, title: string) {
+    const center = new Date(`${date}T12:00:00`)
+    const lo = new Date(center); lo.setDate(lo.getDate() - 1)
+    const hi = new Date(center); hi.setDate(hi.getDate() + 1)
+    const { data } = await supabaseAdmin.from('events')
+      .select('id, title, starts_at')
+      .eq('venue_id', venue_id)
+      .gte('starts_at', lo.toISOString())
+      .lte('starts_at', hi.toISOString())
+    return data?.find(e => titleSimilarity(e.title, title) > 0.5) ?? null
+  }
+
+  // ── Confirm pairing → sequential extraction (per-group failure tolerant) ──
+  async function processBatch() {
+    const capped = groups.slice(0, MAX_GROUPS)
+    const initial: BatchRow[] = capped.map(g => ({
+      id: g.id, poster: g.poster, posterPreview: g.posterPreview, status: 'pending',
+      title: '', date: '', time: '', description: '', category: 'Live Music' as Category,
+      venue_id: '', venue_name: '', sold_out: false, uncertain: [], checked: false, descExpanded: false, duplicateOf: null,
+    }))
+    setRows(initial)
+    setPhase('processing')
+    setProgress({ done: 0, total: capped.length })
+
+    for (let i = 0; i < capped.length; i++) {
+      const g = capped[i]
+      setProgress({ done: i, total: capped.length })
+      setRows(prev => prev.map(r => r.id === g.id ? { ...r, status: 'extracting' } : r))
+      try {
+        const posterB64 = await resizeForExtraction(g.poster).then(blobToBase64)
+        const payload: ExtractPayload = g.info
+          ? { images: [
+              { base64: posterB64, mimeType: 'image/jpeg' },
+              { base64: await resizeForExtraction(g.info).then(blobToBase64), mimeType: 'image/jpeg' },
+            ] }
+          : { base64: posterB64, mimeType: 'image/jpeg' }
+        const result: ExtractedEvent = await extractEventFromImage(payload)
+        const match = findVenueMatch(venues, result.venue_name)
+        const suggested = !match ? venues.find(v => venueSimilarity(v.name, result.venue_name) > 0.7) : undefined
+        const venue_id = match?.id ?? ''
+        const dup = (venue_id && result.date) ? await checkDuplicate(venue_id, result.date, result.title) : null
+        setRows(prev => prev.map(r => r.id === g.id ? {
+          ...r,
+          status: 'done',
+          title: result.title, date: result.date, time: result.time, description: result.description,
+          category: result.category, venue_id, venue_name: result.venue_name,
+          suggested_venue_id: suggested?.id, suggested_venue_name: suggested?.name,
+          sold_out: result.sold_out ?? false, crop: result.crop,
+          uncertain: result.uncertain_fields ?? [], confidence: result.confidence,
+          duplicateOf: dup,
+          checked: !!venue_id && !dup, // default-check resolved, non-duplicate rows
+        } : r))
+      } catch (e) {
+        setRows(prev => prev.map(r => r.id === g.id ? { ...r, status: 'failed', error: friendlyExtractionError(e) } : r))
+      }
+    }
+    setProgress({ done: capped.length, total: capped.length })
+    setPhase('review')
+  }
+
+  // ── Submit selected → insert each as pending via the single-form shape ──
+  async function submitSelected() {
+    const selected = rows.filter(r => r.status === 'done' && r.checked && r.venue_id && r.title && r.date)
+    if (!selected.length) return
+    setPhase('submitting')
+    setProgress({ done: 0, total: selected.length })
+    const confidenceMap: Record<string, number> = { high: 95, medium: 65, low: 35 }
+    let ok = 0
+    for (let i = 0; i < selected.length; i++) {
+      const r = selected[i]
+      setProgress({ done: i, total: selected.length })
+      try {
+        const optimized = await optimizeImage(r.poster, r.crop)
+        const filename = `${Date.now()}-${i}-${r.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 60)}.jpg`
+        const { error: se } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
+        if (se) throw se
+        const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
+        const venue = venues.find(v => v.id === r.venue_id)
+        const startDate = new Date(`${r.date}T${r.time || '20:00'}:00`)
+        const { error: ee } = await supabaseAdmin.from('events').insert({
+          venue_id: r.venue_id, title: r.title, category: r.category, poster_url: urlData.publicUrl,
+          neighborhood: venue?.neighborhood ?? '', address: venue?.address ?? '', description: r.description,
+          view_count: 0, like_count: 0, fill_frame: false, focal_x: 0.5, focal_y: 0.5, sold_out: r.sold_out,
+          source_url: null, ai_confidence: r.confidence ? (confidenceMap[r.confidence] ?? null) : null, flag_note: null,
+          starts_at: startDate.toISOString(),
+          status: 'pending', created_by: user?.id ?? null,
+        })
+        if (ee) throw ee
+        ok++
+        setRows(prev => prev.map(x => x.id === r.id ? { ...x, status: 'submitted' } : x))
+      } catch (e) {
+        setRows(prev => prev.map(x => x.id === r.id ? { ...x, error: String(e), checked: false } : x))
+      }
+    }
+    setSubmittedCount(ok)
+    setProgress({ done: selected.length, total: selected.length })
+    setPhase('done')
+  }
+
+  const selectedCount = rows.filter(r => r.status === 'done' && r.checked && r.venue_id && r.title && r.date).length
+  const unmatchedCount = rows.filter(r => r.status === 'done' && !r.venue_id).length
+
+  // ── IDLE: multi-drop ──
+  if (phase === 'idle') return (
+    <div>
+      <div
+        onDragOver={e => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); buildGroups(Array.from(e.dataTransfer.files)) }}
+        onClick={() => fileRef.current?.click()}
+        style={{ border: `2px dashed ${dragging ? 'var(--fg)' : 'var(--fg-25)'}`, borderRadius: 10, padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer', background: dragging ? 'rgba(240,236,227,0.04)' : 'transparent', transition: 'all 0.15s ease' }}
+      >
+        <span style={{ fontSize: 34 }}>🗂</span>
+        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg)', margin: 0, textAlign: 'center' }}>Drop many poster images here</p>
+        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', margin: 0, textAlign: 'center' }}>posters + optional info screenshots · JPG, PNG, WEBP, HEIC · up to {MAX_GROUPS} events</p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={() => fileRef.current?.click()} style={ghostBtn}>Choose files</button>
+        <button onClick={() => folderRef.current?.click()} style={ghostBtn}>Choose folder</button>
+      </div>
+      <input ref={fileRef} type="file" accept={ACCEPT} multiple style={{ display: 'none' }} onChange={e => buildGroups(Array.from(e.target.files ?? []))} />
+      {/* webkitdirectory folder picker (Chromium/Safari) — attrs set via ref effect */}
+      <input ref={folderRef} type="file" accept={ACCEPT} multiple style={{ display: 'none' }} onChange={e => buildGroups(Array.from(e.target.files ?? []))} />
+      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '12px 0 0', lineHeight: 1.5 }}>
+        Batch mode handles a poster + one optional info image per event. Has a tour schedule / multiple dates? Use single mode for that one.
+      </p>
+    </div>
+  )
+
+  // ── PAIRING strip ──
+  if (phase === 'pairing') {
+    const overCap = groups.length > MAX_GROUPS
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>
+            Confirm pairing · {Math.min(groups.length, MAX_GROUPS)} event{groups.length !== 1 ? 's' : ''}
+          </span>
+          <button onClick={reset} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12 }}>✕ start over</button>
+        </div>
+        {overCap && (
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.95)', margin: '0 0 10px' }}>
+            ⚠ Batch is capped at {MAX_GROUPS} — only the first {MAX_GROUPS} will be processed.
+          </p>
+        )}
+        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px' }}>
+          Each card is one event: poster + optional info image. Nothing is uploaded or read until you confirm.
+        </p>
+        <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 8 }}>
+          {groups.map((g, idx) => (
+            <div key={g.id} style={{ flexShrink: 0, width: 150, border: '1px solid var(--fg-15)', borderRadius: 8, padding: 8, background: 'rgba(240,236,227,0.02)' }}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ flex: 1 }}>
+                  <img src={g.posterPreview} alt="" style={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 4, display: 'block', border: '1px solid var(--fg-15)' }} />
+                  <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'var(--fg-40)', margin: '3px 0 0', textAlign: 'center' }}>poster</p>
+                </div>
+                {g.info && g.infoPreview && (
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <img src={g.infoPreview} alt="" style={{ width: '100%', height: 96, objectFit: 'cover', borderRadius: 4, display: 'block', border: '1px solid var(--fg-15)', opacity: 0.85 }} />
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'var(--fg-40)', margin: '3px 0 0', textAlign: 'center' }}>info</p>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                {g.info ? (
+                  <button onClick={() => splitGroup(idx)} title="Split — info becomes its own poster" style={chipBtn}>split</button>
+                ) : (
+                  <button onClick={() => mergeWithPrevious(idx)} disabled={idx === 0 || !!groups[idx - 1]?.info} title="Merge — this poster becomes the previous card's info image" style={{ ...chipBtn, opacity: (idx === 0 || !!groups[idx - 1]?.info) ? 0.35 : 1 }}>← merge</button>
+                )}
+                {!g.info && <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'var(--fg-30)', alignSelf: 'center' }}>no info</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={processBatch} style={{ ...primaryBtn, width: '100%', marginTop: 14 }}>
+          Confirm &amp; extract {Math.min(groups.length, MAX_GROUPS)} →
+        </button>
+      </div>
+    )
+  }
+
+  // ── PROCESSING ──
+  if (phase === 'processing') return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 0' }}>
+      <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid var(--fg-18)', borderTopColor: 'var(--fg)', animation: 'spin 0.8s linear infinite' }} />
+      <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>extracting {Math.min(progress.done + 1, progress.total)}/{progress.total}…</span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+    </div>
+  )
+
+  // ── DONE ──
+  if (phase === 'done') return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 0', textAlign: 'center' }}>
+      <span style={{ fontSize: 38 }}>✓</span>
+      <p style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, color: 'var(--fg)', margin: 0 }}>{submittedCount} event{submittedCount !== 1 ? 's' : ''} submitted for review</p>
+      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', margin: 0 }}>They're pending in the Review queue.</p>
+      <button onClick={reset} style={{ ...primaryBtn, marginTop: 6 }}>Batch another</button>
+    </div>
+  )
+
+  // ── REVIEW / SUBMITTING checklist ──
+  const submitting = phase === 'submitting'
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>
+          Review · {rows.filter(r => r.status === 'done' || r.status === 'submitted').length} extracted{rows.some(r => r.status === 'failed') ? ` · ${rows.filter(r => r.status === 'failed').length} failed` : ''}
+        </span>
+        <button onClick={reset} disabled={submitting} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12 }}>✕ discard batch</button>
+      </div>
+
+      {/* Bulk assign unmatched */}
+      {unmatchedCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '10px 12px', border: '1px solid rgba(217,119,6,0.3)', borderRadius: 8, background: 'rgba(217,119,6,0.06)' }}>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', whiteSpace: 'nowrap' }}>Assign all {unmatchedCount} unmatched to:</span>
+          <select value={bulkVenue} onChange={e => setBulkVenue(e.target.value)} style={{ ...inputStyle, width: 'auto', flex: 1, minWidth: 160, padding: '6px 10px', fontSize: 13 }}>
+            <option value="">— pick a venue —</option>
+            {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+          <button
+            disabled={!bulkVenue}
+            onClick={() => setRows(prev => prev.map(r => (r.status === 'done' && !r.venue_id) ? { ...r, venue_id: bulkVenue, checked: !r.duplicateOf } : r))}
+            style={{ ...primaryBtn, padding: '7px 12px', fontSize: 12, opacity: bulkVenue ? 1 : 0.4 }}
+          >Apply</button>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {rows.map(r => {
+          if (r.status === 'failed') return (
+            <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.04)' }}>
+              <img src={r.posterPreview} alt="" style={{ width: 34, height: 46, objectFit: 'cover', borderRadius: 4, flexShrink: 0, opacity: 0.6 }} />
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.9)' }}>Extraction failed — {r.error}</span>
+            </div>
+          )
+          if (r.status === 'extracting' || r.status === 'pending') return (
+            <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--fg-08)' }}>
+              <img src={r.posterPreview} alt="" style={{ width: 34, height: 46, objectFit: 'cover', borderRadius: 4, flexShrink: 0, opacity: 0.5 }} />
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>{r.status === 'extracting' ? 'reading…' : 'queued'}</span>
+            </div>
+          )
+
+          const submitted = r.status === 'submitted'
+          const uncertain = (f: string) => r.uncertain.includes(f)
+          const setRow = (patch: Partial<BatchRow>) => setRows(prev => prev.map(x => x.id === r.id ? { ...x, ...patch } : x))
+          return (
+            <div key={r.id} style={{ display: 'flex', gap: 10, padding: '10px 12px', borderRadius: 8, border: `1px solid ${submitted ? 'rgba(74,222,128,0.3)' : r.duplicateOf ? 'rgba(217,119,6,0.3)' : 'var(--fg-12, var(--fg-15))'}`, background: submitted ? 'rgba(74,222,128,0.05)' : 'transparent', opacity: submitting && !r.checked ? 0.5 : 1 }}>
+              {/* checkbox */}
+              <input
+                type="checkbox"
+                checked={r.checked}
+                disabled={submitting || submitted || !r.venue_id}
+                onChange={e => setRow({ checked: e.target.checked })}
+                style={{ width: 16, height: 16, marginTop: 2, flexShrink: 0, accentColor: '#A855F7', cursor: r.venue_id ? 'pointer' : 'not-allowed' }}
+              />
+              {/* poster thumb */}
+              <img src={r.posterPreview} alt="" style={{ width: 42, height: 60, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fg-15)' }} />
+              {/* fields */}
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {/* title + confidence + badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <input
+                    value={r.title}
+                    disabled={submitting || submitted}
+                    onChange={e => setRow({ title: e.target.value })}
+                    placeholder="Event title"
+                    style={{ ...inputStyle, flex: 1, minWidth: 120, padding: '5px 8px', fontSize: 13, ...(uncertain('title') ? { borderColor: 'rgba(234,179,8,0.5)', background: 'rgba(234,179,8,0.04)' } : {}) }}
+                  />
+                  {uncertain('title') && <span title="AI uncertain" style={{ color: '#facc15', fontSize: 12 }}>⚠</span>}
+                  {r.confidence && (
+                    <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', color: CONFIDENCE_COLORS[r.confidence], background: `${CONFIDENCE_COLORS[r.confidence]}1a`, border: `1px solid ${CONFIDENCE_COLORS[r.confidence]}55`, padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+                      {CONFIDENCE_LABELS[r.confidence]}
+                    </span>
+                  )}
+                  {r.duplicateOf && <span title={`Looks like "${r.duplicateOf.title}"`} style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', color: 'rgba(217,119,6,0.95)', background: 'rgba(217,119,6,0.12)', border: '1px solid rgba(217,119,6,0.35)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>DUPLICATE</span>}
+                  {submitted && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', color: '#4ade80', padding: '1px 5px' }}>✓ SUBMITTED</span>}
+                </div>
+
+                {/* date + time */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input type="date" value={r.date} disabled={submitting || submitted} onChange={e => setRow({ date: e.target.value })} style={{ ...inputStyle, width: 'auto', padding: '4px 8px', fontSize: 12, ...(uncertain('date') ? { borderColor: 'rgba(234,179,8,0.5)' } : {}) }} />
+                  {uncertain('date') && <span title="AI uncertain" style={{ color: '#facc15', fontSize: 12 }}>⚠</span>}
+                  <input type="time" value={r.time} disabled={submitting || submitted} onChange={e => setRow({ time: e.target.value })} style={{ ...inputStyle, width: 'auto', padding: '4px 8px', fontSize: 12 }} />
+                  <select value={r.category} disabled={submitting || submitted} onChange={e => setRow({ category: e.target.value as Category })} style={{ ...inputStyle, width: 'auto', padding: '4px 8px', fontSize: 12, appearance: 'none' }}>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <button
+                    onClick={() => setRow({ sold_out: !r.sold_out })}
+                    disabled={submitting || submitted}
+                    style={{ padding: '3px 8px', borderRadius: 4, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', border: `1px solid ${r.sold_out ? 'rgba(240,70,60,0.5)' : 'var(--fg-18)'}`, background: r.sold_out ? 'rgba(240,70,60,0.15)' : 'transparent', color: r.sold_out ? '#f0463c' : 'var(--fg-40)' }}
+                  >{r.sold_out ? 'sold out' : 'available'}</button>
+                </div>
+
+                {/* venue */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select
+                    value={r.venue_id}
+                    disabled={submitting || submitted}
+                    onChange={e => setRow({ venue_id: e.target.value, checked: e.target.value ? !r.duplicateOf : false })}
+                    style={{ ...inputStyle, flex: 1, minWidth: 150, padding: '4px 8px', fontSize: 12, appearance: 'none', ...(r.venue_id ? {} : { borderColor: 'rgba(217,119,6,0.5)' }) }}
+                  >
+                    <option value="">⚠ needs venue{r.venue_name ? ` ("${r.venue_name}")` : ''} — pick…</option>
+                    {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  {!r.venue_id && r.suggested_venue_id && (
+                    <button
+                      onClick={() => setRow({ venue_id: r.suggested_venue_id!, checked: !r.duplicateOf })}
+                      style={{ ...chipBtn, color: '#A855F7', borderColor: 'rgba(168,85,247,0.4)' }}
+                    >→ {r.suggested_venue_name}?</button>
+                  )}
+                </div>
+
+                {/* description — 1-line preview, tap to expand into editable textarea */}
+                {r.descExpanded ? (
+                  <textarea
+                    value={r.description}
+                    disabled={submitting || submitted}
+                    onChange={e => setRow({ description: e.target.value })}
+                    onBlur={() => setRow({ descExpanded: false })}
+                    autoFocus
+                    placeholder="Synopsis (Plaster voice)…"
+                    style={{ ...inputStyle, minHeight: 64, resize: 'vertical', padding: '6px 8px', fontSize: 12, ...(uncertain('description') ? { borderColor: 'rgba(234,179,8,0.5)' } : {}) }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => !submitting && !submitted && setRow({ descExpanded: true })}
+                    title="Tap to edit description"
+                    style={{ textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: submitted ? 'default' : 'text', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: r.description ? 'var(--fg-40)' : 'var(--fg-25)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', width: '100%' }}
+                  >
+                    {uncertain('description') && <span style={{ color: '#facc15' }}>⚠ </span>}
+                    {r.description || 'No description — tap to add'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Submit bar */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center' }}>
+        <button
+          onClick={submitSelected}
+          disabled={submitting || selectedCount === 0}
+          style={{ ...primaryBtn, flex: 1, opacity: (submitting || selectedCount === 0) ? 0.5 : 1 }}
+        >
+          {submitting ? `Submitting ${progress.done + 1}/${progress.total}…` : `Submit ${selectedCount} selected →`}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── shared button styles ──
+const primaryBtn: React.CSSProperties = { padding: '11px 18px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 6, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }
+const ghostBtn: React.CSSProperties = { flex: 1, padding: '9px 0', background: 'transparent', border: '1px solid var(--fg-18)', borderRadius: 6, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer' }
+const chipBtn: React.CSSProperties = { padding: '3px 8px', borderRadius: 4, border: '1px solid var(--fg-18)', background: 'transparent', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }
+
+
+===== ./src/components/admin/CropPreviewModal.tsx =====
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage, sampleCornerColors } from '@/lib/cropUtils'
 
@@ -6129,7 +6067,8 @@ export function CropPreviewModal({
 }
 
 
-=== src/components/admin/DuplicateEventMerger.tsx ===
+===== ./src/components/admin/DuplicateEventMerger.tsx =====
+
 import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { type EventSummary } from '@/components/admin/adminShared'
@@ -6250,7 +6189,8 @@ export function DuplicateEventMerger({ groups, onMergeComplete }: { groups: Even
 }
 
 
-=== src/components/admin/DuplicateVenueMerger.tsx ===
+===== ./src/components/admin/DuplicateVenueMerger.tsx =====
+
 import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { type Venue } from '@/components/admin/adminShared'
@@ -6370,11 +6310,13 @@ export function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venu
 }
 
 
-=== src/components/admin/EventForm.tsx ===
+===== ./src/components/admin/EventForm.tsx =====
+
 import { useState, useRef } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { inputStyle, labelStyle, fieldStyle, type Venue } from '@/components/admin/adminShared'
+import { optimizeImage } from '@/lib/cropUtils'
 
 export function EventForm({ venues }: { venues: Venue[] }) {
   const [form, setForm] = useState({ venue_id: '', title: '', category: '', date: '', start_time: '', description: '', is_recurring: false, recurrence_rule: '' })
@@ -6402,9 +6344,10 @@ export function EventForm({ venues }: { venues: Venue[] }) {
     let poster_url: string | null = null
 
     if (posterFile) {
-      const ext = posterFile.name.split('.').pop()
-      const filename = `${crypto.randomUUID()}.${ext}`
-      const { error: uploadError } = await supabaseAdmin.storage.from('posters').upload(filename, posterFile, { contentType: posterFile.type, upsert: false })
+      // Canvas re-encode strips EXIF/source metadata (and downscales) before upload.
+      const optimized = await optimizeImage(posterFile)
+      const filename = `${crypto.randomUUID()}.jpg`
+      const { error: uploadError } = await supabaseAdmin.storage.from('posters').upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
       if (uploadError) { setStatus('error'); setErrorMsg(`Poster upload failed: ${uploadError.message}`); return }
       const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
       poster_url = urlData.publicUrl
@@ -6508,15 +6451,17 @@ export function EventForm({ venues }: { venues: Venue[] }) {
 }
 
 
-=== src/components/admin/ImportForm.tsx ===
+===== ./src/components/admin/ImportForm.tsx =====
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
+import { expandOccurrences } from '@/lib/recurringDates'
 import {
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
-  fileToDataURL, extractEventFromImage, extractScheduleFromImage,
+  fileToDataURL, extractEventFromImage, extractScheduleFromImage, friendlyExtractionError,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
   generateWeekdayOccurrences, generateOccurrenceDates, fmtShortDate,
   type Venue, type ExtractedEvent, type ExtractPayload,
@@ -6663,7 +6608,7 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
       }
       setPhase('review')
     } catch (e) {
-      setErrorMsg(String(e)); setPhase('error')
+      setErrorMsg(friendlyExtractionError(e)); setPhase('error')
     }
   }, [venues, infoFile])
 
@@ -6736,9 +6681,25 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
         setForm(prev => ({ ...prev, date: valid[0].date, time: valid[0].time || prev.time || '' }))
         setExtraDates(valid.slice(1).map(o => ({ date: o.date, time: o.time || '' })))
       }
-    } catch { setScheduleError("Couldn't read that schedule. Try a clearer image.") }
+    } catch (e) { setScheduleError(friendlyExtractionError(e)) }
     finally { setScheduleLoading(false) }
   }, [])
+
+  // Coverage high-water mark for the selected venue — one max query, shown under
+  // the picker ("Covered through 8/15" / "No events yet"). Visibility, not a gate.
+  const [coveredThru, setCoveredThru] = useState<string | 'none' | null>(null)
+  useEffect(() => {
+    if (!form.venue_id) { setCoveredThru(null); return }
+    let cancelled = false
+    supabaseAdmin.from('events')
+      .select('starts_at')
+      .eq('venue_id', form.venue_id)
+      .in('status', ['pending', 'published'])
+      .order('starts_at', { ascending: false })
+      .limit(1)
+      .then(({ data }) => { if (!cancelled) setCoveredThru(data?.[0]?.starts_at ?? 'none') })
+    return () => { cancelled = true }
+  }, [form.venue_id])
 
   const handleVenueChange = (venueId: string) => {
     if (venueId) setVenueMismatch(null)
@@ -6906,27 +6867,16 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
           }
           setSuccessCount(dates.length)
         } else if (extraDates.length > 0) {
-          // Group all occurrences by calendar date — same date = multiple show times
-          const dateMap = new Map<string, string[]>()
-          const addToMap = (date: string, time: string) => {
-            const iso = new Date(`${date}T${time}:00`).toISOString()
-            if (!dateMap.has(date)) dateMap.set(date, [])
-            dateMap.get(date)!.push(iso)
-          }
-          addToMap(form.date, form.time || '20:00')
-          for (const ed of extraDates) addToMap(ed.date, ed.time || form.time || '20:00')
-          for (const [d, times] of dateMap) dateMap.set(d, times.sort())
-          const uniqueDates = [...dateMap.keys()].sort()
-          const seriesId = uniqueDates.length > 1 ? crypto.randomUUID() : null
-          const allRows = uniqueDates.map(date => {
-            const times = dateMap.get(date)!
-            return {
-              ...baseRow,
-              starts_at: times[0],
-              show_times: times.length > 1 ? times : null,
-              ...(seriesId ? { recurrence_group_id: seriesId } : {}),
-            }
-          })
+          // Group all occurrences by calendar date — same date = multiple show times.
+          // Pure expansion extracted to src/lib/recurringDates.ts (unit-tested).
+          const occurrences = expandOccurrences(form.date, form.time, extraDates)
+          const seriesId = occurrences.length > 1 ? crypto.randomUUID() : null
+          const allRows = occurrences.map(occ => ({
+            ...baseRow,
+            starts_at: occ.starts_at,
+            show_times: occ.show_times,
+            ...(seriesId ? { recurrence_group_id: seriesId } : {}),
+          }))
           const { error: eventError } = await supabaseAdmin.from('events').insert(allRows)
           if (eventError) throw eventError
           setSuccessCount(allRows.length)
@@ -7395,6 +7345,13 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
             {form.venue_id && !nearDuplicate && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#4ade80', margin: '4px 0 0 0' }}>existing venue · address &amp; details auto-filled</p>
             )}
+            {form.venue_id && coveredThru && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '4px 0 0 0' }}>
+                {coveredThru === 'none'
+                  ? 'No events yet'
+                  : `Covered through ${new Date(coveredThru).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric' })}`}
+              </p>
+            )}
             {venueMismatch && (
               <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)', margin: '6px 0 0 0' }}>
                 ⚠ "{venueMismatch}" isn't on the venue list — please select the correct venue.
@@ -7773,7 +7730,36 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
 }
 
 
-=== src/components/admin/KNOWN_BUGS.md ===
+===== ./src/components/admin/Ingester.tsx =====
+
+import { useState } from 'react'
+import { ImportForm } from '@/components/admin/ImportForm'
+import { BatchImport } from '@/components/admin/BatchImport'
+
+// Single is the default tab and the single-poster flow is untouched; Batch is the
+// opt-in many-at-once mode. Both honour staffMode.
+export function Ingester({ staffMode = false }: { staffMode?: boolean } = {}) {
+  const [mode, setMode] = useState<'single' | 'batch'>('single')
+  const tab = (m: 'single' | 'batch', label: string) => (
+    <button onClick={() => setMode(m)} style={{ ...tabStyle, ...(mode === m ? tabActive : null) }}>{label}</button>
+  )
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+        {tab('single', 'Single')}
+        {tab('batch', 'Batch')}
+      </div>
+      {mode === 'single' ? <ImportForm staffMode={staffMode} /> : <BatchImport staffMode={staffMode} />}
+    </div>
+  )
+}
+
+const tabStyle: React.CSSProperties = { padding: '6px 16px', borderRadius: 6, border: '1px solid var(--fg-15)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }
+const tabActive: React.CSSProperties = { border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.1)', color: '#A855F7' }
+
+
+===== ./src/components/admin/KNOWN_BUGS.md =====
+
 # Admin Component Known Bugs
 
 Do not fix these during the refactor — extract code only, no logic changes.
@@ -7791,10 +7777,12 @@ The bottom nav inside AdminDashboard hard-codes tab labels that may not match th
 ImportForm fetches the venues list from Supabase on its own mount. AdminDashboard also fetches venues at the top level. This means two identical queries run on every import form load. Consolidate into a single fetch with prop-drilling or shared context after refactor is complete.
 
 
-=== src/components/admin/VenueForm.tsx ===
+===== ./src/components/admin/VenueForm.tsx =====
+
 import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { NEIGHBORHOODS, inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
+import { callScrapeFn } from '@/components/admin/AdminAutoIngest'
 
 export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
   const [form, setForm] = useState({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
@@ -7817,7 +7805,7 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       if (coords) { location_lat = coords.lat; location_lng = coords.lng }
     }
 
-    const { error } = await supabaseAdmin.from('venues').insert({
+    const { data, error } = await supabaseAdmin.from('venues').insert({
       name: form.name.trim(),
       neighborhood: form.neighborhood || null,
       address: form.address.trim() || null,
@@ -7826,7 +7814,7 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       hours: form.hours.trim() || null,
       location_lat,
       location_lng,
-    })
+    }).select('id').single()
 
     if (error) {
       setStatus('error')
@@ -7836,6 +7824,12 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       setForm({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
       onVenueAdded()
       setTimeout(() => setStatus('idle'), 3000)
+      // Orphan auto-relink: fuzzy-match any parked scraped events against the new
+      // venue's name (fire-and-forget — the Orphans section in Auto-Ingest shows state).
+      if (data?.id) {
+        callScrapeFn({ relinkOrphans: { venueId: data.id } })
+          .catch(err => console.warn('[VenueForm] orphan relink failed', err))
+      }
     }
   }
 
@@ -7878,7 +7872,8 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
 }
 
 
-=== src/components/AdminEditModal.tsx ===
+===== ./src/components/AdminEditModal.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
@@ -8179,8 +8174,11 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     if (!deleteConfirm) { setDeleteConfirm(true); return }
     setSaving('delete'); setSaveError('')
     try {
-      const { error } = await supabase.from('events').delete().eq('id', event.id)
+      // .select('id') makes RLS-blocked deletes detectable — without it a blocked
+      // delete returns success-with-0-rows and the modal closes as if it worked.
+      const { data, error } = await supabase.from('events').delete().eq('id', event.id).select('id')
       if (error) throw error
+      if (!data || data.length === 0) throw new Error('Delete blocked — 0 rows affected (RLS). Are you admin?')
       onSaved()
     } catch (e) {
       setSaveError(String(e))
@@ -8589,7 +8587,8 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 }
 
 
-=== src/components/AppLayout.tsx ===
+===== ./src/components/AppLayout.tsx =====
+
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { SuspendedBanner } from './SuspendedBanner'
@@ -8607,7 +8606,8 @@ export function AppLayout() {
 }
 
 
-=== src/components/AvatarFullscreen.tsx ===
+===== ./src/components/AvatarFullscreen.tsx =====
+
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Pencil } from 'lucide-react'
@@ -8699,7 +8699,8 @@ export function AvatarFullscreen({ userId, onClose, onUpdatePhoto }: Props) {
 }
 
 
-=== src/components/AvatarUploader.tsx ===
+===== ./src/components/AvatarUploader.tsx =====
+
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react'
 import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase'
@@ -9011,7 +9012,8 @@ const scaleLabel: React.CSSProperties = {
 }
 
 
-=== src/components/BannerUploader.tsx ===
+===== ./src/components/BannerUploader.tsx =====
+
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -9298,7 +9300,8 @@ const scaleLabel: React.CSSProperties = {
 }
 
 
-=== src/components/BottomNav.tsx ===
+===== ./src/components/BottomNav.tsx =====
+
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -9491,7 +9494,8 @@ export function BottomNav() {
 }
 
 
-=== src/components/BottomSheet.tsx ===
+===== ./src/components/BottomSheet.tsx =====
+
 import { type ReactNode, useEffect, useState } from 'react'
 
 interface Props {
@@ -9606,7 +9610,8 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
 }
 
 
-=== src/components/CameraDeniedSheet.tsx ===
+===== ./src/components/CameraDeniedSheet.tsx =====
+
 import { BottomSheet } from '@/components/BottomSheet'
 import { openAppSettings } from '@/lib/pickImage'
 
@@ -9694,7 +9699,249 @@ export function CameraDeniedSheet({ open, which, onClose, onChooseLibrary }: Pro
 }
 
 
-=== src/components/DateIndicator.tsx ===
+===== ./src/components/CommunityWall.tsx =====
+
+import { useEffect, useRef, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { optimizeImage, blobToBase64 } from '@/lib/cropUtils'
+import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
+import { Diamond } from '@/components/Diamond'
+import { fetchRegionPosts, submitCommunityPost, type CommunityPost } from '@/lib/communityPosts'
+
+// The neighborhood community wall — a region-scoped (sextant) board of free
+// personal posts. Opened from the neighborhood chip on the Wall page. Posts are
+// visually distinct from event posters (rounded cards, caption, COMMUNITY tag).
+export function CommunityWall({ sextant, neighborhood, onClose }: {
+  sextant: string; neighborhood: string; onClose: () => void
+}) {
+  const { user } = useAuth()
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [loading, setLoading] = useState(true)
+  const [composeOpen, setComposeOpen] = useState(false)
+
+  const region = SEXTANT_LABELS[sextant as Sextant] ?? sextant
+
+  async function load() {
+    setLoading(true)
+    setPosts(await fetchRegionPosts(sextant))
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [sextant])
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--bg)', display: 'flex', flexDirection: 'column', paddingTop: 'env(safe-area-inset-top)' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--fg-08)', flexShrink: 0 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontSize: 22, cursor: 'pointer', lineHeight: 1, padding: 0 }}>‹</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.1 }}>{neighborhood}</p>
+          <p style={{ margin: '1px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>{region} Portland · neighborhood wall</p>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+
+          {/* Compose box — poster-sized, with blurb */}
+          <button
+            onClick={() => setComposeOpen(true)}
+            style={{ aspectRatio: '2 / 3', borderRadius: 12, border: '2px dashed var(--fg-25)', background: 'rgba(168,85,247,0.04)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', padding: 16, textAlign: 'center' }}
+          >
+            <span style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(168,85,247,0.15)', color: '#A855F7', fontSize: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>+</span>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>Post to {neighborhood}</span>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', lineHeight: 1.4 }}>Yard sale, lost cat, free couch, a heads-up — share it with {region} Portland. Free.</span>
+          </button>
+
+          {/* Posts */}
+          {posts.map(p => <CommunityCard key={p.id} post={p} isOwn={p.author_id === user?.id} />)}
+        </div>
+
+        {!loading && posts.length === 0 && (
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', textAlign: 'center', marginTop: 24 }}>
+            Nothing on the wall yet — be the first to post.
+          </p>
+        )}
+      </div>
+
+      {composeOpen && (
+        <ComposeSheet
+          neighborhood={neighborhood}
+          onClose={() => setComposeOpen(false)}
+          onPosted={() => { setComposeOpen(false); load() }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Post card ──
+function CommunityCard({ post, isOwn }: { post: CommunityPost; isOwn: boolean }) {
+  const pending = post.status === 'pending'
+  return (
+    <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--fg-12, var(--fg-15))', background: 'var(--bg)', display: 'flex', flexDirection: 'column', opacity: pending ? 0.85 : 1 }}>
+      <div style={{ position: 'relative', aspectRatio: '2 / 3', background: 'var(--fg-08)' }}>
+        {post.image_url && <img src={post.image_url} alt={post.title ?? ''} loading="lazy" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />}
+        {/* COMMUNITY tag — keeps these distinct from event posters */}
+        <span style={{ position: 'absolute', top: 6, left: 6, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fff', background: 'rgba(168,85,247,0.85)', padding: '1px 6px', borderRadius: 3 }}>
+          {post.post_type === 'business' ? 'Business' : post.post_type === 'lost_pet' ? 'Lost pet' : 'Community'}
+        </span>
+        {isOwn && pending && (
+          <span style={{ position: 'absolute', top: 6, right: 6, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#0c0b0b', background: 'rgba(217,119,6,0.95)', padding: '1px 6px', borderRadius: 3 }}>
+            In review
+          </span>
+        )}
+      </div>
+      <div style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {post.title && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.2 }}>{post.title}</p>}
+        {post.body && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.35, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.body}</p>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <Diamond diamondUrl={post.author?.avatar_diamond_url ?? null} size={16} />
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>@{post.author?.username ?? 'someone'}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Compose sheet ──
+function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: string; onClose: () => void; onPosted: () => void }) {
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [postType, setPostType] = useState<'personal' | 'lost_pet' | 'business'>('personal')
+  const [done, setDone] = useState<{ published: boolean } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function pick(f: File) {
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
+    setError('')
+  }
+
+  async function submit() {
+    if (!file) return
+    setBusy(true); setError('')
+    try {
+      const optimized = await optimizeImage(file)
+      const base64 = await blobToBase64(optimized)
+      const result = await submitCommunityPost({ base64, mimeType: 'image/jpeg', title: title.trim() || undefined, body: body.trim() || undefined, post_type: postType })
+      setDone({ published: result.status === 'published' })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 70, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--bg)', borderRadius: '16px 16px 0 0', padding: '18px 18px calc(18px + env(safe-area-inset-bottom))', maxHeight: '88vh', overflowY: 'auto' }}>
+        {done ? (
+          postType === 'business' ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '24px 0', textAlign: 'center' }}>
+              <span style={{ fontSize: 34 }}>💳</span>
+              <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)' }}>Almost there — complete payment</p>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', lineHeight: 1.5 }}>
+                Your business post is saved. Pay to send it for review — we'll publish it once it's approved.
+              </p>
+              {STRIPE_BUSINESS_POST_URL ? (
+                <a href={STRIPE_BUSINESS_POST_URL} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-block' }}>Complete payment</a>
+              ) : (
+                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)' }}>Payment isn't set up yet — an admin will reach out to finish it.</p>
+              )}
+              <button onClick={onPosted} style={ghostBtn}>Done</button>
+            </div>
+          ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: '24px 0', textAlign: 'center' }}>
+            <span style={{ fontSize: 36 }}>{done.published ? '✓' : '⏳'}</span>
+            <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, color: 'var(--fg)' }}>
+              {done.published ? `Posted to ${neighborhood}!` : 'Submitted for review'}
+            </p>
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', lineHeight: 1.5 }}>
+              {done.published
+                ? "It's live on your neighborhood wall."
+                : postType === 'lost_pet'
+                  ? `As soon as it's approved, everyone in ${neighborhood} gets a lost-pet alert. We review these fast.`
+                  : "We give some posts a quick look before they go public — yours will appear shortly. You can see it on your wall marked “In review.”"}
+            </p>
+            <button onClick={onPosted} style={primaryBtn}>Done</button>
+          </div>
+          )
+        ) : (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>Post to {neighborhood}</span>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              {([['personal', 'Personal'], ['lost_pet', 'Lost pet'], ['business', 'Business']] as const).map(([val, label]) => {
+                const on = postType === val
+                return (
+                  <button key={val} onClick={() => setPostType(val)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${on ? 'var(--fg-55)' : 'var(--fg-15)'}`, background: on ? 'var(--fg-08)' : 'transparent', color: on ? 'var(--fg)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>
+                )
+              })}
+            </div>
+            {postType === 'lost_pet' && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Animals only. Once an admin approves it, everyone in {neighborhood} gets an alert — so we review these fast.
+              </p>
+            )}
+            {postType === 'business' && (
+              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Business posts are paid. After you submit, you'll complete a quick payment — we send it for review once it's paid.
+              </p>
+            )}
+
+            {preview ? (
+              <div style={{ position: 'relative', width: 140, margin: '0 auto 14px' }}>
+                <img src={preview} alt="" style={{ width: 140, aspectRatio: '2 / 3', objectFit: 'cover', borderRadius: 10, display: 'block', border: '1px solid var(--fg-15)' }} />
+                <button onClick={() => fileRef.current?.click()} style={{ ...ghostBtn, marginTop: 8, width: '100%' }}>Change image</button>
+              </div>
+            ) : (
+              <button onClick={() => fileRef.current?.click()} style={{ width: '100%', aspectRatio: '3 / 2', borderRadius: 12, border: '2px dashed var(--fg-25)', background: 'transparent', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer', marginBottom: 14 }}>
+                <span style={{ fontSize: 30, color: 'var(--fg-40)' }}>＋</span>
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>Add a photo</span>
+              </button>
+            )}
+            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) pick(f) }} />
+
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Title (e.g. Lost cat near Kenton Park)" maxLength={120} style={inputStyle} />
+            <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="A few details…" maxLength={1000} rows={3} style={{ ...inputStyle, resize: 'vertical', marginTop: 8 }} />
+
+            {error && <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.9)', margin: '8px 0 0' }}>{error}</p>}
+
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '12px 0 0', lineHeight: 1.5 }}>
+              Posts are free — a small tip helps keep Plaster running for the neighborhood, but it's never required.
+            </p>
+
+            <button onClick={submit} disabled={!file || busy} style={{ ...primaryBtn, width: '100%', marginTop: 12, opacity: (!file || busy) ? 0.5 : 1 }}>
+              {busy ? 'Posting…' : 'Post'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// TODO(business-billing): v1 stub — one Stripe Payment Link opened in the
+// browser; an admin manually flips is_paid after payment. Later: per-post
+// Checkout Session + webhook that sets is_paid automatically. Configure via
+// VITE_STRIPE_BUSINESS_POST_URL.
+const STRIPE_BUSINESS_POST_URL = import.meta.env.VITE_STRIPE_BUSINESS_POST_URL as string | undefined
+
+const primaryBtn: React.CSSProperties = { padding: '11px 22px', background: '#A855F7', color: '#fff', border: 'none', borderRadius: 8, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer' }
+const ghostBtn: React.CSSProperties = { padding: '7px 0', background: 'transparent', border: '1px solid var(--fg-18)', borderRadius: 6, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }
+const inputStyle: React.CSSProperties = { width: '100%', background: 'rgba(240,236,227,0.05)', border: '1px solid var(--fg-18)', borderRadius: 8, padding: '10px 12px', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }
+
+
+===== ./src/components/DateIndicator.tsx =====
+
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/hooks/useTheme'
 
@@ -9886,17 +10133,20 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
 }
 
 
-=== src/components/DatePoster.tsx ===
+===== ./src/components/DatePoster.tsx =====
+
 import { useTheme } from '@/hooks/useTheme'
 
 interface Props {
   date: string // YYYY-MM-DD
+  // viewTransitionName for a filter-change View Transition (multi-col only).
+  transitionName?: string
 }
 
 const STYLES = ['split', 'stacked', 'hugenum', 'topbar', 'bottomweighted', 'framed'] as const
 type StyleName = typeof STYLES[number]
 
-export function DatePoster({ date }: Props) {
+export function DatePoster({ date, transitionName }: Props) {
   const { theme } = useTheme()
 
   const [yearStr, monthStr, dayStr] = date.split('-')
@@ -9920,7 +10170,7 @@ export function DatePoster({ date }: Props) {
   const BAR_BG = night ? '#f0ece3' : '#1a1a1a'
   const BAR_FG = night ? '#1a1a1a' : '#f0ece3'
 
-  const base: React.CSSProperties = {
+  const base = {
     aspectRatio: '2/3',
     background: BG,
     color: FG,
@@ -9929,7 +10179,8 @@ export function DatePoster({ date }: Props) {
     fontFamily: '"Barlow Condensed", sans-serif',
     userSelect: 'none',
     containerType: 'inline-size',
-  }
+    viewTransitionName: transitionName,
+  } as React.CSSProperties
 
   if (styleName === 'split') {
     return (
@@ -10012,7 +10263,8 @@ export function DatePoster({ date }: Props) {
 }
 
 
-=== src/components/DebugOverlay.tsx ===
+===== ./src/components/DebugOverlay.tsx =====
+
 const IS_ENABLED = new URLSearchParams(window.location.search).has('debug')
 
 interface Props {
@@ -10061,7 +10313,8 @@ export function DebugOverlay({ logs, open, onToggle }: Props) {
 }
 
 
-=== src/components/Diamond.tsx ===
+===== ./src/components/Diamond.tsx =====
+
 interface Props {
   diamondUrl: string | null
   fallbackUrl?: string | null
@@ -10138,7 +10391,8 @@ export function Diamond({ diamondUrl, fallbackUrl, size, onClick, altText, focal
 }
 
 
-=== src/components/ErrorBoundary.tsx ===
+===== ./src/components/ErrorBoundary.tsx =====
+
 import React from 'react'
 
 interface State {
@@ -10238,13 +10492,13 @@ export class ErrorBoundary extends React.Component<Props, State> {
 }
 
 
-=== src/components/FilterBar.tsx ===
+===== ./src/components/FilterBar.tsx =====
+
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { CATEGORIES } from '@/lib/categories'
 
 const CATS = CATEGORIES
 type Cat = typeof CATS[number]
-const TRIPLE_CATS = [...CATS, ...CATS, ...CATS]
 
 const SAFE = 1
 const GAP = 6
@@ -10253,9 +10507,15 @@ interface Props {
   active: string
   onChange: (chip: string) => void
   activePosterCategory?: string
+  neighborhood?: string | null
+  onOpenNeighborhood?: () => void
 }
 
-export function FilterBar({ active, onChange, activePosterCategory }: Props) {
+// Carousel items: the genres, plus the neighborhood chip appended at the end of
+// each copy (so it scrolls + infinite-loops like an ordinary chip).
+type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' }
+
+export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
@@ -10269,13 +10529,24 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
   const draggedRef         = useRef(false)
   const DRAG_THRESHOLD     = 5
 
-  // Measure one copy width and seed offset to middle copy
+  const showNbhd = !!(neighborhood && onOpenNeighborhood)
+  const baseItems: ChipItem[] = [
+    ...CATS.map((c): ChipItem => ({ kind: 'cat', cat: c })),
+    ...(showNbhd ? [{ kind: 'nbhd' } as ChipItem] : []),
+  ]
+  const copyLen = baseItems.length
+  const tripleItems = [...baseItems, ...baseItems, ...baseItems]
+  const copyLenRef = useRef(copyLen)
+  copyLenRef.current = copyLen
+
+  // Measure one copy width and seed offset to the middle copy. Re-runs if the
+  // per-copy count changes (e.g. the neighborhood chip appears once it loads).
   useEffect(() => {
     const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
-    if (chipEls.length < TRIPLE_CATS.length) return
+    if (chipEls.length < copyLen * 3) return
 
     let copyWidth = 0
-    for (let i = 0; i < CATS.length; i++) {
+    for (let i = 0; i < copyLen; i++) {
       copyWidth += chipEls[i].offsetWidth + GAP
     }
     oneCopyWidthRef.current = copyWidth
@@ -10283,7 +10554,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
     setAnimating(false)
     setOffset(-copyWidth)
     requestAnimationFrame(() => setAnimating(true))
-  }, [])
+  }, [copyLen])
 
   const snapToCategory = useCallback((cat: string) => {
     const catIdx = CATS.indexOf(cat as Cat)
@@ -10292,7 +10563,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
     requestAnimationFrame(() => {
       const sa      = scrollAreaRef.current
       const chipEls = chipElsRef.current.filter((el): el is HTMLButtonElement => el !== null)
-      if (!sa || chipEls.length < TRIPLE_CATS.length) return
+      if (!sa || chipEls.length < copyLenRef.current * 3) return
 
       // Build left-edge positions for every chip
       const positions: number[] = [0]
@@ -10300,8 +10571,8 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
         positions.push(positions[i - 1] + chipEls[i - 1].offsetWidth + GAP)
       }
 
-      // Target index = middle copy of the active chip
-      const targetI  = CATS.length + catIdx
+      // Target index = middle copy of the active chip (genres lead each copy)
+      const targetI  = copyLenRef.current + catIdx
       const chipW    = chipEls[targetI].offsetWidth
       const saW      = sa.offsetWidth
       const RIGHT_MARGIN = 16
@@ -10421,7 +10692,7 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
             className="font-body font-medium"
             style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
-            {chip === '♥' ? '♥\uFE0E' : chip}
+            {chip === '♥' ? '♥︎' : chip}
           </button>
         ))}
       </div>
@@ -10453,7 +10724,24 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
             willChange: 'transform',
           }}
         >
-          {TRIPLE_CATS.map((cat, i) => {
+          {tripleItems.map((item, i) => {
+            // Neighborhood chip — ordinary chip style (neutral, not an accent) with
+            // a little diamond; opens the region wall instead of filtering.
+            if (item.kind === 'nbhd') {
+              return (
+                <button
+                  key={`nbhd-${i}`}
+                  ref={el => { chipElsRef.current[i] = el }}
+                  onClick={() => { if (!draggedRef.current) onOpenNeighborhood?.() }}
+                  className="font-body font-medium"
+                  style={{ ...chipStyle(false), display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                >
+                  <span style={{ width: 6, height: 6, background: 'var(--fg-40)', transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0 }} />
+                  {neighborhood}
+                </button>
+              )
+            }
+            const cat = item.cat
             const highlighted = cat === active || cat === activePosterCategory
             return (
               <button
@@ -10475,7 +10763,8 @@ export function FilterBar({ active, onChange, activePosterCategory }: Props) {
 }
 
 
-=== src/components/FindFriends.tsx ===
+===== ./src/components/FindFriends.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
@@ -10921,7 +11210,8 @@ const rowStyle: React.CSSProperties = {
 }
 
 
-=== src/components/FollowButton.tsx ===
+===== ./src/components/FollowButton.tsx =====
+
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -11057,7 +11347,8 @@ export function FollowButton({ targetUserId, size = 'large' }: { targetUserId: s
 }
 
 
-=== src/components/FollowListPanel.tsx ===
+===== ./src/components/FollowListPanel.tsx =====
+
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
@@ -11315,7 +11606,8 @@ function UserRow({ user, onTap }: { user: FollowUser; onTap: () => void }) {
 
 
 
-=== src/components/GifMessage.tsx ===
+===== ./src/components/GifMessage.tsx =====
+
 interface Props {
   url: string
   width?: number | null
@@ -11368,7 +11660,8 @@ export function GifMessage({ url, width, height, alt = '', maxWidth = 200, borde
 }
 
 
-=== src/components/GifPicker.tsx ===
+===== ./src/components/GifPicker.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { searchGifs, trendingGifs, gifToSelected, type KlipyGif, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
@@ -11500,7 +11793,93 @@ export function GifPicker({ open, onSelect, onClose }: Props) {
 }
 
 
-=== src/components/MentionInput.tsx ===
+===== ./src/components/GroupEditSheet.tsx =====
+
+import { useState, useRef } from 'react'
+import { supabase } from '@/lib/supabase'
+import { optimizeImage } from '@/lib/cropUtils'
+
+// Rename a group chat + set a custom group image (Instagram/iMessage pattern).
+// Only used for GROUP threads; 1-on-1s always show the other person. Members may
+// update conversations.name/avatar_url (existing update_conversations_if_member RLS).
+export function GroupEditSheet({ conversationId, currentName, currentAvatarUrl, onClose, onSaved }: {
+  conversationId: string
+  currentName: string | null
+  currentAvatarUrl: string | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [name, setName] = useState(currentName ?? '')
+  const [preview, setPreview] = useState<string | null>(currentAvatarUrl)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  async function save() {
+    setBusy(true); setError('')
+    try {
+      let avatar_url = currentAvatarUrl
+      if (pendingFile) {
+        const optimized = await optimizeImage(pendingFile)
+        const path = `group/${conversationId}-${Date.now()}.jpg`
+        const { error: upErr } = await supabase.storage.from('avatars').upload(path, optimized, { contentType: 'image/jpeg', upsert: true })
+        if (upErr) throw upErr
+        avatar_url = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+      }
+      const { error: updErr } = await supabase.from('conversations').update({ name: name.trim() || null, avatar_url }).eq('id', conversationId)
+      if (updErr) throw updErr
+      onSaved()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, boxSizing: 'border-box', background: 'var(--bg)', borderRadius: '16px 16px 0 0', padding: '18px 18px calc(18px + env(safe-area-inset-bottom))', overflowX: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>Edit group</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
+          <button onClick={() => fileRef.current?.click()} style={{ flexShrink: 0, width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', border: '1px dashed var(--fg-25)', background: 'var(--fg-08)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {preview
+              ? <img src={preview} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : <span style={{ fontSize: 24, color: 'var(--fg-40)' }}>＋</span>}
+          </button>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>Tap to set a group photo</span>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { setPendingFile(f); setPreview(URL.createObjectURL(f)) } }} />
+
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Group name (optional)"
+          maxLength={60}
+          style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(240,236,227,0.05)', border: '1px solid var(--fg-18)', borderRadius: 8, padding: '11px 14px', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, outline: 'none' }}
+        />
+        <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>Leave the name blank to show members' names.</p>
+
+        {error && <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.9)', margin: '10px 0 0' }}>{error}</p>}
+
+        <button
+          onClick={save}
+          disabled={busy}
+          style={{ width: '100%', marginTop: 14, padding: '12px 0', borderRadius: 10, border: 'none', background: '#A855F7', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1 }}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+===== ./src/components/MentionInput.tsx =====
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
@@ -11712,7 +12091,8 @@ export function MentionInput({
 }
 
 
-=== src/components/NearbyVenues.tsx ===
+===== ./src/components/NearbyVenues.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
@@ -12002,7 +12382,69 @@ const outlineBtn: React.CSSProperties = {
 }
 
 
-=== src/components/NotifyBell.tsx ===
+===== ./src/components/NeighborhoodPicker.tsx =====
+
+import { useState } from 'react'
+import { SEXTANTS, SEXTANT_LABELS, neighborhoodsBySextant, type Sextant } from '@/lib/neighborhoods'
+
+// Searchable single-select of all Portland neighborhoods, grouped under sextant
+// headers with typeahead. Shared by onboarding + profile edit. onChange hands
+// back both the neighborhood name (the chip) and its sextant (wall scoping).
+export function NeighborhoodPicker({ value, onChange }: {
+  value: string | null
+  onChange: (name: string, sextant: Sextant) => void
+}) {
+  const [query, setQuery] = useState('')
+  const q = query.trim().toLowerCase()
+  const anyMatch = SEXTANTS.some(sx => neighborhoodsBySextant(sx).some(n => !q || n.name.toLowerCase().includes(q)))
+
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Search neighborhoods… (e.g. Kenton)"
+        autoCapitalize="none" autoCorrect="off" spellCheck={false}
+        style={searchStyle}
+      />
+      <div style={{ maxHeight: 300, overflowY: 'auto', border: '1px solid var(--fg-15)', borderRadius: 10 }}>
+        {SEXTANTS.map(sx => {
+          const items = neighborhoodsBySextant(sx).filter(n => !q || n.name.toLowerCase().includes(q))
+          if (!items.length) return null
+          return (
+            <div key={sx}>
+              <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', padding: '6px 12px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)', borderBottom: '1px solid var(--fg-08)' }}>
+                {SEXTANT_LABELS[sx]}
+              </div>
+              {items.map(n => {
+                const active = value === n.name
+                return (
+                  <button
+                    key={n.name}
+                    type="button"
+                    onClick={() => onChange(n.name, n.sextant)}
+                    style={{ width: '100%', textAlign: 'left', padding: '9px 12px', background: active ? 'rgba(168,85,247,0.12)' : 'transparent', border: 'none', borderBottom: '1px solid var(--fg-08)', color: active ? '#A855F7' : 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: active ? 700 : 500, cursor: 'pointer' }}
+                  >
+                    {n.name}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+        {!anyMatch && (
+          <p style={{ padding: 12, margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>No match — try a different spelling.</p>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const searchStyle: React.CSSProperties = { width: '100%', background: 'rgba(240,236,227,0.05)', border: '1px solid var(--fg-18)', borderRadius: 8, padding: '11px 14px', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, outline: 'none', boxSizing: 'border-box' }
+
+
+===== ./src/components/NotifyBell.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { BellOff, BellRing } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
@@ -12208,7 +12650,8 @@ export function NotifyBell({ accountId, accountType, size = 'large' }: Props) {
 }
 
 
-=== src/components/PlasterHeader.tsx ===
+===== ./src/components/PlasterHeader.tsx =====
+
 import { useMotionValue, animate, motion } from 'framer-motion'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
@@ -12291,8 +12734,10 @@ export function PlasterHeader({ actions, leftAction }: Props) {
 }
 
 
-=== src/components/PosterCard.tsx ===
+===== ./src/components/PosterCard.tsx =====
+
 import { useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -12305,6 +12750,8 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { SoldOutChip } from '@/components/SoldOutChip'
+import { SlapSheet } from '@/components/SlapSheet'
+import { SlapHand } from '@/components/SlapHand'
 import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -12324,6 +12771,15 @@ interface Props {
   onUndoCrop?: () => void
   onConfirmCrop?: () => void
   enableDesktopNav?: boolean
+  // 1-col panel persistence. restingPanel is the panel (0=poster, 1=info, 2=wall)
+  // every card rests on — owned by the parent PosterGrid as state, so all cards
+  // render pre-positioned and an incoming card never flashes its poster. The card
+  // reports a settled swipe via onPanelSettled; the grid lifts it to restingPanel.
+  restingPanel?: 0 | 1 | 2
+  onPanelSettled?: (panel: 0 | 1 | 2) => void
+  // viewTransitionName for the multi-col root, so a surviving poster glides to its
+  // new slot during a filter-change View Transition. Multi-col only; undefined in 1-col.
+  transitionName?: string
 }
 
 interface EventDetail {
@@ -12368,13 +12824,13 @@ function groupPostsWithReplies(flatPosts: WallPost[]): (WallPost & { replies: Wa
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
+export function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
   if (filter === 'All') return true
   if (filter === '♥') return isLiked
   return event.category === filter
 }
 
-function matchesSearch(event: WallEvent, query: string): boolean {
+export function matchesSearch(event: WallEvent, query: string): boolean {
   if (!query.trim()) return true
   const q = query.toLowerCase()
   return (
@@ -12455,7 +12911,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName }: Props) {
   const { user, isAdmin } = useAuth()
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
@@ -12464,6 +12920,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
+  const [slapOpen, setSlapOpen] = useState(false)
+  const [slapCount, setSlapCount] = useState<number | null>(null)
   const [popHeart, setPopHeart] = useState<PickedHeart | null>(null)
 
 
@@ -12477,25 +12935,37 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
   const stripRef = useRef<HTMLDivElement>(null)
-  const panelIdxRef = useRef(0)
-  const [panelIdx, _setPanelIdx] = useState(0)
+  const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
+  const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   const loopingRef = useRef(false)
 
-  function setPanelIdx(i: number) {
+  // Commit a panel as this card's final value. shared=true reports it up to the
+  // grid (onPanelSettled → restingPanel) so every other card follows. The
+  // render-phase mirror below adopts the grid's value directly (no setPanelIdx)
+  // so it never echoes straight back up.
+  function setPanelIdx(i: 0 | 1 | 2, shared = true) {
     panelIdxRef.current = i
     _setPanelIdx(i)
+    if (shared) onPanelSettled?.(i)
   }
 
-  // ── Reset to Poster when card scrolls out of view ─────────────────────
+  // Pre-position the active card on the grid's resting panel — render-phase
+  // prop→state sync (React's pattern for adjusting state when a prop changes).
+  // When a card scrolls into view and becomes active it adopts restingPanel HERE,
+  // before paint, so it never flashes panel 0. Inactive cards stay render-pure via
+  // the transform below. Guarded against mid-loop so a wrap animation isn't cut.
+  if (cols === 1 && isActive && !loopingRef.current && panelIdx !== restingPanel) {
+    panelIdxRef.current = restingPanel
+    _setPanelIdx(restingPanel)
+  }
+
+  // ── Fetch panel data when a card activates already on a non-poster panel ──
+  // (Swiping from the poster fetches via shiftPanel; this covers arriving on
+  // info/wall by scrolling with the panel already shifted.)
   useEffect(() => {
-    if (cols !== 1) return
-    if (!isActive && panelIdxRef.current !== 0) {
-      const el = stripRef.current
-      if (el) { el.style.transition = 'none'; el.style.transform = `translateX(${PANEL_PCT[0]}%)` }
-      setPanelIdx(0)
-      loopingRef.current = false
-    }
-  }, [isActive, cols])
+    if (cols !== 1 || !isActive) return
+    if (restingPanel > 0 && !detailFetched.current) fetchPanelData()
+  }, [isActive, cols, restingPanel]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 1-col: lazy-fetched data ─────────────────────────────────────────
   const detailFetched = useRef(false)
@@ -12894,8 +13364,18 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             display: 'flex',
             width: '500%',
             height: '100%',
-            transform: 'translateX(-20%)',
-            willChange: 'transform',
+            // Active card follows its local panelIdx (so the imperative swipe
+            // transition's endpoint matches what React re-applies); inactive cards
+            // render straight from the grid's restingPanel, so every off-screen card
+            // is already standing on the shared panel before it scrolls into view —
+            // no per-card correction, no poster flash. Swipe drag and shiftPanel
+            // still drive the active strip imperatively; React only re-applies the
+            // same endpoint on the post-commit re-render.
+            //
+            // No willChange / layer promotion here: a permanent willChange on every
+            // card's 500% strip promoted ~200 GPU layers and exhausted WKWebView tile
+            // memory. (1-col tearing is investigated separately via the tear lab.)
+            transform: `translateX(${PANEL_PCT[isActive ? panelIdx : restingPanel]}%)`,
           }}
         >
           {/* Panel 0: PostWallClone */}
@@ -13102,15 +13582,27 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         cursor: 'pointer',
         userSelect: 'none',
         background: '#000',
-      }}
+        viewTransitionName: transitionName,
+        // Skip rendering off-screen cards (multi-col only) so a tall wall stays
+        // cheap to scroll. The 2:3 intrinsic size reserves the right box so there's
+        // no layout shift; `auto` lets the browser remember each card's real size
+        // after its first paint.
+        contentVisibility: 'auto',
+        containIntrinsicSize: 'auto 80px auto 120px',
+      } as React.CSSProperties}
     >
       {event.poster_url ? (
         <>
-          {/* Blurred backdrop — tiny thumbnail (40px via Supabase render endpoint), blurred to 24px */}
+          {/* Blurred backdrop — tiny thumbnail (40px via Supabase render endpoint), blurred to 24px.
+              MUST be loading="lazy" — without it every mounted card (the whole wall, since
+              content-visibility only skips paint, not network) eagerly hits the Supabase
+              render endpoint at once → hundreds of parallel requests → ERR_INSUFFICIENT_RESOURCES. */}
           <img
             src={event.poster_url.replace('/object/public/', '/render/image/public/') + '?width=40&quality=20'}
             alt=""
             aria-hidden="true"
+            loading="lazy"
+            decoding="async"
             style={{
               position: 'absolute',
               inset: 0,
@@ -13127,6 +13619,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             src={posterThumb(event.poster_url, cols >= 4 ? 300 : 500) ?? event.poster_url}
             onError={e => { const img = e.currentTarget; img.onerror = null; img.src = event.poster_url! }}
             alt={event.title}
+            loading="lazy"
+            decoding="async"
             style={{
               position: 'absolute', inset: 0,
               width: '100%', height: '100%',
@@ -13269,6 +13763,15 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>sign in to say you're going</p>
               )}
 
+              {user && (
+                <button
+                  onClick={() => setSlapOpen(true)}
+                  style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                >
+                  <SlapHand size={18} /> Slap your friends
+                </button>
+              )}
+
               {user && (() => {
                 const reportLabel = reportCount >= 15
                   ? `${reportCount} users have flagged this event as sold out`
@@ -13287,6 +13790,23 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </button>
                 )
               })()}
+
+              {/* Portaled to body — PosterCard's 1-col strip is transformed, which
+                  would otherwise contain these position:fixed overlays and clip them. */}
+              {slapOpen && createPortal(
+                <SlapSheet
+                  event={{ id: event.id, title: event.title, venue_name: event.venue_name ?? null, starts_at: event.starts_at ?? null }}
+                  onClose={() => setSlapOpen(false)}
+                  onSlapped={(_, count) => { setSlapOpen(false); setSlapCount(count); setTimeout(() => setSlapCount(null), 2200) }}
+                />,
+                document.body
+              )}
+              {slapCount !== null && createPortal(
+                <div style={{ position: 'fixed', left: '50%', bottom: 90, transform: 'translateX(-50%)', zIndex: 90, background: '#2a2622', color: '#fff', padding: '10px 18px', borderRadius: 999, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
+                  Slapped {slapCount} friend{slapCount !== 1 ? 's' : ''} — chat's open
+                </div>,
+                document.body
+              )}
             </>
           ) : (
             <>
@@ -13313,6 +13833,22 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   }
 
   function renderPostWall() {
+    // Only the on-screen card mounts the full post wall (posts list + the
+    // MentionInput composers, each of which carries state + block/mute
+    // subscriptions). Off-screen windowed cards render a light placeholder that
+    // preserves the panel's size, so swiping a tall 1-col wall stays cheap. The
+    // composer mounts when the card becomes active (which is also when its data
+    // loads) and unmounts when you swipe away.
+    if (!isActive) {
+      return (
+        <>
+          <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Wall</span>
+          </div>
+          <div style={{ flex: 1 }} />
+        </>
+      )
+    }
     return (
       <>
         <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -13510,7 +14046,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 }
 
 
-=== src/components/PosterGrid.tsx ===
+===== ./src/components/PosterGrid.tsx =====
+
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
@@ -13557,13 +14094,14 @@ interface Props {
   openEventId?: string | null
   onOpenEventHandled?: () => void
   enableDesktopNav?: boolean
+  onNearEnd?: () => void
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav }: Props) {
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd }: Props) {
   const [cols, setCols] = useState(5)
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
@@ -13571,7 +14109,18 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const [activeEventIdx, setActiveEventIdx] = useState(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Resting 1-col panel (0=poster, 1=info, 2=wall) — STATE, not a ref, so every
+  // card re-renders pre-positioned on it and an incoming card never flashes its
+  // poster. A card reports a settled swipe via onPanelSettled → setRestingPanel.
+  // Per-instance state, so a second PosterGrid (e.g. StaffPreview) is independent
+  // and a remount resets to poster automatically.
+  const [restingPanel, setRestingPanel] = useState<0 | 1 | 2>(0)
   const scrollEndFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Near-end infinite-load trigger — kept in refs so the stable scroll handler reads
+  // them fresh without re-registering. Cooldown throttles onNearEnd to ~2/sec.
+  const onNearEndRef = useRef(onNearEnd)
+  onNearEndRef.current = onNearEnd
+  const nearEndCooldownRef = useRef(0)
   const colsRef = useRef(cols)
   colsRef.current = cols // always current — no stale closure on the listener
   const pinchRef = useRef<{
@@ -13819,6 +14368,16 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
     scrollEndFallbackRef.current = setTimeout(computeActiveDay, 150)
+
+    // Near the bottom (within 3 viewports) → request the next window, throttled.
+    const { scrollTop, clientHeight, scrollHeight } = container
+    if (scrollTop + clientHeight > scrollHeight - 3 * clientHeight) {
+      const now = Date.now()
+      if (now - nearEndCooldownRef.current > 500) {
+        nearEndCooldownRef.current = now
+        onNearEndRef.current?.()
+      }
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync activeDay on mount and when layout/events change ─────────
@@ -13870,8 +14429,19 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     if (cols !== 1) {
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
+      setRestingPanel(0) // zoom-out resets panel persistence to poster
     }
   }, [cols])
+
+  // Filtering now genuinely shrinks the event list (chips remove cards rather
+  // than fading them), so a stale scrollTop can land mid-wall or past the end.
+  // Reset to the top whenever the filter or search query changes. Skipped while
+  // deep-linking (openEventId) so it doesn't fight the scroll-to-target.
+  useEffect(() => {
+    if (openEventId) return
+    const el = containerRef.current
+    if (el) el.scrollTop = 0
+  }, [activeFilter, searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // After cols snaps to 1 and the DOM re-renders, scroll to the tapped card.
   // rAF ensures the 1-col card heights are painted before we set scrollTop.
@@ -13966,15 +14536,17 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                 onUndoCrop={onUndoCrop ? () => onUndoCrop(event.id) : undefined}
                 onConfirmCrop={onConfirmCrop ? () => onConfirmCrop(event.id) : undefined}
                 enableDesktopNav={enableDesktopNav}
+                restingPanel={restingPanel}
+                onPanelSettled={setRestingPanel}
               />
             )
           })
         ) : (
           // ── 2-5 col ───────────────────────────────────────────────
           <div style={gridStyle}>
-            {walledItems.map((item) => {
+            {walledItems.map((item, wi) => {
               if (item.type === 'date-poster') {
-                return <DatePoster key={`d-${item.date}`} date={item.date} />
+                return <DatePoster key={`d-${item.date}`} date={item.date} transitionName={`d-${item.date}`} />
               }
               const { event } = item
               return (
@@ -13990,6 +14562,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                   isAdminMode={isAdminMode}
                   onEventSaved={onEventSaved}
                   enableDesktopNav={enableDesktopNav}
+                  transitionName={wi < 40 ? `p-${event.id}` : undefined}
                 />
               )
             })}
@@ -14002,7 +14575,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
 }
 
 
-=== src/components/PreferencesPanel.tsx ===
+===== ./src/components/PreferencesPanel.tsx =====
+
 import { BottomSheet } from './BottomSheet'
 
 interface Props {
@@ -14084,7 +14658,8 @@ export function PreferencesPanel({ open, onClose, context }: Props) {
 }
 
 
-=== src/components/PrivacyPanel.tsx ===
+===== ./src/components/PrivacyPanel.tsx =====
+
 /**
  * PrivacyPanel
  *
@@ -14364,7 +14939,8 @@ const emptyStyle: React.CSSProperties = {
 }
 
 
-=== src/components/ReportContentSheet.tsx ===
+===== ./src/components/ReportContentSheet.tsx =====
+
 import { useState } from 'react'
 import {
   submitReport,
@@ -14556,7 +15132,8 @@ export function ReportContentSheet({ open, targetKind, targetId, targetUserId, o
 }
 
 
-=== src/components/SettingsPanel.tsx ===
+===== ./src/components/SettingsPanel.tsx =====
+
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
@@ -14870,7 +15447,166 @@ function SettingRow({ label, description, checked, onToggle, disabled }: Setting
 }
 
 
-=== src/components/SocialDiamondRow.tsx ===
+===== ./src/components/SlapHand.tsx =====
+
+// Shared line-art hand for the Plaster Slap feature. stroke="currentColor" so it
+// inherits its surroundings — white on the dark slap button, var(--fg) on light
+// surfaces — no hardcoded color, no emoji.
+export function SlapHand({ size = 18, style }: { size?: number; style?: React.CSSProperties }) {
+  return (
+    <svg
+      width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+      aria-hidden="true"
+    >
+      <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2" />
+      <path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2" />
+      <path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </svg>
+  )
+}
+
+
+===== ./src/components/SlapSheet.tsx =====
+
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
+import { Diamond } from '@/components/Diamond'
+import { fetchFriends, fetchCrews, slapFriends, type SlapFriend, type SlapCrew } from '@/lib/slap'
+
+// "Slap your friends" picker: recent crews (existing group chats) as one-tap
+// presets + a friends list, merged selection. Confirm creates/reuses the thread
+// and posts the slap message. No RSVP — a slap is an invitation.
+export function SlapSheet({ event, onClose, onSlapped }: {
+  event: { id: string; title: string; venue_name: string | null; starts_at: string | null }
+  onClose: () => void
+  onSlapped: (conversationId: string, count: number) => void
+}) {
+  const { user } = useAuth()
+  const [crews, setCrews] = useState<SlapCrew[]>([])
+  const [friends, setFriends] = useState<SlapFriend[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!user) return
+    Promise.all([fetchCrews(user.id), fetchFriends(user.id)]).then(([c, f]) => {
+      setCrews(c); setFriends(f); setLoading(false)
+    })
+  }, [user])
+
+  function toggle(id: string) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function pickCrew(crew: SlapCrew) {
+    setSelected(prev => { const n = new Set(prev); crew.members.forEach(m => n.add(m.id)); return n })
+  }
+
+  async function confirm() {
+    if (!user || selected.size === 0 || busy) return
+    setBusy(true); setError('')
+    try {
+      const { conversationId } = await slapFriends({
+        eventId: event.id, eventTitle: event.title, venueName: event.venue_name, startsAt: event.starts_at,
+        selectedIds: [...selected], userId: user.id,
+      })
+      onSlapped(conversationId, selected.size)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not send the slap.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, boxSizing: 'border-box', background: 'var(--bg)', borderRadius: '16px 16px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {/* Header */}
+        <div style={{ padding: '16px 18px 10px', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+            <p style={{ margin: 0, flex: 1, minWidth: 0, overflowWrap: 'break-word', fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.2 }}>Who's coming to {event.title}?</p>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>✕</button>
+          </div>
+          <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>Tap friends to add — they'll get a group chat.</p>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 18px' }}>
+          {loading ? (
+            <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', padding: '12px 0' }}>Loading…</p>
+          ) : (
+            <>
+              {crews.length > 0 && (
+                <div style={{ marginBottom: 16 }}>
+                  <p style={sectionLabel}>Recent crews</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {crews.map(crew => {
+                      const allIn = crew.members.length > 0 && crew.members.every(m => selected.has(m.id))
+                      return (
+                        <button key={crew.conversationId} onClick={() => pickCrew(crew)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, border: `1px solid ${allIn ? 'var(--fg-40)' : 'var(--fg-12, var(--fg-15))'}`, background: allIn ? 'var(--fg-08)' : 'transparent', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                          <div style={{ display: 'flex', flexShrink: 0, width: Math.min(crew.members.length, 3) * 14 + 10 }}>
+                            {crew.members.slice(0, 3).map((m, i) => (
+                              <div key={m.id} style={{ marginLeft: i === 0 ? 0 : -10 }}>
+                                <Diamond diamondUrl={m.avatar_diamond_url} fallbackUrl={m.avatar_url} size={24} />
+                              </div>
+                            ))}
+                          </div>
+                          <span style={{ flex: 1, minWidth: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {crew.name || crew.members.map(m => m.username ? `@${m.username}` : '?').join(', ')}
+                          </span>
+                          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', flexShrink: 0 }}>{crew.members.length}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <p style={sectionLabel}>Friends</p>
+              {friends.length === 0 ? (
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', padding: '4px 0 12px' }}>Follow some people first, then you can slap them to shows.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {friends.map(f => {
+                    const on = selected.has(f.id)
+                    return (
+                      <button key={f.id} onClick={() => toggle(f.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px', background: 'none', border: 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left', width: '100%' }}>
+                        <Diamond diamondUrl={f.avatar_diamond_url} fallbackUrl={f.avatar_url} size={34} />
+                        <span style={{ flex: 1, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>@{f.username ?? 'someone'}</span>
+                        <span style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1.5px solid ${on ? '#4ade80' : 'var(--fg-18)'}`, background: on ? '#4ade80' : 'transparent', color: '#0c0b0b', fontSize: 13, fontWeight: 700 }}>{on ? '✓' : ''}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{ flexShrink: 0, padding: '12px 18px 16px' }}>
+          {error && <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.9)', margin: '0 0 8px' }}>{error}</p>}
+          <button
+            onClick={confirm}
+            disabled={selected.size === 0 || busy}
+            style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: selected.size === 0 ? 'var(--fg-15)' : 'var(--fg)', color: selected.size === 0 ? 'var(--fg-40)' : 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: (selected.size === 0 || busy) ? 'default' : 'pointer' }}
+          >
+            {busy ? 'Slapping…' : selected.size === 0 ? 'Slap friends' : `Slap ${selected.size} friend${selected.size !== 1 ? 's' : ''}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const sectionLabel: React.CSSProperties = { fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', margin: '0 0 8px' }
+
+
+===== ./src/components/SocialDiamondRow.tsx =====
+
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -15143,7 +15879,8 @@ export function SocialDiamondRow({ targetUserId }: Props) {
 }
 
 
-=== src/components/SoldOutChip.tsx ===
+===== ./src/components/SoldOutChip.tsx =====
+
 export function SoldOutChip() {
   return (
     <span style={{
@@ -15164,7 +15901,8 @@ export function SoldOutChip() {
 }
 
 
-=== src/components/SplashAnimation.tsx ===
+===== ./src/components/SplashAnimation.tsx =====
+
 import { useEffect, useRef, useState } from 'react'
 
 const SPLASH_IMAGES = [
@@ -15258,7 +15996,8 @@ export function SplashAnimation() {
 }
 
 
-=== src/components/StaffChat.tsx ===
+===== ./src/components/StaffChat.tsx =====
+
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15496,7 +16235,8 @@ export function StaffChat({ onUnreadChange }: Props) {
 }
 
 
-=== src/components/StaffClock.tsx ===
+===== ./src/components/StaffClock.tsx =====
+
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15640,7 +16380,8 @@ export function StaffClock() {
 }
 
 
-=== src/components/StaffPresence.tsx ===
+===== ./src/components/StaffPresence.tsx =====
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15758,7 +16499,8 @@ export function StaffPresence() {
 }
 
 
-=== src/components/StaffPreview.tsx ===
+===== ./src/components/StaffPreview.tsx =====
+
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15798,42 +16540,82 @@ function TabBtn({
   )
 }
 
-export function StaffPreview() {
+// scope='mine' (default): the wall tab shows the signed-in worker's own uploads —
+// workers unchanged. scope='all' (admin QC): the wall tab shows EVERY pending event
+// (worker uploads, scraper imports, everything) with uploader attribution; the
+// published-context ('Live app') query is identical in both scopes.
+export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
   const { user, isAdmin } = useAuth()
   const [tab, setTab] = useState<Tab>('mine')
   const [pendingCount, setPendingCount] = useState(0)
   const [mine, setMine] = useState<WallEvent[]>([])
   const [live, setLive] = useState<WallEvent[]>([])
+  // scope='all': uploader usernames by event id, for the attribution strip
+  const [uploaders, setUploaders] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const today = new Date().toISOString().slice(0, 10)
 
   const fetchBoth = useCallback(async () => {
     if (!user) return
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+    const pendingQuery = scope === 'all'
+      ? supabase
+          .from('events')
+          .select('*, venues(name), profiles!created_by(username)')
+          .eq('status', 'pending')
+          .gte('starts_at', cutoff)
+          .order('starts_at', { ascending: true })
+          .limit(200)
+      : supabase
+          .from('events')
+          .select('*, venues(name)')
+          .eq('created_by', user.id)
+          .gte('starts_at', cutoff)
+          .order('starts_at', { ascending: true })
+          .limit(200)
     const [mineRes, liveRes] = await Promise.all([
+      pendingQuery,
+      // 'Live app' = the real public wall — published only (without the filter,
+      // admins/creators see their own pending mixed in via RLS).
       supabase
         .from('events')
         .select('*, venues(name)')
-        .eq('created_by', user.id)
-        .gte('starts_at', cutoff)
-        .order('starts_at', { ascending: true })
-        .limit(200),
-      supabase
-        .from('events')
-        .select('*, venues(name)')
+        .eq('status', 'published')
         .gte('starts_at', cutoff)
         .order('starts_at', { ascending: true })
         .limit(200),
     ])
-    setMine((mineRes.data ?? []).map(dbEventToWallEvent))
+    const mineRows = (mineRes.data ?? []) as Array<Record<string, unknown>>
+    setMine(mineRows.map(r => dbEventToWallEvent(r as Parameters<typeof dbEventToWallEvent>[0])))
+    if (scope === 'all') {
+      const map: Record<string, string> = {}
+      for (const r of mineRows) {
+        const username = (r.profiles as { username?: string } | null)?.username
+        if (typeof r.id === 'string' && username) map[r.id] = username
+      }
+      setUploaders(map)
+    }
     setLive((liveRes.data ?? []).map(dbEventToWallEvent))
     setLoading(false)
-  }, [user])
+  }, [user, scope])
 
   useEffect(() => { fetchBoth() }, [fetchBoth])
 
   const events = tab === 'mine' ? mine : live
   const showEmpty = !loading && tab === 'mine' && mine.length === 0
+
+  // scope='all': uploader attribution strip — counts by username, shown above the
+  // pending wall so QC sees whose uploads are on screen. (The Review tab's approve
+  // affordance already groups by uploader username.)
+  const uploaderSummary = scope === 'all' && tab === 'mine' && mine.length > 0
+    ? Object.entries(
+        mine.reduce<Record<string, number>>((acc, ev) => {
+          const name = uploaders[ev.id] ?? 'unknown'
+          acc[name] = (acc[name] ?? 0) + 1
+          return acc
+        }, {}),
+      ).sort((a, b) => b[1] - a[1])
+    : null
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -15846,7 +16628,7 @@ export function StaffPreview() {
         borderBottom: '1px solid var(--fg-08)',
         background: 'var(--bg)',
       }}>
-        <TabBtn active={tab === 'mine'} onClick={() => setTab('mine')}>Your uploads</TabBtn>
+        <TabBtn active={tab === 'mine'} onClick={() => setTab('mine')}>{scope === 'all' ? 'All pending' : 'Your uploads'}</TabBtn>
         {isAdmin && (
           <TabBtn active={tab === 'pending'} onClick={() => setTab('pending')}>
             Review{pendingCount > 0 ? ` · ${pendingCount}` : ''}
@@ -15854,6 +16636,15 @@ export function StaffPreview() {
         )}
         <TabBtn active={tab === 'live'} onClick={() => setTab('live')}>Live app</TabBtn>
       </div>
+
+      {/* scope='all': uploader attribution above the pending wall */}
+      {uploaderSummary && (
+        <div style={{ flexShrink: 0, padding: '6px 12px', borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+          {uploaderSummary.map(([name, count], i) => (
+            <span key={name}>{i > 0 && ' · '}<span style={{ color: 'var(--fg-65)', fontWeight: 600 }}>@{name}</span> ×{count}</span>
+          ))}
+        </div>
+      )}
 
       {/* Content area — fills remaining height */}
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -15874,7 +16665,7 @@ export function StaffPreview() {
         ) : tab !== 'pending' && showEmpty ? (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
             <p style={{ color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontStyle: 'italic', maxWidth: 160, lineHeight: 1.5, margin: 0 }}>
-              Nothing uploaded yet — shows you add will appear here.
+              {scope === 'all' ? 'Nothing pending right now.' : 'Nothing uploaded yet — shows you add will appear here.'}
             </p>
           </div>
         ) : tab !== 'pending' ? (
@@ -15904,7 +16695,8 @@ export function StaffPreview() {
 }
 
 
-=== src/components/SuspendedBanner.tsx ===
+===== ./src/components/SuspendedBanner.tsx =====
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -15948,7 +16740,8 @@ export function SuspendedBanner() {
 }
 
 
-=== src/components/SwipeableConversationRow.tsx ===
+===== ./src/components/SwipeableConversationRow.tsx =====
+
 import { useRef, useState } from 'react'
 
 interface Props {
@@ -16041,7 +16834,8 @@ export function SwipeableConversationRow({ onDismiss, children }: Props) {
 }
 
 
-=== src/components/TrendingStrip.tsx ===
+===== ./src/components/TrendingStrip.tsx =====
+
 import React, { useState } from 'react'
 import { type WallEvent } from '@/types/event'
 import { posterThumb } from '@/lib/posterThumb'
@@ -16217,11 +17011,9 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
     return <div style={{ marginBottom: 4 }}>{tileRow}</div>
   }
 
-  // ── Wall mode: ambient pill (grey + right-aligned when collapsed; purple when open) ──
+  // ── Wall mode: ambient pill (quiet grey "TRENDING", right-aligned; ▲ added when open) ──
   return (
     <div style={{ flexShrink: 0, borderBottom: '1px solid var(--fg-08)' }}>
-      {/* Collapsed: small grey "▲ TRENDING" tucked right, no chevron.
-          Expanded: purple label + upward chevron — slightly more present. */}
       <button
         onClick={toggle}
         style={{
@@ -16233,19 +17025,10 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
         <span style={{
           fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10,
           fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-          color: open ? '#A855F7' : 'var(--fg-40)',
+          color: 'var(--fg-40)',
         }}>
-          ▲ Trending
+          {open ? '▲ ' : ''}TRENDING
         </span>
-        {open && (
-          <svg
-            width="12" height="12" viewBox="0 0 24 24" fill="none"
-            stroke="#A855F7" strokeWidth="2.5" strokeLinecap="round"
-            style={{ flexShrink: 0, transform: 'rotate(180deg)' }}
-          >
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        )}
       </button>
 
       <div style={{
@@ -16261,7 +17044,8 @@ export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }
 }
 
 
-=== src/components/UploadHistory.tsx ===
+===== ./src/components/UploadHistory.tsx =====
+
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { posterThumb } from '@/lib/posterThumb'
@@ -16277,6 +17061,17 @@ interface UploadRow {
   venue_name: string | null
   neighborhood: string | null
   uploader: string | null
+  rejection_reason: string | null
+  rejection_note: string | null
+}
+
+// Neutral, lowercase reason labels — no admin name, just the house-standard signal.
+const REASON_LABELS: Record<string, string> = {
+  duplicate: 'duplicate',
+  wrong_date: 'wrong date',
+  bad_image: 'bad image',
+  not_an_event: 'not an event',
+  other: 'other',
 }
 
 type ColKey = 'title' | 'venue' | 'neighborhood' | 'type' | 'uploader' | 'date'
@@ -16382,6 +17177,7 @@ export function UploadHistory() {
   const [sort, setSort] = useState<SortState>({ col: 'date', dir: 'desc' })
   const [view, setView] = useState<ViewMode>('list')
   const [colorOn, setColorOn] = useState(loadColorOn)
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.rpc('upload_history', { p_limit: 200 }).then(({ data }) => {
@@ -16543,6 +17339,11 @@ export function UploadHistory() {
                 <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: 'var(--fg-40)', lineHeight: 1.2 }}>
                   {fmtShort(row.created_at)}
                 </div>
+                {row.status === 'rejected' && row.rejection_reason && (
+                  <div title={row.rejection_note ?? undefined} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600, color: '#8a9bb0', lineHeight: 1.2, cursor: row.rejection_note ? 'help' : 'default' }}>
+                    rejected · {REASON_LABELS[row.rejection_reason] ?? row.rejection_reason}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -16650,10 +17451,32 @@ export function UploadHistory() {
                 {fmtShort(row.created_at)}
               </div>
 
-              {/* Status */}
-              <div style={{ ...dataCell(), justifyContent: 'center' }}>
+              {/* Status + rejection reason chip (note on tap/hover) */}
+              <div style={{ ...dataCell(), justifyContent: 'center', flexDirection: 'column', gap: 2, overflow: 'visible' }}>
                 <StatusPill status={row.status} />
+                {row.status === 'rejected' && row.rejection_reason && (
+                  <button
+                    onClick={() => row.rejection_note && setExpandedNoteId(prev => prev === row.id ? null : row.id)}
+                    title={row.rejection_note ?? undefined}
+                    style={{
+                      background: 'none', border: 'none', padding: 0,
+                      fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600,
+                      color: '#8a9bb0', lineHeight: 1.2, textAlign: 'center',
+                      cursor: row.rejection_note ? 'pointer' : 'default',
+                      textDecoration: row.rejection_note ? 'underline dotted' : 'none',
+                    }}
+                  >
+                    {REASON_LABELS[row.rejection_reason] ?? row.rejection_reason}
+                  </button>
+                )}
               </div>
+
+              {/* Full-width rejection note — revealed on tap of the reason chip */}
+              {expandedNoteId === row.id && row.rejection_note && (
+                <div style={{ gridColumn: '1 / -1', padding: '6px 12px 8px 52px', borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', fontStyle: 'italic' }}>
+                  rejected · {REASON_LABELS[row.rejection_reason ?? ''] ?? row.rejection_reason} — {row.rejection_note}
+                </div>
+              )}
             </React.Fragment>
           ))}
         </div>
@@ -16666,7 +17489,8 @@ export function UploadHistory() {
 import React from 'react'
 
 
-=== src/components/UserActionsMenu.tsx ===
+===== ./src/components/UserActionsMenu.tsx =====
+
 /**
  * UserActionsMenu
  *
@@ -17090,7 +17914,8 @@ const cancelBtnStyle: React.CSSProperties = {
 }
 
 
-=== src/components/UserPicker.tsx ===
+===== ./src/components/UserPicker.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from './Diamond'
@@ -17263,7 +18088,8 @@ export function UserPicker({ initialSelected = [], excludedIds, onChange, placeh
 }
 
 
-=== src/components/VenueBoard.tsx ===
+===== ./src/components/VenueBoard.tsx =====
+
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -17304,6 +18130,9 @@ function fmtTime(iso: string) {
 function fmtShort(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'short', day: 'numeric' })
 }
+function fmtMD(iso: string) {
+  return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric' })
+}
 
 function StatusPill({ status }: { status: string }) {
   const cfg: Record<string, { color: string; bg: string; border: string; label: string }> = {
@@ -17319,25 +18148,32 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export function VenueBoard() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const [venues, setVenues] = useState<BoardVenue[]>([])
   const [events, setEvents] = useState<BoardEvent[]>([])
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
   const [collapsedNeighborhoods, setCollapsedNeighborhoods] = useState<Set<string>>(loadCollapsed)
   const [loading, setLoading] = useState(true)
+  const [assignments, setAssignments] = useState<Record<string, string>>({}) // venue_id -> worker_id
+  const [roster, setRoster] = useState<{ id: string; username: string }[]>([])
+  const [assigningVenueId, setAssigningVenueId] = useState<string | null>(null)
 
   const fetchAll = useCallback(async () => {
     if (!user) return
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    const [venuesRes, eventsRes, checkoffsRes] = await Promise.all([
+    const [venuesRes, eventsRes, checkoffsRes, assignmentsRes, rosterRes] = await Promise.all([
       supabase.from('venues').select('id, name, neighborhood').order('name'),
       supabase.from('events').select('id, title, starts_at, status, created_by, created_at, venue_id').gte('starts_at', cutoff).order('starts_at'),
       supabase.from('staff_venue_checkoff').select('venue_id'),
+      supabase.from('staff_venue_assignments').select('venue_id, worker_id'),
+      supabase.rpc('staff_roster'),
     ])
     if (venuesRes.data) setVenues(venuesRes.data as BoardVenue[])
     if (eventsRes.data) setEvents(eventsRes.data as BoardEvent[])
     if (checkoffsRes.data) setCheckedIds(new Set(checkoffsRes.data.map(r => r.venue_id)))
+    if (assignmentsRes.data) setAssignments(Object.fromEntries(assignmentsRes.data.map(r => [r.venue_id, r.worker_id])))
+    if (rosterRes.data) setRoster((rosterRes.data as { id: string; username: string }[]).map(r => ({ id: r.id, username: r.username })))
     setLoading(false)
   }, [user])
 
@@ -17370,6 +18206,22 @@ export function VenueBoard() {
     setExpandedIds(prev => { const next = new Set(prev); if (next.has(venueId)) next.delete(venueId); else next.add(venueId); return next })
   }
 
+  // Admin-only writes (RLS also enforces is_admin). Optimistic, revert on error.
+  async function assignVenue(venueId: string, workerId: string) {
+    if (!user) return
+    setAssignments(prev => ({ ...prev, [venueId]: workerId }))
+    setAssigningVenueId(null)
+    const { error } = await supabase.from('staff_venue_assignments')
+      .upsert({ venue_id: venueId, worker_id: workerId, assigned_by: user.id }, { onConflict: 'venue_id' })
+    if (error) { console.error('[VenueBoard] assign failed', error); fetchAll() }
+  }
+  async function unassignVenue(venueId: string) {
+    setAssignments(prev => { const next = { ...prev }; delete next[venueId]; return next })
+    setAssigningVenueId(null)
+    const { error } = await supabase.from('staff_venue_assignments').delete().eq('venue_id', venueId)
+    if (error) { console.error('[VenueBoard] unassign failed', error); fetchAll() }
+  }
+
   if (loading) {
     return <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>Loading venues…</p>
   }
@@ -17385,15 +18237,172 @@ export function VenueBoard() {
   const coveredCount = venues.filter(v => (eventsByVenue[v.id]?.length ?? 0) > 0).length
   const coveragePct = venues.length > 0 ? (coveredCount / venues.length) * 100 : 0
 
+  // Assignments: worker_id -> username for chips; the current user's own venues
+  // get pinned to a "Your venues" section and dropped from neighborhood groups.
+  const rosterNames: Record<string, string> = Object.fromEntries(roster.map(r => [r.id, r.username]))
+  const myVenueIds = new Set(venues.filter(v => assignments[v.id] && assignments[v.id] === user?.id).map(v => v.id))
+  const myVenues = venues.filter(v => myVenueIds.has(v.id)).sort((a, b) => a.name.localeCompare(b.name))
+
   // Neighborhood grouping
   const neighborhoodOrder = [...NEIGHBORHOODS, 'Other']
   const byNeighborhood: Record<string, BoardVenue[]> = {}
   for (const v of venues) {
+    if (myVenueIds.has(v.id)) continue // pinned above in "Your venues"
     const key = v.neighborhood && NEIGHBORHOODS.includes(v.neighborhood as typeof NEIGHBORHOODS[number]) ? v.neighborhood : 'Other'
     if (!byNeighborhood[key]) byNeighborhood[key] = []
     byNeighborhood[key].push(v)
   }
   const activeNeighborhoods = neighborhoodOrder.filter(n => byNeighborhood[n]?.length)
+
+  // ── Venue row renderer (shared by "Your venues" + neighborhood groups) ──
+  function renderVenueRow(venue: BoardVenue) {
+    const venueEvents = (eventsByVenue[venue.id] ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+    const hasShows = venueEvents.length > 0
+    const isChecked = checkedIds.has(venue.id)
+    const isExpanded = expandedIds.has(venue.id)
+
+    // Staleness: no upcoming shows OR newest created_at >21 days ago
+    const maxCreatedAt = hasShows ? Math.max(...venueEvents.map(e => new Date(e.created_at).getTime())) : 0
+    const isStale = !hasShows || (Date.now() - maxCreatedAt > STALE_MS)
+
+    // Coverage high-water mark: latest pending/published show (visibility, not a gate)
+    const coveredEvents = venueEvents.filter(e => e.status === 'pending' || e.status === 'published')
+    const coveredThru = coveredEvents.length
+      ? coveredEvents.reduce((max, e) => e.starts_at > max ? e.starts_at : max, coveredEvents[0].starts_at)
+      : null
+
+    const nextShow = venueEvents[0]
+
+    const assignedWorkerId = assignments[venue.id]
+    const assigneeName = assignedWorkerId ? rosterNames[assignedWorkerId] : undefined
+    const isPicking = assigningVenueId === venue.id
+
+    return (
+      <div
+        key={venue.id}
+        style={{ borderRadius: 7, border: '1px solid var(--fg-08)', overflow: 'hidden', opacity: isChecked ? 0.45 : 1, transition: 'opacity 0.2s' }}
+      >
+        {/* Venue header row */}
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+
+          {/* Disclosure chevron (venues with shows only) */}
+          {hasShows ? (
+            <button
+              onClick={() => toggleExpand(venue.id)}
+              style={{ width: 30, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-30)', fontSize: 10, transition: 'color 0.15s' }}
+            >
+              <span style={{ display: 'inline-block', transition: 'transform 0.22s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▸</span>
+            </button>
+          ) : (
+            <div style={{ width: 30, flexShrink: 0 }} />
+          )}
+
+          {/* Venue name + meta — clicking expands if has shows */}
+          <button
+            onClick={() => hasShows && toggleExpand(venue.id)}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, padding: '9px 8px 9px 2px', background: isExpanded ? 'rgba(240,236,227,0.04)' : 'transparent', border: 'none', cursor: hasShows ? 'pointer' : 'default', textAlign: 'left' }}
+          >
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {venue.name}
+              <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 500, color: 'var(--fg-30)' }}>
+                {coveredThru ? `thru ${fmtMD(coveredThru)}` : '—'}
+              </span>
+            </span>
+            {isStale && (
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', background: 'var(--fg-08)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
+                stale
+              </span>
+            )}
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: nextShow ? 'var(--fg-40)' : 'rgba(251,146,60,0.7)', flexShrink: 0 }}>
+              {nextShow ? fmtShort(nextShow.starts_at) : '⚠ no shows'}
+            </span>
+          </button>
+
+          {/* Assignee — admin can (re)assign; everyone else sees a read-only chip */}
+          {isAdmin ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); setAssigningVenueId(prev => prev === venue.id ? null : venue.id) }}
+              title={assigneeName ? `Assigned to @${assigneeName}` : 'Assign a venue owner'}
+              style={{
+                flexShrink: 0, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', marginRight: 2, borderRadius: 4, cursor: 'pointer',
+                border: assigneeName ? '1px solid rgba(168,85,247,0.4)' : '1px dashed var(--fg-15)',
+                background: assigneeName ? 'rgba(168,85,247,0.1)' : 'transparent',
+                color: assigneeName ? '#A855F7' : 'var(--fg-30)',
+              }}
+            >
+              {assigneeName ? `@${assigneeName}` : 'assign'}
+            </button>
+          ) : assigneeName ? (
+            <span style={{ flexShrink: 0, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600, padding: '2px 7px', marginRight: 2, borderRadius: 4, border: '1px solid rgba(168,85,247,0.3)', background: 'rgba(168,85,247,0.08)', color: '#A855F7' }}>
+              @{assigneeName}
+            </span>
+          ) : null}
+
+          {/* Check-off — far right, stopPropagation */}
+          <button
+            onClick={(e) => toggleCheckoff(venue.id, e)}
+            title={isChecked ? 'Mark as not done' : 'Mark as done'}
+            style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: isChecked ? '#4ade80' : 'var(--fg-25)', fontSize: 15, lineHeight: 1 }}
+          >
+            {isChecked ? '✓' : '○'}
+          </button>
+        </div>
+
+        {/* Admin assignee picker — inline (role-gated, RLS-enforced) */}
+        {isAdmin && isPicking && (
+          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-40)', marginRight: 2 }}>Assign to</span>
+            {roster.map(r => (
+              <button
+                key={r.id}
+                onClick={() => assignVenue(venue.id, r.id)}
+                style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', border: r.id === assignedWorkerId ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)', background: r.id === assignedWorkerId ? 'rgba(168,85,247,0.1)' : 'transparent', color: r.id === assignedWorkerId ? '#A855F7' : 'var(--fg-65)' }}
+              >
+                @{r.username}
+              </button>
+            ))}
+            {assignedWorkerId && (
+              <button
+                onClick={() => unassignVenue(venue.id)}
+                style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 5, cursor: 'pointer', border: '1px solid rgba(239,68,68,0.4)', background: 'transparent', color: '#ef4444' }}
+              >
+                Unassign
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Show list — cascading expand */}
+        <div style={{ overflow: 'hidden', maxHeight: isExpanded ? 600 : 0, opacity: isExpanded ? 1 : 0, transition: 'max-height 0.25s ease, opacity 0.2s ease' }}>
+          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px 10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {venueEvents.map(e => {
+                const isOwnPending = e.status === 'pending' && e.created_by === user?.id
+                return (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {e.title}
+                        </span>
+                        <StatusPill status={e.status} />
+                      </div>
+                      <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
+                        {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
+                        {isOwnPending && <span style={{ marginLeft: 6, color: 'var(--fg-30)' }}>· added {fmtShort(e.created_at)}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -17410,6 +18419,23 @@ export function VenueBoard() {
           <div style={{ height: '100%', width: `${coveragePct}%`, background: '#A855F7', borderRadius: 2, transition: 'width 0.4s ease' }} />
         </div>
       </div>
+
+      {/* Your venues — the current user's assigned venues, pinned to the top */}
+      {myVenues.length > 0 && (
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '6px 4px 6px 0', borderBottom: '1px solid var(--fg-15)', marginBottom: 6 }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#A855F7', flex: 1 }}>
+              Your venues
+            </span>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)' }}>
+              {myVenues.length}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
+            {myVenues.map(venue => renderVenueRow(venue))}
+          </div>
+        </div>
+      )}
 
       {/* Neighborhood groups */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -17451,111 +18477,7 @@ export function VenueBoard() {
                 transition: 'max-height 0.28s ease, opacity 0.22s ease',
               }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingTop: 2 }}>
-                  {sorted.map(venue => {
-                    const venueEvents = (eventsByVenue[venue.id] ?? []).sort((a, b) => a.starts_at.localeCompare(b.starts_at))
-                    const hasShows = venueEvents.length > 0
-                    const isChecked = checkedIds.has(venue.id)
-                    const isExpanded = expandedIds.has(venue.id)
-
-                    // Staleness: no upcoming shows OR newest created_at >21 days ago
-                    const maxCreatedAt = hasShows ? Math.max(...venueEvents.map(e => new Date(e.created_at).getTime())) : 0
-                    const isStale = !hasShows || (Date.now() - maxCreatedAt > STALE_MS)
-
-                    const nextShow = venueEvents[0]
-
-                    return (
-                      <div
-                        key={venue.id}
-                        style={{ borderRadius: 7, border: '1px solid var(--fg-08)', overflow: 'hidden', opacity: isChecked ? 0.45 : 1, transition: 'opacity 0.2s' }}
-                      >
-                        {/* Venue header row */}
-                        <div style={{ display: 'flex', alignItems: 'center' }}>
-
-                          {/* Disclosure chevron (venues with shows only) */}
-                          {hasShows ? (
-                            <button
-                              onClick={() => toggleExpand(venue.id)}
-                              style={{
-                                width: 30, height: 36, flexShrink: 0,
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                background: 'none', border: 'none', cursor: 'pointer',
-                                color: 'var(--fg-30)', fontSize: 10,
-                                transition: 'color 0.15s',
-                              }}
-                            >
-                              <span style={{ display: 'inline-block', transition: 'transform 0.22s ease', transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▸</span>
-                            </button>
-                          ) : (
-                            <div style={{ width: 30, flexShrink: 0 }} />
-                          )}
-
-                          {/* Venue name + meta — clicking expands if has shows */}
-                          <button
-                            onClick={() => hasShows && toggleExpand(venue.id)}
-                            style={{
-                              flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0,
-                              padding: '9px 8px 9px 2px',
-                              background: isExpanded ? 'rgba(240,236,227,0.04)' : 'transparent',
-                              border: 'none', cursor: hasShows ? 'pointer' : 'default', textAlign: 'left',
-                            }}
-                          >
-                            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                              {venue.name}
-                            </span>
-                            {isStale && (
-                              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', background: 'var(--fg-08)', padding: '1px 5px', borderRadius: 3, flexShrink: 0 }}>
-                                stale
-                              </span>
-                            )}
-                            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: nextShow ? 'var(--fg-40)' : 'rgba(251,146,60,0.7)', flexShrink: 0 }}>
-                              {nextShow ? fmtShort(nextShow.starts_at) : '⚠ no shows'}
-                            </span>
-                          </button>
-
-                          {/* Check-off — far right, stopPropagation */}
-                          <button
-                            onClick={(e) => toggleCheckoff(venue.id, e)}
-                            title={isChecked ? 'Mark as not done' : 'Mark as done'}
-                            style={{ width: 36, height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: isChecked ? '#4ade80' : 'var(--fg-25)', fontSize: 15, lineHeight: 1 }}
-                          >
-                            {isChecked ? '✓' : '○'}
-                          </button>
-                        </div>
-
-                        {/* Show list — cascading expand */}
-                        <div style={{
-                          overflow: 'hidden',
-                          maxHeight: isExpanded ? 600 : 0,
-                          opacity: isExpanded ? 1 : 0,
-                          transition: 'max-height 0.25s ease, opacity 0.2s ease',
-                        }}>
-                          <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px 10px' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              {venueEvents.map(e => {
-                                const isOwnPending = e.status === 'pending' && e.created_by === user?.id
-                                return (
-                                  <div key={e.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {e.title}
-                                        </span>
-                                        <StatusPill status={e.status} />
-                                      </div>
-                                      <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', marginTop: 2 }}>
-                                        {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
-                                        {isOwnPending && <span style={{ marginLeft: 6, color: 'var(--fg-30)' }}>· added {fmtShort(e.created_at)}</span>}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                  {sorted.map(venue => renderVenueRow(venue))}
                 </div>
               </div>
             </div>
@@ -17567,7 +18489,8 @@ export function VenueBoard() {
 }
 
 
-=== src/components/VenueSubPanel.tsx ===
+===== ./src/components/VenueSubPanel.tsx =====
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -17616,6 +18539,7 @@ export function VenueSubPanel({ venue, onBack }: Props) {
     supabase
       .from('events')
       .select('id, title, starts_at, poster_url, category')
+      .eq('status', 'published')
       .eq('venue_id', venue.id)
       .gte('starts_at', new Date().toISOString())
       .order('starts_at', { ascending: true })
@@ -17747,8 +18671,10 @@ export function VenueSubPanel({ venue, onBack }: Props) {
 }
 
 
-=== src/components/Wall.tsx ===
-import { useState, useEffect, useCallback } from 'react'
+===== ./src/components/Wall.tsx =====
+
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
@@ -17757,13 +18683,34 @@ import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
-import { supabase, type DbEvent } from '@/lib/supabase'
-import { dbEventToWallEvent } from '@/lib/adapters'
+import { matchesFilter, matchesSearch } from './PosterCard'
+import { supabase } from '@/lib/supabase'
+import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
+import { CommunityWall } from '@/components/CommunityWall'
 
-const WALL_CACHE_KEY = 'wall-cache-v1'
+const WALL_CACHE_KEY = 'wall-cache-v3' // v3: status-filtered — flush cached admin walls holding pending events
 const WALL_CACHE_TTL = 24 * 60 * 60 * 1000
+const WALL_PAGE = 300 // events per fetch window (initial + each load-more page)
+// Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering
+// (description and other long-text excluded; the 1-col info panel lazy-fetches
+// detail). Shared verbatim by the initial fetch and loadMore.
+const EVENT_SELECT = 'id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, venues(name)'
+
+// Wrap a filter-chip change in a View Transition so surviving posters glide to
+// their new grid slots while removed ones fade. flushSync forces React to commit
+// synchronously inside the transition callback so the API captures the new layout.
+// Falls back to an instant update under reduced-motion or on browsers without the
+// API (older iOS Safari). Search is deliberately NOT animated — it fires per
+// keystroke, so animating it would make the wall churn mid-word. Never wrap data
+// refreshes.
+function withWallTransition(update: () => void) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const d = document as any
+  if (reduce || typeof d.startViewTransition !== 'function') { update(); return }
+  d.startViewTransition(() => { flushSync(update) })
+}
 
 export function Wall() {
   const today = new Date().toISOString().slice(0, 10)
@@ -17775,15 +18722,32 @@ export function Wall() {
 
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+
+  const visibleEvents = useMemo(
+    () => events.filter(e => matchesFilter(e, activeFilter, likedIds.has(e.id)) && matchesSearch(e, searchQuery)),
+    [events, activeFilter, likedIds, searchQuery],
+  )
   const [searchOpen, setSearchOpen] = useState(false)
+  const [communityOpen, setCommunityOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
   // Tracks previous poster URLs per event for undo after crop save (session-only, clears on reload)
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin, profile } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
+  const openCommunity = (location.state as { openCommunity?: boolean } | null)?.openCommunity ?? false
+
+  // Deep-link from a lost-pet notification → open the neighborhood wall.
+  useEffect(() => {
+    if (openCommunity && profile?.home_neighborhood && profile?.home_sextant) setCommunityOpen(true)
+  }, [openCommunity, profile?.home_neighborhood, profile?.home_sextant])
+
+  // Windowed infinite loading: cursor = last loaded row's starts_at; pages append.
+  const cursorRef = useRef<string | null>(null)
+  const hasMoreRef = useRef(true)
+  const isLoadingMoreRef = useRef(false)
 
   const fetchEvents = useCallback(async () => {
     // Show events from up to 6 hours ago so late-night shows
@@ -17792,24 +18756,58 @@ export function Wall() {
 
     const { data } = await supabase
       .from('events')
-      .select('*, venues(name)')
+      .select(EVENT_SELECT)
+      .eq('status', 'published') // RLS hides pending from the public, but admins/creators see their own — filter explicitly
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
-      .limit(200)
+      .limit(WALL_PAGE)
 
-    const realEvents = (data ?? []).map(dbEventToWallEvent)
-    setEvents(realEvents)
+    const batch = data ?? []
+    setEvents(batch.map(dbEventToWallEvent))
+    cursorRef.current = batch.length ? batch[batch.length - 1].starts_at : null
+    hasMoreRef.current = batch.length === WALL_PAGE
 
     try {
-      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: data ?? [] }))
+      // Cache only the first window — appended pages are session-only.
+      localStorage.setItem(WALL_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), events: batch.slice(0, WALL_PAGE) }))
     } catch { /* quota failure must never break the wall */ }
+  }, [])
+
+  // Append the next window when the grid nears the bottom. Guarded against
+  // double-fires and a no-op once the DB is exhausted; dedupes by id on append.
+  const loadMore = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMoreRef.current || cursorRef.current == null) return
+    isLoadingMoreRef.current = true
+    try {
+      const { data } = await supabase
+        .from('events')
+        .select(EVENT_SELECT)
+        .eq('status', 'published')
+        .gt('starts_at', cursorRef.current)
+        .order('starts_at', { ascending: true })
+        .limit(WALL_PAGE)
+
+      const batch = data ?? []
+      if (batch.length) {
+        const mapped = batch.map(dbEventToWallEvent)
+        setEvents(prev => {
+          const seen = new Set(prev.map(e => e.id))
+          const fresh = mapped.filter(e => !seen.has(e.id))
+          return fresh.length ? [...prev, ...fresh] : prev
+        })
+        cursorRef.current = batch[batch.length - 1].starts_at
+      }
+      hasMoreRef.current = batch.length === WALL_PAGE
+    } finally {
+      isLoadingMoreRef.current = false
+    }
   }, [])
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(WALL_CACHE_KEY)
       if (raw) {
-        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: DbEvent[] }
+        const { savedAt, events: cachedData } = JSON.parse(raw) as { savedAt: number; events: WallEventRow[] }
         if (Date.now() - savedAt < WALL_CACHE_TTL) {
           const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
           setEvents(cachedData.filter(e => e.starts_at >= cutoff).map(dbEventToWallEvent))
@@ -17830,6 +18828,14 @@ export function Wall() {
         setLikedIds(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)))
       })
   }, [user?.id])
+
+  // When deep-linking to an event (TrendingStrip tap, location.state), reset filters
+  // so the target event is always visible in the filtered grid.
+  useEffect(() => {
+    if (!openEventId) return
+    setActiveFilter('All')
+    setSearchQuery('')
+  }, [openEventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLike(eventId: string) {
     if (!user) return
@@ -17966,12 +18972,33 @@ export function Wall() {
         </div>
       )}
 
-      <FilterBar active={activeFilter} onChange={setActiveFilter} activePosterCategory={activePosterCategory ?? undefined} />
+      <FilterBar
+        active={activeFilter}
+        onChange={(f) => withWallTransition(() => setActiveFilter(f))}
+        activePosterCategory={activePosterCategory ?? undefined}
+        neighborhood={profile?.home_neighborhood ?? null}
+        onOpenNeighborhood={(profile?.home_neighborhood && profile?.home_sextant) ? () => setCommunityOpen(true) : undefined}
+      />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
 
+      {communityOpen && profile?.home_neighborhood && profile?.home_sextant && (
+        <CommunityWall
+          sextant={profile.home_sextant}
+          neighborhood={profile.home_neighborhood}
+          onClose={() => setCommunityOpen(false)}
+        />
+      )}
+
+      {visibleEvents.length === 0 && events.length > 0 ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-30)' }}>
+            Nothing on the wall for this yet
+          </p>
+        </div>
+      ) : (
       <PosterGrid
-        events={events}
+        events={visibleEvents}
         activeFilter={activeFilter}
         searchQuery={searchQuery}
         today={today}
@@ -17997,7 +19024,9 @@ export function Wall() {
         prevUrlMap={prevUrlMap}
         onUndoCrop={handleUndoCrop}
         onConfirmCrop={handleConfirmCrop}
+        onNearEnd={loadMore}
       />
+      )}
 
     </div>
     <PreferencesPanel open={prefsOpen} onClose={() => setPrefsOpen(false)} context="wall" />
@@ -18006,7 +19035,8 @@ export function Wall() {
 }
 
 
-=== src/components/WelcomeScreen.tsx ===
+===== ./src/components/WelcomeScreen.tsx =====
+
 interface Props {
   avatarUrl: string | null
   onEnter: () => void
@@ -18165,7 +19195,8 @@ export function WelcomeScreen({ avatarUrl, onEnter }: Props) {
 }
 
 
-=== src/contexts/AuthContext.tsx ===
+===== ./src/contexts/AuthContext.tsx =====
+
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { type Session, type User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -18184,6 +19215,8 @@ export interface Profile {
   created_at: string
   account_type: string | null
   pending_account_type: string | null
+  home_neighborhood?: string | null
+  home_sextant?: string | null
 }
 
 interface AuthContextValue {
@@ -18286,7 +19319,8 @@ export function useAuth() {
 }
 
 
-=== src/hooks/usePushNotifications.ts ===
+===== ./src/hooks/usePushNotifications.ts =====
+
 /**
  * usePushNotifications
  *
@@ -18381,7 +19415,8 @@ export function usePushNotifications() {
 }
 
 
-=== src/hooks/useTheme.ts ===
+===== ./src/hooks/useTheme.ts =====
+
 import { useState, useEffect } from 'react'
 
 export type Theme = 'night' | 'day'
@@ -18423,156 +19458,80 @@ export function useTheme() {
 }
 
 
-=== src/hooks/useUserBlocks.ts ===
+===== ./src/hooks/useUserBlocks.ts =====
+
 /**
  * useUserBlocks
  *
- * Fetches and caches the current user's set of blocked user IDs.
- * Used for client-side filtering of SECURITY DEFINER RPCs that
- * bypass RLS (activity_feed, search_users, social_diamond_row).
+ * Current user's set of blocked user IDs, for client-side filtering of
+ * SECURITY DEFINER RPCs that bypass RLS (activity_feed, search_users, …).
  *
- * The set is fetched once on mount and refreshed when the user's
- * auth state changes. Mutations (block/unblock) update the local
- * set optimistically, so callers don't need to wait for refetch.
+ * Backed by a shared module-level store (src/lib/userRelationStore.ts): no
+ * matter how many components call this hook, the set is fetched ONCE per user
+ * and shared, so a screen full of MentionInputs doesn't flood the connection
+ * pool. Mutations update the shared set optimistically.
  */
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useReducer, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { blocksStore } from '@/lib/userRelationStore'
 
 export function useUserBlocks() {
   const { user } = useAuth()
-  const [blockedIds, setBlockedIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
+  const [, force] = useReducer((x: number) => x + 1, 0)
 
-  const refresh = useCallback(async () => {
-    if (!user) { setBlockedIds(new Set()); setLoading(false); return }
-    const { data, error } = await supabase
-      .from('user_blocks')
-      .select('blocked_id')
-      .eq('blocker_id', user.id)
-    if (error) {
-      console.error('[useUserBlocks] fetch failed:', error)
-      setLoading(false)
-      return
-    }
-    setBlockedIds(new Set((data ?? []).map(r => r.blocked_id as string)))
-    setLoading(false)
+  useEffect(() => {
+    const unsub = blocksStore.subscribe(force)
+    blocksStore.ensure(user?.id ?? null)
+    return unsub
   }, [user?.id])
 
-  useEffect(() => { refresh() }, [user?.id])
+  const isBlocked = useCallback((targetId: string) => blocksStore.state.ids.has(targetId), [])
+  const block     = useCallback((targetId: string) => blocksStore.add(user?.id ?? null, targetId), [user?.id])
+  const unblock   = useCallback((targetId: string) => blocksStore.remove(user?.id ?? null, targetId), [user?.id])
+  const refresh   = useCallback(() => blocksStore.refresh(user?.id ?? null), [user?.id])
 
-  const block = useCallback(async (targetId: string) => {
-    if (!user) return { error: new Error('not authenticated') }
-    const { error } = await supabase
-      .from('user_blocks')
-      .insert({ blocker_id: user.id, blocked_id: targetId })
-    if (error) {
-      console.error('[useUserBlocks] block failed:', error)
-      return { error }
-    }
-    setBlockedIds(prev => new Set(prev).add(targetId))
-    return { error: null }
-  }, [user?.id])
-
-  const unblock = useCallback(async (targetId: string) => {
-    if (!user) return { error: new Error('not authenticated') }
-    const { error } = await supabase
-      .from('user_blocks')
-      .delete()
-      .eq('blocker_id', user.id)
-      .eq('blocked_id', targetId)
-    if (error) {
-      console.error('[useUserBlocks] unblock failed:', error)
-      return { error }
-    }
-    setBlockedIds(prev => {
-      const next = new Set(prev)
-      next.delete(targetId)
-      return next
-    })
-    return { error: null }
-  }, [user?.id])
-
-  const isBlocked = useCallback((targetId: string) => blockedIds.has(targetId), [blockedIds])
-
-  return { blockedIds, isBlocked, block, unblock, loading, refresh }
+  return { blockedIds: blocksStore.state.ids, isBlocked, block, unblock, loading: blocksStore.state.loading, refresh }
 }
 
 
-=== src/hooks/useUserMutes.ts ===
+===== ./src/hooks/useUserMutes.ts =====
+
 /**
  * useUserMutes
  *
- * Same shape as useUserBlocks but for one-way mutes.
- * Mutes are silent — the muted user is never notified.
+ * Same shape as useUserBlocks but for one-way mutes. Mutes are silent — the
+ * muted user is never notified.
+ *
+ * Backed by a shared module-level store (src/lib/userRelationStore.ts) so N
+ * callers share ONE fetch per user instead of each firing its own request.
  */
 
-import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useReducer, useCallback } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { mutesStore } from '@/lib/userRelationStore'
 
 export function useUserMutes() {
   const { user } = useAuth()
-  const [mutedIds, setMutedIds] = useState<Set<string>>(new Set())
-  const [loading, setLoading] = useState(true)
+  const [, force] = useReducer((x: number) => x + 1, 0)
 
-  const refresh = useCallback(async () => {
-    if (!user) { setMutedIds(new Set()); setLoading(false); return }
-    const { data, error } = await supabase
-      .from('user_mutes')
-      .select('muted_id')
-      .eq('muter_id', user.id)
-    if (error) {
-      console.error('[useUserMutes] fetch failed:', error)
-      setLoading(false)
-      return
-    }
-    setMutedIds(new Set((data ?? []).map(r => r.muted_id as string)))
-    setLoading(false)
+  useEffect(() => {
+    const unsub = mutesStore.subscribe(force)
+    mutesStore.ensure(user?.id ?? null)
+    return unsub
   }, [user?.id])
 
-  useEffect(() => { refresh() }, [user?.id])
+  const isMuted = useCallback((targetId: string) => mutesStore.state.ids.has(targetId), [])
+  const mute    = useCallback((targetId: string) => mutesStore.add(user?.id ?? null, targetId), [user?.id])
+  const unmute  = useCallback((targetId: string) => mutesStore.remove(user?.id ?? null, targetId), [user?.id])
+  const refresh = useCallback(() => mutesStore.refresh(user?.id ?? null), [user?.id])
 
-  const mute = useCallback(async (targetId: string) => {
-    if (!user) return { error: new Error('not authenticated') }
-    const { error } = await supabase
-      .from('user_mutes')
-      .insert({ muter_id: user.id, muted_id: targetId })
-    if (error) {
-      console.error('[useUserMutes] mute failed:', error)
-      return { error }
-    }
-    setMutedIds(prev => new Set(prev).add(targetId))
-    return { error: null }
-  }, [user?.id])
-
-  const unmute = useCallback(async (targetId: string) => {
-    if (!user) return { error: new Error('not authenticated') }
-    const { error } = await supabase
-      .from('user_mutes')
-      .delete()
-      .eq('muter_id', user.id)
-      .eq('muted_id', targetId)
-    if (error) {
-      console.error('[useUserMutes] unmute failed:', error)
-      return { error }
-    }
-    setMutedIds(prev => {
-      const next = new Set(prev)
-      next.delete(targetId)
-      return next
-    })
-    return { error: null }
-  }, [user?.id])
-
-  const isMuted = useCallback((targetId: string) => mutedIds.has(targetId), [mutedIds])
-
-  return { mutedIds, isMuted, mute, unmute, loading, refresh }
+  return { mutedIds: mutesStore.state.ids, isMuted, mute, unmute, loading: mutesStore.state.loading, refresh }
 }
 
 
-=== src/index.css ===
+===== ./src/index.css =====
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -18591,6 +19550,7 @@ export function useUserMutes() {
 
   /* fg opacity variants */
   --fg-80: rgba(240,236,227,0.80);
+  --fg-70: rgba(240,236,227,0.70);
   --fg-65: rgba(240,236,227,0.65);
   --fg-55: rgba(240,236,227,0.55);
   --fg-40: rgba(240,236,227,0.40);
@@ -18607,6 +19567,12 @@ export function useUserMutes() {
   --badge-bg: #ffffff;
   --badge-fg: #000000;
 
+  --fg-62: rgba(240,236,227,0.62);
+  --fg-82: rgba(240,236,227,0.82);
+  /* Slap "Going" outline — legible greens on the dark MSG surface */
+  --slap-green-border: #5fb98a;
+  --slap-green-text: #7fd0a3;
+
   --sold-out: #f0463c;
 }
 
@@ -18615,6 +19581,7 @@ export function useUserMutes() {
   --fg: #0c0b0b;
 
   --fg-80: rgba(12,11,11,0.80);
+  --fg-70: rgba(12,11,11,0.70);
   --fg-65: rgba(12,11,11,0.65);
   --fg-55: rgba(12,11,11,0.55);
   --fg-40: rgba(12,11,11,0.40);
@@ -18629,6 +19596,12 @@ export function useUserMutes() {
   /* Badge — pure black on white for max contrast (day mode) */
   --badge-bg: #000000;
   --badge-fg: #ffffff;
+
+  --fg-62: rgba(12,11,11,0.62);
+  --fg-82: rgba(12,11,11,0.82);
+  /* Slap "Going" outline — deep forest on the light surface */
+  --slap-green-border: #16482e;
+  --slap-green-text: #16482e;
 
   --sold-out: #c0392b;
 }
@@ -18698,13 +19671,37 @@ html, body {
   background: #A855F7 !important;
 }
 
+/* ── Wall filter View-Transition motion ─────────────────────── */
+/* Surviving posters (named per-card) glide to new slots; the root crossfade
+   handles removed/added cards. Tuned snappy so the reorg reads as one motion. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+}
+::view-transition-group(*) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
 
-=== src/lib/adapters.ts ===
+
+===== ./src/lib/adapters.ts =====
+
 import { type DbEvent } from '@/lib/supabase'
 import { type WallEvent } from '@/types/event'
 import { getGradient } from '@/lib/categories'
 
-export function dbEventToWallEvent(e: DbEvent): WallEvent {
+// Exactly the event columns the wall renders — the slim wall fetch selects these,
+// and a full DbEvent row also satisfies it (the localStorage cache path). Long-text
+// fields like `description` are intentionally excluded; the 1-col info panel
+// lazy-fetches detail on demand, so the wall payload stays small.
+export type WallEventRow = Pick<DbEvent,
+  | 'id' | 'title' | 'venue_id' | 'starts_at' | 'category' | 'poster_url'
+  | 'fill_frame' | 'focal_x' | 'focal_y' | 'poster_offset_x' | 'poster_offset_y'
+  | 'view_count' | 'like_count' | 'sold_out' | 'sold_out_report_count'
+  | 'show_times' | 'trending_score' | 'recurrence_group_id' | 'venues'
+>
+
+export function dbEventToWallEvent(e: WallEventRow): WallEvent {
   const cat = e.category ?? 'Other'
   const [c1, c2] = getGradient(cat)
   return {
@@ -18733,7 +19730,8 @@ export function dbEventToWallEvent(e: DbEvent): WallEvent {
 }
 
 
-=== src/lib/categories.ts ===
+===== ./src/lib/categories.ts =====
+
 export const CATEGORIES = [
   'Live Music',
   'Dance',
@@ -18779,7 +19777,72 @@ export function getGradient(category: string | null | undefined): [string, strin
 }
 
 
-=== src/lib/contactHash.ts ===
+===== ./src/lib/communityPosts.ts =====
+
+import { supabase } from '@/lib/supabase'
+
+export type CommunityPostType = 'personal' | 'business' | 'lost_pet'
+export type CommunityPostStatus = 'pending' | 'published' | 'rejected' | 'expired'
+
+export interface CommunityPost {
+  id: string
+  author_id: string
+  neighborhood: string
+  sextant: string
+  post_type: CommunityPostType
+  title: string | null
+  body: string | null
+  image_url: string | null
+  status: CommunityPostStatus
+  is_paid: boolean
+  flagged: boolean
+  flag_reason: string | null
+  expires_at: string | null
+  created_at: string
+  author?: { username: string | null; avatar_diamond_url: string | null } | null
+}
+
+export interface SubmitResult { id: string; status: CommunityPostStatus; flagged: boolean; reason: string }
+
+const SELECT = '*, author:profiles!author_id(username, avatar_diamond_url)'
+
+// Region wall: RLS returns published+non-expired posts in the viewer's sextant
+// plus the viewer's own posts (any status), so a freshly-submitted pending post
+// is visible to its author with a "pending review" badge.
+export async function fetchRegionPosts(sextant: string): Promise<CommunityPost[]> {
+  const { data, error } = await supabase
+    .from('community_posts')
+    .select(SELECT)
+    .eq('sextant', sextant)
+    .neq('status', 'rejected')
+    .order('created_at', { ascending: false })
+  if (error) { console.error('[communityPosts] fetch failed', error); return [] }
+  return (data ?? []) as unknown as CommunityPost[]
+}
+
+// Submit via the edge function — AI moderation decides published vs pending.
+export async function submitCommunityPost(params: {
+  base64: string; mimeType: string; title?: string; body?: string; post_type?: CommunityPostType
+}): Promise<SubmitResult> {
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('You must be signed in.')
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/submit-community-post`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+    body: JSON.stringify({
+      image: { base64: params.base64, mimeType: params.mimeType },
+      title: params.title, body: params.body, post_type: params.post_type,
+    }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || `Failed (${res.status})`)
+  return data as SubmitResult
+}
+
+
+===== ./src/lib/contactHash.ts =====
+
 /**
  * Client-side hashing for contact matching. Values are SHA-256 hashed
  * before leaving the device — no plaintext PII is ever sent to the server.
@@ -18915,7 +19978,8 @@ export async function readDeviceContacts(): Promise<DeviceContact[]> {
 }
 
 
-=== src/lib/cropUtils.ts ===
+===== ./src/lib/cropUtils.ts =====
+
 // Shared image/crop utilities — used by Admin.tsx (import flow) and AdminEditModal.tsx (wall edit)
 
 // Resize an image for AI extraction — stays under Anthropic's ~5 MB per-image limit.
@@ -19010,7 +20074,8 @@ export async function sampleCornerColors(url: string): Promise<string[]> {
 
 
 
-=== src/lib/dates.ts ===
+===== ./src/lib/dates.ts =====
+
 /**
  * Convert a starts_at timestamp to a local-timezone YYYY-MM-DD string.
  * Example: '2026-05-02T04:00:00Z' in Portland (PDT) → '2026-05-01'
@@ -19035,7 +20100,8 @@ export function eventLocalTime(startsAt: string): string {
 }
 
 
-=== src/lib/env.ts ===
+===== ./src/lib/env.ts =====
+
 // Validate required environment variables at app boot.
 // Failing here is intentional — better to fail fast and loud than to fail mysteriously deep in the call stack.
 
@@ -19073,7 +20139,8 @@ function readEnv(): RequiredEnv {
 export const env = readEnv()
 
 
-=== src/lib/imageUtils.ts ===
+===== ./src/lib/imageUtils.ts =====
+
 export async function flipImageHorizontally(file: File): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -19106,7 +20173,8 @@ export async function processCaptureFile(
 }
 
 
-=== src/lib/klipy.ts ===
+===== ./src/lib/klipy.ts =====
+
 // Klipy GIF API client.
 // API response shape (verified via test call):
 //   { result: true, data: { data: [...gifs], has_next, current_page, per_page } }
@@ -19226,7 +20294,8 @@ export function reportGifShare(gifSlug: string, customUserId?: string, query?: s
 }
 
 
-=== src/lib/klipyId.ts ===
+===== ./src/lib/klipyId.ts =====
+
 const KEY = 'plaster_klipy_id'
 
 export function getKlipyId(): string {
@@ -19244,7 +20313,8 @@ export function getKlipyId(): string {
 }
 
 
-=== src/lib/lineupSpine.ts ===
+===== ./src/lib/lineupSpine.ts =====
+
 import { useState, useEffect } from 'react'
 
 // Tiny pub/sub so LineUpScreen can publish spine state and BottomNav can read it
@@ -19270,7 +20340,8 @@ export function useSpineState(): SpineState {
 }
 
 
-=== src/lib/messaging.ts ===
+===== ./src/lib/messaging.ts =====
+
 import { supabase } from './supabase'
 
 export async function createOrGetConversation(otherUserId: string): Promise<string | null> {
@@ -19297,7 +20368,196 @@ export async function markConversationRead(conversationId: string) {
 }
 
 
-=== src/lib/pickHeart.ts ===
+===== ./src/lib/neighborhoods.ts =====
+
+// Portland neighborhood → sextant taxonomy (canonical).
+//
+// 94 City-recognized neighborhood associations grouped into the six address
+// sextants (N/NE/NW/SE/SW/S — S is the post-2020 downtown sextant). Reconciled
+// against the City roster + Wikipedia, with border cases locked by Rob.
+//
+// Used for: profile identity (home_neighborhood = the chip) + community-wall
+// scoping (home_sextant = the region the wall covers).
+//
+// NOTE: venue.neighborhood tagging still uses the OLD flat region list in
+// adminShared.ts (Northeast/Southeast/… + district nicknames) and is intentionally
+// left untouched here. TODO(neighborhoods): migrate venue tagging + VenueBoard
+// grouping onto this structured taxonomy in a later pass.
+
+export const SEXTANTS = ['N', 'NE', 'NW', 'SE', 'SW', 'S'] as const
+export type Sextant = typeof SEXTANTS[number]
+
+export const SEXTANT_LABELS: Record<Sextant, string> = {
+  N: 'North',
+  NE: 'Northeast',
+  NW: 'Northwest',
+  SE: 'Southeast',
+  SW: 'Southwest',
+  S: 'South',
+}
+
+export interface Neighborhood {
+  name: string
+  sextant: Sextant
+}
+
+// Locked border cases (span boundaries — assigned deliberately, not auto-guessed):
+//   Eliot→N · Goose Hollow→SW · Old Town/Chinatown→S · Downtown→S ·
+//   Madison South→NE · Hosford-Abernethy→SE · Sullivan's Gulch→NE.
+// FLAG: Wilkes / Russell / Glenfair are placed in SE per Rob's "far-east SE"
+//   correction, though they sit in outer NE geographically — revisit if needed.
+export const NEIGHBORHOODS: Neighborhood[] = [
+  // ── N — North (14) ──
+  { name: 'Arbor Lodge', sextant: 'N' },
+  { name: 'Boise', sextant: 'N' },
+  { name: 'Bridgeton', sextant: 'N' },
+  { name: 'Cathedral Park', sextant: 'N' },
+  { name: 'East Columbia', sextant: 'N' },
+  { name: 'Eliot', sextant: 'N' },
+  { name: 'Hayden Island', sextant: 'N' },
+  { name: 'Humboldt', sextant: 'N' },
+  { name: 'Kenton', sextant: 'N' },
+  { name: 'Overlook', sextant: 'N' },
+  { name: 'Piedmont', sextant: 'N' },
+  { name: 'Portsmouth', sextant: 'N' },
+  { name: 'St. Johns', sextant: 'N' },
+  { name: 'University Park', sextant: 'N' },
+
+  // ── NE — Northeast (23) ──
+  { name: 'Alameda', sextant: 'NE' },
+  { name: 'Argay Terrace', sextant: 'NE' },
+  { name: 'Beaumont-Wilshire', sextant: 'NE' },
+  { name: 'Concordia', sextant: 'NE' },
+  { name: 'Cully', sextant: 'NE' },
+  { name: 'Grant Park', sextant: 'NE' },
+  { name: 'Hollywood', sextant: 'NE' },
+  { name: 'Irvington', sextant: 'NE' },
+  { name: 'King', sextant: 'NE' },
+  { name: 'Laurelhurst', sextant: 'NE' },
+  { name: 'Lloyd District', sextant: 'NE' },
+  { name: 'Madison South', sextant: 'NE' },
+  { name: 'Parkrose', sextant: 'NE' },
+  { name: 'Parkrose Heights', sextant: 'NE' },
+  { name: 'Rose City Park', sextant: 'NE' },
+  { name: 'Roseway', sextant: 'NE' },
+  { name: 'Sabin', sextant: 'NE' },
+  { name: "Sullivan's Gulch", sextant: 'NE' },
+  { name: 'Sumner', sextant: 'NE' },
+  { name: 'Sunderland', sextant: 'NE' },
+  { name: 'Vernon', sextant: 'NE' },
+  { name: 'Woodland Park', sextant: 'NE' },
+  { name: 'Woodlawn', sextant: 'NE' },
+
+  // ── NW — Northwest (8) ──
+  { name: 'Arlington Heights', sextant: 'NW' },
+  { name: 'Forest Park', sextant: 'NW' },
+  { name: 'Hillside', sextant: 'NW' },
+  { name: 'Linnton', sextant: 'NW' },
+  { name: 'Northwest District', sextant: 'NW' },
+  { name: 'Northwest Heights', sextant: 'NW' },
+  { name: 'Pearl District', sextant: 'NW' },
+  { name: 'Sylvan-Highlands', sextant: 'NW' },
+
+  // ── SE — Southeast (28) ──
+  { name: 'Ardenwald-Johnson Creek', sextant: 'SE' },
+  { name: 'Brentwood-Darlington', sextant: 'SE' },
+  { name: 'Brooklyn', sextant: 'SE' },
+  { name: 'Buckman', sextant: 'SE' },
+  { name: 'Centennial', sextant: 'SE' },
+  { name: 'Creston-Kenilworth', sextant: 'SE' },
+  { name: 'Eastmoreland', sextant: 'SE' },
+  { name: 'Foster-Powell', sextant: 'SE' },
+  { name: 'Glenfair', sextant: 'SE' },
+  { name: 'Hazelwood', sextant: 'SE' },
+  { name: 'Hosford-Abernethy', sextant: 'SE' },
+  { name: 'Kerns', sextant: 'SE' },
+  { name: 'Lents', sextant: 'SE' },
+  { name: 'Mill Park', sextant: 'SE' },
+  { name: 'Montavilla', sextant: 'SE' },
+  { name: 'Mt. Scott-Arleta', sextant: 'SE' },
+  { name: 'Mt. Tabor', sextant: 'SE' },
+  { name: 'North Tabor', sextant: 'SE' },
+  { name: 'Pleasant Valley', sextant: 'SE' },
+  { name: 'Powellhurst-Gilbert', sextant: 'SE' },
+  { name: 'Reed', sextant: 'SE' },
+  { name: 'Richmond', sextant: 'SE' },
+  { name: 'Russell', sextant: 'SE' },
+  { name: 'Sellwood-Moreland', sextant: 'SE' },
+  { name: 'South Tabor', sextant: 'SE' },
+  { name: 'Sunnyside', sextant: 'SE' },
+  { name: 'Wilkes', sextant: 'SE' },
+  { name: 'Woodstock', sextant: 'SE' },
+
+  // ── SW — Southwest (18) ──
+  { name: 'Arnold Creek', sextant: 'SW' },
+  { name: 'Ashcreek', sextant: 'SW' },
+  { name: 'Bridlemile', sextant: 'SW' },
+  { name: 'Collins View', sextant: 'SW' },
+  { name: 'Crestwood', sextant: 'SW' },
+  { name: 'Far Southwest', sextant: 'SW' },
+  { name: 'Goose Hollow', sextant: 'SW' },
+  { name: 'Hayhurst', sextant: 'SW' },
+  { name: 'Healy Heights', sextant: 'SW' },
+  { name: 'Hillsdale', sextant: 'SW' },
+  { name: 'Homestead', sextant: 'SW' },
+  { name: 'Maplewood', sextant: 'SW' },
+  { name: 'Markham', sextant: 'SW' },
+  { name: 'Marshall Park', sextant: 'SW' },
+  { name: 'Multnomah', sextant: 'SW' },
+  { name: 'South Burlingame', sextant: 'SW' },
+  { name: 'Southwest Hills', sextant: 'SW' },
+  { name: 'West Portland Park', sextant: 'SW' },
+
+  // ── S — South (3, post-2020 downtown sextant) ──
+  { name: 'Downtown', sextant: 'S' },
+  { name: 'Old Town/Chinatown', sextant: 'S' },
+  { name: 'South Portland', sextant: 'S' },
+]
+
+// Flat name list — for any existing code that just needs the names.
+export const NEIGHBORHOOD_NAMES: string[] = NEIGHBORHOODS.map(n => n.name)
+
+// User-friendly aliases → official NA name. "Alberta" is a commercial-district
+// nickname for the Concordia corridor; Nob Hill/Slabtown are the Northwest
+// District; Ladd's Addition is Hosford-Abernethy; etc. Excluded unincorporated
+// areas Portlanders sometimes claim (Raleigh Hills, Garden Home, West Slope) are
+// Multnomah County, not City NAs — left out, kept here as a note for later.
+export const NEIGHBORHOOD_ALIASES: Record<string, string> = {
+  'Alberta': 'Concordia',
+  'Nob Hill': 'Northwest District',
+  'Slabtown': 'Northwest District',
+  'Alphabet District': 'Northwest District',
+  "Ladd's Addition": 'Hosford-Abernethy',
+  'Belmont': 'Sunnyside',
+  'Hawthorne': 'Sunnyside',
+  'Division': 'Richmond',
+  'South Waterfront': 'South Portland',
+  'Marquam Hill': 'Homestead',
+  'Old Town': 'Old Town/Chinatown',
+  'Chinatown': 'Old Town/Chinatown',
+  'Multnomah Village': 'Multnomah',
+}
+
+const BY_NAME: Record<string, Sextant> = Object.fromEntries(NEIGHBORHOODS.map(n => [n.name, n.sextant]))
+
+// Resolve a possibly-aliased name to its official NA name.
+export function resolveNeighborhood(name: string): string {
+  return NEIGHBORHOOD_ALIASES[name] ?? name
+}
+
+// Sextant for a neighborhood name (handles aliases). Undefined if unknown.
+export function sextantOf(name: string): Sextant | undefined {
+  return BY_NAME[resolveNeighborhood(name)]
+}
+
+// All neighborhoods in a sextant, in canonical order.
+export function neighborhoodsBySextant(sextant: Sextant): Neighborhood[] {
+  return NEIGHBORHOODS.filter(n => n.sextant === sextant)
+}
+
+
+===== ./src/lib/pickHeart.ts =====
+
 import plain from '@/assets/hearts/plain_heart.png'
 import anatomical from '@/assets/hearts/anatomical_heart.png'
 import angler from '@/assets/hearts/angler_heart.png'
@@ -19325,7 +20585,8 @@ export function pickHeart(): PickedHeart {
 }
 
 
-=== src/lib/pickImage.ts ===
+===== ./src/lib/pickImage.ts =====
+
 /**
  * Shared image-picker helper backed by @capacitor/camera.
  * All avatar acquisition flows (onboarding, profile edit) funnel through here
@@ -19434,7 +20695,8 @@ export async function pickFromLibrary(): Promise<PickImageOutcome> {
 }
 
 
-=== src/lib/posterThumb.ts ===
+===== ./src/lib/posterThumb.ts =====
+
 const SNAP = [200, 400, 600, 800, 1200]
 
 export function posterThumb(url: string | null | undefined, cssWidth: number): string | undefined {
@@ -19447,7 +20709,169 @@ export function posterThumb(url: string | null | undefined, cssWidth: number): s
 }
 
 
-=== src/lib/reports.ts ===
+===== ./src/lib/recurringDates.test.ts =====
+
+// NOTE: run via `npm test`, which sets TZ=America/Los_Angeles. The local-timezone
+// date parsing in expandOccurrences (and the timezone-sanity assertion below) is
+// deterministic only with TZ pinned to Portland — a bare `vitest` on another TZ may
+// fail the timezone test. (TZ isn't set in this file because the production build's
+// browser tsconfig has no Node `process` global.)
+
+import { describe, it, expect } from 'vitest'
+import { expandOccurrences, DEFAULT_SHOW_TIME } from './recurringDates'
+
+// Format an ISO timestamp back into Portland wall-clock, e.g. "06/15/2026, 08:00 PM",
+// to assert the stored UTC instant lands on the right local calendar date/time.
+function inPortland(iso: string) {
+  return new Date(iso).toLocaleString('en-US', {
+    timeZone: 'America/Los_Angeles',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  })
+}
+
+describe('expandOccurrences', () => {
+  it('single date + time → one occurrence, no show_times list', () => {
+    const out = expandOccurrences('2026-06-15', '20:00', [])
+    expect(out).toHaveLength(1)
+    expect(out[0].date).toBe('2026-06-15')
+    expect(out[0].show_times).toBeNull()
+    expect(typeof out[0].starts_at).toBe('string')
+  })
+
+  it('multi-date with one shared time → one occurrence per date, all at that time', () => {
+    const out = expandOccurrences('2026-06-15', '19:00', [
+      { date: '2026-06-22', time: '' },
+      { date: '2026-06-29', time: '' },
+    ])
+    expect(out.map(o => o.date)).toEqual(['2026-06-15', '2026-06-22', '2026-06-29'])
+    // Extra dates with no time inherit the primary time (19:00 = 7pm Portland).
+    for (const o of out) {
+      expect(o.show_times).toBeNull()
+      expect(inPortland(o.starts_at)).toMatch(/07:00 PM$/)
+    }
+  })
+
+  it('per-date time override via extraDates is honored', () => {
+    const out = expandOccurrences('2026-06-15', '19:00', [
+      { date: '2026-06-22', time: '21:30' },
+    ])
+    expect(out).toHaveLength(2)
+    expect(inPortland(out[0].starts_at)).toMatch(/07:00 PM$/)
+    expect(inPortland(out[1].starts_at)).toMatch(/09:30 PM$/)
+  })
+
+  it('duplicate calendar dates collapse to one occurrence with sorted show_times', () => {
+    const out = expandOccurrences('2026-06-15', '19:00', [
+      { date: '2026-06-15', time: '22:00' },
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].show_times).not.toBeNull()
+    expect(out[0].show_times).toHaveLength(2)
+    // starts_at is the EARLIEST show that day, and times are sorted ascending.
+    expect(out[0].starts_at).toBe(out[0].show_times![0])
+    expect(out[0].show_times![0] < out[0].show_times![1]).toBe(true)
+    expect(inPortland(out[0].starts_at)).toMatch(/07:00 PM$/)
+    expect(inPortland(out[0].show_times![1])).toMatch(/10:00 PM$/)
+  })
+
+  it('a date with no time falls back to the default show time (8pm)', () => {
+    expect(DEFAULT_SHOW_TIME).toBe('20:00')
+    const out = expandOccurrences('2026-06-15', '', [])
+    expect(out).toHaveLength(1)
+    expect(inPortland(out[0].starts_at)).toMatch(/08:00 PM$/)
+  })
+
+  it('timezone sanity: a 20:00 Portland show stays on its calendar date', () => {
+    const out = expandOccurrences('2026-06-15', '20:00', [])
+    // The calendar-date key is preserved...
+    expect(out[0].date).toBe('2026-06-15')
+    // ...and the stored UTC instant reads back as 8pm on June 15 in Portland
+    // (not rolled to the 14th or 16th by a UTC mis-parse).
+    expect(inPortland(out[0].starts_at)).toBe('06/15/2026, 08:00 PM')
+  })
+
+  it('output is chronological even when inputs are out of order', () => {
+    const out = expandOccurrences('2026-06-29', '20:00', [
+      { date: '2026-06-15', time: '20:00' },
+      { date: '2026-06-22', time: '20:00' },
+    ])
+    expect(out.map(o => o.date)).toEqual(['2026-06-15', '2026-06-22', '2026-06-29'])
+  })
+})
+
+
+===== ./src/lib/recurringDates.ts =====
+
+// Recurring / multi-date expansion for the poster importer.
+//
+// This is the highest-stakes pure logic in the app: it turns the admin's primary
+// date + extra dates + times into the exact list of event rows that hit the wall.
+// A wrong output = wrong shows on the wall, silently. Extracted VERBATIM from
+// ImportForm's submit path so it can be unit-tested (see recurringDates.test.ts).
+
+export interface ExtraDate {
+  date: string // YYYY-MM-DD
+  time: string // HH:mm, may be empty
+}
+
+export interface ExpandedOccurrence {
+  /** Calendar date key, YYYY-MM-DD. */
+  date: string
+  /** ISO timestamp of the earliest show that day — the row's starts_at. */
+  starts_at: string
+  /** All ISO show times that day when there's more than one, else null. */
+  show_times: string[] | null
+}
+
+/** Default show time when a date carries no time of its own — 8pm. */
+export const DEFAULT_SHOW_TIME = '20:00'
+
+/**
+ * Group a primary date + extra dates (each with an optional time) into the final
+ * per-calendar-date occurrence list used to build event rows for a multi-date
+ * upload. Behavior, verbatim from the original submit path:
+ *
+ *  - The same calendar date appearing more than once collapses to ONE occurrence:
+ *    `starts_at` is the earliest show time, `show_times` lists every time that day
+ *    (only when there's more than one; otherwise null).
+ *  - A date with no time of its own falls back to the primary time, then to
+ *    DEFAULT_SHOW_TIME.
+ *  - Output is sorted chronologically by date; times within a date are sorted ascending.
+ *
+ * Timezone note: `new Date(`${date}T${time}:00`)` parses in the RUNNER's local
+ * timezone — i.e. the admin's browser, which is Portland. That local interpretation
+ * is intentional (a 20:00 entry means 8pm Portland on that calendar date).
+ */
+export function expandOccurrences(
+  primaryDate: string,
+  primaryTime: string,
+  extraDates: ExtraDate[],
+): ExpandedOccurrence[] {
+  // Group all occurrences by calendar date — same date = multiple show times
+  const dateMap = new Map<string, string[]>()
+  const addToMap = (date: string, time: string) => {
+    const iso = new Date(`${date}T${time}:00`).toISOString()
+    if (!dateMap.has(date)) dateMap.set(date, [])
+    dateMap.get(date)!.push(iso)
+  }
+  addToMap(primaryDate, primaryTime || DEFAULT_SHOW_TIME)
+  for (const ed of extraDates) addToMap(ed.date, ed.time || primaryTime || DEFAULT_SHOW_TIME)
+  for (const [d, times] of dateMap) dateMap.set(d, times.sort())
+  const uniqueDates = [...dateMap.keys()].sort()
+  return uniqueDates.map(date => {
+    const times = dateMap.get(date)!
+    return {
+      date,
+      starts_at: times[0],
+      show_times: times.length > 1 ? times : null,
+    }
+  })
+}
+
+
+===== ./src/lib/reports.ts =====
+
 /**
  * Content reporting helpers.
  *
@@ -19507,7 +20931,146 @@ export async function submitReport(args: SubmitReportArgs): Promise<{ error: Err
 }
 
 
-=== src/lib/supabase.ts ===
+===== ./src/lib/slap.ts =====
+
+import { supabase } from '@/lib/supabase'
+
+export interface SlapFriend {
+  id: string
+  username: string | null
+  avatar_diamond_url: string | null
+  avatar_url: string | null
+}
+
+export interface SlapCrew {
+  conversationId: string
+  name: string | null
+  members: SlapFriend[] // excludes the current user
+}
+
+// People the current user follows (accepted) — the invitable set.
+export async function fetchFriends(userId: string): Promise<SlapFriend[]> {
+  const { data: f } = await supabase
+    .from('follows')
+    .select('following_id')
+    .eq('follower_id', userId)
+    .eq('status', 'accepted')
+  const ids = [...new Set((f ?? []).map(r => r.following_id))]
+  if (!ids.length) return []
+  const { data: profs } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_diamond_url, avatar_url')
+    .in('id', ids)
+  return (profs ?? []).sort((a, b) => (a.username ?? '').localeCompare(b.username ?? '')) as SlapFriend[]
+}
+
+// The user's existing GROUP conversations (member count > 2) → "recent crews".
+export async function fetchCrews(userId: string): Promise<SlapCrew[]> {
+  const { data: mine } = await supabase
+    .from('conversation_members')
+    .select('conversation_id')
+    .eq('user_id', userId)
+  const convIds = [...new Set((mine ?? []).map(r => r.conversation_id))]
+  if (!convIds.length) return []
+
+  const { data: members } = await supabase
+    .from('conversation_members')
+    .select('conversation_id, user_id')
+    .in('conversation_id', convIds)
+  const byConv: Record<string, string[]> = {}
+  for (const m of members ?? []) (byConv[m.conversation_id] ??= []).push(m.user_id)
+
+  const groupIds = convIds.filter(cid => (byConv[cid]?.length ?? 0) > 2)
+  if (!groupIds.length) return []
+
+  const { data: convs } = await supabase
+    .from('conversations')
+    .select('id, name, last_message_at')
+    .in('id', groupIds)
+  const convMeta: Record<string, { name: string | null; last: string }> = {}
+  for (const c of convs ?? []) convMeta[c.id] = { name: c.name, last: c.last_message_at }
+
+  const otherIds = [...new Set(groupIds.flatMap(cid => byConv[cid].filter(id => id !== userId)))]
+  const { data: profs } = await supabase
+    .from('profiles')
+    .select('id, username, avatar_diamond_url, avatar_url')
+    .in('id', otherIds)
+  const profMap: Record<string, SlapFriend> = {}
+  for (const p of profs ?? []) profMap[p.id] = p as SlapFriend
+
+  return groupIds
+    .map(cid => ({
+      conversationId: cid,
+      name: convMeta[cid]?.name ?? null,
+      members: byConv[cid].filter(id => id !== userId).map(id => profMap[id]).filter(Boolean),
+    }))
+    .sort((a, b) => (convMeta[b.conversationId]?.last ?? '').localeCompare(convMeta[a.conversationId]?.last ?? ''))
+}
+
+// Resolve the target thread (reuse exact-member match, or add to an existing
+// thread already slapped for this event, else create), then post the slap
+// message. No RSVP happens here — a slap is an invitation.
+export async function slapFriends(params: {
+  eventId: string
+  eventTitle: string
+  venueName: string | null
+  startsAt: string | null
+  selectedIds: string[]
+  userId: string
+}): Promise<{ conversationId: string }> {
+  const { eventId, eventTitle, venueName, startsAt, selectedIds, userId } = params
+  const targets = [...new Set(selectedIds.filter(id => id && id !== userId))]
+  if (!targets.length) throw new Error('Pick at least one friend.')
+
+  const want = new Set([userId, ...targets])
+  let convId: string | null = null
+
+  // Reuse a conversation whose member set EXACTLY equals the target participants
+  // (the same people — no more, no fewer), regardless of whether it's a DM, group,
+  // slap thread, or plain chat, and regardless of any event. The thread IS the
+  // people; the event is just a message inside. Only a genuinely new combination
+  // of people creates a new conversation.
+  const { data: mine } = await supabase.from('conversation_members').select('conversation_id').eq('user_id', userId)
+  const myConvIds = [...new Set((mine ?? []).map(r => r.conversation_id))]
+  if (myConvIds.length) {
+    const { data: allMemb } = await supabase.from('conversation_members').select('conversation_id, user_id').in('conversation_id', myConvIds)
+    const setByConv: Record<string, Set<string>> = {}
+    for (const r of allMemb ?? []) (setByConv[r.conversation_id] ??= new Set()).add(r.user_id)
+
+    const matches = Object.entries(setByConv)
+      .filter(([, set]) => set.size === want.size && [...want].every(id => set.has(id)))
+      .map(([cid]) => cid)
+
+    if (matches.length === 1) {
+      convId = matches[0]
+    } else if (matches.length > 1) {
+      // Shouldn't happen once this rule is in place, but consolidate onto the oldest.
+      const { data: oldest } = await supabase.from('conversations').select('id').in('id', matches).order('created_at', { ascending: true }).limit(1).maybeSingle()
+      convId = (oldest?.id as string | undefined) ?? matches[0]
+    }
+  }
+
+  // No conversation with this exact set of people → create one (people-titled).
+  if (!convId) {
+    const { data, error } = await supabase.rpc('create_conversation_with_members', { p_member_ids: targets, p_name: undefined })
+    if (error) throw error
+    convId = data as string
+  }
+
+  const dateStr = startsAt ? new Date(startsAt).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''
+  const fallback = `slapped you all to go to ${eventTitle}${venueName ? ` at ${venueName}` : ''}${dateStr ? ` on ${dateStr}` : ''} — who's in?`
+  const { error: msgErr } = await supabase.from('messages').insert({
+    conversation_id: convId, sender_id: userId, body: fallback, message_type: 'slap', event_id: eventId,
+  })
+  if (msgErr) throw msgErr
+  await supabase.from('conversations').update({ last_message_at: new Date().toISOString() }).eq('id', convId)
+
+  return { conversationId: convId }
+}
+
+
+===== ./src/lib/supabase.ts =====
+
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
 
@@ -19541,7 +21104,95 @@ export interface DbVenue {
 }
 
 
-=== src/lib/utils.ts ===
+===== ./src/lib/userRelationStore.ts =====
+
+import { supabase } from '@/lib/supabase'
+
+// Dynamic table/column names defeat the generated Supabase types; this store only
+// ever touches the known-safe user_blocks / user_mutes tables, so use a loose
+// client for these queries. The hooks' public API stays fully typed.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any
+
+// Shared, app-wide store for a user-relation set (blocks / mutes). Backs
+// useUserBlocks + useUserMutes so that N components (e.g. one MentionInput per
+// PosterCard in 1-col) share ONE fetch instead of each firing its own — which
+// previously flooded the connection pool (ERR_INSUFFICIENT_RESOURCES) on the
+// 5→1 col transition. Fetch is deduped per user and cached until the user changes.
+
+export interface RelationStore {
+  state: { ids: Set<string>; loading: boolean }
+  ensure: (userId: string | null) => void
+  refresh: (userId: string | null) => Promise<void>
+  add: (userId: string | null, targetId: string) => Promise<{ error: Error | null }>
+  remove: (userId: string | null, targetId: string) => Promise<{ error: Error | null }>
+  subscribe: (cb: () => void) => () => void
+}
+
+export function createRelationStore(table: string, selfCol: string, otherCol: string, label: string): RelationStore {
+  const state = { ids: new Set<string>(), loading: true }
+  let loadedFor: string | null = null
+  let inflightFor: string | null = null
+  let inflight: Promise<void> | null = null
+  const subs = new Set<() => void>()
+  const notify = () => subs.forEach(fn => fn())
+
+  async function doLoad(userId: string | null): Promise<void> {
+    if (!userId) { state.ids = new Set(); state.loading = false; loadedFor = null; notify(); return }
+    state.loading = true; notify()
+    const { data, error } = await db.from(table).select(otherCol).eq(selfCol, userId)
+    if (error) {
+      console.error(`[${label}] fetch failed:`, error)
+      state.loading = false; notify()
+      return
+    }
+    state.ids = new Set((data ?? []).map((r: any) => String(r[otherCol])))
+    state.loading = false
+    loadedFor = userId
+    notify()
+  }
+
+  function startLoad(userId: string | null) {
+    inflightFor = userId
+    inflight = doLoad(userId).finally(() => { inflightFor = null; inflight = null })
+  }
+
+  return {
+    state,
+    // Load once per user; no-op if already loaded or a load for this user is in flight.
+    ensure(userId) {
+      if (loadedFor === userId && !state.loading && inflightFor === null) return
+      if (inflightFor === userId && inflight) return
+      startLoad(userId)
+    },
+    refresh(userId) {
+      startLoad(userId)
+      return inflight ?? Promise.resolve()
+    },
+    async add(userId, targetId) {
+      if (!userId) return { error: new Error('not authenticated') }
+      const { error } = await db.from(table).insert({ [selfCol]: userId, [otherCol]: targetId })
+      if (error) { console.error(`[${label}] add failed:`, error); return { error } }
+      state.ids = new Set(state.ids).add(targetId); notify()
+      return { error: null }
+    },
+    async remove(userId, targetId) {
+      if (!userId) return { error: new Error('not authenticated') }
+      const { error } = await db.from(table).delete().eq(selfCol, userId).eq(otherCol, targetId)
+      if (error) { console.error(`[${label}] remove failed:`, error); return { error } }
+      const next = new Set(state.ids); next.delete(targetId); state.ids = next; notify()
+      return { error: null }
+    },
+    subscribe(cb) { subs.add(cb); return () => { subs.delete(cb) } },
+  }
+}
+
+export const blocksStore = createRelationStore('user_blocks', 'blocker_id', 'blocked_id', 'useUserBlocks')
+export const mutesStore  = createRelationStore('user_mutes',  'muter_id',  'muted_id',   'useUserMutes')
+
+
+===== ./src/lib/utils.ts =====
+
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 
@@ -19550,7 +21201,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 
-=== src/main.tsx ===
+===== ./src/main.tsx =====
+
 import '@/lib/env' // Validates required env vars at boot. Throws fast if missing.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -19589,205 +21241,23 @@ import('@capacitor/splash-screen').then(({ SplashScreen }) => {
 })
 
 
-=== src/pages/Admin.tsx ===
-import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase as supabaseAdmin } from '@/lib/supabase'
-import { useAuth } from '@/contexts/AuthContext'
-import { PlasterHeader } from '@/components/PlasterHeader'
-import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
-import { VenueForm } from '@/components/admin/VenueForm'
-import { EventForm } from '@/components/admin/EventForm'
-import { AdminNotifications } from '@/components/admin/AdminNotifications'
-import { AdminReports } from '@/components/admin/AdminReports'
-import { AdminVARequests } from '@/components/admin/AdminVARequests'
-import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
-import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
-import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
-import { ImportForm } from '@/components/admin/ImportForm'
-import { UploadHistory } from '@/components/UploadHistory'
-import {
-  findDuplicateVenueGroups,
-  findDuplicateEventGroups,
-  type Venue,
-  type EventSummary,
-} from '@/components/admin/adminShared'
+===== ./src/pages/Admin.tsx =====
 
-// ── Section wrapper ──────────────────────────────────────────
+import { StaffScreen } from '@/pages/StaffScreen'
 
-function Section({ title, badge, children, collapsible = false, defaultCollapsed = false }:
-  { title: string; badge?: string; children: React.ReactNode; collapsible?: boolean; defaultCollapsed?: boolean }) {
-  const [open, setOpen] = useState(!defaultCollapsed)
-  return (
-    <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
-      <div
-        onClick={collapsible ? () => setOpen(o => !o) : undefined}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, margin: open ? '0 0 24px 0' : 0,
-                 cursor: collapsible ? 'pointer' : 'default', userSelect: 'none' }}
-      >
-        <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>{title}</h2>
-        {badge && (
-          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600,
-            color: '#dc2626', background: 'rgba(239,68,68,0.12)', padding: '3px 10px',
-            borderRadius: 999, letterSpacing: '0.02em' }}>{badge}</span>
-        )}
-        {collapsible && (
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--fg-40)"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-               style={{ marginLeft: 'auto', flexShrink: 0,
-                        transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }}>
-            <path d="M6 9l6 6 6-6" />
-          </svg>
-        )}
-      </div>
-      {(!collapsible || open) && children}
-    </section>
-  )
-}
-
-// ── Main admin dashboard ─────────────────────────────────────
-
-function AdminDashboard() {
-  const [venues, setVenues] = useState<Venue[]>([])
-  const [events, setEvents] = useState<EventSummary[]>([])
-  const [venueFormOpen, setVenueFormOpen] = useState(false)
-  const [manualFormOpen, setManualFormOpen] = useState(false)
-  const [openReportCount, setOpenReportCount] = useState<number>(0)
-  const [pendingVACount, setPendingVACount] = useState<number>(0)
-  const navigate = useNavigate()
-
-  const fetchVenues = useCallback(async () => {
-    const { data } = await supabaseAdmin.from('venues').select('id, name, neighborhood, address, location_lat, location_lng, website, instagram, hours').order('name', { ascending: true })
-    if (data) setVenues(data)
-  }, [])
-
-  const fetchEvents = useCallback(async () => {
-    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    const { data } = await supabaseAdmin.from('events')
-      .select('id, title, starts_at, venue_id, poster_url, show_times')
-      .eq('status', 'published')
-      .gte('starts_at', cutoff)
-      .order('starts_at', { ascending: true })
-    if (data) setEvents(data)
-  }, [])
-
-  const fetchOpenReportCount = useCallback(async () => {
-    const { count } = await supabaseAdmin
-      .from('content_reports')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'open')
-    setOpenReportCount(count ?? 0)
-  }, [])
-
-  useEffect(() => { fetchVenues(); fetchEvents(); fetchOpenReportCount() }, [])
-
-  return (
-    <div style={{ height: '100dvh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <PlasterHeader />
-      <div style={{ flex: 1, overflowY: 'auto' }}>
-        <div style={{ maxWidth: 520, margin: '0 auto', padding: '24px 24px 32px', width: '100%' }}>
-
-          <DuplicateVenueMerger groups={findDuplicateVenueGroups(venues)} onMergeComplete={fetchVenues} />
-          <DuplicateEventMerger groups={findDuplicateEventGroups(events)} onMergeComplete={fetchEvents} />
-          <AdminNotifications />
-
-          <div style={{ marginBottom: 8 }}>
-            <button
-              onClick={() => navigate('/staff')}
-              style={{ background: 'none', border: 'none', padding: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: '#A855F7', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'rgba(168,85,247,0.4)' }}
-            >
-              Review staff uploads →
-            </button>
-          </div>
-
-          <Section title="Upload history" collapsible defaultCollapsed>
-            <UploadHistory />
-          </Section>
-
-          <Section
-            title="Reports"
-            badge={openReportCount > 0 ? `${openReportCount} open` : undefined}
-          >
-            <AdminReports onReportsChanged={fetchOpenReportCount} />
-          </Section>
-
-          <Section
-            title="VA Requests"
-            badge={pendingVACount > 0 ? `${pendingVACount} pending` : undefined}
-          >
-            <AdminVARequests onCountChange={setPendingVACount} />
-          </Section>
-
-          <Section title="Venue Accounts" collapsible defaultCollapsed>
-            <AdminVenueAccounts />
-          </Section>
-
-          <Section title="Import Poster">
-            <ImportForm />
-          </Section>
-
-          <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
-            <button
-              onClick={() => setVenueFormOpen(v => !v)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: venueFormOpen ? 24 : 0 }}
-            >
-              <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add a Venue</h2>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{venueFormOpen ? '▾' : '▸'}</span>
-            </button>
-            {venueFormOpen && <VenueForm onVenueAdded={fetchVenues} />}
-          </section>
-
-          <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
-            <button
-              onClick={() => setManualFormOpen(v => !v)}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: manualFormOpen ? 24 : 0 }}
-            >
-              <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 22, fontWeight: 700, color: 'var(--fg-55)', margin: 0 }}>Add an Event</h2>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>{manualFormOpen ? '▾' : '▸'}</span>
-            </button>
-            {manualFormOpen && <EventForm venues={venues} />}
-          </section>
-
-        </div>
-      </div>
-      <AdminBottomNav />
-    </div>
-  )
-}
-
-// ── Entry point ──────────────────────────────────────────────
-
+// /admin is the unified staff dashboard — the same component as /staff, so admins
+// land on the identical experience from either URL (back-compat for old links).
+// Role gating lives inside StaffScreen: non-staff see the "Plaster staff" wall;
+// admins get the full admin panel set (Preview·Review·Ingester·Auto-Ingest·Venues·
+// Tools·Team). Every former Admin.tsx section now mounts via the dashboard panels
+// (see components/admin/AdminTools.tsx) — nothing in components/admin was deleted.
 export function Admin() {
-  const { isAdmin, loading } = useAuth()
-  if (loading) return null
-  if (!isAdmin) {
-    return (
-      <div style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        textAlign: 'center',
-        fontFamily: '"Space Grotesk", sans-serif',
-        color: 'var(--fg)',
-        background: 'var(--bg)',
-      }}>
-        <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 32, fontWeight: 900, marginBottom: 8 }}>
-          plaster
-        </div>
-        <p style={{ margin: '8px 0', fontSize: 15, maxWidth: 320 }}>
-          This page is for admins only.
-        </p>
-      </div>
-    )
-  }
-  return <AdminDashboard />
+  return <StaffScreen />
 }
 
 
-=== src/pages/AuthScreen.tsx ===
+===== ./src/pages/AuthScreen.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
@@ -20161,7 +21631,8 @@ const inputStyle: React.CSSProperties = {
 }
 
 
-=== src/pages/LineUpScreen.tsx ===
+===== ./src/pages/LineUpScreen.tsx =====
+
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -20597,6 +22068,7 @@ export default function LineUpScreen() {
     supabase
       .from('events')
       .select('*, venues(name)')
+      .eq('status', 'published')
       .gt('trending_score', 0)
       .gte('starts_at', cutoff)
       .order('trending_score', { ascending: false })
@@ -20963,7 +22435,8 @@ export default function LineUpScreen() {
 }
 
 
-=== src/pages/MapScreen.tsx ===
+===== ./src/pages/MapScreen.tsx =====
+
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -21528,6 +23001,7 @@ export function MapScreen() {
     const toISO = addDays(selectedDate, 1) + 'T08:00:00'
     supabase.from('events')
       .select('id, title, starts_at, poster_url, category, venue_id')
+      .eq('status', 'published')
       .gte('starts_at', fromISO).lte('starts_at', toISO)
       .not('venue_id', 'is', null)
       .order('starts_at', { ascending: true })
@@ -22059,7 +23533,8 @@ export function MapScreen() {
 }
 
 
-=== src/pages/MsgScreen.tsx ===
+===== ./src/pages/MsgScreen.tsx =====
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PencilLine, Plus } from 'lucide-react'
@@ -22072,6 +23547,9 @@ import { UserPicker, type PickedUser } from '@/components/UserPicker'
 import { BottomSheet } from '@/components/BottomSheet'
 import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
+import { SlapHand } from '@/components/SlapHand'
+import { GroupEditSheet } from '@/components/GroupEditSheet'
+import { createPortal } from 'react-dom'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
@@ -22090,6 +23568,7 @@ interface OtherUser {
 interface ConversationRow {
   id: string
   name: string | null
+  avatarUrl: string | null
   lastMessageAt: string
   lastReadAt: string
   members: OtherUser[]
@@ -22106,6 +23585,8 @@ interface Message {
   media_type?: string | null
   media_width?: number | null
   media_height?: number | null
+  message_type?: string | null
+  event_id?: string | null
   deleted_at?: string | null
 }
 
@@ -22126,6 +23607,8 @@ interface AppNotification {
   kind: string
   target_event_id: string | null
   target_post_id: string | null
+  target_community_post_id: string | null
+  target_conversation_id: string | null
   body_preview: string | null
   read_at: string | null
   created_at: string
@@ -22192,6 +23675,13 @@ function notifCopy(notif: AppNotification) {
     case 'va_declined': return <>Your {notif.body_preview ?? 'account'} account request was declined</>
     case 'show_reminder': return <>Show today: {eventNode}</>
     case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
+    case 'lost_pet': return <>🐾 Lost pet in your neighborhood — {notif.body_preview ?? 'a neighbor needs help'}</>
+    case 'slap': return (
+      <>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{senderNode} slapped you <SlapHand size={15} /></span>
+        <span style={{ display: 'block', marginTop: 2, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>to go to <strong style={{ fontWeight: 700, color: 'var(--fg)' }}>{notif.event?.title ?? 'a show'}</strong></span>
+      </>
+    )
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -22205,13 +23695,14 @@ function showTimestampBefore(cur: Message, prev: Message | undefined): boolean {
   return new Date(cur.created_at).getTime() - new Date(prev.created_at).getTime() > 5 * 60 * 1000
 }
 
-function getConversationDisplay(conv: ConversationRow): { title: string; isGroup: boolean; primaryUser: OtherUser | null } {
-  if (conv.name) return { title: conv.name, isGroup: true, primaryUser: conv.members[0] ?? null }
-  if (conv.members.length === 0) return { title: '(empty)', isGroup: false, primaryUser: null }
-  if (conv.members.length === 1) return { title: `@${conv.members[0].username ?? 'user'}`, isGroup: false, primaryUser: conv.members[0] }
+function getConversationDisplay(conv: ConversationRow): { title: string; isGroup: boolean; primaryUser: OtherUser | null; avatarUrl: string | null } {
+  // Identity is always PEOPLE (or a custom group name/image) — never an event.
+  if (conv.name) return { title: conv.name, isGroup: true, primaryUser: conv.members[0] ?? null, avatarUrl: conv.avatarUrl }
+  if (conv.members.length === 0) return { title: '(empty)', isGroup: false, primaryUser: null, avatarUrl: null }
+  if (conv.members.length === 1) return { title: `@${conv.members[0].username ?? 'user'}`, isGroup: false, primaryUser: conv.members[0], avatarUrl: null }
   const names = conv.members.slice(0, 3).map(m => `@${m.username ?? 'user'}`).join(', ')
   const more = conv.members.length > 3 ? `, +${conv.members.length - 3}` : ''
-  return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0] }
+  return { title: `${names}${more}`, isGroup: true, primaryUser: conv.members[0], avatarUrl: conv.avatarUrl }
 }
 
 // Build a snippet centered on the matched query with surrounding context.
@@ -22261,7 +23752,7 @@ function HighlightedSnippet({ body, query }: { body: string; query: string }) {
 // ── Main ───────────────────────────────────────────────────────────────────
 
 export function MsgScreen() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const { openConversationId: routeConvId } = (location.state ?? {}) as { openConversationId?: string }
@@ -22269,6 +23760,11 @@ export function MsgScreen() {
   const [notifications,    setNotifications]    = useState<AppNotification[]>([])
   const [conversations,    setConversations]    = useState<ConversationRow[]>([])
   const [convLoading,      setConvLoading]      = useState(true)
+  const [slapEvents,   setSlapEvents]   = useState<Record<string, { id: string; title: string; poster_url: string | null }>>({})
+  const [goingEventIds, setGoingEventIds] = useState<Set<string>>(new Set())
+  const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
+  const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
+  const [groupEditOpen, setGroupEditOpen] = useState(false)
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
@@ -22344,7 +23840,7 @@ export function MsgScreen() {
     const { data, error } = await supabase
       .from('notifications')
       .select(`
-        id, sender_id, kind, target_event_id, target_post_id,
+        id, sender_id, kind, target_event_id, target_post_id, target_community_post_id, target_conversation_id,
         body_preview, read_at, created_at,
         sender:profiles!sender_id(username, avatar_diamond_url, avatar_url),
         event:events!target_event_id(id, title, starts_at, poster_url)
@@ -22393,6 +23889,13 @@ export function MsgScreen() {
           navigate('/', { state: { openEventId: notif.target_event_id } })
         }
         return
+      case 'lost_pet':
+        // Deep-link to the neighborhood wall, where the lost-pet post is shown.
+        navigate('/', { state: { openCommunity: true } })
+        return
+      case 'slap':
+        if (notif.target_conversation_id) navigate('/msg', { state: { openConversationId: notif.target_conversation_id } })
+        return
       default:
         if (notif.target_event_id && !isEventEnded(notif.event?.starts_at)) {
           navigate('/', { state: { openEventId: notif.target_event_id } })
@@ -22425,7 +23928,7 @@ export function MsgScreen() {
     // 2. Conversations sorted by last_message_at
     const { data: convRows } = await supabase
       .from('conversations')
-      .select('id, name, last_message_at')
+      .select('id, name, avatar_url, last_message_at')
       .in('id', convIds)
       .order('last_message_at', { ascending: false })
 
@@ -22479,7 +23982,7 @@ export function MsgScreen() {
       membershipMap[m.conversation_id] = m.last_read_at
     }
 
-    const rows: ConversationRow[] = (convRows as { id: string; name: string | null; last_message_at: string }[]).map(conv => {
+    const rows: ConversationRow[] = (convRows as { id: string; name: string | null; avatar_url: string | null; last_message_at: string }[]).map(conv => {
       const lastReadAt = membershipMap[conv.id] ?? conv.last_message_at
       const lastMsg = lastMsgMap[conv.id] ?? null
       const memberIds = membersByConvId[conv.id] ?? []
@@ -22490,6 +23993,7 @@ export function MsgScreen() {
       return {
         id: conv.id,
         name: conv.name,
+        avatarUrl: conv.avatar_url,
         lastMessageAt: conv.last_message_at,
         lastReadAt,
         members,
@@ -22526,7 +24030,7 @@ export function MsgScreen() {
 
     const { data } = await supabase
       .from('messages')
-      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, deleted_at')
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
       .eq('conversation_id', convId)
       .order('created_at', { ascending: true })
 
@@ -22764,6 +24268,58 @@ export function MsgScreen() {
     setSending(false)
   }
 
+  // ── Plaster Slap: event details for banners + in-chat RSVP ──────────────────
+  useEffect(() => {
+    const ids = [...new Set(messages.filter(m => m.message_type === 'slap' && m.event_id).map(m => m.event_id as string))]
+    const missing = ids.filter(id => !slapEvents[id])
+    if (!missing.length) return
+    supabase.from('events').select('id, title, poster_url').in('id', missing).then(({ data }) => {
+      if (data?.length) setSlapEvents(prev => { const n = { ...prev }; for (const e of data) n[e.id] = e as { id: string; title: string; poster_url: string | null }; return n })
+    })
+  }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The event the open thread was slapped to (most recent slap message).
+  const threadSlapEventId = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) { const m = messages[i]; if (m.message_type === 'slap' && m.event_id) return m.event_id }
+    return null
+  })()
+
+  useEffect(() => {
+    if (!user || !threadSlapEventId) return
+    supabase.from('attendees').select('event_id').eq('user_id', user.id).eq('event_id', threadSlapEventId).maybeSingle()
+      .then(({ data }) => { if (data) setGoingEventIds(prev => new Set([...prev, threadSlapEventId])) })
+  }, [threadSlapEventId, user?.id])
+
+  async function rsvpFromChat(eventId: string) {
+    if (!user) return
+    const { error } = await supabase.from('attendees').insert({ event_id: eventId, user_id: user.id })
+    if (!error || error.code === '23505') setGoingEventIds(prev => new Set([...prev, eventId]))
+  }
+
+  // Poster thumbnail for slap-originated conversations (shown at the row's right).
+  const convIdsKey = conversations.map(c => c.id).join(',')
+  useEffect(() => {
+    const ids = conversations.map(c => c.id)
+    if (!ids.length) { setConvSlapPoster({}); return }
+    let cancelled = false
+    supabase.from('messages').select('conversation_id, event_id, created_at').eq('message_type', 'slap').in('conversation_id', ids).order('created_at', { ascending: false })
+      .then(async ({ data }) => {
+        if (cancelled || !data?.length) return
+        const evByConv: Record<string, string> = {}
+        for (const m of data) { if (m.event_id && !evByConv[m.conversation_id]) evByConv[m.conversation_id] = m.event_id as string }
+        const evIds = [...new Set(Object.values(evByConv))]
+        if (!evIds.length) return
+        const { data: evs } = await supabase.from('events').select('id, poster_url').in('id', evIds)
+        if (cancelled) return
+        const posterById: Record<string, string> = {}
+        for (const e of evs ?? []) if (e.poster_url) posterById[e.id] = e.poster_url
+        const map: Record<string, string> = {}
+        for (const [cid, eid] of Object.entries(evByConv)) { const p = posterById[eid]; if (p) map[cid] = p }
+        setConvSlapPoster(map)
+      })
+    return () => { cancelled = true }
+  }, [convIdsKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function closeConv() {
     setOpenConvId(null)
     setMessages([])
@@ -22923,7 +24479,7 @@ export function MsgScreen() {
           {/* Shouts section */}
           {notifications.length > 0 && (
             <div style={{ padding: '10px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-70)' }}>
                 shouts{notifications.length > 1 ? ` (${notifications.length})` : ''}
               </span>
               {notifications.length > 1 && (
@@ -22938,7 +24494,7 @@ export function MsgScreen() {
           )}
 
           {/* Notification cards — capped at 5 unless expanded */}
-          {(shoutsExpanded ? notifications : notifications.slice(0, 5)).map(notif => (
+          {(shoutsExpanded ? notifications : notifications.slice(0, 3)).map(notif => (
             <div key={notif.id} style={{ padding: '0 16px 10px' }}>
               <div style={{ position: 'relative' }}>
                 <div style={{
@@ -22965,10 +24521,10 @@ export function MsgScreen() {
                     size={40}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: notif.kind === 'slap' ? 'normal' : 'nowrap' }}>
                       {notifCopy(notif)}
                     </p>
-                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
+                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && notif.kind !== 'slap' && (
                       <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         "{notif.body_preview}"
                       </p>
@@ -23004,7 +24560,7 @@ export function MsgScreen() {
           ))}
 
           {/* See more / show less */}
-          {notifications.length > 5 && (
+          {notifications.length > 3 && (
             <button
               onClick={() => setShoutsExpanded(v => !v)}
               style={{
@@ -23014,7 +24570,7 @@ export function MsgScreen() {
                 color: 'var(--fg-40)', textAlign: 'left',
               }}
             >
-              {shoutsExpanded ? 'show less' : `see ${notifications.length - 5} more`}
+              {shoutsExpanded ? 'show less' : `see ${notifications.length - 3} more`}
             </button>
           )}
 
@@ -23027,7 +24583,7 @@ export function MsgScreen() {
             {/* Section header — "messages" normally, "people & chats" when searching */}
             {!convLoading && (
               <div style={{ padding: '10px 16px 6px' }}>
-                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', color: 'var(--fg-40)' }}>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-70)' }}>
                   {searchQuery.trim().length >= 1 ? 'people & chats' : 'messages'}
                 </span>
               </div>
@@ -23060,8 +24616,10 @@ export function MsgScreen() {
                     }} />
                   )}
 
-                  {/* Avatar — stacked diamonds for groups */}
-                  {display.isGroup && conv.members.length >= 2 ? (
+                  {/* Avatar — custom group image, else stacked diamonds, else single */}
+                  {display.avatarUrl ? (
+                    <img src={display.avatarUrl} alt="" style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                  ) : display.isGroup && conv.members.length >= 2 ? (
                     <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0 }}>
                         <Diamond diamondUrl={conv.members[0]?.avatar_diamond_url ?? null} size={28} />
@@ -23082,7 +24640,7 @@ export function MsgScreen() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                       <span style={{
                         fontFamily: '"Playfair Display", serif',
-                        fontWeight: 700, fontSize: 15,
+                        fontWeight: 700, fontSize: 16,
                         color: 'var(--fg)',
                         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       }}>
@@ -23114,6 +24672,14 @@ export function MsgScreen() {
                         : 'No messages yet'}
                     </p>
                   </div>
+                  {conv.unread && convSlapPoster[conv.id] && (
+                    <img
+                      src={posterThumb(convSlapPoster[conv.id], 120) ?? convSlapPoster[conv.id]}
+                      onError={ev => { const img = ev.currentTarget; img.onerror = null; img.src = convSlapPoster[conv.id] }}
+                      alt=""
+                      style={{ flexShrink: 0, width: 38, height: 52, borderRadius: 6, objectFit: 'cover', border: '1px solid var(--fg-08)' }}
+                    />
+                  )}
                 </div>
               )
               return (
@@ -23222,8 +24788,13 @@ export function MsgScreen() {
                 {openConv && (() => {
                   const display = getConversationDisplay(openConv)
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-                      {display.isGroup && openConv.members.length >= 2 ? (
+                    <button
+                      onClick={() => { if (display.isGroup) setGroupEditOpen(true) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: display.isGroup ? 'pointer' : 'default', textAlign: 'left' }}
+                    >
+                      {display.avatarUrl ? (
+                        <img src={display.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                      ) : display.isGroup && openConv.members.length >= 2 ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                           {openConv.members.slice(0, 3).map(m => (
                             <Diamond key={m.id} diamondUrl={m.avatar_diamond_url} size={28} />
@@ -23245,7 +24816,7 @@ export function MsgScreen() {
                       }}>
                         {display.title}
                       </span>
-                    </div>
+                    </button>
                   )
                 })()}
 
@@ -23263,6 +24834,17 @@ export function MsgScreen() {
                 </button>
               </div>
 
+              {groupEditOpen && openConv && createPortal(
+                <GroupEditSheet
+                  conversationId={openConv.id}
+                  currentName={openConv.name}
+                  currentAvatarUrl={openConv.avatarUrl}
+                  onClose={() => setGroupEditOpen(false)}
+                  onSaved={() => { setGroupEditOpen(false); loadInbox() }}
+                />,
+                document.body
+              )}
+
               {/* Messages */}
               <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <div ref={messagesInnerRef} style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
@@ -23276,6 +24858,41 @@ export function MsgScreen() {
                   const prev = messages[i - 1]
                   const isHighlighted = highlightedMessageId === msg.id
                   const isDeleted = !!msg.deleted_at
+
+                  // Slap message — event poster centered above the same third-person
+                  // line for everyone (including the sender). Poster + title → event.
+                  if (msg.message_type === 'slap' && !isDeleted) {
+                    const ev = msg.event_id ? slapEvents[msg.event_id] : null
+                    const senderName = isMine
+                      ? (profile?.username ?? 'someone')
+                      : (openConv?.members.find(m => m.id === msg.sender_id)?.username ?? 'someone')
+                    const goToEvent = () => { if (msg.event_id) navigate('/', { state: { openEventId: msg.event_id } }) }
+                    return (
+                      <div key={msg.id} ref={el => { messageRefs.current.set(msg.id, el) }} style={{ margin: '12px 0' }}>
+                        {showTimestampBefore(msg, prev) && (
+                          <p style={{ textAlign: 'center', margin: '10px 0 4px', fontFamily: 'Space Grotesk, sans-serif', fontSize: 10, color: 'var(--fg-25)', letterSpacing: '0.05em' }}>{fmtMsgTime(msg.created_at)}</p>
+                        )}
+                        <div style={{ padding: '14px 36px 22px', textAlign: 'center' }}>
+                          {ev?.poster_url && (
+                            <button onClick={goToEvent} style={{ display: 'block', margin: '0 auto 12px', padding: 0, border: 'none', background: 'none', cursor: 'pointer', lineHeight: 0 }}>
+                              <img src={ev.poster_url} alt="" style={{ height: 96, borderRadius: 8, objectFit: 'cover', display: 'block', boxShadow: '0 2px 8px rgba(0,0,0,0.28)' }} />
+                            </button>
+                          )}
+                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'var(--fg-62)', lineHeight: 1.4 }}>
+                            <span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>@{senderName}</span> wants to go with you to
+                          </p>
+                          <button
+                            onClick={goToEvent}
+                            style={{ display: 'block', width: '100%', background: 'none', border: 'none', padding: 0, margin: '6px 0 0', cursor: 'pointer', fontFamily: '"Playfair Display", serif', fontSize: 16, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.25, textAlign: 'center' }}
+                          >
+                            {ev?.title ?? 'a show'}
+                          </button>
+                          <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>tap to see the event →</p>
+                        </div>
+                      </div>
+                    )
+                  }
+
                   return (
                     <div
                       key={msg.id}
@@ -23366,6 +24983,24 @@ export function MsgScreen() {
                       }}
                     >×</button>
                   </div>
+                </div>
+              )}
+
+              {/* Slap RSVP — floats above the composer while the thread has a slap
+                  and the user hasn't gone or dismissed it this session */}
+              {threadSlapEventId && openConvId && !slapDismissed.has(openConvId) && !goingEventIds.has(threadSlapEventId) && (
+                <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => rsvpFromChat(threadSlapEventId)}
+                    style={{ flex: 1, padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
+                  >
+                    Going ✓
+                  </button>
+                  <button
+                    onClick={() => setSlapDismissed(prev => new Set([...prev, openConvId]))}
+                    aria-label="Dismiss"
+                    style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  >✕</button>
                 </div>
               )}
 
@@ -23702,7 +25337,8 @@ export function MsgScreen() {
 export default MsgScreen
 
 
-=== src/pages/OnboardingScreen.tsx ===
+===== ./src/pages/OnboardingScreen.tsx =====
+
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -23716,13 +25352,15 @@ import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploa
 import { FindFriends } from '@/components/FindFriends'
 import { NearbyVenues } from '@/components/NearbyVenues'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
+import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 
 const INTERESTS = [
   'Music', 'Art', 'Comedy', 'Dance', 'Film',
   'Food & Drink', 'Sports', 'Community', 'Outdoors', 'Tech',
 ]
 
-type Step = 'username' | 'account_type' | 'avatar' | 'interests' | 'phone' | 'find_friends' | 'nearby_venues' | 'welcome'
+type Step = 'username' | 'account_type' | 'neighborhood' | 'avatar' | 'interests' | 'phone' | 'find_friends' | 'nearby_venues' | 'welcome'
 
 export function OnboardingScreen() {
   const [step, setStep] = useState<Step>('username')
@@ -23732,6 +25370,8 @@ export function OnboardingScreen() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [cropOpen, setCropOpen] = useState(false)
   const uploaderRef = useRef<AvatarUploaderRef>(null)
+  const [neighborhood, setNeighborhood] = useState<string | null>(null)
+  const [sextant, setSextant] = useState<Sextant | null>(null)
   const [interests, setInterests] = useState<string[]>([])
   const [phone, setPhone] = useState('')
   const [phoneError, setPhoneError] = useState<string | null>(null)
@@ -23785,6 +25425,20 @@ export function OnboardingScreen() {
     // For 'person', no DB write needed — account_type already defaults to 'person'
 
     setBusy(false)
+    setStep('neighborhood')
+  }
+
+  // ── Step 3: neighborhood ─────────────────────────────────────
+  async function submitNeighborhood() {
+    if (!user || !neighborhood || !sextant) return
+    setBusy(true)
+    const { error } = await supabase
+      .from('profiles')
+      .update({ home_neighborhood: neighborhood, home_sextant: sextant })
+      .eq('id', user.id)
+    setBusy(false)
+    if (error) { console.error('[Onboarding] neighborhood update failed:', error.message); return }
+    await refreshProfile()
     setStep('avatar')
   }
 
@@ -23896,7 +25550,7 @@ export function OnboardingScreen() {
 
       {/* Step counter */}
       <p style={{ color: 'var(--fg-40)', fontSize: 13, margin: '0 0 36px', fontFamily: '"Space Grotesk", sans-serif', textAlign: 'center' }}>
-        step {step === 'phone' ? 5 : step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'avatar' ? 3 : 4} of 6
+        step {step === 'username' ? 1 : step === 'account_type' ? 2 : step === 'neighborhood' ? 3 : step === 'avatar' ? 4 : step === 'interests' ? 5 : 6} of 7
       </p>
 
       {/* Centered content */}
@@ -23955,6 +25609,21 @@ export function OnboardingScreen() {
             disabled={busy || !accountChoice}
             style={{ ...btnStyle(busy), marginTop: 8, opacity: (busy || !accountChoice) ? 0.5 : 1 }}
           >
+            {busy ? '…' : 'Continue'}
+          </button>
+        </div>
+      )}
+
+      {step === 'neighborhood' && (
+        <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h2 style={headingStyle}>Which neighborhood is yours?</h2>
+          <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', textAlign: 'center', margin: '-4px 0 4px', lineHeight: 1.5 }}>
+            {sextant
+              ? <>Your chip shows <strong style={{ color: 'var(--fg)' }}>{neighborhood}</strong> · your community wall covers all of {SEXTANT_LABELS[sextant]} Portland. Change it anytime.</>
+              : "You'll see your community wall and local alerts for here — change it anytime."}
+          </p>
+          <NeighborhoodPicker value={neighborhood} onChange={(name, sx) => { setNeighborhood(name); setSextant(sx) }} />
+          <button onClick={submitNeighborhood} disabled={busy || !neighborhood} style={{ ...btnStyle(busy), opacity: (busy || !neighborhood) ? 0.5 : 1 }}>
             {busy ? '…' : 'Continue'}
           </button>
         </div>
@@ -24177,7 +25846,8 @@ function accountCardStyle(selected: boolean): React.CSSProperties {
 }
 
 
-=== src/pages/PrivacyPolicy.tsx ===
+===== ./src/pages/PrivacyPolicy.tsx =====
+
 /**
  * Privacy Policy — public route, accessible without auth.
  * Linked from Apple App Store listing and from in-app Settings.
@@ -24540,11 +26210,15 @@ const ul: React.CSSProperties = {
 }
 
 
-=== src/pages/StaffScreen.tsx ===
+===== ./src/pages/StaffScreen.tsx =====
+
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { ImportForm } from '@/components/admin/ImportForm'
+import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
+import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
+import { AdminTools } from '@/components/admin/AdminTools'
+import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
 import { StaffPresence } from '@/components/StaffPresence'
@@ -24553,6 +26227,9 @@ import { StaffChat } from '@/components/StaffChat'
 import { UploadHistory } from '@/components/UploadHistory'
 import { Panel as ResizablePanel, Group as PanelGroup, Separator as PanelResizeHandle } from 'react-resizable-panels'
 import type { Layout } from 'react-resizable-panels'
+
+// Auto-Ingest panel mothballed — AdminAutoIngest + scrape-sources kept on disk,
+// just no longer surfaced in the staff dashboard.
 
 // ── Responsive hook ──────────────────────────────────────────
 function useIsWide(breakpoint = 900) {
@@ -24588,14 +26265,19 @@ export function LiveClock({ compact = false }: { compact?: boolean }) {
 }
 
 // ── Panel shell (narrow / non-resizable layout) ──────────────
-function PanelShell({ header, children, bodyPadding = 16 }: {
-  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number
+// maxHeight bounds a long panel so it can't swallow the whole page — content past
+// the cap scrolls inside the panel; shorter panels render at natural height.
+function PanelShell({ header, children, bodyPadding = 16, onMinimize, maxHeight }: {
+  header?: React.ReactNode; children: React.ReactNode; bodyPadding?: number; onMinimize?: () => void; maxHeight?: string | number
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ flexShrink: 0, maxHeight, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
       {header != null && (
-        <div style={{ padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-          {header}
+        <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{header}</span>
+          {onMinimize && (
+            <button onClick={onMinimize} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>–</button>
+          )}
         </div>
       )}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: bodyPadding }}>{children}</div>
@@ -24638,23 +26320,38 @@ function ResizeSeam() {
 }
 
 // ── Panel open/closed persistence ───────────────────────────
-const OPEN_KEY = 'staff-panel-open'
+// Admins get their own bumped key (new panel set — stale saved state from the old
+// admin set must not leak into the new one); workers keep the original key.
+const OPEN_KEY_WORKER = 'staff-panel-open'
+const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v3'
 
 interface PanelOpen {
   preview: boolean; ingester: boolean; board: boolean; history: boolean; review: boolean; team: boolean
+  tools: boolean
 }
 
-function loadPanelOpen(): PanelOpen {
+const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, tools: false }
+const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, board: false, tools: true, team: true, history: false }
+
+function loadPanelOpen(key: string, defaults: PanelOpen): PanelOpen {
   try {
-    const saved = JSON.parse(localStorage.getItem(OPEN_KEY) ?? '{}')
-    return { preview: saved.preview ?? true, ingester: saved.ingester ?? true, board: saved.board ?? true, history: saved.history ?? false, review: saved.review ?? true, team: saved.team ?? true }
-  } catch { return { preview: true, ingester: true, board: true, history: false, review: true, team: true } }
+    const saved = JSON.parse(localStorage.getItem(key) ?? '{}')
+    const out = { ...defaults }
+    for (const k of Object.keys(defaults) as (keyof PanelOpen)[]) {
+      if (typeof saved[k] === 'boolean') out[k] = saved[k]
+    }
+    return out
+  } catch { return { ...defaults } }
 }
-function savePanelOpen(o: PanelOpen) { try { localStorage.setItem(OPEN_KEY, JSON.stringify(o)) } catch { /* noop */ } }
+function makeSavePanelOpen(key: string) {
+  return (o: PanelOpen) => { try { localStorage.setItem(key, JSON.stringify(o)) } catch { /* noop */ } }
+}
 
 // ── Width-layout persistence ─────────────────────────────────
+// Admin key bumped to v3: removing the Auto-Ingest panel changes the resizable
+// group's panel count, so a v2 layout would corrupt the new group.
 const LAYOUT_KEY_WORKER = 'staff-dashboard-cols-worker'
-const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin'
+const LAYOUT_KEY_ADMIN  = 'staff-dashboard-cols-admin-v3'
 
 function loadSavedLayout(key: string): Layout | undefined {
   try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : undefined } catch { return undefined }
@@ -24664,21 +26361,26 @@ function makeSaveLayout(key: string) {
 }
 
 // ── Panel config ─────────────────────────────────────────────
-type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team'
+type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'tools'
 
-const PANEL_LABELS: Record<PanelKey, string> = {
-  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team',
+// Workers keep their original labels; admins get the unified-dashboard names.
+const PANEL_LABELS_WORKER: Record<PanelKey, string> = {
+  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
+}
+const PANEL_LABELS_ADMIN: Record<PanelKey, string> = {
+  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
 }
 
-// Worker: 3 core panels + optional history; Admin: 4 core panels + optional history
-const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22 }
-const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 24, board: 34, history: 26, review: 24, team: 18 }
-const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12 }
+// Worker: 3 core panels + optional history; Admin: review/ingester/tools/team core
+// + optional board.
+const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, tools: 0 }
+const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, tools: 26 }
+const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, tools: 16 }
 
 // ── Preview header with minimize ─────────────────────────────
-function PreviewCard({ children, onMinimize }: { children: React.ReactNode; onMinimize: () => void }) {
+function PreviewCard({ children, onMinimize, width = 360 }: { children: React.ReactNode; onMinimize: () => void; width?: number }) {
   return (
-    <div style={{ width: 360, flexShrink: 0, minHeight: 0, marginRight: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+    <div style={{ width, flexShrink: 0, minHeight: 0, marginRight: 8, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
       <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span>Preview</span>
         <button onClick={onMinimize} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>–</button>
@@ -24689,11 +26391,23 @@ function PreviewCard({ children, onMinimize }: { children: React.ReactNode; onMi
 }
 
 // ── Main screen ──────────────────────────────────────────────
+// Thin gate: the dashboard's role-keyed persistence (open-state + layout keys)
+// initializes in useState on first render, so the role must be RESOLVED before
+// the dashboard mounts — otherwise a direct reload of /admin would initialize an
+// admin with worker keys.
 export function StaffScreen() {
-  const { canIngest, isAdmin, loading, signOut, profile } = useAuth()
+  const { loading } = useAuth()
+  if (loading) return null
+  return <StaffDashboard />
+}
+
+function StaffDashboard() {
+  const { canIngest, isAdmin, signOut, profile } = useAuth()
   const isWide = useIsWide(900)
 
-  const [open, setOpen] = useState<PanelOpen>(loadPanelOpen)
+  const openKey = isAdmin ? OPEN_KEY_ADMIN : OPEN_KEY_WORKER
+  const [open, setOpen] = useState<PanelOpen>(() => loadPanelOpen(openKey, isAdmin ? DEFAULT_OPEN_ADMIN : DEFAULT_OPEN_WORKER))
+  const savePanelOpen = makeSavePanelOpen(openKey)
 
   const layoutKey = isAdmin ? LAYOUT_KEY_ADMIN : LAYOUT_KEY_WORKER
   const [savedLayout] = useState<Layout | undefined>(() => loadSavedLayout(layoutKey))
@@ -24705,8 +26419,6 @@ export function StaffScreen() {
     setOpen(prev => { const next = { ...prev, [key]: !prev[key] }; savePanelOpen(next); return next })
   }
 
-  if (loading) return null
-
   if (!canIngest) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg)', background: 'var(--bg)' }}>
@@ -24717,14 +26429,43 @@ export function StaffScreen() {
   }
 
   // ── Panel chips for top bar (role-aware) ─────────────────
-  const chipDefs: { key: keyof PanelOpen; label: string }[] = [
-    { key: 'preview', label: 'Preview' },
-    { key: 'ingester', label: 'Add a show' },
-    { key: 'board', label: 'Venue board' },
-    { key: 'history', label: 'Upload history' },
-    ...(isAdmin ? [{ key: 'review' as keyof PanelOpen, label: 'Review' }] : []),
-    { key: 'team', label: 'Team' },
-  ]
+  // Admin: Preview · Review · Ingester · Venues · Tools · Team.
+  // Worker: unchanged from the original staff dashboard.
+  const chipDefs: { key: keyof PanelOpen; label: string }[] = isAdmin
+    ? [
+        { key: 'preview', label: 'Preview' },
+        { key: 'review', label: 'Review' },
+        { key: 'ingester', label: 'Ingester' },
+        { key: 'board', label: 'Venues' },
+        { key: 'tools', label: 'Tools' },
+        { key: 'team', label: 'Team' },
+      ]
+    : [
+        { key: 'preview', label: 'Preview' },
+        { key: 'ingester', label: 'Add a show' },
+        { key: 'board', label: 'Venue board' },
+        { key: 'history', label: 'Upload history' },
+        { key: 'team', label: 'Team' },
+      ]
+
+  // Chip buttons — identical at every width; the wrapper differs (inline in the
+  // top bar when wide, a scrollable row under it when narrow).
+  const chipButtons = chipDefs.map(({ key, label }) => (
+    <button
+      key={key}
+      onClick={() => togglePanel(key)}
+      style={{
+        padding: '4px 10px', borderRadius: 6, flexShrink: 0,
+        border: open[key] ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)',
+        background: open[key] ? 'rgba(168,85,247,0.1)' : 'transparent',
+        color: open[key] ? '#A855F7' : 'var(--fg-30)',
+        fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
+        cursor: 'pointer', transition: 'all 0.15s',
+      }}
+    >
+      {label}
+    </button>
+  ))
 
   // ── Top bar ──────────────────────────────────────────────
   const teamMinimizedSection = isWide && !open.team ? (
@@ -24749,25 +26490,10 @@ export function StaffScreen() {
         <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#A855F7', background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 8px', borderRadius: 4 }}>STAFF</span>
       </div>
 
-      {/* Middle: panel toggle chips (wide only) */}
+      {/* Middle: panel toggle chips (wide — inline; narrow chips live below the bar) */}
       {isWide && (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4, overflowX: 'auto', padding: '0 8px' }}>
-          {chipDefs.map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => togglePanel(key)}
-              style={{
-                padding: '4px 10px', borderRadius: 6, flexShrink: 0,
-                border: open[key] ? '1px solid rgba(168,85,247,0.4)' : '1px solid var(--fg-15)',
-                background: open[key] ? 'rgba(168,85,247,0.1)' : 'transparent',
-                color: open[key] ? '#A855F7' : 'var(--fg-30)',
-                fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
-                cursor: 'pointer', transition: 'all 0.15s',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+          {chipButtons}
         </div>
       )}
 
@@ -24811,31 +26537,61 @@ export function StaffScreen() {
 
   // ── Resizable panel group (wide layout) ──────────────────
   const defaultSizes = isAdmin ? DEFAULT_SIZES_ADMIN : DEFAULT_SIZES_WORKER
-  // history is optional/togglable; core panels are the always-default-open set
+  const panelLabels = isAdmin ? PANEL_LABELS_ADMIN : PANEL_LABELS_WORKER
+  // Optional panels are togglable extras; core panels are the always-default-open set
   const resizablePanelOrder: PanelKey[] = isAdmin
-    ? ['ingester', 'board', 'review', 'history', 'team']
+    ? ['review', 'ingester', 'board', 'tools', 'team']
     : ['ingester', 'board', 'history', 'team']
   const corePanelOrder: PanelKey[] = isAdmin
-    ? ['ingester', 'board', 'review', 'team']
+    ? ['review', 'ingester', 'tools', 'team']
     : ['ingester', 'board', 'team']
+  const optionalPanels: PanelKey[] = isAdmin
+    ? ['board']
+    : ['history']
 
   const openResizable = resizablePanelOrder.filter(k => open[k])
 
-  // Save/restore layout only when core panels are all open AND history is closed.
-  // history is an optional panel — when it's open, each panel falls back to defaultSize
-  // so the saved core-panel widths aren't corrupted by a panel-count mismatch in v4.
-  const isCoreFullOpen = corePanelOrder.every(k => open[k]) && !open.history
+  // Save/restore layout only when core panels are all open AND every optional
+  // panel is closed — when an optional panel is open, each panel falls back to
+  // defaultSize so the saved core-panel widths aren't corrupted by a
+  // panel-count mismatch in v4.
+  const isCoreFullOpen = corePanelOrder.every(k => open[k]) && optionalPanels.every(k => !open[k])
   const layoutToPass = isCoreFullOpen ? savedLayout : undefined
   const handleLayoutChanged = isCoreFullOpen ? saveLayout : () => { /* noop */ }
 
   function renderPanelBody(key: PanelKey): React.ReactNode {
     switch (key) {
-      case 'ingester': return <ImportForm staffMode />
-      case 'board':    return <VenueBoard />
-      case 'history':  return <UploadHistory />
-      case 'review':   return <AdminPendingEvents />
-      case 'team':     return teamContent
+      // Admin ingester runs the FULL admin importer (not staffMode)
+      case 'ingester':   return <Ingester staffMode={!isAdmin} />
+      case 'board':      return <VenueBoard />
+      case 'history':    return <UploadHistory />
+      case 'review':     return <><AdminCommunityPosts /><AdminPendingEvents /></>
+      case 'tools':      return <AdminTools />
+      case 'team':       return teamContent
     }
+  }
+
+  // One stacked narrow panel. Preview keeps its fixed 480px block; every other
+  // open panel is bounded (70vh) and scrolls internally so one long panel can't
+  // swallow the page. All carry the – minimize button (toggles open state).
+  function renderNarrowPanel(key: keyof PanelOpen): React.ReactNode {
+    if (key === 'preview') {
+      return (
+        <div key="preview" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
+          <div style={{ padding: '8px 10px 8px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>Preview</span>
+            <button onClick={() => togglePanel('preview')} title="Minimize panel" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-25)', fontSize: 14, lineHeight: 1, padding: '2px 4px' }}>–</button>
+          </div>
+          <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview scope={isAdmin ? 'all' : 'mine'} /></div>
+        </div>
+      )
+    }
+    const label = chipDefs.find(c => c.key === key)?.label ?? key
+    return (
+      <PanelShell key={key} header={label} onMinimize={() => togglePanel(key)} maxHeight="70vh">
+        {renderPanelBody(key as PanelKey)}
+      </PanelShell>
+    )
   }
 
   return (
@@ -24846,10 +26602,10 @@ export function StaffScreen() {
         /* ── Wide layout ── */
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'row', padding: 12, gap: 0, overflow: 'hidden' }}>
 
-          {/* Preview — fixed 360px, conditionally shown */}
+          {/* Preview — fixed width (admins get the widest panel), conditionally shown */}
           {open.preview && (
-            <PreviewCard onMinimize={() => togglePanel('preview')}>
-              <StaffPreview />
+            <PreviewCard onMinimize={() => togglePanel('preview')} width={isAdmin ? 420 : 360}>
+              <StaffPreview scope={isAdmin ? 'all' : 'mine'} />
             </PreviewCard>
           )}
 
@@ -24865,7 +26621,7 @@ export function StaffScreen() {
                   // React.Fragment with key for seam+panel pairs
                   idx === 0 ? (
                     <ResizablePanel key={panelKey} id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                      <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={panelKey === 'team' ? 16 : 16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
+                      <PanelCard header={panelLabels[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={panelKey === 'team' ? 16 : 16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                         {renderPanelBody(panelKey)}
                       </PanelCard>
                     </ResizablePanel>
@@ -24874,7 +26630,7 @@ export function StaffScreen() {
                     <React.Fragment key={panelKey}>
                       <ResizeSeam />
                       <ResizablePanel id={panelKey} defaultSize={defaultSizes[panelKey]} minSize={MIN_SIZES[panelKey]} style={{ overflow: 'hidden' }}>
-                        <PanelCard header={PANEL_LABELS[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
+                        <PanelCard header={panelLabels[panelKey]} onMinimize={() => togglePanel(panelKey)} bodyPadding={16} bodyOverflow={panelKey === 'team' ? 'hidden' : 'auto'}>
                           {renderPanelBody(panelKey)}
                         </PanelCard>
                       </ResizablePanel>
@@ -24886,27 +26642,35 @@ export function StaffScreen() {
           )}
         </div>
       ) : (
-        /* ── Narrow: stacked (minimize not active on narrow) ── */
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 12, overflowY: 'auto' }}>
-          <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', flexShrink: 0, borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Preview</div>
-            <div style={{ height: 480, overflow: 'hidden' }}><StaffPreview /></div>
+        /* ── Narrow: chip-driven stack (respects open state + role order) ── */
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          {/* Chip bar — horizontally scrollable row under the top bar */}
+          <div className="hide-scrollbar" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', overflowX: 'auto', whiteSpace: 'nowrap', borderBottom: '1px solid var(--fg-08)' }}>
+            {chipButtons}
           </div>
-          <PanelShell header="Add a show"><ImportForm staffMode /></PanelShell>
-          <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid var(--fg-15)', borderRadius: 12, background: 'var(--bg)', overflow: 'hidden' }}>
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 16 }}><VenueBoard /></div>
-          </div>
-          <PanelShell header="Upload history"><UploadHistory /></PanelShell>
-          {isAdmin && <PanelShell header="Review"><AdminPendingEvents /></PanelShell>}
-          <PanelShell header="Team">{teamContent}</PanelShell>
+          {chipDefs.some(c => open[c.key]) ? (
+            <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, padding: 12, overflowY: 'auto' }}>
+              {chipDefs.filter(c => open[c.key]).map(c => renderNarrowPanel(c.key))}
+            </div>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
+                All panels hidden — tap a chip above to open one.
+              </p>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Back-compat: admins keep the app bottom nav on narrow/mobile */}
+      {isAdmin && !isWide && <AdminBottomNav />}
     </div>
   )
 }
 
 
-=== src/pages/TermsOfUse.tsx ===
+===== ./src/pages/TermsOfUse.tsx =====
+
 /**
  * Terms of Use — public route at /terms.
  *
@@ -24918,7 +26682,7 @@ export function StaffScreen() {
  * mechanism for users to acknowledge agreement before using.
  */
 
-const EFFECTIVE_DATE = 'June 4, 2026'
+const EFFECTIVE_DATE = 'June 16, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
@@ -25040,6 +26804,61 @@ export function TermsOfUse() {
         community or the service.
       </p>
 
+      <h2 style={h2}>Event listings and third-party content</h2>
+      <p>
+        Event listings on Plaster are compiled from venue websites, public
+        announcements, and submissions by our staff and users. We work to keep
+        them accurate, but details — dates, times, prices, and availability —
+        can change or be canceled at any time. Always confirm with the venue
+        before making plans; Plaster does not guarantee the accuracy of any
+        listing.
+      </p>
+      <p>
+        Event poster artwork and promotional images belong to their respective
+        venues, artists, and promoters. We display them to inform users about
+        events, not to claim any ownership of them. Listing an event does not
+        imply affiliation with, or endorsement by, the venue or artist.
+      </p>
+      <p>
+        If you are a venue, artist, or rights holder and would like a listing or
+        image corrected or removed, contact us at the address in the Contact
+        section below (<a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#A855F7' }}>{CONTACT_EMAIL}</a>)
+        and we will respond promptly.
+      </p>
+
+      <h2 style={h2}>Community posts and neighborhood content</h2>
+      <p>
+        The community wall lets you post neighborhood content — items for sale,
+        yard sales, local notices, lost-pet alerts, and the like. These posts are
+        user-generated: the person who posts is solely responsible for their
+        content and its accuracy.
+      </p>
+      <p>
+        Don't post any of the following. We may remove any post and suspend
+        accounts at our discretion:
+      </p>
+      <ul style={ul}>
+        <li>Illegal goods or services, weapons, drugs, or alcohol/tobacco sales</li>
+        <li>Recalled or stolen items</li>
+        <li>Hate, harassment, spam, scams, or adult content</li>
+        <li>Anything else unlawful or unsafe</li>
+      </ul>
+      <p>
+        Plaster is <strong>not</strong> a party to any sale, trade, or transaction
+        between users, and is not responsible for goods, payments, item condition,
+        delivery, or in-person meetups. Arrange any exchange safely and at your own
+        risk, and meet in public places.
+      </p>
+      <p>
+        Lost-pet alerts and other neighbor-help posts are a community courtesy —
+        Plaster doesn't guarantee any response or outcome.
+      </p>
+      <p>
+        By posting, you grant Plaster a non-exclusive license to display your
+        content within the app. You keep ownership of what you post, and you can
+        request removal via the Contact section below.
+      </p>
+
       <h2 style={h2}>Disclaimers</h2>
       <p>
         Plaster is provided "as is" without warranties of any kind. We don't
@@ -25097,7 +26916,8 @@ const ul: React.CSSProperties = {
 }
 
 
-=== src/pages/TonightScreen.tsx ===
+===== ./src/pages/TonightScreen.tsx =====
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -25146,6 +26966,7 @@ export function TonightScreen() {
     const { data } = await supabase
       .from('events')
       .select('id, title, starts_at, poster_url, category, like_count, venues(id, name)')
+      .eq('status', 'published')
       .gte('starts_at', `${today}T00:00:00`)
       .lt('starts_at', `${today}T23:59:59`)
       .order('starts_at', { ascending: true })
@@ -25332,7 +27153,8 @@ const emptyStyle: React.CSSProperties = {
 }
 
 
-=== src/pages/VenueProfile.tsx ===
+===== ./src/pages/VenueProfile.tsx =====
+
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
@@ -25359,7 +27181,8 @@ export function VenueProfile() {
 }
 
 
-=== src/pages/VenuesScreen.tsx ===
+===== ./src/pages/VenuesScreen.tsx =====
+
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
@@ -25511,7 +27334,8 @@ const emptyStyle: React.CSSProperties = {
 }
 
 
-=== src/pages/YouScreen.tsx ===
+===== ./src/pages/YouScreen.tsx =====
+
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Plus, Settings, ArrowLeft } from 'lucide-react'
@@ -25528,6 +27352,8 @@ import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
 import { BannerUploader } from '@/components/BannerUploader'
@@ -25572,6 +27398,7 @@ type DisplayProfile = {
   account_type: string | null
   banner_url: string | null
   banner_focal_y: number
+  home_neighborhood: string | null
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -25612,10 +27439,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         account_type: selfProfile.account_type ?? null,
         banner_url: (selfProfile as unknown as { banner_url?: string | null }).banner_url ?? null,
         banner_focal_y: (selfProfile as unknown as { banner_focal_y?: number }).banner_focal_y ?? 0.5,
+        home_neighborhood: selfProfile.home_neighborhood ?? null,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -25627,11 +27455,15 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [busy,     setBusy]     = useState(false)
   const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
   const [pendingBannerFocalY, setPendingBannerFocalY] = useState(0.5)
+  const [homeNbhd,    setHomeNbhd]    = useState<string | null>(null)
+  const [homeSextant, setHomeSextant] = useState<Sextant | null>(null)
 
   useEffect(() => {
     setBio(selfProfile?.bio ?? '')
     setIsPublic(selfProfile?.is_public ?? true)
-  }, [selfProfile?.bio, selfProfile?.is_public])
+    setHomeNbhd(selfProfile?.home_neighborhood ?? null)
+    setHomeSextant((selfProfile?.home_sextant ?? null) as Sextant | null)
+  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant])
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
@@ -25718,7 +27550,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!user) return
     setBusy(true)
 
-    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number } = { bio, is_public: isPublic }
+    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant }
 
     if (pendingBannerBlob) {
       const path = `${user.id}/banner.jpg`
@@ -25883,6 +27715,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+                {displayProfile.home_neighborhood && (
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
+                    {displayProfile.home_neighborhood}
+                  </span>
+                )}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -25938,6 +27775,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
+                {displayProfile.home_neighborhood && (
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
+                    {displayProfile.home_neighborhood}
+                  </span>
+                )}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -26034,6 +27876,17 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                   <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>
                     <div style={{ position: 'absolute', top: 3, left: isPublic ? 21 : 3, width: 20, height: 20, borderRadius: '50%', background: 'var(--bg)', transition: 'left 200ms ease' }} />
                   </div>
+                </div>
+                <div style={{ marginBottom: 14 }}>
+                  <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
+                    Neighborhood
+                  </p>
+                  {homeNbhd && homeSextant && (
+                    <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+                      {homeNbhd} · community wall covers {SEXTANT_LABELS[homeSextant]} Portland
+                    </p>
+                  )}
+                  <NeighborhoodPicker value={homeNbhd} onChange={(name, sx) => { setHomeNbhd(name); setHomeSextant(sx) }} />
                 </div>
                 {(selfProfile?.account_type === 'venue' || selfProfile?.account_type === 'artist') && (
                   <div style={{ marginBottom: 14 }}>
@@ -26177,14 +28030,16 @@ function saveBtnStyle(busy: boolean): React.CSSProperties {
 }
 
 
-=== src/types/db.ts ===
+===== ./src/types/db.ts =====
+
 import type { Database } from './supabase'
 
 export type Tables<T extends keyof Database['public']['Tables']> =
   Database['public']['Tables'][T]['Row']
 
 
-=== src/types/event.ts ===
+===== ./src/types/event.ts =====
+
 // Unified wall event type — used by all UI components.
 // Both mock data and Supabase DB events are normalized to this shape.
 export interface WallEvent {
@@ -26213,7 +28068,8 @@ export interface WallEvent {
 }
 
 
-=== src/types/supabase.ts ===
+===== ./src/types/supabase.ts =====
+
 export type Json =
   | string
   | number
@@ -26227,31 +28083,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -26277,12 +28108,6 @@ export type Database = {
           liker_id?: string
           source_id?: string
         }
-        Relationships: []
-      }
-      show_alert_subscriptions: {
-        Row:    { id: string; subscriber_id: string; account_id: string; created_at: string }
-        Insert: { id?: string; subscriber_id: string; account_id: string; created_at?: string }
-        Update: { id?: string; subscriber_id?: string; account_id?: string; created_at?: string }
         Relationships: []
       }
       admin_notifications: {
@@ -26359,6 +28184,84 @@ export type Database = {
           {
             foreignKeyName: "attendees_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_posts: {
+        Row: {
+          author_id: string
+          body: string | null
+          created_at: string
+          expires_at: string | null
+          flag_reason: string | null
+          flagged: boolean
+          id: string
+          image_url: string | null
+          is_paid: boolean
+          neighborhood: string
+          post_type: string
+          rejection_note: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sextant: string
+          status: string
+          title: string | null
+        }
+        Insert: {
+          author_id: string
+          body?: string | null
+          created_at?: string
+          expires_at?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          image_url?: string | null
+          is_paid?: boolean
+          neighborhood: string
+          post_type?: string
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sextant: string
+          status?: string
+          title?: string | null
+        }
+        Update: {
+          author_id?: string
+          body?: string | null
+          created_at?: string
+          expires_at?: string | null
+          flag_reason?: string | null
+          flagged?: boolean
+          id?: string
+          image_url?: string | null
+          is_paid?: boolean
+          neighborhood?: string
+          post_type?: string
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sextant?: string
+          status?: string
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_reviewed_by_fkey"
+            columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -26444,6 +28347,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          avatar_url: string | null
           created_at: string
           created_by: string | null
           id: string
@@ -26451,6 +28355,7 @@ export type Database = {
           name: string | null
         }
         Insert: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -26458,6 +28363,7 @@ export type Database = {
           name?: string | null
         }
         Update: {
+          avatar_url?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
@@ -26643,11 +28549,14 @@ export type Database = {
       events: {
         Row: {
           address: string | null
+          ai_confidence: number | null
           category: string | null
           created_at: string
+          created_by: string | null
           description: string | null
           ends_at: string | null
           fill_frame: boolean | null
+          flag_note: string | null
           focal_x: number | null
           focal_y: number | null
           id: string
@@ -26662,17 +28571,16 @@ export type Database = {
           recurrence_frequency: string | null
           recurrence_group_id: string | null
           recurrence_rule: string | null
+          rejection_note: string | null
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          show_times: string[] | null
           sold_out: boolean
           sold_out_report_count: number
-          show_times: string[] | null
+          source_url: string | null
           starts_at: string
           status: string
-          source_url: string | null
-          ai_confidence: number | null
-          flag_note: string | null
-          created_by: string | null
-          reviewed_by: string | null
-          reviewed_at: string | null
           title: string
           trending_score: number
           venue_id: string | null
@@ -26680,11 +28588,14 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          ai_confidence?: number | null
           category?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           ends_at?: string | null
           fill_frame?: boolean | null
+          flag_note?: string | null
           focal_x?: number | null
           focal_y?: number | null
           id?: string
@@ -26699,17 +28610,16 @@ export type Database = {
           recurrence_frequency?: string | null
           recurrence_group_id?: string | null
           recurrence_rule?: string | null
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          show_times?: string[] | null
           sold_out?: boolean
           sold_out_report_count?: number
-          show_times?: string[] | null
+          source_url?: string | null
           starts_at: string
           status?: string
-          source_url?: string | null
-          ai_confidence?: number | null
-          flag_note?: string | null
-          created_by?: string | null
-          reviewed_by?: string | null
-          reviewed_at?: string | null
           title: string
           trending_score?: number
           venue_id?: string | null
@@ -26717,11 +28627,14 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          ai_confidence?: number | null
           category?: string | null
           created_at?: string
+          created_by?: string | null
           description?: string | null
           ends_at?: string | null
           fill_frame?: boolean | null
+          flag_note?: string | null
           focal_x?: number | null
           focal_y?: number | null
           id?: string
@@ -26736,23 +28649,36 @@ export type Database = {
           recurrence_frequency?: string | null
           recurrence_group_id?: string | null
           recurrence_rule?: string | null
+          rejection_note?: string | null
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          show_times?: string[] | null
           sold_out?: boolean
           sold_out_report_count?: number
-          show_times?: string[] | null
+          source_url?: string | null
           starts_at?: string
           status?: string
-          source_url?: string | null
-          ai_confidence?: number | null
-          flag_note?: string | null
-          created_by?: string | null
-          reviewed_by?: string | null
-          reviewed_at?: string | null
           title?: string
           trending_score?: number
           venue_id?: string | null
           view_count?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "events_venue_id_fkey"
             columns: ["venue_id"]
@@ -26804,18 +28730,82 @@ export type Database = {
           },
         ]
       }
+      ingest_orphans: {
+        Row: {
+          confidence: number | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          event_url: string | null
+          id: string
+          image_url: string | null
+          linked_event_id: string | null
+          linked_venue_id: string | null
+          raw_venue_name: string | null
+          sold_out: boolean | null
+          source_url: string | null
+          starts_at: string
+          status: string
+          title: string
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          event_url?: string | null
+          id?: string
+          image_url?: string | null
+          linked_event_id?: string | null
+          linked_venue_id?: string | null
+          raw_venue_name?: string | null
+          sold_out?: boolean | null
+          source_url?: string | null
+          starts_at: string
+          status?: string
+          title: string
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          event_url?: string | null
+          id?: string
+          image_url?: string | null
+          linked_event_id?: string | null
+          linked_venue_id?: string | null
+          raw_venue_name?: string | null
+          sold_out?: boolean | null
+          source_url?: string | null
+          starts_at?: string
+          status?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingest_orphans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string | null
           conversation_id: string
           created_at: string
           deleted_at: string | null
+          event_id: string | null
           id: string
           media_height: number | null
           media_source_id: string | null
           media_type: string | null
           media_url: string | null
           media_width: number | null
+          message_type: string
           sender_id: string
         }
         Insert: {
@@ -26823,12 +28813,14 @@ export type Database = {
           conversation_id: string
           created_at?: string
           deleted_at?: string | null
+          event_id?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
           media_type?: string | null
           media_url?: string | null
           media_width?: number | null
+          message_type?: string
           sender_id: string
         }
         Update: {
@@ -26836,12 +28828,14 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           deleted_at?: string | null
+          event_id?: string | null
           id?: string
           media_height?: number | null
           media_source_id?: string | null
           media_type?: string | null
           media_url?: string | null
           media_width?: number | null
+          message_type?: string
           sender_id?: string
         }
         Relationships: [
@@ -26850,6 +28844,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -26863,6 +28864,8 @@ export type Database = {
           read_at: string | null
           recipient_id: string
           sender_id: string | null
+          target_community_post_id: string | null
+          target_conversation_id: string | null
           target_event_id: string | null
           target_post_id: string | null
         }
@@ -26874,6 +28877,8 @@ export type Database = {
           read_at?: string | null
           recipient_id: string
           sender_id?: string | null
+          target_community_post_id?: string | null
+          target_conversation_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -26885,6 +28890,8 @@ export type Database = {
           read_at?: string | null
           recipient_id?: string
           sender_id?: string | null
+          target_community_post_id?: string | null
+          target_conversation_id?: string | null
           target_event_id?: string | null
           target_post_id?: string | null
         }
@@ -26901,6 +28908,20 @@ export type Database = {
             columns: ["sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_community_post_id_fkey"
+            columns: ["target_community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_target_conversation_id_fkey"
+            columns: ["target_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
           {
@@ -26954,11 +28975,13 @@ export type Database = {
           avatar_diamond_url: string | null
           avatar_full_url: string | null
           avatar_url: string | null
-          banner_url: string | null
           banner_focal_y: number
+          banner_url: string | null
           bio: string | null
           created_at: string
           email_hash: string | null
+          home_neighborhood: string | null
+          home_sextant: string | null
           id: string
           interests: string[]
           is_admin: boolean
@@ -26976,11 +28999,13 @@ export type Database = {
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
-          banner_url?: string | null
           banner_focal_y?: number
+          banner_url?: string | null
           bio?: string | null
           created_at?: string
           email_hash?: string | null
+          home_neighborhood?: string | null
+          home_sextant?: string | null
           id: string
           interests?: string[]
           is_admin?: boolean
@@ -26998,11 +29023,13 @@ export type Database = {
           avatar_diamond_url?: string | null
           avatar_full_url?: string | null
           avatar_url?: string | null
-          banner_url?: string | null
           banner_focal_y?: number
+          banner_url?: string | null
           bio?: string | null
           created_at?: string
           email_hash?: string | null
+          home_neighborhood?: string | null
+          home_sextant?: string | null
           id?: string
           interests?: string[]
           is_admin?: boolean
@@ -27015,7 +29042,206 @@ export type Database = {
           username?: string | null
           venue_id?: string | null
         }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      show_alert_subscriptions: {
+        Row: {
+          account_id: string
+          created_at: string
+          id: string
+          subscriber_id: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          id?: string
+          subscriber_id: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          id?: string
+          subscriber_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "show_alert_subscriptions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "show_alert_subscriptions_subscriber_id_fkey"
+            columns: ["subscriber_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sold_out_reports: {
+        Row: {
+          created_at: string | null
+          event_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          event_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          event_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sold_out_reports_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_chat_messages: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          sender_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          sender_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          sender_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_chat_messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_shifts: {
+        Row: {
+          clock_in: string
+          clock_out: string | null
+          created_at: string
+          id: string
+          worker_id: string
+        }
+        Insert: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          id?: string
+          worker_id: string
+        }
+        Update: {
+          clock_in?: string
+          clock_out?: string | null
+          created_at?: string
+          id?: string
+          worker_id?: string
+        }
         Relationships: []
+      }
+      staff_venue_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          venue_id: string
+          worker_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          venue_id: string
+          worker_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          venue_id?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_venue_assignments_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_venue_assignments_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_venue_assignments_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      staff_venue_checkoff: {
+        Row: {
+          checked_at: string
+          venue_id: string
+          worker_id: string
+        }
+        Insert: {
+          checked_at?: string
+          venue_id: string
+          worker_id: string
+        }
+        Update: {
+          checked_at?: string
+          venue_id?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_venue_checkoff_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "staff_venue_checkoff_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       superlatives: {
         Row: {
@@ -27092,76 +29318,49 @@ export type Database = {
         }
         Relationships: []
       }
-      staff_chat_messages: {
+      venue_sources: {
         Row: {
+          default_category: string
+          enabled: boolean
+          horizon_days: number
           id: string
-          sender_id: string
-          body: string
-          created_at: string
+          last_run_at: string | null
+          last_run_note: string | null
+          source_type: string
+          source_url: string
+          venue_id: string
         }
         Insert: {
+          default_category?: string
+          enabled?: boolean
+          horizon_days?: number
           id?: string
-          sender_id: string
-          body: string
-          created_at?: string
+          last_run_at?: string | null
+          last_run_note?: string | null
+          source_type?: string
+          source_url: string
+          venue_id: string
         }
         Update: {
+          default_category?: string
+          enabled?: boolean
+          horizon_days?: number
           id?: string
-          sender_id?: string
-          body?: string
-          created_at?: string
+          last_run_at?: string | null
+          last_run_note?: string | null
+          source_type?: string
+          source_url?: string
+          venue_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "staff_chat_messages_sender_id_fkey"
-            columns: ["sender_id"]
+            foreignKeyName: "venue_sources_venue_id_fkey"
+            columns: ["venue_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
-      }
-      staff_shifts: {
-        Row: {
-          id: string
-          worker_id: string
-          clock_in: string
-          clock_out: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          worker_id: string
-          clock_in?: string
-          clock_out?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          worker_id?: string
-          clock_in?: string
-          clock_out?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      staff_venue_checkoff: {
-        Row: {
-          worker_id: string
-          venue_id: string
-          checked_at: string
-        }
-        Insert: {
-          worker_id: string
-          venue_id: string
-          checked_at?: string
-        }
-        Update: {
-          worker_id?: string
-          venue_id?: string
-          checked_at?: string
-        }
-        Relationships: []
       }
       venues: {
         Row: {
@@ -27288,55 +29487,6 @@ export type Database = {
         Args: { delta: number; p_event_id: string }
         Returns: undefined
       }
-      nearby_venue_accounts: {
-        Args: {
-          user_lat: number
-          user_lng: number
-          max_results?: number
-        }
-        Returns: {
-          profile_id: string
-          username: string
-          venue_name: string
-          neighborhood: string | null
-          avatar_diamond_url: string | null
-          distance_km: number
-        }[]
-      }
-      admin_list_venues_with_account_status: {
-        Args: Record<string, never>
-        Returns: {
-          venue_id: string
-          venue_name: string
-          neighborhood: string | null
-          address: string | null
-          has_account: boolean
-          account_profile_id: string | null
-          account_username: string | null
-          account_banner_url: string | null
-          account_avatar_diamond_url: string | null
-        }[]
-      }
-      admin_pending_events: {
-        Args: Record<string, never>
-        Returns: {
-          id: string
-          title: string
-          starts_at: string
-          venue_id: string | null
-          venue_name: string | null
-          poster_url: string | null
-          category: string | null
-          created_by: string
-          uploader: string | null
-          created_at: string
-          is_duplicate: boolean
-          duplicate_of: string | null
-          source_url: string | null
-          ai_confidence: number | null
-          flag_note: string | null
-        }[]
-      }
       admin_approve_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -27344,6 +29494,40 @@ export type Database = {
       admin_decline_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      admin_list_venues_with_account_status: {
+        Args: never
+        Returns: {
+          account_avatar_diamond_url: string
+          account_banner_url: string
+          account_profile_id: string
+          account_username: string
+          address: string
+          has_account: boolean
+          neighborhood: string
+          venue_id: string
+          venue_name: string
+        }[]
+      }
+      admin_pending_events: {
+        Args: never
+        Returns: {
+          ai_confidence: number
+          category: string
+          created_at: string
+          created_by: string
+          duplicate_of: string
+          flag_note: string
+          id: string
+          is_duplicate: boolean
+          poster_url: string
+          source_url: string
+          starts_at: string
+          title: string
+          uploader: string
+          venue_id: string
+          venue_name: string
+        }[]
       }
       admin_resolve_report: {
         Args: {
@@ -27360,6 +29544,12 @@ export type Database = {
       }
       admin_unsuspend_user: { Args: { p_user_id: string }; Returns: undefined }
       are_mutual_follows: { Args: { other_user_id: string }; Returns: boolean }
+      can_ingest: { Args: { user_id: string }; Returns: boolean }
+      confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
+      consolidate_events: {
+        Args: { p_keep_id: string; p_remove_ids: string[] }
+        Returns: undefined
+      }
       create_conversation_with_members: {
         Args: { p_member_ids: string[]; p_name?: string }
         Returns: string
@@ -27378,12 +29568,7 @@ export type Database = {
         Returns: undefined
       }
       follow_status: { Args: { other_user_id: string }; Returns: string }
-      match_contacts: {
-        Args: { hashes: string[] }
-        Returns: { id: string; username: string; avatar_diamond_url: string | null; avatar_url: string | null; account_type: string; matched_phone_hash: string | null; matched_email_hash: string | null }[]
-      }
       get_unread_count: { Args: never; Returns: number }
-      can_ingest: { Args: { user_id: string }; Returns: boolean }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
         Args: { target_id: string; viewer_id: string }
@@ -27401,6 +29586,18 @@ export type Database = {
       like_activity: {
         Args: { in_activity_type: string; in_source_id: string }
         Returns: undefined
+      }
+      lineup_open_weekend_shows: {
+        Args: { p_limit?: number; p_user: string }
+        Returns: {
+          event_id: string
+          poster_url: string
+          starts_at: string
+          title: string
+          venue_account_id: string
+          venue_diamond_url: string
+          venue_name: string
+        }[]
       }
       list_followers: {
         Args: { target_user_id: string }
@@ -27435,6 +29632,29 @@ export type Database = {
           username: string
         }[]
       }
+      match_contacts: {
+        Args: { hashes: string[] }
+        Returns: {
+          account_type: string
+          avatar_diamond_url: string
+          avatar_url: string
+          id: string
+          matched_email_hash: string
+          matched_phone_hash: string
+          username: string
+        }[]
+      }
+      nearby_venue_accounts: {
+        Args: { max_results?: number; user_lat: number; user_lng: number }
+        Returns: {
+          avatar_diamond_url: string
+          distance_km: number
+          neighborhood: string
+          profile_id: string
+          username: string
+          venue_name: string
+        }[]
+      }
       pending_follow_request_count: { Args: never; Returns: number }
       pending_follow_requests: {
         Args: never
@@ -27451,39 +29671,9 @@ export type Database = {
         Args: { p_post_id: string }
         Returns: number
       }
+      refresh_trending_scores: { Args: never; Returns: undefined }
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
-      confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
-      consolidate_events: { Args: { p_keep_id: string; p_remove_ids: string[] }; Returns: undefined }
-      upload_history: {
-        Args: { p_limit?: number }
-        Returns: {
-          id: string
-          title: string
-          poster_url: string | null
-          starts_at: string
-          created_at: string
-          status: string
-          category: string | null
-          venue_name: string | null
-          neighborhood: string | null
-          uploader: string | null
-        }[]
-      }
-      staff_stats: {
-        Args: Record<string, never>
-        Returns: { pending_count: number; approved_7d: number; rejected_7d: number }[]
-      }
-      staff_roster: {
-        Args: Record<string, never>
-        Returns: {
-          id: string
-          username: string | null
-          avatar_diamond_url: string | null
-          avatar_url: string | null
-          is_admin: boolean
-        }[]
-      }
       scrub_my_account_data: { Args: never; Returns: boolean }
       search_my_messages: {
         Args: { p_query: string }
@@ -27506,6 +29696,7 @@ export type Database = {
           username: string
         }[]
       }
+      send_show_reminders: { Args: never; Returns: number }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       social_diamond_row: {
@@ -27525,10 +29716,45 @@ export type Database = {
         Args: { p_message_id: string }
         Returns: undefined
       }
+      staff_roster: {
+        Args: never
+        Returns: {
+          avatar_diamond_url: string
+          avatar_url: string
+          id: string
+          is_admin: boolean
+          username: string
+        }[]
+      }
+      staff_stats: {
+        Args: never
+        Returns: {
+          approved_7d: number
+          pending_count: number
+          rejected_7d: number
+        }[]
+      }
       unfollow_user: { Args: { other_user_id: string }; Returns: undefined }
       unlike_activity: {
         Args: { in_activity_type: string; in_source_id: string }
         Returns: undefined
+      }
+      upload_history: {
+        Args: { p_limit?: number }
+        Returns: {
+          category: string
+          created_at: string
+          id: string
+          neighborhood: string
+          poster_url: string
+          rejection_note: string
+          rejection_reason: string
+          starts_at: string
+          status: string
+          title: string
+          uploader: string
+          venue_name: string
+        }[]
       }
     }
     Enums: {
@@ -27658,43 +29884,14 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
 } as const
 
 
-=== supabase/.temp/cli-latest ===
-v2.105.0
+===== ./supabase/functions/create-venue-account/index.ts =====
 
-=== supabase/.temp/gotrue-version ===
-v2.189.0
-
-=== supabase/.temp/linked-project.json ===
-{"ref":"lhetwgdlpulgnjetuope","name":"plaster","organization_id":"ymuqwclfsevwoffhhwnl","organization_slug":"ymuqwclfsevwoffhhwnl"}
-
-=== supabase/.temp/pooler-url ===
-postgresql://postgres.lhetwgdlpulgnjetuope@aws-1-us-west-1.pooler.supabase.com:5432/postgres
-
-=== supabase/.temp/postgres-version ===
-17.6.1.104
-
-=== supabase/.temp/project-ref ===
-lhetwgdlpulgnjetuope
-
-=== supabase/.temp/rest-version ===
-v14.5
-
-=== supabase/.temp/storage-migration ===
-optimize-existing-functions-again
-
-=== supabase/.temp/storage-version ===
-v1.60.4
-
-=== supabase/functions/create-venue-account/index.ts ===
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
@@ -27887,7 +30084,8 @@ serve(async (req) => {
 })
 
 
-=== supabase/functions/delete-my-account/index.ts ===
+===== ./supabase/functions/delete-my-account/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
@@ -28002,7 +30200,8 @@ serve(async (req) => {
 })
 
 
-=== supabase/functions/extract-poster/index.ts ===
+===== ./supabase/functions/extract-poster/index.ts =====
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -28338,7 +30537,8 @@ For the "crop" field: express poster art bounds as fractions of the total image 
 })
 
 
-=== supabase/functions/extract-schedule/index.ts ===
+===== ./supabase/functions/extract-schedule/index.ts =====
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -28441,7 +30641,8 @@ Rules:
 })
 
 
-=== supabase/functions/fetch-image/index.ts ===
+===== ./supabase/functions/fetch-image/index.ts =====
+
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts'
 
 const CORS = {
@@ -28504,7 +30705,8 @@ serve(async (req) => {
 })
 
 
-=== supabase/functions/push-notification/index.ts ===
+===== ./supabase/functions/push-notification/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 //
 // push-notification — dispatches APNS pushes for new notification rows.
@@ -28715,7 +30917,8 @@ serve(async (req) => {
 })
 
 
-=== supabase/functions/report-alert/index.ts ===
+===== ./supabase/functions/report-alert/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 //
 // report-alert — sends an email notification to plasterpdx@gmail.com
@@ -28918,7 +31121,1301 @@ function escapeHtml(s: string): string {
 }
 
 
-=== supabase/functions/set-venue-imagery/index.ts ===
+===== ./supabase/functions/scrape-sources/index.ts =====
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { Image as ScriptImage } from "https://deno.land/x/imagescript@1.2.17/mod.ts"
+
+// ── scrape-sources ─────────────────────────────────────────────────────────────
+// Auto-ingest: scrape structured event data into the pending review pipeline.
+// Modes:
+//   Registered sources: { sourceId?: string, all?: boolean, dryRun?: boolean }
+//   Ad-hoc URL import:  { adhocUrl: string, venueId?: string, dryRun?: boolean,
+//                         events?: AdhocEvent[] }  ← import step posts back the
+//                         dryRun-parsed selection (avoids re-running AI extraction)
+//   Venue enrichment:   { enrichVenueFromUrl: string } → venue draft, NO inserts
+// Ad-hoc extraction pipeline (most Portland calendars are client-rendered, so
+// plain HTML often shows zero events):
+//   JSON-LD → hidden-endpoint probes (WP Tribe REST + Squarespace ?format=json)
+//   → one-hop link hunt to a calendar-ish page (re-running JSON-LD + probes there)
+//   → AI text fallback → empty.
+// Gate: is_admin ONLY. Deployed with --no-verify-jwt; the JWT + role check below
+// is the real gate (same pattern as extract-poster).
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+const BOT_UA = 'PlasterBot/0.1 (+https://plasterthewall.com)'
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15'
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024
+const MAX_DAYS_OUT = 120 // default ingest horizon (days); see clampDays
+
+// Configurable horizon: integer clamp 1..180, default 120 (missing/invalid input).
+function clampDays(n: unknown): number {
+  const v = typeof n === 'number' ? Math.round(n) : parseInt(String(n ?? ''), 10)
+  if (!Number.isFinite(v)) return MAX_DAYS_OUT
+  return Math.min(180, Math.max(1, v))
+}
+const PAGE_TIMEOUT_MS = 10000
+const PAGE_FETCH_BUDGET = 5
+const IMAGE_TOTAL_BUDGET_MS = 25000
+const MAX_ADHOC_EVENTS = 40
+const AI_TEXT_CAP = 20000
+const EXTRACT_MODEL = Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6'
+// ai_confidence is NUMERIC in this schema (ImportForm maps high→95):
+const CONFIDENCE_STRUCTURED = 95
+const CONFIDENCE_AI = 70
+
+interface ScrapedEvent {
+  title: string
+  starts_at: string // ISO
+  portland_date: string // YYYY-MM-DD in America/Los_Angeles
+  event_url: string
+  image: string | null
+  description: string | null
+  soldOut?: boolean
+  _venue_name?: string
+}
+
+// schema.org offers.availability → sold out ("SoldOut" or the URL form;
+// offers may be a single object or an array).
+function offersSoldOut(offers: unknown): boolean {
+  const list = Array.isArray(offers) ? offers : offers ? [offers] : []
+  for (const o of list) {
+    const av = (o as Record<string, unknown>)?.availability
+    if (typeof av === 'string' && /soldout/i.test(av)) return true
+  }
+  return false
+}
+
+// Title-level sold-out detection + conservative cleanup: strip a parenthesized
+// "(sold out)" / "[sold out]" or a trailing "- sold out" so dedupe stays
+// consistent (normalizeName comparisons keep working — both sides cleaned).
+function detectSoldOut(rawTitle: string): { title: string; soldOut: boolean } {
+  if (!/\bsold[\s-]?out\b/i.test(rawTitle)) return { title: rawTitle, soldOut: false }
+  const cleaned = rawTitle
+    .replace(/\s*[([]\s*sold[\s-]?out\s*[)\]]/gi, '')
+    .replace(/\s*[-–—:|·]+\s*sold[\s-]?out\s*$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+  return { title: cleaned || rawTitle, soldOut: true }
+}
+
+interface AdhocEvent extends ScrapedEvent {
+  venue_id: string | null
+  venue_name: string | null
+  needsVenue: boolean
+  confidence: number
+  suggested_venue_id?: string
+  suggested_venue_name?: string
+  venue_latest?: string | null // coverage high-water mark (informational)
+}
+
+// Normalize a venue/title for matching + dedupe: lowercase, straighten curly
+// quotes, strip punctuation, collapse whitespace, drop a leading "the ".
+function normalizeName(s: string): string {
+  return s.toLowerCase()
+    .replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, '"')
+    .replace(/^the\s+/, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+// Same scoring as adminShared.venueSimilarity (ported): exact → 1, containment
+// → 0.9, else word overlap / max word count.
+function nameSimilarity(a: string, b: string): number {
+  const na = normalizeName(a), nb = normalizeName(b)
+  if (!na || !nb) return 0
+  if (na === nb) return 1
+  if (na.includes(nb) || nb.includes(na)) return 0.9
+  const words = (s: string) => new Set(s.split(/\s+/).filter(w => w.length > 1))
+  const wa = words(na), wb = words(nb)
+  if (wa.size === 0 || wb.size === 0) return 0
+  let overlap = 0
+  for (const w of wa) { if (wb.has(w)) overlap++ }
+  return overlap / Math.max(wa.size, wb.size)
+}
+
+const VENUE_AUTOMATCH_THRESHOLD = 0.85
+
+interface SourceResult {
+  sourceId: string
+  venue: string
+  url: string
+  found: number
+  wouldInsert?: number
+  samples?: Array<{ title: string; date: string }>
+  inserted?: number
+  skipped?: number
+  error?: string
+  rewriteFailures?: number
+  rewriteError?: string
+  enriched?: number
+  enrichTried?: number
+  beyondHorizon?: number
+  past?: number
+}
+
+// Budgeted page fetcher: PlasterBot UA first; ONE browser-UA retry on
+// 403/404/network-fail. A logical fetch (incl. its retry) costs 1 budget unit.
+class PageFetcher {
+  remaining: number
+  notes: string[] = []
+  constructor(budget = PAGE_FETCH_BUDGET) { this.remaining = budget }
+  async get(url: string): Promise<{ status: number; text: string; contentType: string } | null> {
+    if (this.remaining <= 0) { this.notes.push(`budget exhausted, skipped ${url}`); return null }
+    this.remaining--
+    const attempt = async (ua: string) => {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': ua, 'Accept': '*/*' },
+          signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+          redirect: 'follow',
+        })
+        return { status: res.status, text: await res.text().catch(() => ''), contentType: res.headers.get('content-type') ?? '' }
+      } catch { return { status: 0, text: '', contentType: '' } }
+    }
+    const first = await attempt(BOT_UA)
+    if (first.status !== 0 && first.status !== 403 && first.status !== 404) return first
+    const second = await attempt(BROWSER_UA)
+    if (second.status > 0 && second.status < 400) this.notes.push(`${url} needed browser UA`)
+    return second
+  }
+}
+
+// fetch() requires a scheme — normalize user-entered URLs ("kellysolympian.com")
+// at every entry point so scheme-less input can't fail with "page fetch 0".
+function ensureScheme(u: string): string {
+  const t = u.trim()
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`
+}
+
+// Portland is UTC-7 mid-March..early-Nov, else UTC-8 (month heuristic, same as
+// scripts/ingest.js — exact DST boundary doesn't matter at event-time precision).
+function portlandOffset(dateStr: string): string {
+  const month = parseInt(dateStr.split('-')[1], 10)
+  return month >= 3 && month <= 10 ? '-07:00' : '-08:00'
+}
+
+// Combine extracted date (+ optional time) AS America/Los_Angeles — never a naive
+// new Date() in the UTC runtime. Default show time 20:00.
+function ptTimestamp(date: string, time: string | null): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
+  const t = time && /^\d{2}:\d{2}$/.test(time) ? time : '20:00'
+  const d = new Date(`${date}T${t}:00${portlandOffset(date)}`)
+  return isNaN(d.getTime()) ? null : d
+}
+
+// JSON-LD startDate → Date. Date-only / zone-less ISO = assume Portland.
+function parseStartDate(raw: unknown): Date | null {
+  if (typeof raw !== 'string' || !raw.trim()) return null
+  const s = raw.trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return ptTimestamp(s, null)
+  let d: Date
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    d = new Date(`${s}${portlandOffset(s)}`)
+  } else {
+    d = new Date(s)
+  }
+  return isNaN(d.getTime()) ? null : d
+}
+
+function portlandDate(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(d)
+}
+
+function portlandToday(): string {
+  return portlandDate(new Date())
+}
+
+// Visibility: events parsed but dropped by the horizon window. A page that
+// features only far-future shows would otherwise look like a failed scrape
+// ("found 0") — these counts surface "6 beyond horizon · 2 already past".
+interface WindowStats { beyondHorizon: number; past: number }
+
+// True when d is within [now, maxOut]; tallies WHY an out-of-window event dropped.
+function windowCheck(d: Date, now: number, maxOut: number, stats?: WindowStats): boolean {
+  if (d.getTime() < now) { if (stats) stats.past++; return false }
+  if (d.getTime() > maxOut) { if (stats) stats.beyondHorizon++; return false }
+  return true
+}
+
+// "90" → "3-month", "45" → "45-day" (months only for clean multiples of ~30).
+function horizonLabel(days: number): string {
+  const months = Math.round(days / 30)
+  return months >= 1 && Math.abs(days - months * 30) <= 2 ? `${months}-month` : `${days}-day`
+}
+
+// Pull every <script type="application/ld+json"> block and parse tolerantly.
+function extractJsonLdBlocks(html: string): unknown[] {
+  const blocks: unknown[] = []
+  const re = /<script[^>]*type\s*=\s*["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    try { blocks.push(JSON.parse(m[1].trim())) } catch { /* skip unparseable block */ }
+  }
+  return blocks
+}
+
+function isEventType(t: unknown): boolean {
+  if (typeof t === 'string') return t === 'Event' || t.endsWith('Event')
+  if (Array.isArray(t)) return t.some(isEventType)
+  return false
+}
+
+function collectEvents(node: unknown, out: Record<string, unknown>[]) {
+  if (Array.isArray(node)) { node.forEach(n => collectEvents(n, out)); return }
+  if (!node || typeof node !== 'object') return
+  const obj = node as Record<string, unknown>
+  if (isEventType(obj['@type'])) out.push(obj)
+  if (Array.isArray(obj['@graph'])) collectEvents(obj['@graph'], out)
+}
+
+function pickImage(img: unknown): string | null {
+  if (typeof img === 'string') return img
+  if (Array.isArray(img) && img.length) return pickImage(img[0])
+  if (img && typeof img === 'object' && typeof (img as Record<string, unknown>).url === 'string') {
+    return (img as Record<string, string>).url
+  }
+  return null
+}
+
+function resolveUrl(maybe: unknown, base: string): string {
+  if (typeof maybe !== 'string' || !maybe.trim()) return base
+  try { return new URL(maybe, base).href } catch { return base }
+}
+
+// Decode HTML entities — venue feeds are full of them ("Kelly&#8217;s Olympian",
+// "CARL &#038; WES"). Without this, fuzzy venue matching and dedupe keys see
+// "kelly8217s olympian" and fail. Numeric decimal/hex via fromCodePoint (invalid
+// → left as-is); a pragmatic named set; unknown named entities pass through.
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', nbsp: ' ', quot: '"', apos: "'", rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  hellip: '…', ndash: '–', mdash: '—', eacute: 'é', egrave: 'è', agrave: 'à',
+  ouml: 'ö', uuml: 'ü', ntilde: 'ñ', ccedil: 'ç',
+}
+
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (m, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return m } })
+    .replace(/&#(\d+);/g, (m, dec) => { try { return String.fromCodePoint(parseInt(dec, 10)) } catch { return m } })
+    .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
+}
+
+function stripTags(html: string): string {
+  return decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()
+}
+
+// JSON-LD on a page → ScrapedEvents within the ingest window.
+function mapJsonLdEvents(html: string, baseUrl: string, now: number, maxOut: number, stats?: WindowStats): ScrapedEvent[] {
+  const rawEvents: Record<string, unknown>[] = []
+  for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
+  const mapped: ScrapedEvent[] = []
+  for (const ev of rawEvents) {
+    const rawTitle = typeof ev.name === 'string' ? decodeEntities(ev.name).trim() : ''
+    const { title, soldOut: titleSold } = detectSoldOut(rawTitle)
+    const start = parseStartDate(ev.startDate)
+    if (!title || !start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
+    const desc = typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) : null
+    const loc = ev.location as Record<string, unknown> | undefined
+    const venueName = loc && typeof loc.name === 'string' ? decodeEntities(loc.name).trim() : undefined
+    mapped.push({
+      title,
+      starts_at: start.toISOString(),
+      portland_date: portlandDate(start),
+      event_url: resolveUrl(ev.url, baseUrl),
+      image: pickImage(ev.image),
+      description: desc || null,
+      soldOut: titleSold || offersSoldOut(ev.offers),
+      ...(venueName ? { _venue_name: venueName } : {}),
+    })
+  }
+  return mapped
+}
+
+// Hidden endpoint probe 1: WP The Events Calendar REST API.
+async function probeTribe(fetcher: PageFetcher, origin: string, now: number, maxOut: number, stats?: WindowStats): Promise<ScrapedEvent[]> {
+  const res = await fetcher.get(`${origin}/wp-json/tribe/events/v1/events?per_page=50`)
+  if (!res || res.status !== 200) return []
+  let json: { events?: Array<Record<string, unknown>> } | null = null
+  try { json = JSON.parse(res.text) } catch { return [] }
+  const out: ScrapedEvent[] = []
+  for (const ev of json?.events ?? []) {
+    const { title, soldOut } = detectSoldOut(typeof ev.title === 'string' ? stripTags(ev.title) : '')
+    // Tribe start_date is venue-local ("YYYY-MM-DD HH:MM:SS") — Portland venues → PT.
+    const sd = typeof ev.start_date === 'string' ? ev.start_date : ''
+    const [date, timeFull] = sd.split(' ')
+    const start = date ? ptTimestamp(date, timeFull ? timeFull.slice(0, 5) : null) : null
+    if (!title || !start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
+    const img = ev.image as Record<string, unknown> | undefined
+    const venue = ev.venue as Record<string, unknown> | undefined
+    out.push({
+      title,
+      starts_at: start.toISOString(),
+      portland_date: portlandDate(start),
+      event_url: typeof ev.url === 'string' ? ev.url : origin,
+      image: img && typeof img.url === 'string' ? img.url : null,
+      description: typeof ev.description === 'string' ? stripTags(ev.description).slice(0, 400) || null : null,
+      soldOut,
+      ...(venue && typeof venue.venue === 'string' ? { _venue_name: decodeEntities(venue.venue).trim() } : {}),
+    })
+  }
+  return out
+}
+
+// Hidden endpoint probe 2: Squarespace collection JSON (?format=json).
+async function probeSquarespace(fetcher: PageFetcher, pageUrl: string, now: number, maxOut: number, stats?: WindowStats): Promise<ScrapedEvent[]> {
+  const probeUrl = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}format=json`
+  const res = await fetcher.get(probeUrl)
+  if (!res || res.status !== 200) return []
+  let json: Record<string, unknown> | null = null
+  try { json = JSON.parse(res.text) } catch { return [] }
+  const items = (json?.upcoming ?? json?.items ?? (json?.collection as Record<string, unknown> | undefined)?.items) as Array<Record<string, unknown>> | undefined
+  if (!Array.isArray(items)) return []
+  const origin = new URL(pageUrl).origin
+  const out: ScrapedEvent[] = []
+  for (const it of items) {
+    const { title, soldOut } = detectSoldOut(typeof it.title === 'string' ? decodeEntities(it.title).trim() : '')
+    // Squarespace startDate is epoch milliseconds.
+    const start = typeof it.startDate === 'number' ? new Date(it.startDate) : null
+    if (!title || !start || isNaN(start.getTime())) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
+    out.push({
+      title,
+      starts_at: start.toISOString(),
+      portland_date: portlandDate(start),
+      event_url: typeof it.fullUrl === 'string' ? resolveUrl(it.fullUrl, origin) : pageUrl,
+      image: typeof it.assetUrl === 'string' ? it.assetUrl : null,
+      description: typeof it.excerpt === 'string' ? stripTags(it.excerpt).slice(0, 400) || null : null,
+      soldOut,
+    })
+  }
+  return out
+}
+
+// One-hop link hunt: find the most calendar-ish same-host link on the page.
+function huntEventsLink(html: string, pageUrl: string): string | null {
+  const base = new URL(pageUrl)
+  const re = /<a\b[^>]*href\s*=\s*["']([^"'#]+)["'][^>]*>([\s\S]{0,120}?)<\/a>/gi
+  const KEYWORDS = /(events?|calendar|shows?|schedule|upcoming)/i
+  let best: { url: string; score: number } | null = null
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    let url: URL
+    try { url = new URL(m[1], base) } catch { continue }
+    if (url.host !== base.host) continue
+    if (url.pathname === base.pathname) continue
+    const pathHit = KEYWORDS.test(url.pathname)
+    const textHit = KEYWORDS.test(stripTags(m[2]))
+    if (!pathHit && !textHit) continue
+    // Prefer path matches, then shorter paths (closer to a root calendar page).
+    const score = (pathHit ? 100 : 0) + (textHit ? 10 : 0) - url.pathname.length
+    if (!best || score > best.score) best = { url: url.href, score }
+  }
+  return best?.url ?? null
+}
+
+// Strip ONLY non-content blocks (script/style/noscript/svg + comments). Do NOT
+// strip <nav>/<header>/<footer>: many venue themes (Mississippi Studios, confirmed)
+// render the show list inside hero/header markup, so stripping them handed the AI a
+// page with every event removed — and the non-greedy regex was unsafe on nested
+// tags anyway. The AI prompt already instructs ignoring nav/footer junk.
+function htmlToText(html: string): string {
+  return decodeEntities(
+    html
+      .replace(/<(script|style|noscript|svg)[\s\S]*?<\/\1>/gi, ' ')
+      .replace(/<!--[\s\S]*?-->/g, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, AI_TEXT_CAP)
+}
+
+function ogMeta(html: string, property: string): string | null {
+  const re1 = new RegExp(`<meta[^>]*property\\s*=\\s*["']${property}["'][^>]*content\\s*=\\s*["']([^"']+)["']`, 'i')
+  const re2 = new RegExp(`<meta[^>]*content\\s*=\\s*["']([^"']+)["'][^>]*property\\s*=\\s*["']${property}["']`, 'i')
+  return html.match(re1)?.[1] ?? html.match(re2)?.[1] ?? null
+}
+
+function metaName(html: string, name: string): string | null {
+  const re1 = new RegExp(`<meta[^>]*name\\s*=\\s*["']${name}["'][^>]*content\\s*=\\s*["']([^"']+)["']`, 'i')
+  const re2 = new RegExp(`<meta[^>]*content\\s*=\\s*["']([^"']+)["'][^>]*name\\s*=\\s*["']${name}["']`, 'i')
+  return html.match(re1)?.[1] ?? html.match(re2)?.[1] ?? null
+}
+
+// Per-event detail-page enrichment (import time only, NO AI here): fetch the
+// event's own page and pull a description by priority — Event JSON-LD description
+// → og:description / meta description → nothing. Opportunistically grab JSON-LD /
+// og:image while there when the event has no poster.
+async function enrichFromDetailPage(fetcher: PageFetcher, eventUrl: string): Promise<{ description: string | null; image: string | null }> {
+  const page = await fetcher.get(eventUrl)
+  if (!page || page.status !== 200) return { description: null, image: null }
+  const html = page.text
+  let description: string | null = null
+  let image: string | null = null
+  const rawEvents: Record<string, unknown>[] = []
+  for (const block of extractJsonLdBlocks(html)) collectEvents(block, rawEvents)
+  for (const ev of rawEvents) {
+    if (!description && typeof ev.description === 'string' && ev.description.trim()) {
+      description = stripTags(ev.description).slice(0, 400) || null
+    }
+    if (!image) image = pickImage(ev.image)
+    if (description && image) break
+  }
+  if (!description) {
+    const og = ogMeta(html, 'og:description') ?? metaName(html, 'description')
+    if (og) description = decodeEntities(og).trim().slice(0, 400) || null
+  }
+  if (!image) image = ogMeta(html, 'og:image')
+  return { description, image: image ? resolveUrl(image, eventUrl) : null }
+}
+
+// AI text fallback. Returns [] when the page genuinely has no events — never invents.
+// jsonFeed=true marks the input as a raw JSON calendar feed rather than page text.
+async function aiExtractEvents(pageText: string, pageUrl: string, now: number, maxOut: number, jsonFeed = false, stats?: WindowStats): Promise<ScrapedEvent[]> {
+  const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: EXTRACT_MODEL,
+      max_tokens: 2048,
+      messages: [{
+        role: 'user',
+        content: `Today is ${portlandToday()} in Portland, Oregon. The following is the readable text of an events web page (${pageUrl}). ${jsonFeed ? "The input is a JSON feed from a venue's calendar system — extract the events from it. " : ''}Extract every distinct UPCOMING event as a JSON array — respond with ONLY the JSON array, no markdown fences, no commentary:
+
+[{"title": string, "date": "YYYY-MM-DD", "time": "HH:mm" | null, "venue_name": string | null, "description": string | null, "image_url": string | null, "sold_out": boolean}]
+
+Rules:
+- Only real events — no nav/footer/membership/newsletter junk.
+- description ≤ 2 sentences.
+- Dates without a year roll FORWARD to the next future occurrence from today.
+- Skip anything without a discernible calendar date.
+- Mark sold_out true only if the page explicitly says the event is sold out.
+- If the page has no events, return [] — never invent events.`,
+      }],
+    }),
+  })
+  if (!res.ok) {
+    const errText = await res.text()
+    throw new Error(`Anthropic API error ${res.status}: ${errText.slice(0, 200)}`)
+  }
+  const data = await res.json()
+  const text = data.content?.[0]?.text ?? ''
+  let parsed: unknown
+  try { parsed = JSON.parse(text.replace(/```json|```/g, '').trim()) } catch {
+    throw new Error(`AI response was not valid JSON: ${text.slice(0, 200)}`)
+  }
+  if (!Array.isArray(parsed)) return []
+
+  const mapped: ScrapedEvent[] = []
+  for (const ev of parsed as Record<string, unknown>[]) {
+    const { title, soldOut: titleSold } = detectSoldOut(typeof ev.title === 'string' ? ev.title.trim() : '')
+    const date = typeof ev.date === 'string' ? ev.date.trim() : ''
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue // discard rows without a parseable date
+    const time = typeof ev.time === 'string' && /^\d{2}:\d{2}$/.test(ev.time) ? ev.time : null
+    const start = ptTimestamp(date, time)
+    if (!start) continue
+    if (!windowCheck(start, now, maxOut, stats)) continue
+    mapped.push({
+      title,
+      soldOut: titleSold || ev.sold_out === true,
+      starts_at: start.toISOString(),
+      portland_date: portlandDate(start),
+      event_url: pageUrl,
+      image: typeof ev.image_url === 'string' && ev.image_url.trim() ? resolveUrl(ev.image_url, pageUrl) : null,
+      description: typeof ev.description === 'string' ? ev.description.trim().slice(0, 400) || null : null,
+      ...(typeof ev.venue_name === 'string' && ev.venue_name.trim() ? { _venue_name: ev.venue_name.trim() } : {}),
+    })
+  }
+  return mapped
+}
+
+// Rewrite a scraped description into Plaster's own voice — applied to EVERY
+// description the pipeline ingests (JSON-LD, endpoint probes, AI fallback output),
+// at the pre-insert point. Hardcoded cheap tier (NOT EXTRACT_MODEL). Empty or
+// failed rewrite → null (the info panel handles null) — never the verbatim source.
+const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
+
+// Returns { text } on success; { text: null, error } on FAILURE — the stored
+// description stays null either way (never verbatim source), but failures must be
+// visible upstream: an out-of-credit run must not look like an empty feed.
+async function rewriteDescription(sourceText: string | null, eventTitle: string, venueName: string): Promise<{ text: string | null; error?: string }> {
+  if (!sourceText || !sourceText.trim()) return { text: null } // no source prose → no call, no failure
+  const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+  if (!ANTHROPIC_KEY) return { text: null, error: 'ANTHROPIC_API_KEY secret not set' }
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: REWRITE_MODEL,
+        max_tokens: 200,
+        messages: [{
+          role: 'user',
+          content: `Rewrite this event description in 1–3 sentences for a Portland events app with a warm, plainspoken, slightly playful voice. STRICT GROUNDING: use ONLY facts present in the source text (names, genres, prices, ages, times) — never add, embellish, or guess anything not stated. Do not copy phrases of 5+ consecutive words from the source. If the source has no real descriptive content, return an empty string. Respond with ONLY the rewritten description (or empty), no quotes, no commentary.
+
+Event: ${eventTitle}${venueName ? ` at ${venueName}` : ''}
+Source text: ${sourceText.slice(0, 1500)}`,
+        }],
+      }),
+    })
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const j = await res.json()
+        detail = j?.error?.message ?? j?.error?.type ?? ''
+      } catch { /* non-JSON error body */ }
+      return { text: null, error: `${res.status}${detail ? ` ${String(detail).slice(0, 140)}` : ''}` }
+    }
+    const data = await res.json()
+    const text = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
+    return { text: text || null }
+  } catch (e) { return { text: null, error: e instanceof Error ? e.message : String(e) } }
+}
+
+// Best-effort EXIF/metadata strip: decode + re-encode drops all embedded
+// metadata. Time-guarded and fail-open — on any error, timeout, or unsupported
+// format the caller keeps the original bytes, so ingestion is never blocked or
+// slowed. Returns null to signal "use the original bytes".
+const EXIF_STRIP_BUDGET_MS = 1500
+// Per-run tally of metadata-strip outcomes (reset at the start of each request).
+// When any image fell back to original bytes, the run note flags it.
+const exifStats = { stripped: 0, kept: 0 }
+async function stripMetadataBestEffort(bytes: Uint8Array): Promise<Uint8Array | null> {
+  try {
+    return await Promise.race([
+      (async () => {
+        const img = await ScriptImage.decode(bytes)
+        return await img.encodeJPEG(85)
+      })(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), EXIF_STRIP_BUDGET_MS)),
+    ])
+  } catch {
+    return null
+  }
+}
+
+// Re-host an image into posters/scrape/{uuid}.jpg. Sequential callers share a
+// deadline (IMAGE_TOTAL_BUDGET_MS): past it, fall back to the remote URL so
+// posters can never time out the whole request.
+// deno-lint-ignore no-explicit-any
+async function rehostImage(supabaseService: any, imageUrl: string | null, deadline: number): Promise<string | null> {
+  if (!imageUrl) return null
+  if (Date.now() > deadline) return imageUrl
+  try {
+    const imgRes = await fetch(imageUrl, {
+      headers: { 'User-Agent': BOT_UA },
+      signal: AbortSignal.timeout(Math.max(1000, Math.min(PAGE_TIMEOUT_MS, deadline - Date.now()))),
+    })
+    if (!imgRes.ok) return imageUrl
+    const bytes = new Uint8Array(await imgRes.arrayBuffer())
+    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return imageUrl
+    // Best-effort metadata strip (decode + re-encode); fall back to original bytes.
+    let outBytes = bytes
+    let outType = imgRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
+    const stripped = await stripMetadataBestEffort(bytes)
+    if (stripped && stripped.byteLength > 0) { outBytes = stripped; outType = 'image/jpeg'; exifStats.stripped++ }
+    else { exifStats.kept++ } // stored original bytes — metadata not stripped this time
+    const path = `scrape/${crypto.randomUUID()}.jpg`
+    const { error: upErr } = await supabaseService.storage
+      .from('posters').upload(path, outBytes, { contentType: outType, upsert: false })
+    if (upErr) return imageUrl
+    return supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
+  } catch { return imageUrl }
+}
+
+// Dedupe index for a venue: ANY-status events from yesterday onward. Exact
+// normalized keys PLUS per-Portland-date normalized titles, so retitled twins
+// ("Carl & Wes" vs "AN EVENING WITH, CARL & WES: …") are caught by similarity
+// while distinct same-night events (3:30pm mic vs 8pm show, similarity ~0) stay safe.
+interface DedupeIndex {
+  keys: Set<string> // exact `${portland_date}|${normalized title}`
+  byDate: Map<string, string[]> // portland_date → normalized titles that day
+  // Coverage high-water mark: the venue's max starts_at over pending/published
+  // (visibility only — dedupe remains the overlap protection).
+  maxStartsAt: string | null
+}
+
+const DUP_SIMILARITY_THRESHOLD = 0.8
+
+// deno-lint-ignore no-explicit-any
+async function existingIndex(supabaseService: any, venueId: string, now: number): Promise<DedupeIndex> {
+  const { data: existing } = await supabaseService
+    .from('events')
+    .select('title, starts_at, status')
+    .eq('venue_id', venueId)
+    .gte('starts_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
+  const idx: DedupeIndex = { keys: new Set(), byDate: new Map(), maxStartsAt: null }
+  for (const e of (existing ?? []) as Array<{ title: string; starts_at: string; status: string }>) {
+    addToIndex(idx, portlandDate(new Date(e.starts_at)), e.title)
+    if ((e.status === 'pending' || e.status === 'published') && (!idx.maxStartsAt || e.starts_at > idx.maxStartsAt)) {
+      idx.maxStartsAt = e.starts_at
+    }
+  }
+  return idx
+}
+
+function addToIndex(idx: DedupeIndex, date: string, title: string) {
+  const norm = normalizeName(title)
+  idx.keys.add(`${date}|${norm}`)
+  if (!idx.byDate.has(date)) idx.byDate.set(date, [])
+  idx.byDate.get(date)!.push(norm)
+}
+
+// Duplicate = exact key match OR same venue+date with title similarity ≥ threshold
+// (nameSimilarity's containment rule yields 0.9 for retitled twins).
+function isDuplicate(idx: DedupeIndex, date: string, title: string): boolean {
+  const norm = normalizeName(title)
+  if (idx.keys.has(`${date}|${norm}`)) return true
+  const titles = idx.byDate.get(date)
+  if (titles) {
+    for (const t of titles) {
+      if (nameSimilarity(norm, t) >= DUP_SIMILARITY_THRESHOLD) return true
+    }
+  }
+  return false
+}
+
+// Ad-hoc extraction pipeline for one page: JSON-LD → endpoint probes → (caller
+// handles the link-hunt hop) → AI is also caller-driven. Returns events + method.
+async function extractFromPage(fetcher: PageFetcher, url: string, html: string, now: number, maxOut: number, stats?: WindowStats):
+  Promise<{ events: ScrapedEvent[]; method: string }> {
+  const jsonld = mapJsonLdEvents(html, url, now, maxOut, stats)
+  if (jsonld.length > 0) return { events: jsonld, method: 'jsonld' }
+  const origin = new URL(url).origin
+  const tribe = await probeTribe(fetcher, origin, now, maxOut, stats)
+  if (tribe.length > 0) return { events: tribe, method: 'wp-tribe' }
+  const sq = await probeSquarespace(fetcher, url, now, maxOut, stats)
+  if (sq.length > 0) return { events: sq, method: 'squarespace' }
+  return { events: [], method: 'none' }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  exifStats.stripped = 0; exifStats.kept = 0
+
+  // ── JWT + is_admin check (admin ONLY — not ingester) ─────────────────────
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+  const token = authHeader.replace('Bearer ', '')
+
+  const supabaseService = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+
+  const { data: { user }, error: authError } = await supabaseService.auth.getUser(token)
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+
+  const { data: profile } = await supabaseService
+    .from('profiles').select('is_admin').eq('id', user.id).single()
+  if (!profile?.is_admin) {
+    return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
+      status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+
+  try {
+    const body = await req.json().catch(() => ({}))
+    const now = Date.now()
+
+    // ═══ VENUE ENRICHMENT MODE: draft a venue from its site, NO inserts ══════
+    if (typeof body.enrichVenueFromUrl === 'string' && body.enrichVenueFromUrl.trim()) {
+      const url = ensureScheme(body.enrichVenueFromUrl)
+      const fetcher = new PageFetcher()
+      const page = await fetcher.get(url)
+      if (!page || page.status !== 200) throw new Error(`page fetch ${page?.status ?? 'failed'}`)
+      const html = page.text
+      const origin = new URL(url).origin
+      const notes: string[] = [...fetcher.notes]
+
+      // name: og:site_name → JSON-LD Organization/Place name → cleaned <title>
+      const ogSiteName = ogMeta(html, 'og:site_name')
+      let name: string | null = ogSiteName ? decodeEntities(ogSiteName).trim() : null
+      if (!name) {
+        for (const block of extractJsonLdBlocks(html)) {
+          const stack = [block]
+          while (stack.length && !name) {
+            const node = stack.pop()
+            if (Array.isArray(node)) { stack.push(...node); continue }
+            if (!node || typeof node !== 'object') continue
+            const obj = node as Record<string, unknown>
+            const t = obj['@type']
+            const typeStr = Array.isArray(t) ? t.join(' ') : String(t ?? '')
+            if (/Organization|Place|LocalBusiness|MusicVenue/i.test(typeStr) && typeof obj.name === 'string') {
+              name = obj.name.trim()
+            }
+            if (Array.isArray(obj['@graph'])) stack.push(obj['@graph'])
+          }
+          if (name) break
+        }
+      }
+      if (!name) {
+        const t = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+        if (t) name = stripTags(t).split(/\s*[|–—·-]\s+/)[0].trim() || null
+      }
+
+      // instagram: first PROFILE link (exclude /p/, /reel(s)/, /explore/, /stories/…)
+      let instagram: string | null = null
+      const igRe = /instagram\.com\/([A-Za-z0-9_.]+)/gi
+      let igm: RegExpExecArray | null
+      while ((igm = igRe.exec(html)) !== null) {
+        const handle = igm[1].replace(/\.$/, '')
+        if (/^(p|reel|reels|explore|stories|accounts|share)$/i.test(handle)) continue
+        instagram = `https://instagram.com/${handle}`
+        break
+      }
+
+      // address: JSON-LD PostalAddress → street-pattern scan of page text
+      let address: string | null = null
+      for (const block of extractJsonLdBlocks(html)) {
+        const stack = [block]
+        while (stack.length && !address) {
+          const node = stack.pop()
+          if (Array.isArray(node)) { stack.push(...node); continue }
+          if (!node || typeof node !== 'object') continue
+          const obj = node as Record<string, unknown>
+          const addr = obj.address as Record<string, unknown> | string | undefined
+          if (typeof addr === 'string' && addr.trim()) address = addr.trim()
+          else if (addr && typeof addr === 'object' && typeof addr.streetAddress === 'string') {
+            address = [addr.streetAddress, addr.addressLocality, addr.addressRegion]
+              .filter(p => typeof p === 'string' && p).join(', ')
+          }
+          if (Array.isArray(obj['@graph'])) stack.push(obj['@graph'])
+        }
+        if (address) break
+      }
+      if (!address) {
+        const text = htmlToText(html)
+        const m = text.match(/\b\d{2,5}\s+(?:[NSEW]{1,2}\.?\s+)?[A-Za-z0-9'.]+(?:\s+[A-Za-z0-9'.]+){0,3}\s+(?:St(?:reet)?|Ave(?:nue)?|Blvd|Boulevard|R(?:oa)?d|Way|Dr(?:ive)?|Pl(?:ace)?|L(?:a)?ne?)\b\.?(?:,?\s*(?:Portland|OR)[^.]{0,15})?/i)
+        if (m) address = m[0].trim()
+      }
+
+      // geocode (server-side, MAPBOX_TOKEN secret) — same flow the importer uses
+      let location_lat: number | null = null
+      let location_lng: number | null = null
+      if (address) {
+        const MAPBOX_TOKEN = Deno.env.get('MAPBOX_TOKEN')
+        if (!MAPBOX_TOKEN) {
+          notes.push('MAPBOX_TOKEN secret not set — skipped geocode (set via supabase secrets)')
+        } else {
+          try {
+            const q = encodeURIComponent(`${address}, Portland, OR`)
+            const geoRes = await fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${q}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1&proximity=-122.6784,45.5051`, {
+              signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+            })
+            const geo = await geoRes.json()
+            const center = geo?.features?.[0]?.center
+            if (Array.isArray(center) && center.length === 2) {
+              location_lng = center[0]; location_lat = center[1]
+            }
+          } catch { notes.push('geocode failed') }
+        }
+      }
+
+      return new Response(JSON.stringify({
+        venueDraft: { name, website: origin, instagram, address, location_lat, location_lng },
+        notes,
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
+    // ═══ RELINK-ORPHANS MODE: convert parked orphans into pending events ══════
+    // { relinkOrphans: { venueId, forceAll?, orphanIds? } } — fuzzy-match open
+    // orphans' raw_venue_name against the venue (≥ threshold), or take them all
+    // when forceAll (admin explicitly assigned a group, optionally scoped by ids).
+    // Matches run the FULL insert pipeline: dedupe (incl. similarity), image
+    // re-host, voice rewrite, status='pending'. Duplicates → discarded.
+    if (body.relinkOrphans && typeof body.relinkOrphans.venueId === 'string') {
+      const { venueId, forceAll, orphanIds } = body.relinkOrphans as { venueId: string; forceAll?: boolean; orphanIds?: string[] }
+      const { data: venue } = await supabaseService.from('venues').select('id, name').eq('id', venueId).single()
+      if (!venue) throw new Error('relink: venue not found')
+
+      let oq = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
+      if (Array.isArray(orphanIds) && orphanIds.length > 0) oq = oq.in('id', orphanIds)
+      const { data: orphans, error: oErr } = await oq
+      if (oErr) throw oErr
+
+      interface OrphanRow {
+        id: string; title: string; starts_at: string; raw_venue_name: string | null
+        image_url: string | null; description: string | null; source_url: string | null
+        event_url: string | null; sold_out: boolean | null; confidence: number | null
+      }
+      const matches = ((orphans ?? []) as OrphanRow[]).filter(o =>
+        forceAll === true || (o.raw_venue_name && nameSimilarity(o.raw_venue_name, venue.name) >= VENUE_AUTOMATCH_THRESHOLD),
+      )
+
+      const idx = await existingIndex(supabaseService, venueId, now)
+      const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+      let linked = 0, duplicates = 0
+      for (const o of matches) {
+        const pDate = portlandDate(new Date(o.starts_at))
+        if (isDuplicate(idx, pDate, o.title)) {
+          duplicates++
+          await supabaseService.from('ingest_orphans')
+            .update({ status: 'discarded', linked_venue_id: venueId })
+            .eq('id', o.id)
+          continue
+        }
+        addToIndex(idx, pDate, o.title)
+        const posterUrl = await rehostImage(supabaseService, o.image_url, imageDeadline)
+        const rw = await rewriteDescription(o.description, o.title, venue.name)
+        const { data: insData, error: insErr } = await supabaseService.from('events').insert({
+          venue_id: venueId,
+          title: o.title,
+          category: 'Live Music',
+          poster_url: posterUrl,
+          starts_at: o.starts_at,
+          description: rw.text,
+          view_count: 0,
+          like_count: 0,
+          status: 'pending', // explicit — service role bypasses the 063 trigger
+          sold_out: o.sold_out ?? false,
+          created_by: user.id, // the relinking admin
+          source_url: o.event_url || o.source_url,
+          ai_confidence: o.confidence ?? CONFIDENCE_AI,
+        }).select('id').single()
+        if (insErr) throw new Error(`relink insert: ${insErr.message}`)
+        linked++
+        await supabaseService.from('ingest_orphans')
+          .update({ status: 'linked', linked_venue_id: venueId, linked_event_id: insData.id })
+          .eq('id', o.id)
+      }
+
+      const { count: remaining } = await supabaseService
+        .from('ingest_orphans').select('*', { count: 'exact', head: true }).eq('status', 'open')
+
+      return new Response(JSON.stringify({ relink: { linked, duplicates, remaining: remaining ?? 0 } }), {
+        headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
+    // ═══ AD-HOC MODE: paste any event page URL ═══════════════════════════════
+    if (typeof body.adhocUrl === 'string' && body.adhocUrl.trim()) {
+      const adhocUrl = ensureScheme(body.adhocUrl)
+      const forcedVenueId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
+      const dryRun: boolean = body.dryRun === true
+      const postedEvents: AdhocEvent[] | null = Array.isArray(body.events) ? body.events : null
+      // Configurable ingest horizon for this request (UI sends maxDays; default 120)
+      const horizonDays = clampDays(body.maxDays)
+      const maxOut = now + horizonDays * 24 * 60 * 60 * 1000
+
+      // ── Import step: insert the posted-back selection (no re-parse/AI) ──
+      if (!dryRun && postedEvents) {
+        let inserted = 0, skipped = 0, parked = 0
+        let rewriteFailures = 0
+        let rewriteError: string | undefined
+        let enrichTried = 0, enriched = 0
+        const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+        // Detail-page enrichment gets its own budget: selected count + 2, capped.
+        const detailFetcher = new PageFetcher(Math.min(postedEvents.length + 2, 25))
+        const idxByVenue = new Map<string, DedupeIndex>()
+        for (const ev of postedEvents.slice(0, MAX_ADHOC_EVENTS)) {
+          if (!ev.title || !ev.starts_at) { skipped++; continue }
+          const venueId = ev.venue_id || forcedVenueId
+          if (!venueId) {
+            // ORPHAN QUEUE: unknown venue → park instead of drop. Raw extraction
+            // verbatim — remote image_url not rehosted, description NOT rewritten;
+            // both happen at relink when the venue exists.
+            const { error: orphErr } = await supabaseService.from('ingest_orphans').insert({
+              title: ev.title.trim(),
+              starts_at: ev.starts_at,
+              raw_venue_name: ev.venue_name ?? null,
+              image_url: ev.image ?? null,
+              description: ev.description ?? null,
+              source_url: adhocUrl,
+              event_url: ev.event_url ?? null,
+              sold_out: ev.soldOut ?? false,
+              confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
+              created_by: user.id,
+            })
+            if (orphErr) throw new Error(`park orphan: ${orphErr.message}`)
+            parked++
+            continue
+          }
+          if (!idxByVenue.has(venueId)) idxByVenue.set(venueId, await existingIndex(supabaseService, venueId, now))
+          const idx = idxByVenue.get(venueId)!
+          const pDate = portlandDate(new Date(ev.starts_at))
+          if (isDuplicate(idx, pDate, ev.title)) { skipped++; continue }
+          addToIndex(idx, pDate, ev.title)
+
+          // Detail-page enrichment: only when the listing gave no description and
+          // the event has its own page (no AI in this step).
+          let description = ev.description ?? null
+          let image = ev.image ?? null
+          if ((!description || !description.trim()) && ev.event_url && ev.event_url !== adhocUrl) {
+            enrichTried++
+            const det = await enrichFromDetailPage(detailFetcher, ev.event_url)
+            if (det.description) { description = det.description; enriched++ }
+            if (!image && det.image) image = det.image
+          }
+
+          const posterUrl = await rehostImage(supabaseService, image, imageDeadline)
+          const rw = await rewriteDescription(description, ev.title, ev.venue_name ?? '')
+          if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
+          const { error: insErr } = await supabaseService.from('events').insert({
+            venue_id: venueId,
+            title: ev.title.trim(),
+            category: 'Live Music',
+            poster_url: posterUrl,
+            starts_at: ev.starts_at,
+            description: rw.text,
+            view_count: 0,
+            like_count: 0,
+            status: 'pending', // explicit — service role bypasses the 063 trigger
+            sold_out: ev.soldOut ?? false,
+            created_by: user.id,
+            source_url: ev.event_url || adhocUrl,
+            ai_confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
+          })
+          if (insErr) throw new Error(`insert: ${insErr.message}`)
+          inserted++
+        }
+        return new Response(JSON.stringify({
+          adhoc: {
+            url: adhocUrl, inserted, skipped,
+            ...(parked ? { parked } : {}),
+            ...(enrichTried ? { enriched, enrichTried } : {}),
+            ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}),
+          },
+        }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // ── Parse step: JSON-LD → probes → one-hop hunt → AI → empty ──
+      const fetcher = new PageFetcher()
+      const page = await fetcher.get(adhocUrl)
+      if (!page || page.status !== 200) throw new Error(`page fetch ${page?.status ?? 'failed'}`)
+
+      let sourcePage = adhocUrl
+      let html = page.text
+      let scraped: ScrapedEvent[] = []
+      let method = 'none'
+      let confidence = CONFIDENCE_STRUCTURED
+      // Tally events parsed-but-dropped by the horizon across every path so a
+      // far-future-only page reads "found 0 · 6 beyond horizon", not a failure.
+      const windowStats: WindowStats = { beyondHorizon: 0, past: 0 }
+
+      // Raw-JSON feed (e.g. a WP Tribe endpoint pasted directly): skip the HTML
+      // paths and hand the pretty-printed JSON to the AI extractor.
+      let jsonFeed: string | null = null
+      const bodyTrim = page.text.trim()
+      if (page.contentType.includes('application/json') || bodyTrim.startsWith('{') || bodyTrim.startsWith('[')) {
+        try { jsonFeed = JSON.stringify(JSON.parse(bodyTrim), null, 2) } catch { /* not JSON — HTML paths below */ }
+      }
+
+      if (jsonFeed) {
+        scraped = await aiExtractEvents(jsonFeed.slice(0, AI_TEXT_CAP), adhocUrl, now, maxOut, true, windowStats)
+        method = 'json-feed'
+        confidence = CONFIDENCE_AI
+      } else {
+        ;({ events: scraped, method } = await extractFromPage(fetcher, adhocUrl, html, now, maxOut, windowStats))
+
+        // One-hop link hunt when the page itself yields nothing structured.
+        if (scraped.length === 0) {
+          const hunted = huntEventsLink(html, adhocUrl)
+          if (hunted) {
+            const huntedPage = await fetcher.get(hunted)
+            if (huntedPage && huntedPage.status === 200) {
+              const result = await extractFromPage(fetcher, hunted, huntedPage.text, now, maxOut, windowStats)
+              if (result.events.length > 0) {
+                scraped = result.events
+                method = `${result.method} (hunted)`
+                sourcePage = hunted
+                html = huntedPage.text
+              } else {
+                // keep the hunted page as the AI target — it's the events page
+                sourcePage = hunted
+                html = huntedPage.text
+              }
+            }
+          }
+        }
+
+        // AI text fallback — only after structured paths come up empty.
+        if (scraped.length === 0) {
+          scraped = await aiExtractEvents(htmlToText(html), sourcePage, now, maxOut, false, windowStats)
+          confidence = CONFIDENCE_AI
+          method = sourcePage === adhocUrl ? 'ai' : 'ai (hunted)'
+        }
+      }
+
+      scraped = scraped.slice(0, MAX_ADHOC_EVENTS)
+
+      // Poster fallback: page og:image when the event carries none.
+      const pageOg = ogMeta(html, 'og:image')
+      // Venue resolution: forced venueId, else FUZZY name match (never create) —
+      // exact-normalized first, then similarity ≥ threshold auto-matches; below
+      // threshold stays needsVenue but carries the best guess as a suggestion.
+      const { data: allVenues } = await supabaseService.from('venues').select('id, name')
+      const venueList = (allVenues ?? []) as Array<{ id: string; name: string }>
+      const venueByNorm = new Map(venueList.map(v => [normalizeName(v.name), v]))
+
+      function matchVenue(rawName: string): { match: { id: string; name: string } | null; suggestion: { id: string; name: string } | null } {
+        const exact = venueByNorm.get(normalizeName(rawName))
+        if (exact) return { match: exact, suggestion: null }
+        let best: { v: { id: string; name: string }; score: number } | null = null
+        for (const v of venueList) {
+          const score = nameSimilarity(rawName, v.name)
+          if (!best || score > best.score) best = { v, score }
+        }
+        if (best && best.score >= VENUE_AUTOMATCH_THRESHOLD) return { match: best.v, suggestion: null }
+        if (best && best.score >= 0.5) return { match: null, suggestion: best.v }
+        return { match: null, suggestion: null }
+      }
+
+      const adhocEvents: AdhocEvent[] = scraped.map(ev => {
+        const rawVenueName = ev._venue_name ?? null
+        let venue_id: string | null = forcedVenueId
+        let venue_name: string | null = rawVenueName
+        let suggestion: { id: string; name: string } | null = null
+        if (!venue_id && rawVenueName) {
+          const { match, suggestion: sugg } = matchVenue(rawVenueName)
+          if (match) { venue_id = match.id; venue_name = match.name }
+          else suggestion = sugg
+        }
+        return {
+          ...ev,
+          image: ev.image ?? pageOg,
+          venue_id,
+          venue_name,
+          needsVenue: !venue_id,
+          confidence,
+          ...(suggestion ? { suggested_venue_id: suggestion.id, suggested_venue_name: suggestion.name } : {}),
+        }
+      })
+
+      // Dedupe annotation (per resolved venue) — exact key OR title similarity
+      const idxByVenue = new Map<string, DedupeIndex>()
+      let wouldInsert = 0
+      const annotated = [] as Array<AdhocEvent & { duplicate: boolean }>
+      for (const ev of adhocEvents) {
+        let duplicate = false
+        let venueLatest: string | null = null
+        if (ev.venue_id) {
+          if (!idxByVenue.has(ev.venue_id)) idxByVenue.set(ev.venue_id, await existingIndex(supabaseService, ev.venue_id, now))
+          const idx = idxByVenue.get(ev.venue_id)!
+          venueLatest = idx.maxStartsAt
+          duplicate = isDuplicate(idx, ev.portland_date, ev.title)
+          if (!duplicate) { addToIndex(idx, ev.portland_date, ev.title); wouldInsert++ }
+        }
+        annotated.push({ ...ev, duplicate, venue_latest: venueLatest })
+      }
+
+      if (dryRun) {
+        return new Response(JSON.stringify({
+          adhoc: {
+            url: adhocUrl, sourcePage, method, found: annotated.length, wouldInsert, events: annotated, notes: fetcher.notes,
+            ...(windowStats.beyondHorizon ? { beyondHorizon: windowStats.beyondHorizon } : {}),
+            ...(windowStats.past ? { past: windowStats.past } : {}),
+            horizonLabel: horizonLabel(horizonDays),
+          },
+        }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // Real run without a posted selection: insert every resolved, non-dup event
+      let inserted = 0, skipped = 0
+      let rewriteFailures = 0
+      let rewriteError: string | undefined
+      const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+      for (const ev of annotated) {
+        if (ev.needsVenue || ev.duplicate) { skipped++; continue }
+        const posterUrl = await rehostImage(supabaseService, ev.image, imageDeadline)
+        const rw = await rewriteDescription(ev.description, ev.title, ev.venue_name ?? '')
+        if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
+        const { error: insErr } = await supabaseService.from('events').insert({
+          venue_id: ev.venue_id,
+          title: ev.title,
+          category: 'Live Music',
+          poster_url: posterUrl,
+          starts_at: ev.starts_at,
+          description: rw.text,
+          view_count: 0,
+          like_count: 0,
+          status: 'pending',
+          sold_out: ev.soldOut ?? false,
+          created_by: user.id,
+          source_url: ev.event_url || sourcePage,
+          ai_confidence: ev.confidence,
+        })
+        if (insErr) throw new Error(`insert: ${insErr.message}`)
+        inserted++
+      }
+      return new Response(JSON.stringify({
+        adhoc: {
+          url: adhocUrl, sourcePage, method, inserted, skipped, notes: fetcher.notes,
+          ...(rewriteFailures ? { rewriteFailures, rewriteError } : {}),
+          ...(windowStats.beyondHorizon ? { beyondHorizon: windowStats.beyondHorizon } : {}),
+          ...(windowStats.past ? { past: windowStats.past } : {}),
+          horizonLabel: horizonLabel(horizonDays),
+        },
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
+    // ═══ REGISTERED-SOURCES MODE (unchanged behavior) ════════════════════════
+    const sourceId: string | undefined = body.sourceId
+    const all: boolean = body.all === true
+    const dryRun: boolean = body.dryRun === true
+
+    if (!sourceId && !all) {
+      return new Response(JSON.stringify({ error: 'Pass adhocUrl, enrichVenueFromUrl, sourceId, or all:true' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+      })
+    }
+
+    let q = supabaseService
+      .from('venue_sources')
+      .select('id, venue_id, source_url, source_type, default_category, enabled, horizon_days, venues(name)')
+      .eq('enabled', true)
+      .eq('source_type', 'jsonld')
+    if (sourceId) q = q.eq('id', sourceId)
+    const { data: sources, error: srcError } = await q
+    if (srcError) throw srcError
+
+    const results: SourceResult[] = []
+
+    for (const src of sources ?? []) {
+      const venueName = (src as unknown as { venues: { name: string } | null }).venues?.name ?? '(unknown venue)'
+      // Normalize at run time so a source saved without a scheme can't silently
+      // fail on every nightly run.
+      const srcUrl = ensureScheme(src.source_url)
+      const result: SourceResult = { sourceId: src.id, venue: venueName, url: srcUrl, found: 0 }
+      results.push(result)
+
+      try {
+        // 1. Fetch + structured extraction: JSON-LD → wp-tribe → squarespace.
+        // NO link-hunt and NO AI fallback for unattended runs — registered URLs
+        // should be the events page itself, and unattended AI burns money silently.
+        const fetcher = new PageFetcher()
+        const pageRes = await fetcher.get(srcUrl)
+        if (!pageRes || pageRes.status !== 200) throw new Error(`page fetch ${pageRes?.status ?? 'failed'}`)
+        // Per-source ingest horizon (venue_sources.horizon_days, default 120)
+        const srcDays = clampDays(src.horizon_days)
+        const maxOutSrc = now + srcDays * 24 * 60 * 60 * 1000
+        const windowStats: WindowStats = { beyondHorizon: 0, past: 0 }
+        const { events: mapped, method } = await extractFromPage(fetcher, srcUrl, pageRes.text, now, maxOutSrc, windowStats)
+        result.found = mapped.length
+        if (windowStats.beyondHorizon) result.beyondHorizon = windowStats.beyondHorizon
+        if (windowStats.past) result.past = windowStats.past
+
+        // 2. Dedupe — venue + Portland date, exact normalized title OR similarity
+        // ≥ threshold, against existing rows of ANY status AND within this batch.
+        // Idempotent.
+        const idx = await existingIndex(supabaseService, src.venue_id, now)
+        const fresh: ScrapedEvent[] = []
+        let skipped = 0
+        for (const ev of mapped) {
+          if (isDuplicate(idx, ev.portland_date, ev.title)) { skipped++; continue }
+          addToIndex(idx, ev.portland_date, ev.title)
+          fresh.push(ev)
+        }
+
+        // 3. Dry run: report only
+        if (dryRun) {
+          result.wouldInsert = fresh.length
+          result.samples = fresh.slice(0, 3).map(e => ({ title: e.title, date: e.portland_date }))
+          continue
+        }
+
+        // 4. Real run: detail-enrich (no AI) + re-host image + insert pending
+        let inserted = 0
+        let rewriteFailures = 0
+        let rewriteError: string | undefined
+        let enrichTried = 0, enriched = 0
+        const imageDeadline = Date.now() + IMAGE_TOTAL_BUDGET_MS
+        const detailFetcher = new PageFetcher(Math.min(fresh.length + 2, 25))
+        for (const ev of fresh) {
+          let description = ev.description
+          let image = ev.image
+          if ((!description || !description.trim()) && ev.event_url && ev.event_url !== srcUrl) {
+            enrichTried++
+            const det = await enrichFromDetailPage(detailFetcher, ev.event_url)
+            if (det.description) { description = det.description; enriched++ }
+            if (!image && det.image) image = det.image
+          }
+          const posterUrl = await rehostImage(supabaseService, image, imageDeadline)
+          const rw = await rewriteDescription(description, ev.title, venueName)
+          if (rw.error) { rewriteFailures++; rewriteError ??= rw.error }
+          const { error: insErr } = await supabaseService.from('events').insert({
+            venue_id: src.venue_id,
+            title: ev.title,
+            category: src.default_category,
+            poster_url: posterUrl,
+            starts_at: ev.starts_at,
+            description: rw.text,
+            view_count: 0,
+            like_count: 0,
+            // Service-role inserts BYPASS the 063 staging trigger — set explicitly:
+            status: 'pending',
+            sold_out: ev.soldOut ?? false,
+            created_by: user.id, // the calling admin, so review groups under them
+            source_url: ev.event_url,
+            ai_confidence: CONFIDENCE_STRUCTURED,
+          })
+          if (insErr) { result.error = `insert: ${insErr.message}`; break }
+          inserted++
+        }
+
+        result.inserted = inserted
+        result.skipped = skipped
+        if (rewriteFailures) { result.rewriteFailures = rewriteFailures; result.rewriteError = rewriteError }
+        if (enrichTried) { result.enriched = enriched; result.enrichTried = enrichTried }
+
+        // 5. Stamp the source row (method + horizon discards + enrichment + rewrite failures)
+        const horizonNote = windowStats.beyondHorizon ? ` · ${windowStats.beyondHorizon} beyond ${horizonLabel(srcDays)} horizon` : ''
+        const pastNote = windowStats.past ? ` · ${windowStats.past} already past` : ''
+        const enrichNote = enrichTried ? ` · enriched ${enriched}/${enrichTried} from detail pages` : ''
+        const rwNote = rewriteFailures ? ` · descriptions failed: ${rewriteFailures} (${rewriteError})` : ''
+        // Only noted when at least one image fell back to original (metadata-bearing) bytes.
+        const exifNote = exifStats.kept ? ` · exif: ${exifStats.kept} kept(fallback)/${exifStats.stripped} stripped` : ''
+        await supabaseService.from('venue_sources').update({
+          last_run_at: new Date().toISOString(),
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${horizonNote}${pastNote}${enrichNote}${rwNote}${exifNote}`,
+        }).eq('id', src.id)
+      } catch (err) {
+        // Per-source failure is a note, not a batch failure
+        result.error = err instanceof Error ? err.message : String(err)
+      }
+    }
+
+    return new Response(JSON.stringify({ results }), {
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    })
+  }
+})
+
+
+===== ./supabase/functions/set-venue-imagery/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
@@ -29061,7 +32558,147 @@ serve(async (req) => {
 })
 
 
-=== supabase/functions/va-decision-alert/index.ts ===
+===== ./supabase/functions/submit-community-post/index.ts =====
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+
+// Submits a neighborhood community-wall post. AI moderation is authoritative and
+// runs server-side: a clean image publishes immediately; anything flagged
+// (sexual / violent / hateful / disturbing) drops to 'pending' for admin review.
+// Moderation failures fail SAFE → 'pending' (never auto-publish unreviewed).
+
+const MODERATE_MODEL = Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6'
+const POST_TYPES = ['personal', 'business', 'lost_pet']
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return json({ error: 'Unauthorized' }, 401)
+  const token = authHeader.replace('Bearer ', '')
+
+  const supa = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const { data: { user }, error: authError } = await supa.auth.getUser(token)
+  if (authError || !user) return json({ error: 'Unauthorized' }, 401)
+
+  // Author must have a declared neighborhood (the post is scoped to their region).
+  const { data: profile } = await supa.from('profiles')
+    .select('home_neighborhood, home_sextant').eq('id', user.id).single()
+  if (!profile?.home_neighborhood || !profile?.home_sextant) {
+    return json({ error: 'Set your neighborhood in your profile first.' }, 400)
+  }
+
+  let body: { image?: { base64: string; mimeType: string }; title?: string; body?: string; post_type?: string; expires_at?: string }
+  try { body = await req.json() } catch { return json({ error: 'Bad request' }, 400) }
+  if (!body.image?.base64) return json({ error: 'An image is required.' }, 400)
+
+  const postType = POST_TYPES.includes(body.post_type ?? '') ? body.post_type! : 'personal'
+
+  // ── AI moderation (fail safe to pending) ──────────────────
+  let flagged = false
+  let flagReason = ''
+  let moderationOk = false
+  try {
+    const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY')
+    if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set')
+    const prompt = `You are a content moderator for a friendly neighborhood community board (think: lost pets, yard sales, free stuff, local notices, event flyers, community photos).
+
+Look at this image and decide if it needs human review before going public.
+
+FLAG it (needs review) only if it plausibly contains: nudity or sexual content, graphic violence or gore, hate symbols or hateful content, hard-drug use, or genuinely disturbing/upsetting imagery.
+
+Do NOT flag ordinary, innocent community content — pets, animals, people at normal events, kids, food, yard-sale items, furniture, flyers, handwritten notes, storefronts, scenery. When in doubt about ordinary content, do NOT flag.
+
+Return ONLY a JSON object, no markdown:
+{ "flagged": true or false, "reason": "short reason if flagged, else empty string" }`
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: MODERATE_MODEL,
+        max_tokens: 256,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: body.image.mimeType || 'image/jpeg', data: body.image.base64 } },
+            { type: 'text', text: prompt },
+          ],
+        }],
+      }),
+    })
+    if (!res.ok) throw new Error(`Anthropic ${res.status}`)
+    const data = await res.json()
+    const text = data.content?.[0]?.text ?? ''
+    const parsed = JSON.parse(text.replace(/```json|```/g, '').trim())
+    flagged = !!parsed.flagged
+    flagReason = typeof parsed.reason === 'string' ? parsed.reason : ''
+    moderationOk = true
+  } catch (e) {
+    // Fail safe: route to review rather than auto-publishing unmoderated content.
+    console.error('[submit-community-post] moderation failed:', e)
+    flagged = false
+    flagReason = 'moderation unavailable — routed to review'
+    moderationOk = false
+  }
+
+  // ── Upload the image (service role) ───────────────────────
+  let imageUrl: string | null = null
+  try {
+    const bin = Uint8Array.from(atob(body.image.base64), c => c.charCodeAt(0))
+    const path = `community/${crypto.randomUUID()}.jpg`
+    const { error: upErr } = await supa.storage.from('posters').upload(path, bin, { contentType: body.image.mimeType || 'image/jpeg', upsert: false })
+    if (upErr) throw upErr
+    imageUrl = supa.storage.from('posters').getPublicUrl(path).data.publicUrl
+  } catch (e) {
+    console.error('[submit-community-post] upload failed:', e)
+    return json({ error: 'Image upload failed.' }, 500)
+  }
+
+  // Clean + moderation succeeded → publish; otherwise → pending review.
+  // Lost-pet broadcasts and business posts always go through admin approval:
+  // lost-pet because approval fires the neighborhood alert, business because it
+  // is gated on payment (admin flips is_paid, then approves).
+  const status = (postType === 'lost_pet' || postType === 'business')
+    ? 'pending'
+    : ((moderationOk && !flagged) ? 'published' : 'pending')
+  const expiresAt = body.expires_at ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: inserted, error: insErr } = await supa.from('community_posts').insert({
+    author_id: user.id,
+    neighborhood: profile.home_neighborhood,
+    sextant: profile.home_sextant,
+    post_type: postType,
+    title: body.title?.slice(0, 120) || null,
+    body: body.body?.slice(0, 1000) || null,
+    image_url: imageUrl,
+    status,
+    flagged,
+    flag_reason: flagReason || null,
+    expires_at: expiresAt,
+  }).select('id, status').single()
+
+  if (insErr) {
+    console.error('[submit-community-post] insert failed:', insErr)
+    return json({ error: 'Could not save your post.' }, 500)
+  }
+
+  return json({ id: inserted.id, status, flagged, reason: flagReason })
+})
+
+
+===== ./supabase/functions/va-decision-alert/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 //
 // va-decision-alert — emails a user when their VA account request
@@ -29200,7 +32837,8 @@ function escapeHtml(s: string): string {
 }
 
 
-=== supabase/functions/va-request-alert/index.ts ===
+===== ./supabase/functions/va-request-alert/index.ts =====
+
 // deno-lint-ignore-file no-explicit-any
 //
 // va-request-alert — sends an admin email when a user requests VA account
@@ -29341,7 +32979,8 @@ function escapeHtml(s: string): string {
 }
 
 
-=== supabase/migrations/002_auth_schema.sql ===
+===== ./supabase/migrations/002_auth_schema.sql =====
+
 -- ============================================================
 -- Migration 002: auth schema additions
 -- Run in Supabase SQL editor.
@@ -29413,7 +33052,8 @@ create policy "Users can accept incoming requests"
 --   using (bucket_id = 'avatars' and auth.uid()::text = (storage.foldername(name))[1]);
 
 
-=== supabase/migrations/003_event_likes.sql ===
+===== ./supabase/migrations/003_event_likes.sql =====
+
 -- ============================================================
 -- Migration 003: event likes
 -- Run in Supabase SQL editor.
@@ -29457,7 +33097,8 @@ as $$
 $$;
 
 
-=== supabase/migrations/004_event_interactions.sql ===
+===== ./supabase/migrations/004_event_interactions.sql =====
+
 -- 004_event_interactions.sql
 -- Run in Supabase SQL editor (Dashboard → SQL Editor)
 -- Adds: add_view_count RPC, attendees, event_wall_posts, post_likes, add_post_like_count RPC
@@ -29549,23 +33190,27 @@ as $$
 $$;
 
 
-=== supabase/migrations/005_venues_hours.sql ===
+===== ./supabase/migrations/005_venues_hours.sql =====
+
 -- Add hours column to venues
 alter table public.venues add column if not exists hours text;
 
 
-=== supabase/migrations/006_venue_banner.sql ===
+===== ./supabase/migrations/006_venue_banner.sql =====
+
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS banner_url text;
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS diamond_focal_x float DEFAULT 0.5;
 ALTER TABLE venues ADD COLUMN IF NOT EXISTS diamond_focal_y float DEFAULT 0.5;
 
 
-=== supabase/migrations/007_avatar_diamond_separate.sql ===
+===== ./supabase/migrations/007_avatar_diamond_separate.sql =====
+
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_full_url text;
 ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_diamond_url text;
 
 
-=== supabase/migrations/008_messaging.sql ===
+===== ./supabase/migrations/008_messaging.sql =====
+
 -- Conversations (1-on-1 for v1, structure supports group later)
 create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
@@ -29653,7 +33298,8 @@ alter publication supabase_realtime add table messages;
 alter publication supabase_realtime add table conversations;
 
 
-=== supabase/migrations/009_add_admin_auth.sql ===
+===== ./supabase/migrations/009_add_admin_auth.sql =====
+
 -- Add is_admin column to profiles (defaults to false)
 ALTER TABLE profiles
   ADD COLUMN IF NOT EXISTS is_admin boolean NOT NULL DEFAULT false;
@@ -29683,7 +33329,8 @@ CREATE INDEX IF NOT EXISTS profiles_is_admin_idx ON profiles(is_admin)
   WHERE is_admin = true;
 
 
-=== supabase/migrations/010_lock_down_rls.sql ===
+===== ./supabase/migrations/010_lock_down_rls.sql =====
+
 -- Fix 1: Enable RLS on admin_notifications (was fully open)
 ALTER TABLE admin_notifications ENABLE ROW LEVEL SECURITY;
 
@@ -29746,7 +33393,8 @@ CREATE POLICY "events_update"
   );
 
 
-=== supabase/migrations/011_lock_down_venues_rls.sql ===
+===== ./supabase/migrations/011_lock_down_venues_rls.sql =====
+
 -- Migration 011: lock down venues RLS
 -- UPDATE/DELETE now requires is_admin() or created_by ownership.
 -- SELECT and INSERT are unchanged.
@@ -29767,7 +33415,8 @@ CREATE POLICY "Venue creator or admin can delete venues"
   USING (public.is_admin(auth.uid()) OR created_by = auth.uid());
 
 
-=== supabase/migrations/012_add_event_views.sql ===
+===== ./supabase/migrations/012_add_event_views.sql =====
+
 -- Add view_count to events (column already exists on some envs — safe no-op)
 ALTER TABLE public.events
   ADD COLUMN IF NOT EXISTS view_count integer NOT NULL DEFAULT 0;
@@ -29832,7 +33481,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.register_event_view(uuid) TO authenticated;
 
 
-=== supabase/migrations/013_view_count_engagement_rules.sql ===
+===== ./supabase/migrations/013_view_count_engagement_rules.sql =====
+
 -- Reset all view counts to start fresh under new rules
 UPDATE events SET view_count = 0;
 
@@ -29903,7 +33553,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.register_event_view(uuid) TO authenticated;
 
 
-=== supabase/migrations/014_event_wall_posts_replies_and_delete.sql ===
+===== ./supabase/migrations/014_event_wall_posts_replies_and_delete.sql =====
+
 -- Add columns for replies and soft-delete
 ALTER TABLE public.event_wall_posts
   ADD COLUMN IF NOT EXISTS parent_id uuid REFERENCES public.event_wall_posts(id) ON DELETE CASCADE,
@@ -30001,7 +33652,8 @@ CREATE POLICY "Users can insert posts up to 2 levels deep"
   );
 
 
-=== supabase/migrations/015_event_wall_posts_rls_cleanup.sql ===
+===== ./supabase/migrations/015_event_wall_posts_rls_cleanup.sql =====
+
 -- Drop redundant legacy policies that duplicate or override the new ones
 DROP POLICY IF EXISTS posts_insert ON public.event_wall_posts;
 DROP POLICY IF EXISTS posts_delete ON public.event_wall_posts;
@@ -30041,7 +33693,8 @@ CREATE POLICY "Admins can update any post"
   WITH CHECK (public.is_admin(auth.uid()));
 
 
-=== supabase/migrations/016_event_wall_posts_flat_replies.sql ===
+===== ./supabase/migrations/016_event_wall_posts_flat_replies.sql =====
+
 -- Switch from tree-with-depth-limit to flat-replies model.
 -- Replies can technically nest at any depth in the data model, but the UI
 -- will flatten everything under the top-level parent.
@@ -30055,7 +33708,8 @@ CREATE POLICY "Users can insert their own posts"
   WITH CHECK (user_id = auth.uid());
 
 
-=== supabase/migrations/017_notifications.sql ===
+===== ./supabase/migrations/017_notifications.sql =====
+
 -- Notifications table
 CREATE TABLE IF NOT EXISTS public.notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30168,7 +33822,8 @@ CREATE TRIGGER event_wall_posts_after_insert_mentions
   EXECUTE FUNCTION public.handle_wall_post_insert();
 
 
-=== supabase/migrations/018_notifications_profile_fk.sql ===
+===== ./supabase/migrations/018_notifications_profile_fk.sql =====
+
 -- Repoint notifications FKs from auth.users to profiles so PostgREST embedded selects can auto-resolve.
 -- profiles.id is always in sync with auth.users.id (profiles is keyed off auth users via FK).
 -- This is safe because the underlying UUIDs are identical.
@@ -30188,7 +33843,8 @@ ALTER TABLE public.notifications
   FOREIGN KEY (recipient_id) REFERENCES public.profiles(id) ON DELETE CASCADE;
 
 
-=== supabase/migrations/019_search_users_rpc.sql ===
+===== ./supabase/migrations/019_search_users_rpc.sql =====
+
 -- searchUsers: returns up to 8 users whose username starts with the given prefix.
 -- Excludes the calling user. Ranks users with prior interaction first.
 -- Interaction = either user has posted a wall post that mentions the other, OR
@@ -30245,7 +33901,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.search_users(text) TO authenticated;
 
 
-=== supabase/migrations/020_unread_count_rpc.sql ===
+===== ./supabase/migrations/020_unread_count_rpc.sql =====
+
 -- Returns combined count of:
 -- 1. Unread shouts (notifications.read_at IS NULL for this user)
 -- 2. Unread messages: messages newer than the user's last_read_at
@@ -30286,7 +33943,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.get_unread_count() TO authenticated;
 
 
-=== supabase/migrations/021_enable_realtime_unread.sql ===
+===== ./supabase/migrations/021_enable_realtime_unread.sql =====
+
 -- Add tables to supabase_realtime publication so client subscriptions can fire
 DO $$
 BEGIN
@@ -30313,7 +33971,8 @@ BEGIN
 END $$;
 
 
-=== supabase/migrations/022_friendships_schema.sql ===
+===== ./supabase/migrations/022_friendships_schema.sql =====
+
 -- Friendship/connection table.
 -- One row per relationship. Status flips pending → accepted; row deleted on decline, retract, or unfriend.
 
@@ -30509,7 +34168,8 @@ BEGIN
 END $$;
 
 
-=== supabase/migrations/023_account_type.sql ===
+===== ./supabase/migrations/023_account_type.sql =====
+
 -- Account type distinguishes users for relationship semantics:
 -- 'person' = mutual Connect (default for existing users)
 -- 'artist' = one-way Follow (bands, solo artists, performers)
@@ -30525,7 +34185,8 @@ CREATE INDEX IF NOT EXISTS profiles_account_type_idx ON public.profiles(account_
 UPDATE public.profiles SET account_type = 'person' WHERE account_type IS NULL;
 
 
-=== supabase/migrations/024_unified_follows.sql ===
+===== ./supabase/migrations/024_unified_follows.sql =====
+
 -- Drop old fragmented tables
 DROP TABLE IF EXISTS public.friendships CASCADE;
 DROP TABLE IF EXISTS public.follows CASCADE;
@@ -30782,13 +34443,15 @@ BEGIN
 END $$;
 
 
-=== supabase/migrations/025_follows_default_status.sql ===
+===== ./supabase/migrations/025_follows_default_status.sql =====
+
 -- Add default 'pending' to follows.status so client inserts can omit it.
 -- The BEFORE INSERT trigger handles auto-accept for artist/venue targets.
 ALTER TABLE public.follows ALTER COLUMN status SET DEFAULT 'pending';
 
 
-=== supabase/migrations/026_profile_show_social_publicly.sql ===
+===== ./supabase/migrations/026_profile_show_social_publicly.sql =====
+
 -- Privacy toggle for the social diamond row on profile views.
 -- When true (default), other people can see this user's followers/following row.
 -- When false, the row only renders for the user themselves.
@@ -30799,7 +34462,8 @@ ALTER TABLE public.profiles
 UPDATE public.profiles SET show_social_publicly = true WHERE show_social_publicly IS NULL;
 
 
-=== supabase/migrations/027_social_privacy_in_list_rpcs.sql ===
+===== ./supabase/migrations/027_social_privacy_in_list_rpcs.sql =====
+
 -- Update list_followers and list_following to respect profiles.show_social_publicly.
 -- If target has show_social_publicly=true: anyone can see (no gating).
 -- If target has show_social_publicly=false: only the user themselves or mutual follows can see.
@@ -30888,7 +34552,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.list_following(uuid) TO authenticated;
 
 
-=== supabase/migrations/028_social_diamond_row_rpc.sql ===
+===== ./supabase/migrations/028_social_diamond_row_rpc.sql =====
+
 -- Dedicated RPC for the social diamond row UI surface.
 -- Returns pending incoming follow requests first (only when viewing your own profile),
 -- then accepted follows (people the target user follows), ordered most-recent first.
@@ -30968,7 +34633,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.social_diamond_row(uuid) TO authenticated;
 
 
-=== supabase/migrations/029_fix_social_diamond_row_ambiguity.sql ===
+===== ./supabase/migrations/029_fix_social_diamond_row_ambiguity.sql =====
+
 -- Fix column ambiguity in social_diamond_row.
 -- 'account_type' is both a column on profiles AND a column name in the RETURN TABLE,
 -- causing PG to throw 42702 (ambiguous column reference) on the SELECT INTO.
@@ -31043,7 +34709,8 @@ END;
 $$;
 
 
-=== supabase/migrations/030_mutual_follows_rpcs.sql ===
+===== ./supabase/migrations/030_mutual_follows_rpcs.sql =====
+
 -- Slice E5: RPCs for accept, decline, and unfollow operations.
 -- Person<->Person follows are always mutual: accepting creates the reverse row;
 -- unfollowing deletes both directions.
@@ -31212,7 +34879,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.follow_status(uuid) TO authenticated;
 
 
-=== supabase/migrations/031_follows_replica_identity_full.sql ===
+===== ./supabase/migrations/031_follows_replica_identity_full.sql =====
+
 -- Enable REPLICA IDENTITY FULL on follows so realtime DELETE events
 -- include full row data. Without this, DELETE events only include the primary key,
 -- which means filters like 'following_id=eq.X' on the realtime channel can't match
@@ -31221,7 +34889,8 @@ GRANT EXECUTE ON FUNCTION public.follow_status(uuid) TO authenticated;
 ALTER TABLE public.follows REPLICA IDENTITY FULL;
 
 
-=== supabase/migrations/032_activity_feed.sql ===
+===== ./supabase/migrations/032_activity_feed.sql =====
+
 -- LineUp activity feed: schema and RPCs.
 -- Activities are NOT stored in their own table — they're derived at query time
 -- from four source tables (attendees, event_wall_posts, follows, event_likes).
@@ -31470,7 +35139,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.unlike_activity(text, uuid) TO authenticated;
 
 
-=== supabase/migrations/033_account_deletion.sql ===
+===== ./supabase/migrations/033_account_deletion.sql =====
+
 -- Migration 033: Account deletion infrastructure
 --
 -- Provides a sentinel profile for anonymizing wall content from deleted users,
@@ -31526,7 +35196,8 @@ GRANT EXECUTE ON FUNCTION public.scrub_my_account_data() TO authenticated;
 CREATE INDEX IF NOT EXISTS event_wall_posts_user_id_idx ON public.event_wall_posts(user_id);
 
 
-=== supabase/migrations/034_group_chats.sql ===
+===== ./supabase/migrations/034_group_chats.sql =====
+
 -- Migration 034: Group chats
 --
 -- Existing schema (008_messaging) supports many-to-many already via conversation_members.
@@ -31645,7 +35316,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.add_members_to_conversation(uuid, uuid[]) TO authenticated;
 
 
-=== supabase/migrations/035_message_search.sql ===
+===== ./supabase/migrations/035_message_search.sql =====
+
 -- Migration 035: Message content search
 --
 -- Adds full-text-style search across messages the user can read.
@@ -31712,7 +35384,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.search_my_messages(text) TO authenticated;
 
 
-=== supabase/migrations/036_gif_support.sql ===
+===== ./supabase/migrations/036_gif_support.sql =====
+
 -- Migration 036: GIF / media support for messages and wall posts
 --
 -- Adds media_url, media_type, media_width, media_height, media_source_id to:
@@ -31892,7 +35565,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.activity_feed(integer, timestamptz, integer) TO authenticated;
 
 
-=== supabase/migrations/037_gif_body_constraints.sql ===
+===== ./supabase/migrations/037_gif_body_constraints.sql =====
+
 -- Migration 037: Make body nullable on messages + event_wall_posts so GIF-only
 -- messages and posts can be sent. Replace the strict char_length checks with
 -- versions that allow empty/null body, and add a CHECK that requires either
@@ -31937,7 +35611,8 @@ ALTER TABLE public.event_wall_posts
     );
 
 
-=== supabase/migrations/038_notifications_kind_extend.sql ===
+===== ./supabase/migrations/038_notifications_kind_extend.sql =====
+
 -- Migration 038: extend notifications.kind CHECK to allow activity_like:* values
 --
 -- Migration 032 introduced the like_activity() RPC which inserts notifications
@@ -31962,7 +35637,8 @@ ALTER TABLE public.notifications
   ));
 
 
-=== supabase/migrations/039_message_and_conversation_soft_delete.sql ===
+===== ./supabase/migrations/039_message_and_conversation_soft_delete.sql =====
+
 -- Soft-delete for messages and conversation dismissal
 
 -- 1. messages.deleted_at — sender can hide their own message
@@ -32029,7 +35705,8 @@ GRANT EXECUTE ON FUNCTION soft_delete_message(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION dismiss_conversation(uuid) TO authenticated;
 
 
-=== supabase/migrations/040_blocks_mutes_reports.sql ===
+===== ./supabase/migrations/040_blocks_mutes_reports.sql =====
+
 -- ================================================================
 -- Migration 040: blocking, muting, and content reporting
 --
@@ -32257,7 +35934,8 @@ CREATE POLICY "restrictive_notifications_block_filter" ON public.notifications
   );
 
 
-=== supabase/migrations/041_list_my_blocks_and_mutes.sql ===
+===== ./supabase/migrations/041_list_my_blocks_and_mutes.sql =====
+
 -- ================================================================
 -- Migration 041: list_my_blocks_and_mutes RPC
 --
@@ -32315,7 +35993,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.list_my_blocks_and_mutes() TO authenticated;
 
 
-=== supabase/migrations/042_moderation_actions.sql ===
+===== ./supabase/migrations/042_moderation_actions.sql =====
+
 -- ================================================================
 -- Migration 042: moderation actions for admin report resolution
 --
@@ -32599,7 +36278,8 @@ GRANT EXECUTE ON FUNCTION public.admin_unsuspend_user(uuid) TO authenticated;
 -- ================================================================
 
 
-=== supabase/migrations/043_device_tokens.sql ===
+===== ./supabase/migrations/043_device_tokens.sql =====
+
 -- ================================================================
 -- Migration 043: device tokens for push notifications
 --
@@ -32635,7 +36315,8 @@ CREATE POLICY "delete_own_tokens" ON public.device_tokens
   FOR DELETE USING (user_id = auth.uid());
 
 
-=== supabase/migrations/044_follow_message_notifications.sql ===
+===== ./supabase/migrations/044_follow_message_notifications.sql =====
+
 -- Migration 044: follow + message notification triggers
 --
 -- Adds DB-level triggers so that:
@@ -32759,7 +36440,8 @@ CREATE TRIGGER messages_after_insert_notify
   EXECUTE FUNCTION public.handle_message_insert();
 
 
-=== supabase/migrations/045_fix_follow_trigger_collision.sql ===
+===== ./supabase/migrations/045_fix_follow_trigger_collision.sql =====
+
 -- Migration 045: Fix function name collision from migration 044
 --
 -- Migration 044 named its notification function handle_follow_insert(),
@@ -32834,7 +36516,8 @@ CREATE TRIGGER follows_after_insert_notify
   EXECUTE FUNCTION public.notify_on_follow_insert();
 
 
-=== supabase/migrations/046_follow_accepted_notification.sql ===
+===== ./supabase/migrations/046_follow_accepted_notification.sql =====
+
 -- Migration 046: follow_accepted notification kind + status in body_preview
 --
 -- Three things in one migration:
@@ -32935,7 +36618,8 @@ CREATE TRIGGER follows_after_update_notify_accepted
   EXECUTE FUNCTION public.notify_on_follow_accepted();
 
 
-=== supabase/migrations/047_skip_followee_notify_on_reciprocal.sql ===
+===== ./supabase/migrations/047_skip_followee_notify_on_reciprocal.sql =====
+
 -- Migration 047: Fix duplicate notification when accepting a follow request.
 --
 -- When B accepts A's pending follow request, accept_follow_request does two
@@ -33052,7 +36736,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.accept_follow_request(uuid) TO authenticated;
 
 
-=== supabase/migrations/048_reply_notifications.sql ===
+===== ./supabase/migrations/048_reply_notifications.sql =====
+
 -- Migration 048: reply notification trigger
 --
 -- When someone replies to a wall post (event_wall_posts row with parent_id
@@ -33154,7 +36839,8 @@ CREATE TRIGGER wall_posts_after_insert_notify_reply
   EXECUTE FUNCTION public.notify_on_wall_post_reply();
 
 
-=== supabase/migrations/049_pending_account_type.sql ===
+===== ./supabase/migrations/049_pending_account_type.sql =====
+
 -- Migration 049: VA (venue/artist) account onboarding infrastructure
 --
 -- When a user signs up and selects 'artist' or 'venue' during onboarding,
@@ -33248,7 +36934,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.admin_decline_va_request(uuid) TO authenticated;
 
 
-=== supabase/migrations/050_va_decision_notifications.sql ===
+===== ./supabase/migrations/050_va_decision_notifications.sql =====
+
 -- ================================================================
 -- Migration 050: VA decision notifications
 --
@@ -33376,7 +37063,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.admin_decline_va_request(uuid) TO authenticated;
 
 
-=== supabase/migrations/051_contact_matching.sql ===
+===== ./supabase/migrations/051_contact_matching.sql =====
+
 -- ================================================================
 -- Migration 051: contact matching — hash columns + secure match RPC
 --
@@ -33450,7 +37138,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.match_contacts(text[]) TO authenticated;
 
 
-=== supabase/migrations/052_match_contacts_return_hashes.sql ===
+===== ./supabase/migrations/052_match_contacts_return_hashes.sql =====
+
 -- ================================================================
 -- Migration 052: match_contacts — return matched hashes for client contact-name pairing
 --
@@ -33494,7 +37183,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.match_contacts(text[]) TO authenticated;
 
 
-=== supabase/migrations/053_venue_accounts.sql ===
+===== ./supabase/migrations/053_venue_accounts.sql =====
+
 -- ================================================================
 -- Migration 053: venue accounts foundation
 --
@@ -33569,7 +37259,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.admin_list_venues_with_account_status() TO authenticated;
 
 
-=== supabase/migrations/054_nearby_venue_accounts.sql ===
+===== ./supabase/migrations/054_nearby_venue_accounts.sql =====
+
 CREATE OR REPLACE FUNCTION public.nearby_venue_accounts(
   user_lat double precision,
   user_lng double precision,
@@ -33612,7 +37303,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.nearby_venue_accounts(double precision, double precision, int) TO authenticated;
 
 
-=== supabase/migrations/055_show_alert_subscriptions.sql ===
+===== ./supabase/migrations/055_show_alert_subscriptions.sql =====
+
 -- (a) show_alert_subscriptions table
 CREATE TABLE IF NOT EXISTS public.show_alert_subscriptions (
   id            uuid primary key default gen_random_uuid(),
@@ -33644,7 +37336,8 @@ ALTER TABLE public.notifications ADD CONSTRAINT notifications_kind_check
   ));
 
 
-=== supabase/migrations/056_show_reminder_cron.sql ===
+===== ./supabase/migrations/056_show_reminder_cron.sql =====
+
 -- (a) Reminder function
 CREATE OR REPLACE FUNCTION public.send_show_reminders()
 RETURNS integer
@@ -33694,7 +37387,8 @@ WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'show-reminders-daily');
 SELECT cron.schedule('show-reminders-daily', '0 16 * * *', $$ SELECT public.send_show_reminders(); $$);
 
 
-=== supabase/migrations/057_profile_banner.sql ===
+===== ./supabase/migrations/057_profile_banner.sql =====
+
 -- (a) Add banner columns to profiles
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS banner_url      text,
@@ -33753,7 +37447,8 @@ $$;
 GRANT EXECUTE ON FUNCTION public.admin_list_venues_with_account_status() TO authenticated;
 
 
-=== supabase/migrations/058_sold_out_reports.sql ===
+===== ./supabase/migrations/058_sold_out_reports.sql =====
+
 alter table events add column if not exists sold_out_report_count integer not null default 0;
 
 create table if not exists sold_out_reports (
@@ -33814,11 +37509,13 @@ end; $$;
 grant execute on function confirm_sold_out(uuid) to authenticated;
 
 
-=== supabase/migrations/059_show_times.sql ===
+===== ./supabase/migrations/059_show_times.sql =====
+
 alter table events add column if not exists show_times timestamptz[];
 
 
-=== supabase/migrations/060_consolidate_events.sql ===
+===== ./supabase/migrations/060_consolidate_events.sql =====
+
 create or replace function consolidate_events(p_keep_id uuid, p_remove_ids uuid[])
 returns void language plpgsql security definer as $$
 declare v_times timestamptz[];
@@ -33851,11 +37548,13 @@ end; $$;
 grant execute on function consolidate_events(uuid, uuid[]) to authenticated;
 
 
-=== supabase/migrations/061_sold_out_column.sql ===
+===== ./supabase/migrations/061_sold_out_column.sql =====
+
 alter table events add column if not exists sold_out boolean not null default false;
 
 
-=== supabase/migrations/062_lineup_open_weekend_shows.sql ===
+===== ./supabase/migrations/062_lineup_open_weekend_shows.sql =====
+
 CREATE OR REPLACE FUNCTION public.lineup_open_weekend_shows(p_user uuid, p_limit integer DEFAULT 12)
  RETURNS TABLE(event_id uuid, title text, starts_at timestamp with time zone, poster_url text, venue_name text, venue_account_id uuid, venue_diamond_url text)
  LANGUAGE sql
@@ -33887,7 +37586,8 @@ $function$;
 grant execute on function public.lineup_open_weekend_shows(uuid, integer) to anon, authenticated;
 
 
-=== supabase/migrations/063_ingester_role_and_event_staging.sql ===
+===== ./supabase/migrations/063_ingester_role_and_event_staging.sql =====
+
 -- ── (a) Ingester role flag ────────────────────────────────────
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS is_ingester boolean NOT NULL DEFAULT false;
@@ -34099,7 +37799,8 @@ $function$;
 GRANT EXECUTE ON FUNCTION public.lineup_open_weekend_shows(uuid, integer) TO anon, authenticated;
 
 
-=== supabase/migrations/064_admin_pending_events.sql ===
+===== ./supabase/migrations/064_admin_pending_events.sql =====
+
 create or replace function public.admin_pending_events()
 returns table (
   id uuid, title text, starts_at timestamptz, venue_id uuid, venue_name text,
@@ -34126,7 +37827,8 @@ $$;
 grant execute on function public.admin_pending_events() to authenticated;
 
 
-=== supabase/migrations/065_staff_venue_checkoff.sql ===
+===== ./supabase/migrations/065_staff_venue_checkoff.sql =====
+
 create table if not exists public.staff_venue_checkoff (
   worker_id  uuid not null references public.profiles(id) on delete cascade,
   venue_id   uuid not null references public.venues(id) on delete cascade,
@@ -34139,7 +37841,8 @@ create policy "own checkoff insert" on public.staff_venue_checkoff for insert wi
 create policy "own checkoff delete" on public.staff_venue_checkoff for delete using (auth.uid() = worker_id);
 
 
-=== supabase/migrations/067_staff_roster.sql ===
+===== ./supabase/migrations/067_staff_roster.sql =====
+
 create or replace function public.staff_roster()
 returns table (id uuid, username text, avatar_diamond_url text, avatar_url text, is_admin boolean)
 language sql security definer set search_path = public stable as $$
@@ -34152,7 +37855,8 @@ $$;
 grant execute on function public.staff_roster() to authenticated;
 
 
-=== supabase/migrations/068_staff_shifts.sql ===
+===== ./supabase/migrations/068_staff_shifts.sql =====
+
 -- Staff clock-in / clock-out tracking
 create table if not exists public.staff_shifts (
   id          uuid primary key default gen_random_uuid(),
@@ -34171,7 +37875,8 @@ create policy "staff can manage own shifts"
   with check (worker_id = auth.uid() and public.can_ingest(auth.uid()));
 
 
-=== supabase/migrations/069_event_ingester_metadata.sql ===
+===== ./supabase/migrations/069_event_ingester_metadata.sql =====
+
 -- Source URL, AI confidence score, and admin flag note on events
 alter table public.events
   add column if not exists source_url   text,
@@ -34207,7 +37912,8 @@ $$;
 grant execute on function public.admin_pending_events() to authenticated;
 
 
-=== supabase/migrations/070_staff_stats.sql ===
+===== ./supabase/migrations/070_staff_stats.sql =====
+
 -- Aggregate stats for the admin Review panel
 create or replace function public.staff_stats()
 returns table (
@@ -34227,7 +37933,8 @@ $$;
 grant execute on function public.staff_stats() to authenticated;
 
 
-=== supabase/migrations/071_staff_chat.sql ===
+===== ./supabase/migrations/071_staff_chat.sql =====
+
 -- Staff-only shared chat room
 create table public.staff_chat_messages (
   id         uuid primary key default gen_random_uuid(),
@@ -34252,7 +37959,8 @@ create policy "staff can send chat"
 alter publication supabase_realtime add table public.staff_chat_messages;
 
 
-=== supabase/migrations/072_upload_history.sql ===
+===== ./supabase/migrations/072_upload_history.sql =====
+
 create or replace function public.upload_history(p_limit int default 200)
 returns table (id uuid, title text, poster_url text, starts_at timestamptz, created_at timestamptz,
   status text, category text, venue_name text, neighborhood text, uploader text)
@@ -34270,13 +37978,15 @@ $$;
 grant execute on function public.upload_history(int) to authenticated;
 
 
-=== supabase/migrations/073_hot_path_indexes.sql ===
+===== ./supabase/migrations/073_hot_path_indexes.sql =====
+
 create index if not exists events_status_starts_at_idx on public.events (status, starts_at);
 create index if not exists events_starts_at_idx on public.events (starts_at);
 create index if not exists venues_neighborhood_idx on public.venues (neighborhood);
 
 
-=== supabase/migrations/074_trending_score.sql ===
+===== ./supabase/migrations/074_trending_score.sql =====
+
 -- ── Column + index ──────────────────────────────────────────────────────────
 alter table public.events add column if not exists trending_score numeric not null default 0;
 
@@ -34339,7 +38049,8 @@ select cron.schedule('trending-scores-refresh', '*/30 * * * *',
 select public.refresh_trending_scores();
 
 
-=== supabase/migrations/075_venue_new_show_notifications.sql ===
+===== ./supabase/migrations/075_venue_new_show_notifications.sql =====
+
 -- ── Extend notifications.kind CHECK ────────────────────────────────────────
 ALTER TABLE public.notifications
   DROP CONSTRAINT IF EXISTS notifications_kind_check;
@@ -34423,7 +38134,418 @@ CREATE TRIGGER events_after_publish_notify
   EXECUTE FUNCTION public.notify_followers_on_publish();
 
 
-=== supabase/RLS_POLICIES.md ===
+===== ./supabase/migrations/076_venue_sources.sql =====
+
+-- ── Auto-ingest pilot: per-venue scrape sources ───────────────────────────────
+-- A row = one URL we scrape for structured event data (JSON-LD now; ics/api/ai
+-- scrape types reserved). Managed from /admin (Auto-Ingest section); processed by
+-- the scrape-sources edge function, which inserts events as status='pending' into
+-- the existing review pipeline.
+
+create table if not exists public.venue_sources (
+  id uuid primary key default gen_random_uuid(),
+  venue_id uuid not null references public.venues(id) on delete cascade,
+  source_url text not null,
+  source_type text not null default 'jsonld' check (source_type in ('jsonld','ics','api','ai_scrape')),
+  default_category text not null default 'Live Music',
+  enabled boolean not null default true,
+  last_run_at timestamptz,
+  last_run_note text,
+  unique (venue_id, source_url)
+);
+
+alter table public.venue_sources enable row level security;
+
+create policy "admin all" on public.venue_sources
+  for all using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+
+
+===== ./supabase/migrations/077_events_delete_policy.sql =====
+
+-- ── Admin delete on events ────────────────────────────────────────────────────
+-- The events table had NO DELETE policy (default-deny): deletes returned
+-- success-with-0-rows, so AdminEditModal closed as if it worked while the event
+-- survived. Admins (is_admin() helper from 063) may delete.
+
+CREATE POLICY "events_delete" ON public.events
+  FOR DELETE USING (public.is_admin(auth.uid()));
+
+
+===== ./supabase/migrations/078_source_horizon.sql =====
+
+-- ── Configurable ingest horizon per registered source ─────────────────────────
+-- How far ahead (days) a source's scrape window reaches. Pre-existing sources
+-- keep the old behavior via the 120 default; the UI defaults NEW sources to 60.
+
+ALTER TABLE public.venue_sources
+  ADD COLUMN IF NOT EXISTS horizon_days int NOT NULL DEFAULT 120;
+
+
+===== ./supabase/migrations/079_ingest_orphans.sql =====
+
+-- ── Orphan queue: scraped events at unknown venues ────────────────────────────
+-- Parked instead of dropped. Raw extraction stored verbatim (remote image_url,
+-- unrewritten description) — re-host + voice rewrite happen at relink, when the
+-- venue exists and the full insert pipeline runs.
+
+create table if not exists public.ingest_orphans (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  starts_at timestamptz not null,
+  raw_venue_name text,
+  image_url text,
+  description text,
+  source_url text,
+  event_url text,
+  sold_out boolean default false,
+  confidence numeric,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now(),
+  status text not null default 'open' check (status in ('open','linked','discarded')),
+  linked_venue_id uuid,
+  linked_event_id uuid
+);
+
+alter table public.ingest_orphans enable row level security;
+
+create policy "admin all" on public.ingest_orphans
+  for all using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+
+
+===== ./supabase/migrations/080_rejection_reasons.sql =====
+
+-- Structured rejection reasons for pending events.
+-- Admins pick a reason when rejecting; the uploading worker sees it back in their
+-- own upload history (the feedback loop — workers learn the house standards).
+
+alter table public.events
+  add column if not exists rejection_reason text null
+    check (rejection_reason in ('duplicate','wrong_date','bad_image','not_an_event','other')),
+  add column if not exists rejection_note text null;
+
+-- upload_history gains rejection_reason + rejection_note. The RETURNS TABLE shape
+-- changes, so the old function must be dropped before re-create.
+drop function if exists public.upload_history(int);
+
+create or replace function public.upload_history(p_limit int default 200)
+returns table (id uuid, title text, poster_url text, starts_at timestamptz, created_at timestamptz,
+  status text, category text, venue_name text, neighborhood text, uploader text,
+  rejection_reason text, rejection_note text)
+language sql security definer set search_path = public stable as $$
+  select e.id, e.title, e.poster_url, e.starts_at, e.created_at, e.status, e.category,
+         v.name, v.neighborhood, p.username, e.rejection_reason, e.rejection_note
+  from public.events e
+  left join public.venues v on v.id = e.venue_id
+  left join public.profiles p on p.id = e.created_by
+  where public.is_admin(auth.uid())
+     or (e.created_by = auth.uid() and public.can_ingest(auth.uid()))
+  order by e.created_at desc
+  limit p_limit;
+$$;
+grant execute on function public.upload_history(int) to authenticated;
+
+
+===== ./supabase/migrations/081_staff_venue_assignments.sql =====
+
+-- Admin-assigned venue ownership. One worker per venue (PK on venue_id).
+-- The board is the source of truth; no notifications in v1.
+create table if not exists public.staff_venue_assignments (
+  venue_id    uuid primary key references public.venues(id) on delete cascade,
+  worker_id   uuid not null references public.profiles(id) on delete cascade,
+  assigned_by uuid references public.profiles(id),
+  assigned_at timestamptz not null default now()
+);
+
+alter table public.staff_venue_assignments enable row level security;
+
+-- All staff can read the assignment board (mirrors the staff_chat read pattern).
+create policy "staff can read assignments"
+  on public.staff_venue_assignments for select
+  using (public.can_ingest(auth.uid()));
+
+-- Only admins can assign / reassign / unassign.
+create policy "admin can insert assignments"
+  on public.staff_venue_assignments for insert to authenticated
+  with check (public.is_admin(auth.uid()));
+create policy "admin can update assignments"
+  on public.staff_venue_assignments for update to authenticated
+  using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+create policy "admin can delete assignments"
+  on public.staff_venue_assignments for delete to authenticated
+  using (public.is_admin(auth.uid()));
+
+
+===== ./supabase/migrations/082_profile_home_neighborhood.sql =====
+
+-- Declared neighborhood identity on the profile.
+-- home_neighborhood = the specific neighborhood (the identity chip).
+-- home_sextant      = its region (N/NE/NW/SE/SW/S) — stored at signup so the
+--   community wall can scope by region without a per-query name lookup.
+alter table public.profiles
+  add column if not exists home_neighborhood text null,
+  add column if not exists home_sextant text null
+    check (home_sextant in ('N','NE','NW','SE','SW','S'));
+
+
+===== ./supabase/migrations/083_community_posts.sql =====
+
+-- Neighborhood community wall posts.
+-- Wall is scoped by SEXTANT (region); a post stores both the author's exact
+-- neighborhood (for lost-pet alerts later) and sextant (for wall scoping).
+-- Status is set server-side by the submit-community-post edge function after AI
+-- moderation: clean → 'published', flagged/uncertain → 'pending' (admin review).
+create table if not exists public.community_posts (
+  id          uuid primary key default gen_random_uuid(),
+  author_id   uuid not null references public.profiles(id) on delete cascade,
+  neighborhood text not null,
+  sextant     text not null check (sextant in ('N','NE','NW','SE','SW','S')),
+  post_type   text not null default 'personal' check (post_type in ('personal','business','lost_pet')),
+  title       text,
+  body        text,
+  image_url   text,
+  status      text not null default 'pending' check (status in ('pending','published','rejected','expired')),
+  is_paid     boolean not null default false,
+  flagged     boolean not null default false,
+  flag_reason text,
+  expires_at  timestamptz,
+  reviewed_by uuid references public.profiles(id),
+  reviewed_at timestamptz,
+  rejection_reason text check (rejection_reason in ('duplicate','wrong_date','bad_image','not_an_event','other')),
+  rejection_note   text,
+  created_at  timestamptz not null default now()
+);
+
+create index if not exists community_posts_sextant_status_idx on public.community_posts (sextant, status, created_at desc);
+create index if not exists community_posts_author_idx on public.community_posts (author_id);
+
+alter table public.community_posts enable row level security;
+
+-- Read: published + non-expired in the viewer's sextant; own posts (any status,
+-- so an author sees their own pending one); admins see all.
+create policy "community read scoped"
+  on public.community_posts for select to authenticated
+  using (
+    (status = 'published'
+      and (expires_at is null or expires_at > now())
+      and sextant = (select p.home_sextant from public.profiles p where p.id = auth.uid()))
+    or author_id = auth.uid()
+    or public.is_admin(auth.uid())
+  );
+
+-- Insert: an authed user may insert their own row. The submit edge function
+-- (service role, auth.uid() = null) sets the moderated status; a direct client
+-- insert is forced to 'pending' by the trigger below (can't self-publish).
+create policy "community insert own"
+  on public.community_posts for insert to authenticated
+  with check (author_id = auth.uid());
+
+-- Update: admins only (moderation actions).
+create policy "community admin update"
+  on public.community_posts for update to authenticated
+  using (public.is_admin(auth.uid())) with check (public.is_admin(auth.uid()));
+
+-- Force pending for non-admin direct inserts; service-role (edge function) inserts
+-- have auth.uid() = null and are exempt, so their moderated status stands.
+create or replace function public.community_set_status()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.author_id is null then new.author_id := auth.uid(); end if;
+  if auth.uid() is not null and not public.is_admin(auth.uid()) then
+    new.status := 'pending';
+  end if;
+  return new;
+end; $$;
+
+create trigger community_set_status_trg before insert on public.community_posts
+  for each row execute function public.community_set_status();
+
+
+===== ./supabase/migrations/084_lost_pet_alerts.sql =====
+
+-- Lost-pet alerts: when a lost_pet community post is published (admin approval),
+-- notify everyone whose declared neighborhood EXACTLY matches the post's
+-- neighborhood. Animals only; one alert per approved post.
+
+-- 1. Allow the new notification kind.
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in (
+    'mention',
+    'activity_like:rsvp',
+    'activity_like:wall_post',
+    'activity_like:venue_post',
+    'warning',
+    'follow',
+    'message',
+    'follow_accepted',
+    'reply',
+    'va_approved',
+    'va_declined',
+    'show_reminder',
+    'venue_new_show',
+    'lost_pet'
+  ));
+
+-- 2. Deep-link target for community posts.
+alter table public.notifications
+  add column if not exists target_community_post_id uuid
+    references public.community_posts(id) on delete cascade;
+
+-- 3. Fan-out trigger — fires on transition to published for a lost_pet post.
+create or replace function public.notify_neighborhood_on_lost_pet()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if NEW.post_type <> 'lost_pet' then return NEW; end if;
+  if NEW.status <> 'published' then return NEW; end if;
+  -- one alert per post: skip if it was already published
+  if TG_OP = 'UPDATE' and (OLD.status is not distinct from 'published') then return NEW; end if;
+
+  insert into public.notifications (recipient_id, sender_id, kind, target_community_post_id, body_preview)
+  select p.id, NEW.author_id, 'lost_pet', NEW.id, left(coalesce(NEW.title, 'Lost pet'), 120)
+  from public.profiles p
+  where p.home_neighborhood = NEW.neighborhood
+    and p.id <> NEW.author_id;
+
+  return NEW;
+end;
+$$;
+
+drop trigger if exists community_lost_pet_notify on public.community_posts;
+create trigger community_lost_pet_notify
+  after insert or update of status on public.community_posts
+  for each row execute function public.notify_neighborhood_on_lost_pet();
+
+
+===== ./supabase/migrations/085_plaster_slap.sql =====
+
+-- Plaster Slap: invite friends to a show via a group chat; everyone RSVPs
+-- independently. A slap is a structured message that renders as a tappable event
+-- banner, and it notifies each other member with a deep-link to the thread.
+
+-- Structured slap message.
+alter table public.messages
+  add column if not exists message_type text not null default 'text'
+    check (message_type in ('text','slap')),
+  add column if not exists event_id uuid references public.events(id) on delete set null;
+
+-- Thread deep-link target for the slap notification.
+alter table public.notifications
+  add column if not exists target_conversation_id uuid
+    references public.conversations(id) on delete cascade;
+
+-- Allow the new notification kind.
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check
+  check (kind in (
+    'mention',
+    'activity_like:rsvp',
+    'activity_like:wall_post',
+    'activity_like:venue_post',
+    'warning',
+    'follow',
+    'message',
+    'follow_accepted',
+    'reply',
+    'va_approved',
+    'va_declined',
+    'show_reminder',
+    'venue_new_show',
+    'lost_pet',
+    'slap'
+  ));
+
+-- Notify every other member of the conversation when a slap message is posted.
+create or replace function public.notify_on_slap()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if NEW.message_type <> 'slap' then return NEW; end if;
+  insert into public.notifications (recipient_id, sender_id, kind, target_conversation_id, target_event_id, body_preview)
+  select cm.user_id, NEW.sender_id, 'slap', NEW.conversation_id, NEW.event_id, left(coalesce(NEW.body, 'Slap'), 120)
+  from public.conversation_members cm
+  where cm.conversation_id = NEW.conversation_id
+    and cm.user_id <> NEW.sender_id;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists messages_slap_notify on public.messages;
+create trigger messages_slap_notify
+  after insert on public.messages
+  for each row execute function public.notify_on_slap();
+
+
+===== ./supabase/migrations/086_slap_dedupe_notification.sql =====
+
+-- A slap message already gets its dedicated 'slap' notification (migration 085).
+-- Stop the generic message-insert trigger from ALSO firing a 'message' shout for
+-- it, so a slap produces exactly one notification. Normal text messages are
+-- unaffected. Re-creates handle_message_insert() with an early return for slaps.
+create or replace function public.handle_message_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r_member record;
+  v_preview text;
+begin
+  if NEW.deleted_at is not null then
+    return NEW;
+  end if;
+
+  -- Slap messages notify via the dedicated 'slap' trigger — skip the generic one.
+  if NEW.message_type = 'slap' then
+    return NEW;
+  end if;
+
+  v_preview := case
+    when NEW.body is null or length(NEW.body) = 0 then null
+    when length(NEW.body) > 80 then substring(NEW.body from 1 for 77) || '...'
+    else NEW.body
+  end;
+
+  for r_member in
+    select user_id
+    from public.conversation_members
+    where conversation_id = NEW.conversation_id
+      and user_id <> NEW.sender_id
+  loop
+    if public.is_blocked_either_way(r_member.user_id, NEW.sender_id) then
+      continue;
+    end if;
+    if public.is_muted_by(r_member.user_id, NEW.sender_id) then
+      continue;
+    end if;
+
+    insert into public.notifications (recipient_id, sender_id, kind, body_preview)
+    values (r_member.user_id, NEW.sender_id, 'message', v_preview);
+  end loop;
+
+  return NEW;
+end;
+$$;
+
+
+===== ./supabase/migrations/087_conversation_avatar.sql =====
+
+-- Custom group-chat image (Instagram/iMessage style). The name column already
+-- exists; members can already UPDATE their conversations (update_conversations_if_member
+-- RLS policy), which covers both name and avatar_url — no new policy needed.
+alter table public.conversations
+  add column if not exists avatar_url text null;
+
+
+===== ./supabase/RLS_POLICIES.md =====
+
 # Plaster RLS Policy Reference
 
 **Last verified against live DB: 2026-04-22 (venues updated migration 011, 2026-04-22)**
@@ -34835,7 +38957,8 @@ Then update each table section above with any changes. For new policies, add an 
 explanation. Mark anything unclear with `TODO: clarify intent`.
 
 
-=== supabase/schema.sql ===
+===== ./supabase/schema.sql =====
+
 -- ============================================================
 -- Plaster schema
 -- Run this in the Supabase SQL editor after project creation.
@@ -35001,7 +39124,8 @@ create policy "Users can delete their own posts"
 --   with check (bucket_id = 'posters' and auth.role() = 'authenticated');
 
 
-=== supabase/storage.sql ===
+===== ./supabase/storage.sql =====
+
 insert into storage.buckets (id, name, public)
   values ('posters', 'posters', true)
 on conflict (id) do nothing;
@@ -35015,7 +39139,8 @@ create policy "Authenticated users can upload posters"
   with check (bucket_id = 'posters' and auth.role() = 'authenticated');
 
 
-=== tailwind.config.js ===
+===== ./tailwind.config.js =====
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -35039,7 +39164,8 @@ export default {
 }
 
 
-=== tsconfig.app.json ===
+===== ./tsconfig.app.json =====
+
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
@@ -35074,7 +39200,8 @@ export default {
 }
 
 
-=== tsconfig.json ===
+===== ./tsconfig.json =====
+
 {
   "files": [],
   "references": [
@@ -35084,7 +39211,8 @@ export default {
 }
 
 
-=== tsconfig.node.json ===
+===== ./tsconfig.node.json =====
+
 {
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
@@ -35111,7 +39239,8 @@ export default {
 }
 
 
-=== vercel.json ===
+===== ./vercel.json =====
+
 {
   "redirects": [
     { "source": "/privacy.html", "destination": "/privacy", "permanent": true },
@@ -35141,7 +39270,8 @@ export default {
 }
 
 
-=== vite.config.ts ===
+===== ./vite.config.ts =====
+
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { fileURLToPath, URL } from 'node:url'
@@ -35159,3 +39289,100 @@ export default defineConfig({
 })
 
 
+===== ./WINDOW-SUMMARY-2026-06-11.md =====
+
+# Plaster — What We Accomplished This Window
+**Reconstructed: June 11, 2026** (from the "before the close" session transcript — the prior session died on `ConnectionRefused` before it could write this)
+
+This window ran from `62bf161` (already pushed at start) through `cc11e6b` (current HEAD). Three big workstreams: **Wall refinements + the iOS 1-col tearing saga**, the **Auto-Ingest pilot** (venue scraping + Import-from-URL), and the **Staff/Admin dashboard unification**. Plus a real safety-net testing pass.
+
+---
+
+## State at the end of the window
+- **HEAD:** `cc11e6b fix(staff): narrow dashboard respects panel chips`
+- **Unpushed:** ~26–29 commits local-only. The Wall refinements were pushed mid-window; the **entire Auto-Ingest + Import-from-URL + orphan-queue line and the staff dashboard** are live on the edge-function side but **absent from plasterthewall.com until pushed**.
+- **Tree:** clean except the usual untracked/loose `codebase copy.md` dump (left unstaged on purpose).
+- **Migrations:** continued past 075 (window added more — admin DELETE RLS, ingest tables, orphan queue).
+- **Suite at last commit:** `tsc --noEmit` clean · 7 tests passing · `npm run build` ok · `cap sync ios` ok.
+
+---
+
+## 1. Wall refinements & the iOS 1-col tearing saga
+
+### Filtering & motion
+- **True filtering** (`110fe9f`, and the filter-build change): chips now **remove** non-matching events from the grid instead of just fading them; date markers only render for days that still have a matching event. Done at the item-list build in PosterGrid so date-posters fall out naturally for emptied days.
+- **Animated reorganization on filter change** via the **View Transitions API** (`110fe9f`) — posters slide to their new positions when a chip changes the set.
+- **Animate filter-chip taps only, not search** (`7328d0b`) — search stays instant/un-animated; only chip taps trigger the transition (avoids janky reflow on every keystroke; this is what "debounce the search transition" was about).
+- **Quieter trending pill** (`eef0620`) — muted grey word only, collapsed.
+- **Spine retired / trending strip** housekeeping (`a831878`, reverted to bare strip in `62bf161`).
+- `eb03604` — ordering fix: moved `visibleEvents` useMemo below the `searchQuery` declaration.
+
+### 1-col persistent panel browsing
+- **Persistent info-panel browsing** (`dbcdfd2`) — in 1-col, info stays info as you scroll (panel state persists across cards instead of resetting to poster).
+
+### The iOS tearing hunt (multiple root-cause attempts)
+This was the long one — poster→info swipe showed torn/ghosted rendering on iOS (WKWebView). Sequence of fixes:
+- `8c11dfa` — prefetch + defer commits mid-gesture (first attempt; `fetchPanelData()` was the suspected cause).
+- `dba195b` — "real root cause": gesture-scoped GPU promotion.
+- `b4fd486` — active-card GPU promotion to kill residual swipe-time tear.
+- `b52da3a` — **per-panel layer promotion (v3 root-cause fix)**: the actual cause was WKWebView **tile-memory exhaustion** — every card was being promoted; fixed by gating promotion per-panel.
+- `3c72bbf` — fallback C: gate heavy panel content to in-view only.
+- Built and later **archived/removed a "Tear Lab"** — a controlled-toggle isolation harness to stop guessing and reproduce the tear deterministically.
+
+### Wall scale
+- **Windowed infinite loading** (`b6efbf6`) — removes the event-count ceiling (no more 200/500 cap as the real limit).
+- **Slimmed the events query + raised limit 200→500** (`b556688`) as an interim step.
+- **Render hygiene on multi-col cards** (`252e62d`) — lazy `img` + `content-visibility`.
+
+---
+
+## 2. Auto-Ingest pilot (admin-first venue scraping)
+
+A new pipeline to scrape venue websites for structured event data → pending events for review.
+
+- **`scrape-sources` edge function** (`82f417c`) — JSON-LD → pending events.
+- **Tier 1.5 endpoint audit script** (`414be92`) — venue calendars are client-rendered, so it hunts the actual JSON endpoint each page fetches.
+- **Fixture verification PASSED** (`028e29a`) — found 3 / would-insert 2 / inserted on run; cleaned up test data.
+- **Import from URL** (`89786ff`) — paste any event page (venue site, Eventbrite, raw JSON, etc.) and ingest one-off, ad-hoc.
+- **URL hunting + hidden-endpoint probes + new-venue enrichment** (`33eb40a`) — extends adhoc mode to discover endpoints and enrich previously-unknown venues.
+- **Original-voice descriptions for ALL scraped events** (`87dd091`) — editorial voice applied uniformly, not just AI-extracted ones.
+- **Fuzzy venue match + bulk assignment + structured registered data** (`5ecf1d9`) — from the first real test (Kelly's Olympian, 19 found).
+- **Similarity-based duplicate detection** (`e883753`).
+- **Sold-out detection in the scraper** (`e30fd20`).
+- **Configurable ingest horizon** (`067b8a8`) — `MAX_DAYS_OUT` (default 120) drives a single window.
+- **Surface horizon-discarded events** (`cab3676`) — visibility only, no behavior change, so valid scrapes don't look broken when events fall outside the window.
+- **Orphan queue** — scraped events at unknown venues get **parked instead of dropped** (recoverable rather than silently lost).
+- **Raw-JSON URL support in the adhoc importer** (`d40b004`).
+- QC fixes from real venue feeds: **scheme-less URL handling** ("kellysolympian.com" → no more "page fetch 0"), **HTML entity decoding** (Tribe-style feeds), **htmlToText `<header>` preservation** (Mississippi Studios theme), and **surfacing the real extraction failure reason in the UI** (`a0f24fc`).
+
+---
+
+## 3. Staff / Admin dashboard unification
+
+- **`/admin` now routes to the unified staff dashboard shell** (`c9adaf0`) — one shell, role-aware.
+- **Admin panel set** (`e518ef9`) — Auto-Ingest + Tools panels added; role-aware shell (admin vs worker panel sets/order).
+- **Preview 'all pending' scope for admin QC** (`d050fe4`) — admins preview all pending events, not just their own.
+- **"Reject all" button in the pending review queue** (`4f1e788`).
+- **Venue coverage high-water mark** (`b904849`) — visibility metric, explicitly **not a gate** (dedupe stays the real guard).
+- **Narrow (<900px) dashboard respects panel chips** (`cc11e6b`) — extracted `chipButtons` once; chips render in the top bar when wide and as a scrollable row under the bar when narrow. Narrow stack now maps only open panels in role order, each capped at 70vh with internal scroll; Preview keeps its 480px block; minimize buttons everywhere; empty-state hint when all chips are off.
+- **Admin DELETE RLS** — added the missing DELETE policy so admins can actually delete events (the `events` table had no DELETE policy).
+
+---
+
+## 4. Testing & safety net
+- **Rerunnable staging-trigger verification script** (`3dbef55`).
+- **Recurring-date expansion extracted to a pure lib + vitest coverage** (`8c899cf`).
+- **Regression tests for two silent-data-corruption behaviors** (the "Batch 4 safety net").
+
+---
+
+## 5. Model notes (meta, from the session)
+- Confirmed this build work was happening on **Opus**; mid-window had switched to **Sonnet** at one point, switched back to **Opus** for the heavier reasoning (the tearing root-cause hunt, feedback passes).
+- Briefly tried **Fable 5** ("can we use claude fable / fable 5") — newly available this Claude Code version.
+
+---
+
+## Suggested next steps
+1. **Push.** ~26 commits are local-only — the entire Auto-Ingest + Import-from-URL + orphan-queue line and the unified staff dashboard are invisible on plasterthewall.com until you `git push`. (Edge functions are already deployed; `git push` updates web only.)
+2. Run the standard gate before pushing if you've touched anything since: `npx tsc --noEmit && npm run build && npx cap sync ios`.
+3. Real-venue QC continues — Kelly's Olympian / Mississippi Studios / Tribe were the test feeds; keep an eye on the orphan queue for unknown-venue parks.

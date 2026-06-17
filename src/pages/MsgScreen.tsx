@@ -12,6 +12,7 @@ import { GifPicker } from '@/components/GifPicker'
 import { GifMessage } from '@/components/GifMessage'
 import { SlapHand } from '@/components/SlapHand'
 import { GroupEditSheet } from '@/components/GroupEditSheet'
+import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { createPortal } from 'react-dom'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
@@ -228,6 +229,7 @@ export function MsgScreen() {
   const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
   const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
   const [groupEditOpen, setGroupEditOpen] = useState(false)
+  const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
   const [openConvId,       setOpenConvId]       = useState<string | null>(routeConvId ?? null)
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
@@ -1250,36 +1252,51 @@ export function MsgScreen() {
 
                 {openConv && (() => {
                   const display = getConversationDisplay(openConv)
+                  const plainBtn = { background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', flexShrink: 0 } as const
+                  const titleStyle = {
+                    fontFamily: '"Playfair Display", serif',
+                    fontWeight: 700, fontSize: 16,
+                    color: 'var(--fg)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    flex: 1, minWidth: 0,
+                  } as const
                   return (
-                    <button
-                      onClick={() => { if (display.isGroup) setGroupEditOpen(true) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, cursor: display.isGroup ? 'pointer' : 'default', textAlign: 'left' }}
-                    >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                      {/* Avatar(s): diamonds open that person's photo; a custom group image edits the group */}
                       {display.avatarUrl ? (
-                        <img src={display.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                        <button onClick={() => setGroupEditOpen(true)} style={plainBtn} aria-label="Edit group">
+                          <img src={display.avatarUrl} alt="" style={{ width: 36, height: 36, borderRadius: '50%', objectFit: 'cover' }} />
+                        </button>
                       ) : display.isGroup && openConv.members.length >= 2 ? (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                           {openConv.members.slice(0, 3).map(m => (
-                            <Diamond key={m.id} diamondUrl={m.avatar_diamond_url} size={28} />
+                            <button key={m.id} onClick={() => setAvatarFullscreenId(m.id)} style={plainBtn} aria-label={`View @${m.username ?? 'member'}'s photo`}>
+                              <Diamond diamondUrl={m.avatar_diamond_url} fallbackUrl={m.avatar_url} size={28} />
+                            </button>
                           ))}
                         </div>
                       ) : (
-                        <Diamond
-                          diamondUrl={display.primaryUser?.avatar_diamond_url ?? null}
-                          fallbackUrl={display.primaryUser?.avatar_url ?? null}
-                          size={36}
-                        />
+                        <button
+                          onClick={() => { if (display.primaryUser) setAvatarFullscreenId(display.primaryUser.id) }}
+                          style={plainBtn}
+                          aria-label="View photo"
+                        >
+                          <Diamond
+                            diamondUrl={display.primaryUser?.avatar_diamond_url ?? null}
+                            fallbackUrl={display.primaryUser?.avatar_url ?? null}
+                            size={36}
+                          />
+                        </button>
                       )}
-                      <span style={{
-                        fontFamily: '"Playfair Display", serif',
-                        fontWeight: 700, fontSize: 16,
-                        color: 'var(--fg)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        flex: 1, minWidth: 0,
-                      }}>
-                        {display.title}
-                      </span>
-                    </button>
+                      {/* Title: groups open the editor (rename / group photo); 1-on-1 is plain text */}
+                      {display.isGroup ? (
+                        <button onClick={() => setGroupEditOpen(true)} style={{ ...titleStyle, background: 'none', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
+                          {display.title}
+                        </button>
+                      ) : (
+                        <span style={titleStyle}>{display.title}</span>
+                      )}
+                    </div>
                   )
                 })()}
 
@@ -1306,6 +1323,13 @@ export function MsgScreen() {
                   onSaved={() => { setGroupEditOpen(false); loadInbox() }}
                 />,
                 document.body
+              )}
+
+              {avatarFullscreenId && (
+                <AvatarFullscreen
+                  userId={avatarFullscreenId}
+                  onClose={() => setAvatarFullscreenId(null)}
+                />
               )}
 
               {/* Messages */}

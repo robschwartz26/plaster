@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Pencil } from 'lucide-react'
+import { X, Pencil, Lock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -20,13 +20,21 @@ interface Props {
 export function AvatarFullscreen({ userId, onClose, onUpdatePhoto }: Props) {
   const { user } = useAuth()
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const isSelf = user?.id === userId
 
   useEffect(() => {
+    setLoaded(false)
     supabase.from('profiles').select('username, avatar_url, avatar_full_url, bio').eq('id', userId).single()
-      .then(({ data }) => setProfile(data ?? null))
+      .then(({ data }) => { setProfile(data ?? null); setLoaded(true) })
   }, [userId])
 
+  // Privacy is governed entirely by the existing profiles SELECT RLS policy:
+  //   (is_public = true) OR (auth.uid() = id) OR is_admin(auth.uid())
+  // There is no follower exception, so a private (or blocked) profile that
+  // isn't ours returns no row at all — the gate is automatic. If the fetch came
+  // back empty for someone else's profile, show a locked state, never an error.
+  const isLocked = loaded && !profile && !isSelf
   const displaySrc = profile?.avatar_full_url ?? profile?.avatar_url ?? null
 
   return createPortal(
@@ -42,7 +50,18 @@ export function AvatarFullscreen({ userId, onClose, onUpdatePhoto }: Props) {
     >
       {/* Floating modal — natural image size within bounds */}
       <div style={{ position: 'relative', maxWidth: '75vw', maxHeight: '70vh', borderRadius: 8, overflow: 'hidden' }}>
-        {displaySrc ? (
+        {isLocked ? (
+          <div style={{
+            width: 200, height: 260, background: 'rgba(240,236,227,0.08)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12,
+            padding: 20, boxSizing: 'border-box', textAlign: 'center',
+          }}>
+            <Lock size={28} color="rgba(255,255,255,0.55)" />
+            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'rgba(255,255,255,0.55)' }}>
+              This profile is private
+            </p>
+          </div>
+        ) : displaySrc ? (
           <img
             src={displaySrc}
             style={{ display: 'block', maxWidth: '75vw', maxHeight: '70vh', width: 'auto', height: 'auto', objectFit: 'contain' }}

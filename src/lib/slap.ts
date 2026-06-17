@@ -24,9 +24,13 @@ export async function fetchFriends(userId: string): Promise<SlapFriend[]> {
   if (!ids.length) return []
   const { data: profs } = await supabase
     .from('profiles')
-    .select('id, username, avatar_diamond_url, avatar_url')
+    .select('id, username, avatar_diamond_url, avatar_url, account_type')
     .in('id', ids)
-  return (profs ?? []).sort((a, b) => (a.username ?? '').localeCompare(b.username ?? '')) as SlapFriend[]
+  // Only real people can be slapped — never venues or artists. A null/unset
+  // account_type is treated as 'person'.
+  return (profs ?? [])
+    .filter(p => ((p as { account_type?: string | null }).account_type ?? 'person') === 'person')
+    .sort((a, b) => (a.username ?? '').localeCompare(b.username ?? '')) as SlapFriend[]
 }
 
 // The user's existing GROUP conversations (member count > 2) → "recent crews".
@@ -58,10 +62,13 @@ export async function fetchCrews(userId: string): Promise<SlapCrew[]> {
   const otherIds = [...new Set(groupIds.flatMap(cid => byConv[cid].filter(id => id !== userId)))]
   const { data: profs } = await supabase
     .from('profiles')
-    .select('id, username, avatar_diamond_url, avatar_url')
+    .select('id, username, avatar_diamond_url, avatar_url, account_type')
     .in('id', otherIds)
+  // Person accounts only — venues/artists are never slappable crew members.
   const profMap: Record<string, SlapFriend> = {}
-  for (const p of profs ?? []) profMap[p.id] = p as SlapFriend
+  for (const p of profs ?? []) {
+    if (((p as { account_type?: string | null }).account_type ?? 'person') === 'person') profMap[p.id] = p as SlapFriend
+  }
 
   return groupIds
     .map(cid => ({
