@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
@@ -1052,17 +1053,21 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 )
               })()}
 
-              {slapOpen && (
+              {/* Portaled to body — PosterCard's 1-col strip is transformed, which
+                  would otherwise contain these position:fixed overlays and clip them. */}
+              {slapOpen && createPortal(
                 <SlapSheet
                   event={{ id: event.id, title: event.title, venue_name: event.venue_name ?? null, starts_at: event.starts_at ?? null }}
                   onClose={() => setSlapOpen(false)}
                   onSlapped={(_, count) => { setSlapOpen(false); setSlapCount(count); setTimeout(() => setSlapCount(null), 2200) }}
-                />
+                />,
+                document.body
               )}
-              {slapCount !== null && (
+              {slapCount !== null && createPortal(
                 <div style={{ position: 'fixed', left: '50%', bottom: 90, transform: 'translateX(-50%)', zIndex: 90, background: '#2a2622', color: '#fff', padding: '10px 18px', borderRadius: 999, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.3)' }}>
                   Slapped {slapCount} friend{slapCount !== 1 ? 's' : ''} — chat's open
-                </div>
+                </div>,
+                document.body
               )}
             </>
           ) : (

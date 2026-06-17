@@ -50,11 +50,11 @@ export function SlapSheet({ event, onClose, onSlapped }: {
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, background: 'var(--bg)', borderRadius: '16px 16px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', paddingBottom: 'env(safe-area-inset-bottom)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 480, boxSizing: 'border-box', background: 'var(--bg)', borderRadius: '16px 16px 0 0', maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflowX: 'hidden', paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {/* Header */}
         <div style={{ padding: '16px 18px 10px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-            <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.2 }}>Who's coming to {event.title}?</p>
+            <p style={{ margin: 0, flex: 1, minWidth: 0, overflowWrap: 'break-word', fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.2 }}>Who's coming to {event.title}?</p>
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', flexShrink: 0 }}>✕</button>
           </div>
           <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>Tap friends to add — they'll get a group chat.</p>
