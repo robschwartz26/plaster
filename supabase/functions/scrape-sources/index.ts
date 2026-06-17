@@ -571,6 +571,9 @@ Source text: ${sourceText.slice(0, 1500)}`,
 // format the caller keeps the original bytes, so ingestion is never blocked or
 // slowed. Returns null to signal "use the original bytes".
 const EXIF_STRIP_BUDGET_MS = 1500
+// Per-run tally of metadata-strip outcomes (reset at the start of each request).
+// When any image fell back to original bytes, the run note flags it.
+const exifStats = { stripped: 0, kept: 0 }
 async function stripMetadataBestEffort(bytes: Uint8Array): Promise<Uint8Array | null> {
   try {
     return await Promise.race([
@@ -604,7 +607,8 @@ async function rehostImage(supabaseService: any, imageUrl: string | null, deadli
     let outBytes = bytes
     let outType = imgRes.headers.get('content-type')?.split(';')[0] || 'image/jpeg'
     const stripped = await stripMetadataBestEffort(bytes)
-    if (stripped && stripped.byteLength > 0) { outBytes = stripped; outType = 'image/jpeg' }
+    if (stripped && stripped.byteLength > 0) { outBytes = stripped; outType = 'image/jpeg'; exifStats.stripped++ }
+    else { exifStats.kept++ } // stored original bytes — metadata not stripped this time
     const path = `scrape/${crypto.randomUUID()}.jpg`
     const { error: upErr } = await supabaseService.storage
       .from('posters').upload(path, outBytes, { contentType: outType, upsert: false })
@@ -681,6 +685,7 @@ async function extractFromPage(fetcher: PageFetcher, url: string, html: string, 
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  exifStats.stripped = 0; exifStats.kept = 0
 
   // ── JWT + is_admin check (admin ONLY — not ingester) ─────────────────────
   const authHeader = req.headers.get('Authorization')
@@ -1260,9 +1265,11 @@ serve(async (req) => {
         const pastNote = windowStats.past ? ` · ${windowStats.past} already past` : ''
         const enrichNote = enrichTried ? ` · enriched ${enriched}/${enrichTried} from detail pages` : ''
         const rwNote = rewriteFailures ? ` · descriptions failed: ${rewriteFailures} (${rewriteError})` : ''
+        // Only noted when at least one image fell back to original (metadata-bearing) bytes.
+        const exifNote = exifStats.kept ? ` · exif: ${exifStats.kept} kept(fallback)/${exifStats.stripped} stripped` : ''
         await supabaseService.from('venue_sources').update({
           last_run_at: new Date().toISOString(),
-          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${horizonNote}${pastNote}${enrichNote}${rwNote}`,
+          last_run_note: `${method} · inserted ${inserted} · skipped ${skipped} · found ${result.found}${horizonNote}${pastNote}${enrichNote}${rwNote}${exifNote}`,
         }).eq('id', src.id)
       } catch (err) {
         // Per-source failure is a note, not a batch failure
