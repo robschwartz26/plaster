@@ -1320,6 +1320,11 @@ export function MsgScreen() {
                   if (msg.message_type === 'slap' && !isDeleted) {
                     const ev = msg.event_id ? slapEvents[msg.event_id] : null
                     const senderName = openConv?.members.find(m => m.id === msg.sender_id)?.username ?? 'someone'
+                    // The crew = the other thread members (the people the sender slapped).
+                    const crew = openConv?.members ?? []
+                    const crewNames = crew.length
+                      ? crew.slice(0, 3).map(m => `@${m.username ?? 'someone'}`).join(', ') + (crew.length > 3 ? ` +${crew.length - 3} more` : '')
+                      : 'the crew'
                     return (
                       <div key={msg.id} ref={el => { messageRefs.current.set(msg.id, el) }} style={{ margin: '12px 0' }}>
                         {showTimestampBefore(msg, prev) && (
@@ -1328,7 +1333,7 @@ export function MsgScreen() {
                         <div style={{ padding: '22px 36px', textAlign: 'center' }}>
                           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'var(--fg-62)', lineHeight: 1.4 }}>
                             {isMine
-                              ? <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>You</span> want to go with the crew to</>
+                              ? <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>You</span> wanna go with {crewNames} to</>
                               : <><span style={{ fontWeight: 700, color: 'var(--fg-82)' }}>@{senderName}</span> wants to go with you to</>}
                           </p>
                           <button
