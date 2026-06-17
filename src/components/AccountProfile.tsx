@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Diamond } from '@/components/Diamond'
+import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
@@ -74,6 +75,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
   const [followersListOpen,   setFollowersListOpen]   = useState(false)
   const [followListTab,       setFollowListTab]       = useState<'followers' | 'following'>('followers')
   const [loading,             setLoading]             = useState(true)
+  const [avatarFullscreenOpen, setAvatarFullscreenOpen] = useState(false)
 
   // Step 1: resolve account profile id
   useEffect(() => {
@@ -216,6 +218,13 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     document.body
   ) : null
 
+  // ── Shared avatar-fullscreen portal ────────────────────────────────────
+  // AvatarFullscreen self-portals to body and gates on the profiles is_public
+  // RLS (locked state for private profiles); we just hand it the user id.
+  const avatarFullscreenPortal = resolvedId && avatarFullscreenOpen ? (
+    <AvatarFullscreen userId={resolvedId} onClose={() => setAvatarFullscreenOpen(false)} />
+  ) : null
+
   // ── Person branch ──────────────────────────────────────────────────────
   if (isPerson) {
     const attendedList = attendedEvents.map(r => r.events).filter(Boolean) as NonNullable<AttendedEvent['events']>[]
@@ -225,7 +234,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
 
         {/* Header: diamond + name */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, marginBottom: 16 }}>
-          <Diamond diamondUrl={account.avatar_diamond_url} size={80} />
+          <Diamond diamondUrl={account.avatar_diamond_url} size={80} onClick={() => setAvatarFullscreenOpen(true)} />
           <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
             <h1 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--fg)', lineHeight: 1.2 }}>
               @{account.username ?? '—'}
@@ -303,6 +312,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         </div>
 
         {followListPortal}
+        {avatarFullscreenPortal}
       </div>
     )
   }
@@ -318,7 +328,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           background: 'var(--bg)',
         }} />
         <div style={{ position: 'absolute', inset: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Diamond diamondUrl={account.avatar_diamond_url} size={88} />
+          <Diamond diamondUrl={account.avatar_diamond_url} size={88} onClick={() => setAvatarFullscreenOpen(true)} />
         </div>
       </div>
     </div>
