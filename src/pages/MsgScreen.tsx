@@ -136,7 +136,12 @@ function notifCopy(notif: AppNotification) {
     case 'show_reminder': return <>Show today: {eventNode}</>
     case 'venue_new_show': return <>{senderNode} added a show — {notif.body_preview ?? 'new show'}</>
     case 'lost_pet': return <>🐾 Lost pet in your neighborhood — {notif.body_preview ?? 'a neighbor needs help'}</>
-    case 'slap': return <>{senderNode} slapped you to a show <SlapHand size={14} style={{ marginLeft: 3 }} /></>
+    case 'slap': return (
+      <>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>{senderNode} slapped you <SlapHand size={15} /></span>
+        <span style={{ display: 'block', marginTop: 2, fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>to go to <strong style={{ fontWeight: 700, color: 'var(--fg)' }}>{notif.event?.title ?? 'a show'}</strong></span>
+      </>
+    )
     default: return <>{senderNode} shouted you on {eventNode}</>
   }
 }
@@ -931,7 +936,7 @@ export function MsgScreen() {
           {/* Shouts section */}
           {notifications.length > 0 && (
             <div style={{ padding: '10px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-65)' }}>
+              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-70)' }}>
                 shouts{notifications.length > 1 ? ` (${notifications.length})` : ''}
               </span>
               {notifications.length > 1 && (
@@ -946,7 +951,7 @@ export function MsgScreen() {
           )}
 
           {/* Notification cards — capped at 5 unless expanded */}
-          {(shoutsExpanded ? notifications : notifications.slice(0, 5)).map(notif => (
+          {(shoutsExpanded ? notifications : notifications.slice(0, 3)).map(notif => (
             <div key={notif.id} style={{ padding: '0 16px 10px' }}>
               <div style={{ position: 'relative' }}>
                 <div style={{
@@ -973,27 +978,13 @@ export function MsgScreen() {
                     size={40}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    {notif.kind === 'slap' ? (
-                      <>
-                        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                          <span><span style={{ fontWeight: 700 }}>@{notif.sender?.username ?? 'someone'}</span> slapped you</span>
-                          <SlapHand size={15} />
-                        </p>
-                        <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          to go to <strong style={{ fontWeight: 700, color: 'var(--fg)' }}>{notif.event?.title ?? 'a show'}</strong>
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {notifCopy(notif)}
-                        </p>
-                        {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && (
-                          <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            "{notif.body_preview}"
-                          </p>
-                        )}
-                      </>
+                    <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg)', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: notif.kind === 'slap' ? 'normal' : 'nowrap' }}>
+                      {notifCopy(notif)}
+                    </p>
+                    {notif.body_preview && notif.kind !== 'follow' && notif.kind !== 'venue_new_show' && notif.kind !== 'slap' && (
+                      <p style={{ margin: '2px 0 0', fontFamily: 'Space Grotesk, sans-serif', fontSize: 12, color: 'var(--fg-55)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        "{notif.body_preview}"
+                      </p>
                     )}
                     {isEventEnded(notif.event?.starts_at) && notif.event?.starts_at && (
                       <div style={{
@@ -1026,7 +1017,7 @@ export function MsgScreen() {
           ))}
 
           {/* See more / show less */}
-          {notifications.length > 5 && (
+          {notifications.length > 3 && (
             <button
               onClick={() => setShoutsExpanded(v => !v)}
               style={{
@@ -1036,7 +1027,7 @@ export function MsgScreen() {
                 color: 'var(--fg-40)', textAlign: 'left',
               }}
             >
-              {shoutsExpanded ? 'show less' : `see ${notifications.length - 5} more`}
+              {shoutsExpanded ? 'show less' : `see ${notifications.length - 3} more`}
             </button>
           )}
 
@@ -1049,7 +1040,7 @@ export function MsgScreen() {
             {/* Section header — "messages" normally, "people & chats" when searching */}
             {!convLoading && (
               <div style={{ padding: '10px 16px 6px' }}>
-                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-65)' }}>
+                <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 16, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-70)' }}>
                   {searchQuery.trim().length >= 1 ? 'people & chats' : 'messages'}
                 </span>
               </div>
