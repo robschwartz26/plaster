@@ -1095,6 +1095,22 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   }
 
   function renderPostWall() {
+    // Only the on-screen card mounts the full post wall (posts list + the
+    // MentionInput composers, each of which carries state + block/mute
+    // subscriptions). Off-screen windowed cards render a light placeholder that
+    // preserves the panel's size, so swiping a tall 1-col wall stays cheap. The
+    // composer mounts when the card becomes active (which is also when its data
+    // loads) and unmounts when you swipe away.
+    if (!isActive) {
+      return (
+        <>
+          <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Wall</span>
+          </div>
+          <div style={{ flex: 1 }} />
+        </>
+      )
+    }
     return (
       <>
         <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
