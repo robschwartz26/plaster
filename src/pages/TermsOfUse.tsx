@@ -9,7 +9,7 @@
  * mechanism for users to acknowledge agreement before using.
  */
 
-const EFFECTIVE_DATE = 'June 11, 2026'
+const EFFECTIVE_DATE = 'June 16, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
@@ -151,6 +151,39 @@ export function TermsOfUse() {
         image corrected or removed, contact us at the address in the Contact
         section below (<a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#A855F7' }}>{CONTACT_EMAIL}</a>)
         and we will respond promptly.
+      </p>
+
+      <h2 style={h2}>Community posts and neighborhood content</h2>
+      <p>
+        The community wall lets you post neighborhood content — items for sale,
+        yard sales, local notices, lost-pet alerts, and the like. These posts are
+        user-generated: the person who posts is solely responsible for their
+        content and its accuracy.
+      </p>
+      <p>
+        Don't post any of the following. We may remove any post and suspend
+        accounts at our discretion:
+      </p>
+      <ul style={ul}>
+        <li>Illegal goods or services, weapons, drugs, or alcohol/tobacco sales</li>
+        <li>Recalled or stolen items</li>
+        <li>Hate, harassment, spam, scams, or adult content</li>
+        <li>Anything else unlawful or unsafe</li>
+      </ul>
+      <p>
+        Plaster is <strong>not</strong> a party to any sale, trade, or transaction
+        between users, and is not responsible for goods, payments, item condition,
+        delivery, or in-person meetups. Arrange any exchange safely and at your own
+        risk, and meet in public places.
+      </p>
+      <p>
+        Lost-pet alerts and other neighbor-help posts are a community courtesy —
+        Plaster doesn't guarantee any response or outcome.
+      </p>
+      <p>
+        By posting, you grant Plaster a non-exclusive license to display your
+        content within the app. You keep ownership of what you post, and you can
+        request removal via the Contact section below.
       </p>
 
       <h2 style={h2}>Disclaimers</h2>
