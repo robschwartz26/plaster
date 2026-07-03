@@ -15,6 +15,8 @@ import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { MusicEmbed } from '@/components/MusicEmbed'
+import { parseMusicEmbed, isValidMusicUrl } from '@/lib/musicEmbed'
 import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
@@ -119,13 +121,15 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [pendingBannerFocalY, setPendingBannerFocalY] = useState(0.5)
   const [homeNbhd,    setHomeNbhd]    = useState<string | null>(null)
   const [homeSextant, setHomeSextant] = useState<Sextant | null>(null)
+  const [musicUrl,    setMusicUrl]    = useState('')
 
   useEffect(() => {
     setBio(selfProfile?.bio ?? '')
     setIsPublic(selfProfile?.is_public ?? true)
     setHomeNbhd(selfProfile?.home_neighborhood ?? null)
     setHomeSextant((selfProfile?.home_sextant ?? null) as Sextant | null)
-  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant])
+    setMusicUrl((selfProfile as unknown as { music_embed_url?: string | null })?.music_embed_url ?? '')
+  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant, (selfProfile as unknown as { music_embed_url?: string | null })?.music_embed_url])
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
@@ -212,7 +216,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!user) return
     setBusy(true)
 
-    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant }
+    // Guard: never persist an invalid music link (empty string clears it).
+    const music = musicUrl.trim()
+    if (music !== '' && !isValidMusicUrl(music)) { setBusy(false); return }
+
+    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null; music_embed_url?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant, music_embed_url: music === '' ? null : music }
 
     if (pendingBannerBlob) {
       const path = `${user.id}/banner.jpg`
@@ -563,6 +571,46 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                     {pendingBannerBlob && <p style={{ margin: '6px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Banner ready — will upload on Save</p>}
                   </div>
                 )}
+                {(selfProfile?.account_type === 'venue' || selfProfile?.account_type === 'artist') && (() => {
+                  const musicDirty = musicUrl.trim() !== ''
+                  const musicOk    = !!parseMusicEmbed(musicUrl)
+                  const musicBad   = musicDirty && !musicOk
+                  return (
+                    <div style={{ marginBottom: 14 }}>
+                      <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
+                        Music
+                      </p>
+                      <input
+                        type="url"
+                        inputMode="url"
+                        placeholder="Paste a Spotify or Bandcamp link"
+                        value={musicUrl}
+                        onChange={e => setMusicUrl(e.target.value)}
+                        style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${musicBad ? 'var(--sold-out)' : 'var(--fg-18)'}`, background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+                      />
+                      <p style={{ margin: '6px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', lineHeight: 1.5 }}>
+                        Spotify: your track / album / artist link. Bandcamp: Share → Embed → copy the player link.
+                      </p>
+                      {musicBad && (
+                        <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--sold-out)' }}>
+                          Paste a Spotify or Bandcamp link.
+                        </p>
+                      )}
+                      {window.location.hostname === 'localhost' && (
+                        <button type="button" onClick={() => setMusicUrl('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT')}
+                          style={{ marginTop: 8, padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>
+                          DEV: fill sample Spotify link
+                        </button>
+                      )}
+                      {musicOk && (
+                        <div style={{ marginTop: 12 }}>
+                          <p style={{ margin: '0 0 6px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Preview</p>
+                          <MusicEmbed url={musicUrl} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
                 <button onClick={saveProfile} disabled={busy} style={saveBtnStyle(busy)}>{busy ? 'Saving…' : 'Save changes'}</button>
               </motion.div>
             )}

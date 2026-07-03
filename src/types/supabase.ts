@@ -916,6 +916,7 @@ export type Database = {
           is_ingester: boolean
           is_public: boolean
           is_suspended: boolean
+          music_embed_url: string | null
           pending_account_type: string | null
           phone_hash: string | null
           show_social_publicly: boolean
@@ -940,6 +941,7 @@ export type Database = {
           is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
+          music_embed_url?: string | null
           pending_account_type?: string | null
           phone_hash?: string | null
           show_social_publicly?: boolean
@@ -964,6 +966,7 @@ export type Database = {
           is_ingester?: boolean
           is_public?: boolean
           is_suspended?: boolean
+          music_embed_url?: string | null
           pending_account_type?: string | null
           phone_hash?: string | null
           show_social_publicly?: boolean

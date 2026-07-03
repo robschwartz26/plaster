@@ -9,7 +9,7 @@
  * mechanism for users to acknowledge agreement before using.
  */
 
-const EFFECTIVE_DATE = 'June 16, 2026'
+const EFFECTIVE_DATE = 'July 2, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
@@ -151,6 +151,13 @@ export function TermsOfUse() {
         image corrected or removed, contact us at the address in the Contact
         section below (<a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#A855F7' }}>{CONTACT_EMAIL}</a>)
         and we will respond promptly.
+      </p>
+      <p>
+        Artist profiles may embed a third-party music player (such as Spotify or
+        Bandcamp). Those players, and the audio they stream, are provided by and
+        governed by that service's own terms and privacy policy — not Plaster's.
+        Plaster hosts no audio and is not responsible for third-party content or
+        its availability.
       </p>
 
       <h2 style={h2}>Community posts and neighborhood content</h2>

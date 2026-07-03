@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase, type DbVenue } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Diamond } from '@/components/Diamond'
+import { MusicEmbed } from '@/components/MusicEmbed'
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
@@ -22,6 +23,7 @@ interface AccountData {
   banner_url: string | null
   banner_focal_y: number
   avatar_diamond_url: string | null
+  music_embed_url: string | null
 }
 
 interface VenueEvent {
@@ -90,7 +92,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     if (!resolvedId) return
     setLoading(true)
     supabase.from('profiles')
-      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url')
+      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url, music_embed_url')
       .eq('id', resolvedId)
       .single()
       .then(async ({ data: prof }) => {
@@ -278,6 +280,14 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           </div>
         )}
 
+        {/* Listen — artist/music embed, hidden unless set */}
+        {account.music_embed_url && (
+          <div style={{ marginBottom: 24 }}>
+            <p style={listenLabel}>Listen</p>
+            <MusicEmbed url={account.music_embed_url} />
+          </div>
+        )}
+
         {/* Attended events grid */}
         <div style={{ marginBottom: 24 }}>
           <p style={sectionLabel}>Attended</p>
@@ -412,6 +422,14 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         </div>
       )}
 
+      {/* ── Listen — artist/music embed, hidden unless set ── */}
+      {account.music_embed_url && (
+        <div style={{ padding: '16px 20px 0' }}>
+          <p style={listenLabel}>Listen</p>
+          <MusicEmbed url={account.music_embed_url} />
+        </div>
+      )}
+
       {/* ── Venue details ── */}
       {isVenue && venue && (
         <div style={{ padding: '10px 20px 0', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -507,4 +525,13 @@ const sectionLabel: React.CSSProperties = {
   fontSize: 11, fontWeight: 700,
   letterSpacing: '0.08em', textTransform: 'uppercase' as const,
   color: 'var(--fg-30)',
+}
+
+// LISTEN section label — Barlow Condensed, uppercase, neutral (no accent).
+const listenLabel: React.CSSProperties = {
+  margin: '0 0 10px',
+  fontFamily: '"Barlow Condensed", sans-serif',
+  fontSize: 15, fontWeight: 700,
+  letterSpacing: '0.08em', textTransform: 'uppercase' as const,
+  color: 'var(--fg-55)',
 }

@@ -6,7 +6,7 @@
  * practices or features change. Do NOT add features that don't exist.
  */
 
-const EFFECTIVE_DATE = 'June 16, 2026'
+const EFFECTIVE_DATE = 'July 2, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function PrivacyPolicy() {
@@ -143,6 +143,17 @@ export function PrivacyPolicy() {
       </p>
 
       <h2 style={h2}>Who we share information with</h2>
+
+      <h3 style={h3}>Embedded third-party players (Spotify, Bandcamp)</h3>
+      <p>
+        Artist profiles can include an embedded music player from Spotify or
+        Bandcamp. When a profile that has a player loads, your browser connects
+        directly to that service to stream the music — which means the service
+        may receive your IP address and set cookies or collect data under its own
+        privacy policy, not ours. Plaster hosts no audio and receives none of this
+        data. If you'd rather not load these players, review the relevant service's
+        privacy policy (Spotify or Bandcamp) for details and controls.
+      </p>
 
       <h3 style={h3}>Service providers</h3>
       <p>
