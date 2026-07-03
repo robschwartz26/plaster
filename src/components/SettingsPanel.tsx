@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
 import { PrivacyPanel } from './PrivacyPanel'
+import { TourOverlay } from './TourOverlay'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -20,6 +21,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [showSocial, setShowSocial] = useState<boolean>(true)
   const [savingPrivacy, setSavingPrivacy] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -136,6 +138,32 @@ export function SettingsPanel({ open, onClose }: Props) {
         }}>›</span>
       </button>
 
+      <button
+        onClick={() => setTourOpen(true)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 0',
+          background: 'none',
+          border: 'none',
+          borderBottom: '1px solid var(--fg-08)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+            Take a tour
+          </p>
+          <p style={{ margin: '2px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)' }}>
+            See how Plaster works
+          </p>
+        </div>
+        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 16, color: 'var(--fg-40)' }}>›</span>
+      </button>
+
       <div style={{ height: 24 }} />
 
       <p style={{ margin: '0 0 8px', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
@@ -245,6 +273,7 @@ export function SettingsPanel({ open, onClose }: Props) {
       )}
     </BottomSheet>
     <PrivacyPanel open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+    <TourOverlay open={tourOpen} onClose={() => setTourOpen(false)} />
     </>
   )
 }
