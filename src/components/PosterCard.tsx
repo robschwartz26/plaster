@@ -15,6 +15,9 @@ import { SoldOutChip } from '@/components/SoldOutChip'
 import { SlapSheet } from '@/components/SlapSheet'
 import { SlapHand } from '@/components/SlapHand'
 import { posterThumb } from '@/lib/posterThumb'
+import { MusicEmbed } from '@/components/MusicEmbed'
+import { ClaimShow } from '@/components/ClaimShow'
+import { fetchApprovedTrack } from '@/lib/eventClaims'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -248,10 +251,15 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [reportingPost, setReportingPost] = useState<{ id: string; userId: string } | null>(null)
   const [reported, setReported] = useState(false)
   const [reportCount, setReportCount] = useState(event.sold_out_report_count ?? 0)
+  const [showTrack, setShowTrack] = useState<{ trackUrl: string; username: string | null } | null>(null)
+  const [trackPlayerOpen, setTrackPlayerOpen] = useState(false)
 
   function fetchPanelData() {
     if (detailFetched.current) return
     detailFetched.current = true
+
+    // Layer 2: an approved per-show track (if any) → poster "Listen" chip.
+    fetchApprovedTrack(event.id).then(setShowTrack)
 
     supabase.from('events').select('description, address').eq('id', event.id).single()
       .then(({ data }) => { if (data) setDetail(data as EventDetail) })
@@ -674,6 +682,23 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 {formatDatePill(event.starts_at)}
               </div>
             )}
+            {/* Layer 2: "Listen" chip — mirrors the date pill, opens the track player */}
+            {panelIdx === 0 && showTrack && (
+              <button
+                onClick={e => { e.stopPropagation(); setTrackPlayerOpen(true) }}
+                aria-label="Hear this show"
+                style={{
+                  position: 'absolute', bottom: 'env(safe-area-inset-bottom)', left: 0,
+                  padding: '6px 12px', background: 'var(--bg)', color: 'var(--fg)', border: 'none',
+                  fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 13,
+                  letterSpacing: '0.1em', textTransform: 'uppercase', zIndex: 6, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                <span style={{ width: 0, height: 0, borderLeft: '9px solid var(--fg)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent' }} />
+                Listen
+              </button>
+            )}
           </div>
 
           {/* Panel 2: Info */}
@@ -691,6 +716,19 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             {renderPosterContent()}
           </div>
         </div>
+
+        {/* Layer 2: per-show track player — slim bar, opened from the Listen chip */}
+        {trackPlayerOpen && showTrack && (
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 30, background: 'var(--bg)', borderTop: '1px solid var(--fg-15)', padding: '8px 10px calc(8px + env(safe-area-inset-bottom))' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>
+                {showTrack.username ? `♪ @${showTrack.username}` : '♪ Listen'}
+              </span>
+              <button onClick={e => { e.stopPropagation(); setTrackPlayerOpen(false) }} aria-label="Close player" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <MusicEmbed url={showTrack.trackUrl} autoLoad />
+          </div>
+        )}
 
         {/* Desktop nav chevrons (opt-in) */}
         {enableDesktopNav && (
@@ -1052,6 +1090,17 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </button>
                 )
               })()}
+
+              {/* Layer 2: this show's track — credit (any viewer) + claim (artists) */}
+              {showTrack && (
+                <button onClick={() => setTrackPlayerOpen(true)} style={{ width: '100%', boxSizing: 'border-box', marginTop: 10, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ width: 0, height: 0, borderLeft: '10px solid var(--fg-65)', borderTop: '7px solid transparent', borderBottom: '7px solid transparent', flexShrink: 0 }} />
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', textAlign: 'left' }}>
+                    Hear this show{showTrack.username ? ` — @${showTrack.username}` : ''}
+                  </span>
+                </button>
+              )}
+              <ClaimShow eventId={event.id} active={!!isActive} />
 
               {/* Portaled to body — PosterCard's 1-col strip is transformed, which
                   would otherwise contain these position:fixed overlays and clip them. */}

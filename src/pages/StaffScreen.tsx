@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
+import { AdminEventClaims } from '@/components/admin/AdminEventClaims'
 import { AdminTools } from '@/components/admin/AdminTools'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueBoard } from '@/components/VenueBoard'
@@ -351,7 +352,7 @@ function StaffDashboard() {
       case 'ingester':   return <Ingester staffMode={!isAdmin} />
       case 'board':      return <VenueBoard />
       case 'history':    return <UploadHistory />
-      case 'review':     return <><AdminCommunityPosts /><AdminPendingEvents /></>
+      case 'review':     return <><AdminEventClaims /><AdminCommunityPosts /><AdminPendingEvents /></>
       case 'tools':      return <AdminTools />
       case 'team':       return teamContent
     }
