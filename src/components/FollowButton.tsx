@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { reportTourAction } from '@/lib/tourBus'
 
 export type FollowStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'following' | 'mutual' | 'self'
 
@@ -38,6 +39,7 @@ export function FollowButton({ targetUserId, size = 'large' }: { targetUserId: s
     setLoading(true)
     if (status === 'none') {
       await supabase.from('follows').insert({ follower_id: user.id, following_id: targetUserId })
+      reportTourAction('follow')
     } else if (status === 'pending_outgoing') {
       await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetUserId)
     } else if (status === 'following' || status === 'mutual') {

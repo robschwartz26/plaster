@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
 import { PrivacyPanel } from './PrivacyPanel'
-import { TourOverlay } from './TourOverlay'
+import { useInteractiveTour } from './tour/InteractiveTour'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
@@ -21,7 +21,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [showSocial, setShowSocial] = useState<boolean>(true)
   const [savingPrivacy, setSavingPrivacy] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
-  const [tourOpen, setTourOpen] = useState(false)
+  const { start: startTour } = useInteractiveTour()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -139,7 +139,7 @@ export function SettingsPanel({ open, onClose }: Props) {
       </button>
 
       <button
-        onClick={() => setTourOpen(true)}
+        onClick={() => { onClose(); startTour() }}
         style={{
           width: '100%',
           display: 'flex',
@@ -273,7 +273,6 @@ export function SettingsPanel({ open, onClose }: Props) {
       )}
     </BottomSheet>
     <PrivacyPanel open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
-    <TourOverlay open={tourOpen} onClose={() => setTourOpen(false)} />
     </>
   )
 }

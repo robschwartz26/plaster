@@ -141,6 +141,7 @@ export function BottomNav() {
         return (
           <button
             key={path}
+            data-tour={`nav-${path}`}
             onClick={() => navigate(path)}
             className="flex flex-col items-center gap-1"
             style={{

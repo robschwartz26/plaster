@@ -18,6 +18,7 @@ import { posterThumb } from '@/lib/posterThumb'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { ClaimShow } from '@/components/ClaimShow'
 import { fetchApprovedTrack } from '@/lib/eventClaims'
+import { reportTourAction } from '@/lib/tourBus'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -194,7 +195,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const lastTap = useRef(0)
   function handleTap() {
     const now = Date.now()
-    if (now - lastTap.current < 300) onDoubleTap?.(event)
+    if (now - lastTap.current < 300) { onDoubleTap?.(event); reportTourAction('open-poster') }
     lastTap.current = now
   }
 
@@ -202,6 +203,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const stripRef = useRef<HTMLDivElement>(null)
   const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
   const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
+  useEffect(() => { if (panelIdx === 1) reportTourAction('swipe') }, [panelIdx])
   const loopingRef = useRef(false)
 
   // Commit a panel as this card's final value. shared=true reports it up to the
@@ -445,6 +447,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         const now = Date.now()
         if (now - lastTapTimeRef.current < 300) {
           lastTapTimeRef.current = 0
+          reportTourAction('like')
           if (!isLiked) {
             onLike(event.id)
             registerView()
@@ -533,6 +536,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     } else {
       await supabase.from('attendees').insert({ event_id: event.id, user_id: user.id })
       setIsAttending(true); setAttendeeCount((c) => c + 1)
+      reportTourAction('rsvp')
     }
     setAttendLoading(false)
   }
@@ -617,6 +621,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     return (
       <div
         ref={cardRef}
+        data-tour="onecol"
         style={{
           height: '100%',
           background: 'var(--bg)',
@@ -870,6 +875,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── 2-5 col: blurred backdrop card ────────────────────────────────────
   return (
     <div
+      data-tour="poster"
       onClick={handleTap}
       onDoubleClick={enableDesktopNav ? () => onDoubleTap?.(event) : undefined}
       style={{
@@ -1056,7 +1062,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               )}
 
               {user ? (
-                <button onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
+                <button data-tour="rsvp" onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
                   {isAttending ? "I'm Going ✓" : "I'll Be There"}
                 </button>
               ) : (
