@@ -13,14 +13,18 @@ function markTourSeen() {
   try { localStorage.setItem(TOUR_SEEN_KEY, '1') } catch { /* ignore */ }
 }
 
-type Scene = 'welcome' | 'wall' | 'map' | 'lineup' | 'msg' | 'hood' | 'you' | 'done'
+type Scene = 'welcome' | 'wall' | 'onecol' | 'like' | 'going' | 'lineup' | 'follow' | 'map' | 'msg' | 'hood' | 'you' | 'done'
 interface Step { scene: Scene; title: string; body: string }
 
 const STEPS: Step[] = [
   { scene: 'welcome', title: 'Welcome to Plaster', body: "Portland's event poster wall — discover shows, plan nights out, and feel the city's pulse. Here's the quick tour." },
-  { scene: 'wall', title: 'The Wall', body: 'The heart of it all. Scroll the poster grid and pinch to change columns. Double-tap any poster to open it full-screen, then swipe for its details and wall.' },
+  { scene: 'wall', title: 'The Wall', body: 'The heart of it all. Scroll the poster grid, and pinch to change how many columns you see.' },
+  { scene: 'onecol', title: 'Open a poster', body: 'Double-tap any poster to open it in single view. Then swipe sideways to move through the poster, its details, and its community wall.' },
+  { scene: 'like', title: 'Like what you love', body: 'Double-tap a poster to like it — a heart pops. Your likes help surface what’s hot on the Wall.' },
+  { scene: 'going', title: '“I’ll be there”', body: 'Open a show’s details and tap “I’ll be there.” It drops the show into your Line Up so you never forget the date.' },
+  { scene: 'lineup', title: 'Line Up', body: 'Your upcoming nights, stacked as diamonds — plus a feed of what your friends and the venues you follow are up to.' },
+  { scene: 'follow', title: 'Follow venues & artists', body: 'Open a venue or artist’s page — from a map pin, the feed, or search — and tap Follow. Their new shows then surface for you.' },
   { scene: 'map', title: 'Map', body: 'See what’s on near you. Spin the day wheel and tap venue pins to explore the city, night by night.' },
-  { scene: 'lineup', title: 'Line Up', body: 'Your feed and your queue. Tap “I’ll be there” on a show and watch your upcoming nights stack up as diamonds.' },
   { scene: 'msg', title: 'Messages & Slap', body: 'Message friends and make group chats. Love a show? Slap your friends to it — it opens a group chat so you can plan going together.' },
   { scene: 'hood', title: 'Your neighborhood', body: 'Tap your neighborhood chip on the Wall for your community board — sell things, post local notices, or send a lost-pet alert.' },
   { scene: 'you', title: 'You', body: 'Your profile: the shows you’ve been to, who you follow, your neighborhood. Artists can add their music and claim their shows so their songs play on the poster.' },
@@ -61,6 +65,52 @@ function TourVisual({ scene }: { scene: Scene }) {
           </div>
         </div>
       )
+    case 'onecol':
+      return (
+        <div style={{ ...box, gap: 14 }}>
+          <span style={{ fontSize: 26, color: 'var(--fg-30)', lineHeight: 1 }}>‹</span>
+          <div style={{ width: 62, height: 92, borderRadius: 6, background: POSTER_GRADS[0], display: 'flex', alignItems: 'flex-end', justifyContent: 'center', paddingBottom: 8 }}>
+            <span style={{ fontSize: 16, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.7)', lineHeight: 1 }}>···</span>
+          </div>
+          <span style={{ fontSize: 26, color: 'var(--fg-30)', lineHeight: 1 }}>›</span>
+        </div>
+      )
+    case 'like':
+      return (
+        <div style={{ ...box }}>
+          <div style={{ position: 'relative', width: 62, height: 92, borderRadius: 6, background: POSTER_GRADS[5], display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span style={{ position: 'absolute', width: 46, height: 46, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.35)' }} />
+            <span style={{ fontSize: 26, color: '#fff', lineHeight: 1 }}>{'♥'}</span>
+          </div>
+        </div>
+      )
+    case 'going':
+      return (
+        <div style={{ ...box, flexDirection: 'column', gap: 12 }}>
+          <div style={{ padding: '10px 22px', borderRadius: 10, background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700 }}>
+            I’ll be there
+          </div>
+          <span style={{ fontSize: 18, color: 'var(--fg-30)', lineHeight: 1 }}>↓</span>
+          <Diamond size={22} grad={POSTER_GRADS[3]} />
+        </div>
+      )
+    case 'lineup':
+      return (
+        <div style={{ ...box, flexDirection: 'column', gap: 8 }}>
+          {[1, 0.75, 0.5, 0.3].map((o, i) => (
+            <Diamond key={i} size={26} opacity={o} grad={POSTER_GRADS[i % POSTER_GRADS.length]} />
+          ))}
+        </div>
+      )
+    case 'follow':
+      return (
+        <div style={{ ...box, flexDirection: 'column', gap: 12 }}>
+          <Diamond size={54} grad={POSTER_GRADS[1]} />
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 16px', borderRadius: 20, background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700 }}>
+            + Follow
+          </div>
+        </div>
+      )
     case 'map':
       return (
         <div style={{ ...box, flexDirection: 'column', gap: 12 }}>
@@ -73,14 +123,6 @@ function TourVisual({ scene }: { scene: Scene }) {
               <div key={i} style={{ width: 2, height: i === 5 ? 16 : 10, borderRadius: 2, background: i === 5 ? 'var(--fg)' : 'var(--fg-25)' }} />
             ))}
           </div>
-        </div>
-      )
-    case 'lineup':
-      return (
-        <div style={{ ...box, flexDirection: 'column', gap: 8 }}>
-          {[1, 0.75, 0.5, 0.3].map((o, i) => (
-            <Diamond key={i} size={26} opacity={o} grad={POSTER_GRADS[i % POSTER_GRADS.length]} />
-          ))}
         </div>
       )
     case 'msg':
@@ -183,12 +225,12 @@ export function TourOverlay({ open, onClose }: { open: boolean; onClose: () => v
       </div>
 
       {/* Dots */}
-      <div style={{ display: 'flex', gap: 7, justifyContent: 'center', marginBottom: 20, flexShrink: 0 }}>
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginBottom: 20, flexShrink: 0, flexWrap: 'wrap' }}>
         {STEPS.map((_, idx) => (
           <span
             key={idx}
             onClick={() => setI(idx)}
-            style={{ width: idx === i ? 22 : 7, height: 7, borderRadius: 4, background: idx === i ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', transition: 'width 0.2s ease, background 0.2s ease' }}
+            style={{ width: idx === i ? 20 : 7, height: 7, borderRadius: 4, background: idx === i ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', transition: 'width 0.2s ease, background 0.2s ease' }}
           />
         ))}
       </div>
