@@ -16,7 +16,8 @@ import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
 import { MusicEmbed } from '@/components/MusicEmbed'
-import { parseMusicEmbed, isValidMusicUrl } from '@/lib/musicEmbed'
+import { parseMusicEmbed, isValidMusicUrl, isBandcampPageUrl } from '@/lib/musicEmbed'
+import { resolveBandcamp } from '@/lib/resolveMusicEmbed'
 import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
@@ -121,15 +122,45 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [pendingBannerFocalY, setPendingBannerFocalY] = useState(0.5)
   const [homeNbhd,    setHomeNbhd]    = useState<string | null>(null)
   const [homeSextant, setHomeSextant] = useState<Sextant | null>(null)
-  const [musicUrl,    setMusicUrl]    = useState('')
+  const [musicUrl,      setMusicUrl]      = useState('')
+  const [resolvedEmbed, setResolvedEmbed] = useState<string | null>(null) // Bandcamp page → EmbeddedPlayer
+  const [resolving,     setResolving]     = useState(false)
+  const [resolveError,  setResolveError]  = useState<string | null>(null)
+
+  const savedMusic = (selfProfile as unknown as { music_embed_url?: string | null })?.music_embed_url ?? null
 
   useEffect(() => {
     setBio(selfProfile?.bio ?? '')
     setIsPublic(selfProfile?.is_public ?? true)
     setHomeNbhd(selfProfile?.home_neighborhood ?? null)
     setHomeSextant((selfProfile?.home_sextant ?? null) as Sextant | null)
-    setMusicUrl((selfProfile as unknown as { music_embed_url?: string | null })?.music_embed_url ?? '')
-  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant, (selfProfile as unknown as { music_embed_url?: string | null })?.music_embed_url])
+    setMusicUrl(savedMusic ?? '')
+  }, [selfProfile?.bio, selfProfile?.is_public, selfProfile?.home_neighborhood, selfProfile?.home_sextant, savedMusic])
+
+  // Bandcamp page urls carry no player id, so resolve them via the edge function
+  // (debounced). Spotify + already-resolved Bandcamp embeds parse client-side and
+  // need no round-trip. resolvedEmbed holds the EmbeddedPlayer link on success.
+  useEffect(() => {
+    const raw = musicUrl.trim()
+    setResolveError(null)
+    if (!raw || parseMusicEmbed(raw) || !isBandcampPageUrl(raw)) {
+      setResolvedEmbed(null); setResolving(false); return
+    }
+    setResolvedEmbed(null); setResolving(true)
+    let cancelled = false
+    const t = setTimeout(async () => {
+      const { embedSrc, error } = await resolveBandcamp(raw)
+      if (cancelled) return
+      setResolving(false)
+      if (embedSrc && parseMusicEmbed(embedSrc)) setResolvedEmbed(embedSrc)
+      else setResolveError(error ?? 'Could not load that Bandcamp link.')
+    }, 600)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [musicUrl])
+
+  // The value we actually store/render: the pasted url if it parses directly,
+  // else the resolved Bandcamp embed.
+  const effectiveMusic = parseMusicEmbed(musicUrl) ? musicUrl.trim() : (resolvedEmbed ?? '')
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
@@ -216,11 +247,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!user) return
     setBusy(true)
 
-    // Guard: never persist an invalid music link (empty string clears it).
-    const music = musicUrl.trim()
-    if (music !== '' && !isValidMusicUrl(music)) { setBusy(false); return }
+    // Guard: never persist an invalid music link (empty clears it). A Bandcamp page
+    // url is stored as its resolved EmbeddedPlayer link (effectiveMusic).
+    const musicRaw = musicUrl.trim()
+    const musicToSave = musicRaw === '' ? '' : effectiveMusic
+    if (musicRaw !== '' && !isValidMusicUrl(musicToSave)) { setBusy(false); return }
 
-    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null; music_embed_url?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant, music_embed_url: music === '' ? null : music }
+    const updates: { bio: string; is_public: boolean; banner_url?: string; banner_focal_y?: number; home_neighborhood?: string | null; home_sextant?: string | null; music_embed_url?: string | null } = { bio, is_public: isPublic, home_neighborhood: homeNbhd, home_sextant: homeSextant, music_embed_url: musicToSave === '' ? null : musicToSave }
 
     if (pendingBannerBlob) {
       const path = `${user.id}/banner.jpg`
@@ -573,8 +606,8 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                 )}
                 {(selfProfile?.account_type === 'venue' || selfProfile?.account_type === 'artist') && (() => {
                   const musicDirty = musicUrl.trim() !== ''
-                  const musicOk    = !!parseMusicEmbed(musicUrl)
-                  const musicBad   = musicDirty && !musicOk
+                  const musicOk    = !!parseMusicEmbed(effectiveMusic)
+                  const musicBad   = musicDirty && !musicOk && !resolving
                   return (
                     <div style={{ marginBottom: 14 }}>
                       <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)' }}>
@@ -589,23 +622,30 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                         style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${musicBad ? 'var(--sold-out)' : 'var(--fg-18)'}`, background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
                       />
                       <p style={{ margin: '6px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', lineHeight: 1.5 }}>
-                        Spotify: your track / album / artist link. Bandcamp: Share → Embed → copy the player link.
+                        Paste your Spotify or Bandcamp link — track, album, or artist.
                       </p>
+                      {resolving && (
+                        <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>Loading that Bandcamp link…</p>
+                      )}
                       {musicBad && (
                         <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--sold-out)' }}>
-                          Paste a Spotify or Bandcamp link.
+                          {resolveError ?? 'Paste a Spotify or Bandcamp link.'}
                         </p>
                       )}
                       {window.location.hostname === 'localhost' && (
-                        <button type="button" onClick={() => setMusicUrl('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT')}
-                          style={{ marginTop: 8, padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>
-                          DEV: fill sample Spotify link
-                        </button>
+                        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                          <button type="button" onClick={() => setMusicUrl('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT')}
+                            style={{ padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>DEV: Spotify</button>
+                          <button type="button" onClick={() => setMusicUrl('https://c418.bandcamp.com/album/minecraft-volume-alpha')}
+                            style={{ padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>DEV: Bandcamp page</button>
+                          <button type="button" onClick={() => setMusicUrl('')}
+                            style={{ padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>DEV: clear</button>
+                        </div>
                       )}
                       {musicOk && (
                         <div style={{ marginTop: 12 }}>
                           <p style={{ margin: '0 0 6px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Preview</p>
-                          <MusicEmbed url={musicUrl} />
+                          <MusicEmbed url={effectiveMusic} autoLoad />
                         </div>
                       )}
                     </div>
@@ -640,6 +680,14 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               </div>
             )}
             {searchBusy && <p style={{ fontSize: 13, color: 'var(--fg-30)', margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif' }}>Searching…</p>}
+          </div>
+        )}
+
+        {/* Listen — your saved music embed (shown on your own profile, click-to-load) */}
+        {!editing && savedMusic && (displayProfile.account_type === 'artist' || displayProfile.account_type === 'venue') && (
+          <div style={{ marginBottom: 24 }}>
+            <p style={{ margin: '0 0 10px', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 15, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-55)' }}>Listen</p>
+            <MusicEmbed url={savedMusic} />
           </div>
         )}
 

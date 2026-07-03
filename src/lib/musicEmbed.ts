@@ -98,3 +98,21 @@ export function parseMusicEmbed(raw: string | null | undefined): MusicEmbed | nu
 export function isValidMusicUrl(raw: string | null | undefined): boolean {
   return parseMusicEmbed(raw) !== null
 }
+
+/**
+ * True for a plain Bandcamp album/track PAGE url (e.g. name.bandcamp.com/track/slug).
+ * These can't be parsed client-side — the numeric id lives only in the page HTML — so
+ * the editor sends them to the resolve-music-embed edge function, which returns an
+ * EmbeddedPlayer link that parseMusicEmbed() then accepts. Distinct from an already-
+ * resolvable EmbeddedPlayer link.
+ */
+export function isBandcampPageUrl(raw: string | null | undefined): boolean {
+  if (!raw) return false
+  const u = toURL(raw)
+  if (!u || u.protocol !== 'https:') return false
+  const okHost = u.hostname === 'bandcamp.com' || u.hostname.endsWith('.bandcamp.com')
+  if (!okHost) return false
+  const segs = u.pathname.split('/').filter(Boolean)
+  if (segs[0]?.toLowerCase() === 'embeddedplayer') return false
+  return segs[0] === 'album' || segs[0] === 'track'
+}
