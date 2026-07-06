@@ -40,6 +40,7 @@ interface Step {
   demo?: boolean            // show-only demo: block interaction, ghost at top, advance via CTA
   intercept?: string        // action id the target control reports instead of its default
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
+  noDim?: boolean           // spotlight step: highlight the target (ring + ghost) but DON'T dim the rest
   reveal?: string           // action step: on the action, reveal this image + a Next CTA (don't advance yet)
   // nav:
   to?: string
@@ -58,7 +59,7 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', ghost: 'tap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
-  { type: 'spotlight', target: 'setlist', ghost: 'tap', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
+  { type: 'spotlight', target: 'setlist', ghost: 'tap', noDim: true, gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'All chats and group chats live here!' },
   { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'Hey, lookin’ sharp! ;) This is your profile — upload your pics, keep track of your friends, bands, and venues, and gaze upon your poster collection (all the events you’ve attended)!' },
@@ -305,10 +306,14 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         const x = rect.left - PAD, y = rect.top - PAD, w = rect.width + PAD * 2, h = rect.height + PAD * 2
         return (
           <>
-            <div style={{ ...blocker, left: 0, top: 0, right: 0, height: Math.max(0, y) }} />
-            <div style={{ ...blocker, left: 0, top: y + h, right: 0, bottom: 0 }} />
-            <div style={{ ...blocker, left: 0, top: y, width: Math.max(0, x), height: h }} />
-            <div style={{ ...blocker, left: x + w, top: y, right: 0, height: h }} />
+            {!step.noDim && (
+              <>
+                <div style={{ ...blocker, left: 0, top: 0, right: 0, height: Math.max(0, y) }} />
+                <div style={{ ...blocker, left: 0, top: y + h, right: 0, bottom: 0 }} />
+                <div style={{ ...blocker, left: 0, top: y, width: Math.max(0, x), height: h }} />
+                <div style={{ ...blocker, left: x + w, top: y, right: 0, height: h }} />
+              </>
+            )}
             <div style={{ position: 'fixed', left: x, top: y, width: w, height: h, borderRadius: 10, border: '2px solid rgba(255,255,255,0.9)', pointerEvents: 'none', animation: 'plaster-tour-pulse 1.4s ease-out infinite' }} />
           </>
         )
