@@ -271,7 +271,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
   const ghostPos: React.CSSProperties = hasHole && rect
     ? { position: 'fixed', left: rect.left + rect.width / 2, top: rect.top + rect.height / 2, transform: 'translate(-50%,-50%)' }
     : demo
-    ? { position: 'fixed', left: '50%', top: '24%', transform: 'translate(-50%,-50%)' }
+    ? { position: 'fixed', left: '50%', top: '44%', transform: 'translate(-50%,-50%)' }
     : { position: 'fixed', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }
 
   const blocker: React.CSSProperties = { position: 'fixed', background: dim, pointerEvents: 'auto' }
@@ -321,7 +321,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 
       {ghost && !isReveal && (
         <div style={{ ...ghostPos, pointerEvents: 'none' }}>
-          {ghost === 'pinch' ? <PinchFlip size={280} /> : <GestureGhost variant={ghost} />}
+          {ghost === 'pinch' ? <PinchFlip size={340} /> : <GestureGhost variant={ghost} />}
         </div>
       )}
 
