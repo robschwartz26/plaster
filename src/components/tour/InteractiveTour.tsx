@@ -258,8 +258,12 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
 
   // Scrim: full + clickable for centered; full + NON-blocking for interactive/nav-arrive
   // explainers; 4 blockers around the hole otherwise.
-  const fullScrim = centered || interactive || (step.type === 'nav' && navPhase === 'arrive') || (!!target && !hasHole)
-  const fullScrimBlocks = centered  // only centered captures taps; interactive/explainer let touches through
+  // Dim the full screen ONLY for the welcome/finish cards and the arrival explainers.
+  // Interactive steps (pinch, open-a-poster) and any step whose target isn't on-screen
+  // show the wall normally — no awkward blanket shadow when nothing is highlighted.
+  const navArrive = step.type === 'nav' && navPhase === 'arrive'
+  const fullScrim = centered || navArrive
+  const fullScrimBlocks = centered  // only centered captures taps
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 4000, pointerEvents: 'none' }}>
