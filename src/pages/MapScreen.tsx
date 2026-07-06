@@ -446,7 +446,7 @@ export function MapScreen() {
 
   // Radius
   const RADIUS_PRESETS = [1, 2, 5, 10, 25, 100]
-  const [sliderPos, setSliderPos] = useState(() => milesToSlider(10))
+  const [sliderPos, setSliderPos] = useState(() => milesToSlider(100)) // default "Any" — few venues for now, show them all
   const radiusMi = sliderToMiles(sliderPos)
   function cycleRadius() {
     const next = RADIUS_PRESETS.find((p) => p > radiusMi + 0.1) ?? RADIUS_PRESETS[0]
