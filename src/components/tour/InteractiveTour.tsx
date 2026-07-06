@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
-import { GestureGhost } from './GestureGhost'
+import { HandGhost } from './HandGhost'
 import { PinchFlip } from './PinchFlip'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
@@ -41,6 +41,7 @@ interface Step {
   intercept?: string        // action id the target control reports instead of its default
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
   noDim?: boolean           // spotlight step: highlight the target (ring + ghost) but DON'T dim the rest
+  ghostSize?: number        // override the gesture-hint (hand/paw) size
   reveal?: string           // action step: on the action, reveal this image + a Next CTA (don't advance yet)
   // nav:
   to?: string
@@ -53,11 +54,11 @@ interface Step {
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
   { type: 'spotlight', demo: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch to zoom', body: 'Pinch the poster wall to change how many columns you see — from one big poster up to a five-across grid. Give it a try after the tour!', advance: { on: 'cta' }, cta: 'Next', gotoRoute: '/' },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
-  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 200, enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
+  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 260, title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
-  { type: 'spotlight', target: 'slap', ghost: 'tap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
+  { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 170, title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', ghost: 'tap', noDim: true, gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
@@ -321,7 +322,9 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 
       {ghost && !isReveal && (
         <div style={{ ...ghostPos, pointerEvents: 'none' }}>
-          {ghost === 'pinch' ? <PinchFlip size={340} /> : <GestureGhost variant={ghost} />}
+          {ghost === 'pinch'
+            ? <PinchFlip size={340} />
+            : <HandGhost variant={ghost} size={step.ghostSize ?? (ghost === 'swipe' ? 260 : ghost === 'tap' ? 150 : 240)} />}
         </div>
       )}
 
