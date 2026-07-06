@@ -1,49 +1,68 @@
-// Animated gesture hints for the interactive tour — pure CSS, no assets, theme-aware.
-// Rendered inside/over the spotlight (pointer-events: none) and removed the instant the
-// step's action fires. Honors prefers-reduced-motion with a static fallback.
+// Approved gesture hints for the interactive tour — all built on Plaster's diamond
+// motif. Pure CSS, no assets, theme-aware (var(--fg)). Rendered over the spotlight
+// (pointer-events: none) and removed the instant the step's action fires. Honors
+// prefers-reduced-motion with a static chevron.
 
 const REDUCE = typeof window !== 'undefined'
   && !!window.matchMedia
   && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 const KEYFRAMES = `
-@keyframes tg-swipe { 0%{transform:translateX(46px);opacity:0} 15%{opacity:1} 78%{opacity:1} 100%{transform:translateX(-46px);opacity:0} }
-@keyframes tg-doubletap { 0%{transform:scale(.35);opacity:0} 4%{opacity:.85} 18%{transform:scale(1.5);opacity:0} 24%{transform:scale(.35);opacity:.85} 38%{transform:scale(1.5);opacity:0} 100%{opacity:0} }
-@keyframes tg-dot { 0%,100%{opacity:.55} 40%{opacity:1} }
-@keyframes tg-pinch-a { 0%,100%{transform:translate(-20px,-20px)} 50%{transform:translate(-5px,-5px)} }
-@keyframes tg-pinch-b { 0%,100%{transform:translate(20px,20px)} 50%{transform:translate(5px,5px)} }
+@keyframes tg-tap-dia {0%,4%{transform:scale(0);opacity:1}6%{transform:scale(1.15)}9%{transform:scale(.8)}12%{transform:scale(1.1)}15%{transform:scale(.85)}18%{transform:scale(1)}55%{transform:scale(1);opacity:1}65%{transform:scale(0);opacity:0}100%{transform:scale(0);opacity:0}}
+@keyframes tg-tap-ring {0%,4%{opacity:0;transform:rotate(45deg) scale(.145)}5%{opacity:.85;transform:rotate(45deg) scale(.145)}30%{opacity:0;transform:rotate(45deg) scale(1)}100%{opacity:0;transform:rotate(45deg) scale(1)}}
+@keyframes tg-comet-0 {0%{transform:translateX(96px);opacity:0}12%{opacity:1}82%{opacity:1}100%{transform:translateX(-110px);opacity:0}}
+@keyframes tg-comet-1 {0%{transform:translateX(96px);opacity:0}12%{opacity:.45}82%{opacity:.45}100%{transform:translateX(-110px);opacity:0}}
+@keyframes tg-comet-2 {0%{transform:translateX(96px);opacity:0}12%{opacity:.22}82%{opacity:.22}100%{transform:translateX(-110px);opacity:0}}
+@keyframes tg-comet-3 {0%{transform:translateX(96px);opacity:0}12%{opacity:.10}82%{opacity:.10}100%{transform:translateX(-110px);opacity:0}}
+@keyframes tg-chev {0%,20%{opacity:0}45%{opacity:.8}70%,100%{opacity:0}}
+@keyframes tg-pinch-a {0%,10%{transform:translate(-9px,9px)}45%,55%{transform:translate(-40px,40px)}90%,100%{transform:translate(-9px,9px)}}
+@keyframes tg-pinch-b {0%,10%{transform:translate(-6px,-24px)}45%,55%{transform:translate(25px,-55px)}90%,100%{transform:translate(-6px,-24px)}}
+@keyframes tg-pinch-chev {0%,25%{opacity:0}50%{opacity:.7}75%,100%{opacity:0}}
 `
 
-const dot: React.CSSProperties = { width: 22, height: 22, borderRadius: '50%', background: 'rgba(255,255,255,0.95)', boxShadow: '0 1px 6px rgba(0,0,0,0.4)' }
+const CLIP = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+function dia(size: number): React.CSSProperties {
+  return { width: size, height: size, clipPath: CLIP, background: 'var(--fg)', filter: 'drop-shadow(0 0 6px rgba(240,236,227,0.45))' }
+}
+const ring: React.CSSProperties = { position: 'absolute', width: 110, height: 110, border: '1.5px solid var(--fg)' }
+const chev: React.CSSProperties = { position: 'absolute', fontSize: 22, lineHeight: 1, color: 'var(--fg)' }
+const center: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
 export function GestureGhost({ variant }: { variant: 'swipe' | 'doubletap' | 'pinch' }) {
   if (REDUCE) {
-    const glyph = variant === 'swipe' ? '⇠' : variant === 'pinch' ? '⇲⇱' : '⊙'
-    return <div style={{ fontSize: 30, color: 'rgba(255,255,255,0.85)', lineHeight: 1 }} aria-hidden>{glyph}</div>
+    const glyph = variant === 'swipe' ? '‹' : variant === 'pinch' ? '◇' : '◆'
+    return <div style={{ fontSize: 30, color: 'var(--fg)', lineHeight: 1, filter: 'drop-shadow(0 0 6px rgba(240,236,227,0.45))' }} aria-hidden>{glyph}</div>
   }
 
   return (
-    <div style={{ position: 'relative', width: 120, height: 120, pointerEvents: 'none' }} aria-hidden>
+    <div style={{ position: 'relative', width: 130, height: 130, pointerEvents: 'none' }} aria-hidden>
       <style>{KEYFRAMES}</style>
 
-      {variant === 'swipe' && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', alignItems: 'center', gap: 6, animation: 'tg-swipe 1.8s ease-in-out infinite' }}>
-          <span style={{ fontSize: 22, color: 'rgba(255,255,255,0.8)', lineHeight: 1 }}>‹</span>
-          <div style={dot} />
+      {variant === 'doubletap' && (
+        <div style={center}>
+          <div style={{ ...ring, transform: 'rotate(45deg) scale(.145)', animation: 'tg-tap-ring 2.6s ease-out infinite' }} />
+          <div style={{ ...ring, transform: 'rotate(45deg) scale(.145)', animation: 'tg-tap-ring 2.6s ease-out infinite', animationDelay: '0.12s' }} />
+          <div style={{ ...dia(16), position: 'absolute', animation: 'tg-tap-dia 2.6s ease-in-out infinite' }} />
         </div>
       )}
 
-      {variant === 'doubletap' && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}>
-          <div style={{ position: 'absolute', top: -22, left: -22, width: 44, height: 44, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.9)', animation: 'tg-doubletap 1.8s ease-out infinite' }} />
-          <div style={{ ...dot, position: 'absolute', top: -11, left: -11, animation: 'tg-dot 1.8s ease-in-out infinite' }} />
+      {variant === 'swipe' && (
+        <div style={center}>
+          <div style={{ ...chev, left: 6, animation: 'tg-chev 2s ease-in-out infinite' }}>‹</div>
+          <div style={{ ...chev, left: 20, animation: 'tg-chev 2s ease-in-out infinite', animationDelay: '0.1s' }}>‹</div>
+          <div style={{ ...dia(8), position: 'absolute', animation: 'tg-comet-3 2s cubic-bezier(.45,.05,.35,.95) infinite', animationDelay: '0.21s' }} />
+          <div style={{ ...dia(10), position: 'absolute', animation: 'tg-comet-2 2s cubic-bezier(.45,.05,.35,.95) infinite', animationDelay: '0.14s' }} />
+          <div style={{ ...dia(13), position: 'absolute', animation: 'tg-comet-1 2s cubic-bezier(.45,.05,.35,.95) infinite', animationDelay: '0.07s' }} />
+          <div style={{ ...dia(16), position: 'absolute', animation: 'tg-comet-0 2s cubic-bezier(.45,.05,.35,.95) infinite' }} />
         </div>
       )}
 
       {variant === 'pinch' && (
-        <div style={{ position: 'absolute', top: '50%', left: '50%' }}>
-          <div style={{ ...dot, position: 'absolute', animation: 'tg-pinch-a 1.6s ease-in-out infinite' }} />
-          <div style={{ ...dot, position: 'absolute', animation: 'tg-pinch-b 1.6s ease-in-out infinite' }} />
+        <div style={center}>
+          <div style={{ ...dia(15), position: 'absolute', animation: 'tg-pinch-a 2.6s cubic-bezier(.45,.05,.35,.95) infinite' }} />
+          <div style={{ ...dia(15), position: 'absolute', animation: 'tg-pinch-b 2.6s cubic-bezier(.45,.05,.35,.95) infinite' }} />
+          <div style={{ ...chev, left: 12, top: 26, fontSize: 18, transform: 'rotate(45deg)', animation: 'tg-pinch-chev 2.6s ease-in-out infinite' }}>‹</div>
+          <div style={{ ...chev, right: 12, bottom: 26, fontSize: 18, transform: 'rotate(-135deg)', animation: 'tg-pinch-chev 2.6s ease-in-out infinite' }}>‹</div>
         </div>
       )}
     </div>

@@ -18,7 +18,7 @@ import { posterThumb } from '@/lib/posterThumb'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { ClaimShow } from '@/components/ClaimShow'
 import { fetchApprovedTrack } from '@/lib/eventClaims'
-import { reportTourAction } from '@/lib/tourBus'
+import { reportTourAction, isIntercepted } from '@/lib/tourBus'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -187,6 +187,13 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [showEdit, setShowEdit] = useState(false)
   const [confirmToast, setConfirmToast] = useState(false)
   const [slapOpen, setSlapOpen] = useState(false)
+  // During the tour's slap step, force-close the sheet on step change so it never
+  // lingers over the bottom nav on the next (Line Up) step.
+  useEffect(() => {
+    const close = () => setSlapOpen(false)
+    window.addEventListener('plaster-tour-cleanup', close)
+    return () => window.removeEventListener('plaster-tour-cleanup', close)
+  }, [])
   const [slapCount, setSlapCount] = useState<number | null>(null)
   const [popHeart, setPopHeart] = useState<PickedHeart | null>(null)
 
@@ -1072,7 +1079,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               {user && (
                 <button
                   data-tour="slap"
-                  onClick={() => setSlapOpen(true)}
+                  onClick={() => { if (isIntercepted('slap')) { reportTourAction('slap'); return } setSlapOpen(true) }}
                   style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >
                   <SlapHand size={18} /> Slap your friends

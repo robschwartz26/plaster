@@ -1,14 +1,13 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '@/contexts/AuthContext'
-import { setTourActive } from '@/lib/tourBus'
+import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
 import { GestureGhost } from './GestureGhost'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
 // dims the rest (two-tier: hard for gesture steps, light for explainers), teaches
-// gestures with looping ghosts, and advances only when the user performs the real
-// gesture/click (via tourBus) or navigates to the target screen. Resumable.
+// gestures with looping diamond ghosts, and advances only when the user performs the
+// real gesture/click (via tourBus) or navigates to the target screen. Resumable.
 
 export const TOUR_SEEN_KEY = 'plaster_tour_seen'
 const TOUR_STEP_KEY = 'plaster_tour_step'
@@ -17,8 +16,8 @@ export function hasSeenTour(): boolean {
 }
 
 function tourHaptic() {
-  // Dependency-free: works where the Web Vibration API exists (Android/web), no-op
-  // elsewhere. True iOS haptics would need @capacitor/haptics (deferred follow-up).
+  // Dependency-free (Web Vibration API); no-op on iOS web. True iOS haptics would need
+  // @capacitor/haptics (deferred follow-up).
   try { navigator.vibrate?.(8) } catch { /* ignore */ }
 }
 
@@ -36,29 +35,30 @@ interface Step {
   ghost?: Ghost
   advance?: Advance         // default { on:'cta' }
   allowSkip?: boolean
-  scrim?: 'light'           // force the light dim (e.g. pinch, so the grid shows)
+  interactive?: boolean     // pinch: visual dim only, nothing blocks touches
+  intercept?: string        // action id the target control reports instead of its default
   // nav:
-  to?: string               // destination route (tab tap target)
-  navLabel?: string         // label shown in the "tap X" card
-  arriveBody?: string       // explainer once you've arrived
+  to?: string
+  navLabel?: string
+  arriveBody?: string
   // center finish:
   finish?: boolean
-  personalized?: boolean
 }
 
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
-  { type: 'spotlight', ghost: 'pinch', scrim: 'light', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Like what you love', body: 'Double-tap the poster to like it — a heart pops.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
-  { type: 'spotlight', target: 'slap', title: 'Slap your friends', body: 'Love this show? Slap your friends to it — it opens a group chat to plan the night.', advance: { on: 'cta' }, cta: 'Got it' },
-  { type: 'nav', to: '/lineup', navLabel: 'Line Up', target: 'setlist', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'Tap SET LIST any time to see every show you’ve said you’ll be there for, laid out on a calendar. This feed is what your friends, venues, and artists are up to.' },
-  { type: 'nav', to: '/map', navLabel: 'Map', target: 'daywheel', title: 'The Map', body: 'Tap Map.', arriveBody: 'Spin the day wheel and tap venue pins to explore the city, night by night.' },
+  { type: 'spotlight', target: 'slap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', cta: 'Got it' },
+  { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
+  { type: 'spotlight', target: 'setlist', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
+  { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'Your chats live here — including the group chats your slaps open.' },
-  { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'The venues and artists you follow show up here — their new shows surface in your Line Up. This is also your profile, neighborhood, and settings.' },
-  { type: 'center', title: 'That’s Plaster{name}! ◆', body: 'Now go find your next night out! ☺', cta: 'Go find a show', finish: true, personalized: true },
+  { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'This is your profile — everyone you’re following, and your personal poster collection from every event you’ve gone to this year.' },
+  { type: 'center', title: 'You’re all set', body: 'That’s the tour. Now go find your next night out! ☺', cta: 'Go find a show', finish: true },
 ]
 
 interface Ctx { start: () => void }
@@ -70,10 +70,8 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   const [i, setI] = useState(0)
   const [resumePrompt, setResumePrompt] = useState(false)
   const [resumeAt, setResumeAt] = useState(0)
-  const [celebrating, setCelebrating] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
-  const { profile } = useAuth()
 
   const start = useCallback(() => {
     let saved = 0
@@ -84,27 +82,25 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   }, [])
 
   const stopComplete = useCallback(() => {
-    setActive(false); setCelebrating(false); setI(0)
+    setActive(false); setI(0)
     try { localStorage.setItem(TOUR_SEEN_KEY, '1'); localStorage.removeItem(TOUR_STEP_KEY) } catch { /* ignore */ }
   }, [])
   const stopExit = useCallback(() => {
-    setActive(false); setCelebrating(false)
+    setActive(false)
     try { localStorage.setItem(TOUR_SEEN_KEY, '1') } catch { /* ignore */ } // keep step for resume
   }, [])
 
   const doAdvance = useCallback(() => {
+    // Belt-and-suspenders: close any sheet a step may have opened before moving on.
+    try { window.dispatchEvent(new CustomEvent('plaster-tour-cleanup')) } catch { /* ignore */ }
     setI(v => { if (v + 1 >= STEPS.length) { stopComplete(); return 0 } return v + 1 })
   }, [stopComplete])
 
-  const celebrateAndAdvance = useCallback(() => {
-    tourHaptic()
-    setCelebrating(true)
-    setTimeout(() => { setCelebrating(false); doAdvance() }, 420)
-  }, [doAdvance])
+  const actionAdvance = useCallback(() => { tourHaptic(); doAdvance() }, [doAdvance])
 
   useEffect(() => { setTourActive(active) }, [active])
 
-  // Persist progress (so ✕ mid-run can be resumed).
+  // Persist progress so ✕ mid-run can be resumed.
   useEffect(() => {
     if (active && !resumePrompt) { try { localStorage.setItem(TOUR_STEP_KEY, String(i)) } catch { /* ignore */ } }
   }, [i, active, resumePrompt])
@@ -117,19 +113,22 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
 
   const step = active && !resumePrompt ? STEPS[i] : null
 
+  // Let intercepting controls (Slap button) know when to report instead of act.
+  useEffect(() => { setInterceptedAction(step?.intercept ?? null) }, [step])
+
   // Ensure the step's required screen.
   useEffect(() => {
     if (step?.gotoRoute && location.pathname !== step.gotoRoute) navigate(step.gotoRoute)
   }, [step, location.pathname, navigate])
 
-  // Advance when a real handler reports the target action (with a celebration beat).
+  // Advance when a real handler reports the target action.
   useEffect(() => {
     if (!step || step.type !== 'spotlight' || step.advance?.on !== 'action') return
     const id = step.advance.id
-    const h = (e: Event) => { if ((e as CustomEvent).detail === id) celebrateAndAdvance() }
+    const h = (e: Event) => { if ((e as CustomEvent).detail === id) actionAdvance() }
     window.addEventListener('plaster-tour-action', h as EventListener)
     return () => window.removeEventListener('plaster-tour-action', h as EventListener)
-  }, [step, celebrateAndAdvance])
+  }, [step, actionAdvance])
 
   const onCta = useCallback(() => {
     const s = STEPS[i]
@@ -156,8 +155,6 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
           index={i}
           total={STEPS.length}
           navPhase={navPhase}
-          celebrating={celebrating}
-          username={profile?.username ?? null}
           onCta={onCta}
           onSkip={doAdvance}
           onClose={stopExit}
@@ -183,20 +180,18 @@ function ResumePrompt({ onResume, onRestart }: { onResume: () => void; onRestart
   )
 }
 
-function TourLayer({ step, index, total, navPhase, celebrating, username, onCta, onSkip, onClose }: {
-  step: Step; index: number; total: number; navPhase: 'nav' | 'arrive'; celebrating: boolean
-  username: string | null; onCta: () => void; onSkip: () => void; onClose: () => void
+function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
+  step: Step; index: number; total: number; navPhase: 'nav' | 'arrive'
+  onCta: () => void; onSkip: () => void; onClose: () => void
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   const scrolledFor = useRef<string | null>(null)
 
-  // What are we spotlighting this frame?
   const target = step.type === 'nav'
-    ? (navPhase === 'nav' ? `nav-${step.to}` : step.target)   // tab first, then destination
+    ? (navPhase === 'nav' ? `nav-${step.to}` : undefined)   // spotlight the tab, then explain (no dest spotlight)
     : step.target
   const ghost = step.type === 'spotlight' ? step.ghost : undefined
 
-  // Follow the target every frame (handles late mounts, scroll, layout shifts).
   useEffect(() => {
     scrolledFor.current = null
     if (!target) { setRect(null); return }
@@ -205,7 +200,6 @@ function TourLayer({ step, index, total, navPhase, celebrating, username, onCta,
       const el = document.querySelector(`[data-tour="${target}"]`) as HTMLElement | null
       if (el) {
         const r = el.getBoundingClientRect()
-        // Auto-scroll into view once if it's off-screen.
         if (scrolledFor.current !== target && (r.bottom < 8 || r.top > window.innerHeight - 8)) {
           scrolledFor.current = target
           try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch { /* ignore */ }
@@ -221,54 +215,54 @@ function TourLayer({ step, index, total, navPhase, celebrating, username, onCta,
   }, [target])
 
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-  const hasHole = !!target && !!rect
   const centered = step.type === 'center'
+  const interactive = !!step.interactive
+  const hasHole = !!target && !!rect && !interactive
   const PAD = 6
 
-  // Two-tier scrim.
   const dimAmt =
-    step.type === 'center' ? 0.62 :
+    centered ? 0.62 :
+    interactive ? 0.35 :
     step.type === 'nav' ? (navPhase === 'arrive' ? 0.32 : 0.55) :
-    step.scrim === 'light' ? 0.35 :
-    step.advance?.on === 'action' ? 0.65 : 0.5
+    step.cta ? 0.5 :
+    0.65
   const dim = `rgba(0,0,0,${dimAmt})`
 
-  // Card placement: opposite half from the target so it never covers it.
+  // Card placement: opposite half from the target; bottom for interactive/no-hole gesture.
   let cardPos: React.CSSProperties
-  if (centered || (!hasHole && !rect)) {
+  if (centered) {
     cardPos = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-  } else if (rect) {
+  } else if (hasHole && rect) {
     const cy = rect.top + rect.height / 2
     cardPos = cy > vh / 2
       ? { top: 'max(64px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)' }
       : { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
   } else {
+    // interactive (pinch) or explainer with no on-screen target → bottom, clear of the app
     cardPos = { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
   }
 
-  // Where the ghost sits: over the hole if we have one, else screen-centre.
   const ghostPos: React.CSSProperties = hasHole && rect
     ? { position: 'fixed', left: rect.left + rect.width / 2, top: rect.top + rect.height / 2, transform: 'translate(-50%,-50%)' }
     : { position: 'fixed', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }
 
   const blocker: React.CSSProperties = { position: 'fixed', background: dim, pointerEvents: 'auto' }
   const isNavCta = step.type === 'nav' && navPhase === 'arrive'
-  const showCta = centered || step.advance?.on === 'cta' || isNavCta
+  const showCta = centered || step.advance?.on === 'cta' || isNavCta || !!step.cta
   const showSkip = !showCta && (step.allowSkip || step.type === 'nav')
-  const body = step.type === 'nav' && navPhase === 'arrive' ? (step.arriveBody ?? step.body) : step.body
-  const title = step.personalized
-    ? step.title.replace('{name}', username ? `, @${username}` : '')
-    : step.title
+  const body = isNavCta ? (step.arriveBody ?? step.body) : step.body
+
+  // Scrim: full + clickable for centered; full + NON-blocking for interactive/nav-arrive
+  // explainers; 4 blockers around the hole otherwise.
+  const fullScrim = centered || interactive || (step.type === 'nav' && navPhase === 'arrive') || (!!target && !rect)
+  const fullScrimBlocks = centered  // only centered captures taps; interactive/explainer let touches through
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 4000, pointerEvents: 'none' }}>
       <style>{'@keyframes plaster-tour-pulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}100%{box-shadow:0 0 0 14px rgba(255,255,255,0)}}'}</style>
 
-      {(centered || (!hasHole && !!target && !rect)) && (
-        <div style={{ position: 'fixed', inset: 0, background: dim, pointerEvents: 'auto' }} />
-      )}
-      {!centered && !target && (
-        <div style={{ position: 'fixed', inset: 0, background: dim, pointerEvents: 'auto' }} />
+      {fullScrim && (
+        <div style={{ position: 'fixed', inset: 0, background: dim, pointerEvents: fullScrimBlocks ? 'auto' : 'none' }} />
       )}
 
       {hasHole && rect && (() => {
@@ -284,50 +278,41 @@ function TourLayer({ step, index, total, navPhase, celebrating, username, onCta,
         )
       })()}
 
-      {ghost && !celebrating && (
+      {ghost && (
         <div style={{ ...ghostPos, pointerEvents: 'none' }}><GestureGhost variant={ghost} /></div>
       )}
 
       {/* Coach-mark card */}
       <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
-        {/* progress bar */}
         <div style={{ height: 4, background: 'var(--fg-15)' }}>
           <div style={{ height: '100%', width: `${((index + 1) / total) * 100}%`, background: 'var(--fg)', transition: 'width 0.3s ease' }} />
         </div>
 
         <div style={{ padding: 18 }}>
-          {celebrating ? (
-            <div style={{ textAlign: 'center', padding: '10px 0' }}>
-              <span style={{ fontFamily: '"Playfair Display", serif', fontSize: 24, fontWeight: 900, color: 'var(--fg)' }}>Nice ✓</span>
-            </div>
-          ) : (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
-                <button onClick={onClose} aria-label="End tour" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
-              </div>
-              <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{title}</h3>
-              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+            <button onClick={onClose} aria-label="End tour" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+          </div>
+          <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>
 
-              {showCta ? (
-                <>
-                  <button onClick={onCta} style={{ marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                    {step.cta ?? 'Next'}
-                  </button>
-                  {step.finish && (
-                    <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Replay any time from Settings.</p>
-                  )}
-                </>
-              ) : (
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
-                    {step.type === 'nav' ? 'Tap the highlighted tab' : 'Try it above'}
-                  </span>
-                  {showSkip && (
-                    <button onClick={onSkip} style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Skip →</button>
-                  )}
-                </div>
+          {showCta ? (
+            <>
+              <button onClick={onCta} style={{ marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                {step.cta ?? 'Next'}
+              </button>
+              {step.finish && (
+                <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Replay any time from Settings.</p>
               )}
             </>
+          ) : (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+                {step.type === 'nav' ? 'Tap the highlighted tab' : 'Try it above'}
+              </span>
+              {showSkip && (
+                <button onClick={onSkip} style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Skip →</button>
+              )}
+            </div>
           )}
         </div>
       </div>
