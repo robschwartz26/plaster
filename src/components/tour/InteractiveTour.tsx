@@ -21,7 +21,7 @@ function tourHaptic() {
   try { navigator.vibrate?.(8) } catch { /* ignore */ }
 }
 
-type Ghost = 'swipe' | 'doubletap' | 'pinch'
+type Ghost = 'swipe' | 'doubletap' | 'pinch' | 'tap'
 type Advance = { on: 'cta' } | { on: 'action'; id: string }
 
 interface Step {
@@ -37,6 +37,7 @@ interface Step {
   allowSkip?: boolean
   interactive?: boolean     // pinch: visual dim only, nothing blocks touches
   intercept?: string        // action id the target control reports instead of its default
+  enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
   // nav:
   to?: string
   navLabel?: string
@@ -47,14 +48,14 @@ interface Step {
 
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
-  { type: 'spotlight', interactive: true, ghost: 'doubletap', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
+  { type: 'spotlight', interactive: true, ghost: 'doubletap', enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Like what you love', body: 'Double-tap the poster to like it — a heart pops.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', cta: 'Got it' },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
-  { type: 'spotlight', target: 'setlist', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
+  { type: 'spotlight', target: 'setlist', ghost: 'tap', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'All chats and group chats live here!' },
   { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'Hey, lookin’ sharp! ;) This is your profile — upload your pics, keep track of your friends, bands, and venues, and gaze upon your poster collection (all the events you’ve attended)!' },
@@ -115,6 +116,14 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
 
   // Let intercepting controls (Slap button) know when to report instead of act.
   useEffect(() => { setInterceptedAction(step?.intercept ?? null) }, [step])
+
+  // Drive the app into the right state when a step begins (e.g. reset the wall to the
+  // multi-column grid) so the tour's step state can't drift from the app's view.
+  useEffect(() => {
+    if (step?.enterCmd) {
+      try { window.dispatchEvent(new CustomEvent('plaster-tour-cmd', { detail: { cmd: step.enterCmd } })) } catch { /* ignore */ }
+    }
+  }, [step])
 
   // Ensure the step's required screen.
   useEffect(() => {

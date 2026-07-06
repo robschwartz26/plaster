@@ -377,6 +377,16 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     onOpenEventHandled?.()
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Interactive tour: let the tour force the wall back to the multi-column grid so its
+  // step state can't drift from the app's view (e.g. after a pinch-to-1-col).
+  useEffect(() => {
+    const onCmd = (e: Event) => {
+      if ((e as CustomEvent).detail?.cmd === 'reset-grid') setCols(5)
+    }
+    window.addEventListener('plaster-tour-cmd', onCmd)
+    return () => window.removeEventListener('plaster-tour-cmd', onCmd)
+  }, [])
+
   // Clear 1-col-only state when leaving 1-col view.
   useEffect(() => {
     if (cols !== 1) {

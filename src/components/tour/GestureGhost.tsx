@@ -10,6 +10,8 @@ const REDUCE = typeof window !== 'undefined'
 const KEYFRAMES = `
 @keyframes tg-tap-dia {0%,4%{transform:scale(0);opacity:1}6%{transform:scale(1.15)}9%{transform:scale(.8)}12%{transform:scale(1.1)}15%{transform:scale(.85)}18%{transform:scale(1)}55%{transform:scale(1);opacity:1}65%{transform:scale(0);opacity:0}100%{transform:scale(0);opacity:0}}
 @keyframes tg-tap-ring {0%,4%{opacity:0;transform:rotate(45deg) scale(.145)}5%{opacity:.85;transform:rotate(45deg) scale(.145)}30%{opacity:0;transform:rotate(45deg) scale(1)}100%{opacity:0;transform:rotate(45deg) scale(1)}}
+@keyframes tg-tap1-dia {0%,8%{transform:scale(0);opacity:1}16%{transform:scale(1.2)}24%{transform:scale(.9)}30%{transform:scale(1)}62%{transform:scale(1);opacity:1}74%{transform:scale(0);opacity:0}100%{transform:scale(0);opacity:0}}
+@keyframes tg-tap1-ring {0%,8%{opacity:0;transform:rotate(45deg) scale(.145)}10%{opacity:.9;transform:rotate(45deg) scale(.145)}40%{opacity:0;transform:rotate(45deg) scale(1)}100%{opacity:0;transform:rotate(45deg) scale(1)}}
 @keyframes tg-comet-0 {0%{transform:translateX(96px);opacity:0}12%{opacity:1}82%{opacity:1}100%{transform:translateX(-110px);opacity:0}}
 @keyframes tg-comet-1 {0%{transform:translateX(96px);opacity:0}12%{opacity:.45}82%{opacity:.45}100%{transform:translateX(-110px);opacity:0}}
 @keyframes tg-comet-2 {0%{transform:translateX(96px);opacity:0}12%{opacity:.22}82%{opacity:.22}100%{transform:translateX(-110px);opacity:0}}
@@ -34,7 +36,7 @@ const ring: React.CSSProperties = { position: 'absolute', width: 110, height: 11
 const chev: React.CSSProperties = { position: 'absolute', fontSize: 22, lineHeight: 1, color: INK, textShadow: TEXT_SHADOW }
 const center: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
-export function GestureGhost({ variant }: { variant: 'swipe' | 'doubletap' | 'pinch' }) {
+export function GestureGhost({ variant }: { variant: 'swipe' | 'doubletap' | 'pinch' | 'tap' }) {
   if (REDUCE) {
     const glyph = variant === 'swipe' ? '‹' : variant === 'pinch' ? '◇' : '◆'
     return <div style={{ fontSize: 30, color: INK, lineHeight: 1, textShadow: TEXT_SHADOW }} aria-hidden>{glyph}</div>
@@ -43,6 +45,13 @@ export function GestureGhost({ variant }: { variant: 'swipe' | 'doubletap' | 'pi
   return (
     <div style={{ position: 'relative', width: 130, height: 130, pointerEvents: 'none' }} aria-hidden>
       <style>{KEYFRAMES}</style>
+
+      {variant === 'tap' && (
+        <div style={center}>
+          <div style={{ ...ring, transform: 'rotate(45deg) scale(.145)', animation: 'tg-tap1-ring 1.8s ease-out infinite' }} />
+          <div style={{ ...dia(18), position: 'absolute', animation: 'tg-tap1-dia 1.8s ease-in-out infinite' }} />
+        </div>
+      )}
 
       {variant === 'doubletap' && (
         <div style={center}>
