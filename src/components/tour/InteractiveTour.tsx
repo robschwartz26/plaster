@@ -50,7 +50,7 @@ const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
   { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
   { type: 'spotlight', interactive: true, ghost: 'doubletap', enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
-  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Like what you love', body: 'Double-tap the poster to like it — a heart pops.', advance: { on: 'action', id: 'like' }, allowSkip: true },
+  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', cta: 'Got it' },
@@ -267,11 +267,10 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
 
   // Scrim: full + clickable for centered; full + NON-blocking for interactive/nav-arrive
   // explainers; 4 blockers around the hole otherwise.
-  // Dim the full screen ONLY for the welcome/finish cards and the arrival explainers.
-  // Interactive steps (pinch, open-a-poster) and any step whose target isn't on-screen
-  // show the wall normally — no awkward blanket shadow when nothing is highlighted.
-  const navArrive = step.type === 'nav' && navPhase === 'arrive'
-  const fullScrim = centered || navArrive
+  // Dim the whole screen ONLY for the welcome/finish cards. Explainer steps that talk
+  // ABOUT a screen leave it fully visible; spotlight steps dim only around their target
+  // (a specific button/icon). Interactive steps show the screen normally too.
+  const fullScrim = centered
   const fullScrimBlocks = centered  // only centered captures taps
 
   return createPortal(
