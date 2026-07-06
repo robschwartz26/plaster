@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
 import { GestureGhost } from './GestureGhost'
+import { PinchFlip } from './PinchFlip'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
 // dims the rest (two-tier: hard for gesture steps, light for explainers), teaches
@@ -295,7 +296,9 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
       })()}
 
       {ghost && (
-        <div style={{ ...ghostPos, pointerEvents: 'none' }}><GestureGhost variant={ghost} /></div>
+        <div style={{ ...ghostPos, pointerEvents: 'none' }}>
+          {ghost === 'pinch' ? <PinchFlip /> : <GestureGhost variant={ghost} />}
+        </div>
       )}
 
       {/* Coach-mark card */}
