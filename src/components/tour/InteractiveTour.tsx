@@ -22,7 +22,7 @@ function tourHaptic() {
   try { navigator.vibrate?.(8) } catch { /* ignore */ }
 }
 
-type Ghost = 'swipe' | 'doubletap' | 'pinch' | 'tap'
+type Ghost = 'swipe' | 'doubletap' | 'pinch' | 'tap' | 'drag'
 type Advance = { on: 'cta' } | { on: 'action'; id: string }
 
 interface Step {
@@ -53,6 +53,8 @@ interface Step {
 
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
+  { type: 'spotlight', target: 'wordmark', noDim: true, ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Day & night', body: 'Plaster has a day look and a night look. Pull the “plaster” logo to the right to switch.', advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
+  { type: 'spotlight', target: 'wordmark', noDim: true, ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Switch it back', body: 'Nice! Pull it again to flip back to where you started.', advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', demo: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch to zoom', body: 'Pinch the poster wall to change how many columns you see — from one big poster up to a five-across grid. Give it a try after the tour!', advance: { on: 'cta' }, cta: 'Next', gotoRoute: '/' },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
@@ -60,8 +62,9 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
-  { type: 'spotlight', target: 'setlist', ghost: 'tap', noDim: true, gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
-  { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
+  { type: 'spotlight', target: 'setlist', ghost: 'tap', ghostSize: 120, gotoRoute: '/lineup', title: 'Set List', body: 'Tap SET LIST — it tracks every show you’re going to.', advance: { on: 'action', id: 'open-setlist' }, allowSkip: true },
+  { type: 'spotlight', demo: true, gotoRoute: '/lineup', title: 'Your set list', body: 'Here’s your calendar — every show you’ve said you’ll be there for, laid out to make planning easy.', advance: { on: 'cta' }, cta: 'Next' },
+  { type: 'nav', to: '/map', navLabel: 'Map', enterCmd: 'close-setlist', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'All chats and group chats live here!' },
   { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'Hey, lookin’ sharp! ;) This is your profile — upload your pics, keep track of your friends, bands, and venues, and gaze upon your poster collection (all the events you’ve attended)!' },
   { type: 'center', title: 'You’re all set', body: 'That’s the tour. Now go find your next night out! ☺', cta: 'Go find a show', finish: true },

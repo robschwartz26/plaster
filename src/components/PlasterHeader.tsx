@@ -1,6 +1,7 @@
 import { useMotionValue, animate, motion } from 'framer-motion'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { useTheme } from '@/hooks/useTheme'
+import { reportTourAction } from '@/lib/tourBus'
 
 // Shared icon button style — exported so screens with custom right-side
 // actions can match the header button appearance exactly.
@@ -47,6 +48,7 @@ export function PlasterHeader({ actions, leftAction }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         {leftAction}
         <motion.span
+        data-tour="wordmark"
         style={{
           x,
           fontSize: 26, fontWeight: 900,
@@ -58,7 +60,7 @@ export function PlasterHeader({ actions, leftAction }: Props) {
         drag="x"
         dragMomentum={false}
         onDragEnd={(_, info) => {
-          if (info.offset.x >= 40) toggle()
+          if (info.offset.x >= 40) { toggle(); reportTourAction('theme-toggle') }
           animate(x, 0, { type: 'spring', stiffness: 500, damping: 22 })
         }}
       >

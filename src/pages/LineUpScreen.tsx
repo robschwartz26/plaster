@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { reportTourAction } from '@/lib/tourBus'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Diamond } from '@/components/Diamond'
@@ -209,6 +210,15 @@ export default function LineUpScreen() {
   const [lineup,     setLineup]     = useState<LineupItem[]>([])
   const [panelOpen,  setPanelOpen]  = useState(false)
   const [panelStack, setPanelStack] = useState<PanelEntry[]>([])
+
+  // Interactive tour: report when the set-list panel opens (advances the tour step), and
+  // let the tour close it (so it doesn't linger) when moving on.
+  useEffect(() => { if (panelOpen) reportTourAction('open-setlist') }, [panelOpen])
+  useEffect(() => {
+    const onCmd = (e: Event) => { if ((e as CustomEvent).detail?.cmd === 'close-setlist') setPanelOpen(false) }
+    window.addEventListener('plaster-tour-cmd', onCmd)
+    return () => window.removeEventListener('plaster-tour-cmd', onCmd)
+  }, [])
   const [displayMonth, setDisplayMonth] = useState(() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1) })
   const [highlightedEventIds, setHighlightedEventIds] = useState<Set<string>>(new Set())
   const panelListRef    = useRef<HTMLDivElement>(null)
