@@ -300,12 +300,6 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         <div style={{ position: 'fixed', inset: 0, background: 'transparent', pointerEvents: 'auto' }} />
       )}
 
-      {/* Reveal (Slap): large white line-art overlaid on the screen, not in the card. */}
-      {isReveal && step.reveal && (
-        <div style={{ position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }}>
-          <img src={step.reveal} alt="" draggable={false} style={{ width: 'min(280px, 74vw)', height: 'min(280px, 74vw)', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(0,0,0,0.75)) drop-shadow(0 0 18px rgba(0,0,0,0.5))' }} />
-        </div>
-      )}
 
       {hasHole && rect && (() => {
         const x = rect.left - PAD, y = rect.top - PAD, w = rect.width + PAD * 2, h = rect.height + PAD * 2
@@ -327,7 +321,10 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
       )}
 
       {/* Coach-mark card */}
-      <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
+      <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
+        {isReveal && step.reveal && (
+          <img src={step.reveal} className="tour-slap-img" alt="" draggable={false} style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translate(-50%, 18%)', width: 150, height: 150, objectFit: 'contain', pointerEvents: 'none', zIndex: 1 }} />
+        )}
         <div style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
             <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{index + 1} / {total}</span>
