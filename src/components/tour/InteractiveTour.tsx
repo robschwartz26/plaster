@@ -37,6 +37,7 @@ interface Step {
   advance?: Advance         // default { on:'cta' }
   allowSkip?: boolean
   interactive?: boolean     // pinch: visual dim only, nothing blocks touches
+  demo?: boolean            // show-only demo: block interaction, ghost at top, advance via CTA
   intercept?: string        // action id the target control reports instead of its default
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
   reveal?: string           // action step: on the action, reveal this image + a Next CTA (don't advance yet)
@@ -50,8 +51,8 @@ interface Step {
 
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
-  { type: 'spotlight', interactive: true, ghost: 'doubletap', enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
+  { type: 'spotlight', demo: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch to zoom', body: 'Pinch the poster wall to change how many columns you see — from one big poster up to a five-across grid. Give it a try after the tour!', advance: { on: 'cta' }, cta: 'Next', gotoRoute: '/' },
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
@@ -237,6 +238,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
   const centered = step.type === 'center'
   const interactive = !!step.interactive
   const isReveal = revealed && !!step.reveal
+  const demo = !!step.demo
   // Only cut a hole when the target is actually on-screen — otherwise the blockers
   // would cover the viewport and trap scrolling (and misalign the tour).
   const inView = !!rect && rect.bottom > 24 && rect.top < vh - 24 && rect.right > 8 && rect.left < vw - 8
@@ -267,6 +269,8 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 
   const ghostPos: React.CSSProperties = hasHole && rect
     ? { position: 'fixed', left: rect.left + rect.width / 2, top: rect.top + rect.height / 2, transform: 'translate(-50%,-50%)' }
+    : demo
+    ? { position: 'fixed', left: '50%', top: '24%', transform: 'translate(-50%,-50%)' }
     : { position: 'fixed', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }
 
   const blocker: React.CSSProperties = { position: 'fixed', background: dim, pointerEvents: 'auto' }
@@ -291,6 +295,18 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         <div style={{ position: 'fixed', inset: 0, background: dim, pointerEvents: fullScrimBlocks ? 'auto' : 'none' }} />
       )}
 
+      {/* Demo step: transparent full-screen blocker so the wall shows but can't be pinched. */}
+      {demo && (
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', pointerEvents: 'auto' }} />
+      )}
+
+      {/* Reveal (Slap): large white line-art overlaid on the screen, not in the card. */}
+      {isReveal && step.reveal && (
+        <div style={{ position: 'fixed', left: '50%', top: '40%', transform: 'translate(-50%,-50%)', pointerEvents: 'none' }}>
+          <img src={step.reveal} alt="" draggable={false} style={{ width: 'min(280px, 74vw)', height: 'min(280px, 74vw)', objectFit: 'contain', filter: 'drop-shadow(0 0 6px rgba(0,0,0,0.75)) drop-shadow(0 0 18px rgba(0,0,0,0.5))' }} />
+        </div>
+      )}
+
       {hasHole && rect && (() => {
         const x = rect.left - PAD, y = rect.top - PAD, w = rect.width + PAD * 2, h = rect.height + PAD * 2
         return (
@@ -306,7 +322,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 
       {ghost && !isReveal && (
         <div style={{ ...ghostPos, pointerEvents: 'none' }}>
-          {ghost === 'pinch' ? <PinchFlip /> : <GestureGhost variant={ghost} />}
+          {ghost === 'pinch' ? <PinchFlip size={280} /> : <GestureGhost variant={ghost} />}
         </div>
       )}
 
@@ -318,10 +334,11 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
             <button onClick={onClose} aria-label="End tour" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
           </div>
           {isReveal ? (
-            <div style={{ textAlign: 'center', paddingTop: 2 }}>
-              <img src={step.reveal} className="tour-slap-img" alt="" draggable={false} style={{ width: 132, height: 132, objectFit: 'contain', display: 'block', margin: '0 auto 10px' }} />
-              <button onClick={onCta} style={{ width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>Next</button>
-            </div>
+            <>
+              <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>That got their attention!</h3>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>A slap pings your friends and opens a group chat to plan the night.</p>
+              <button onClick={onCta} style={{ marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>Next</button>
+            </>
           ) : (
             <>
               <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
