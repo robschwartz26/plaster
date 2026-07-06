@@ -57,7 +57,7 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'setlist', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'All chats and group chats live here!' },
-  { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'This is your profile — everyone you’re following, and your personal poster collection from every event you’ve gone to this year.' },
+  { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'Hey, lookin’ sharp! ;) This is your profile — upload your pics, keep track of your friends, bands, and venues, and gaze upon your poster collection (all the events you’ve attended)!' },
   { type: 'center', title: 'You’re all set', body: 'That’s the tour. Now go find your next night out! ☺', cta: 'Go find a show', finish: true },
 ]
 
@@ -284,12 +284,9 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
 
       {/* Coach-mark card */}
       <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
-        <div style={{ height: 4, background: 'var(--fg-15)' }}>
-          <div style={{ height: '100%', width: `${((index + 1) / total) * 100}%`, background: 'var(--fg)', transition: 'width 0.3s ease' }} />
-        </div>
-
         <div style={{ padding: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{index + 1} / {total}</span>
             <button onClick={onClose} aria-label="End tour" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
           </div>
           <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
