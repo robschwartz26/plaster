@@ -39,6 +39,7 @@ interface Step {
   interactive?: boolean     // pinch: visual dim only, nothing blocks touches
   intercept?: string        // action id the target control reports instead of its default
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
+  reveal?: string           // action step: on the action, reveal this image + a Next CTA (don't advance yet)
   // nav:
   to?: string
   navLabel?: string
@@ -54,7 +55,7 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
-  { type: 'spotlight', target: 'slap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', cta: 'Got it' },
+  { type: 'spotlight', target: 'slap', ghost: 'tap', title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', ghost: 'tap', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
@@ -72,6 +73,7 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   const [i, setI] = useState(0)
   const [resumePrompt, setResumePrompt] = useState(false)
   const [resumeAt, setResumeAt] = useState(0)
+  const [revealed, setRevealed] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -116,7 +118,7 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   const step = active && !resumePrompt ? STEPS[i] : null
 
   // Let intercepting controls (Slap button) know when to report instead of act.
-  useEffect(() => { setInterceptedAction(step?.intercept ?? null) }, [step])
+  useEffect(() => { setInterceptedAction(step?.intercept ?? null); setRevealed(false) }, [step])
 
   // Drive the app into the right state when a step begins (e.g. reset the wall to the
   // multi-column grid) so the tour's step state can't drift from the app's view.
@@ -135,7 +137,12 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   useEffect(() => {
     if (!step || step.type !== 'spotlight' || step.advance?.on !== 'action') return
     const id = step.advance.id
-    const h = (e: Event) => { if ((e as CustomEvent).detail === id) actionAdvance() }
+    const h = (e: Event) => {
+      if ((e as CustomEvent).detail !== id) return
+      // Reveal-then-Next steps (Slap): show the image instead of advancing outright.
+      if (step.reveal) { tourHaptic(); setRevealed(true) }
+      else actionAdvance()
+    }
     window.addEventListener('plaster-tour-action', h as EventListener)
     return () => window.removeEventListener('plaster-tour-action', h as EventListener)
   }, [step, actionAdvance])
@@ -165,6 +172,7 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
           index={i}
           total={STEPS.length}
           navPhase={navPhase}
+          revealed={revealed}
           onCta={onCta}
           onSkip={doAdvance}
           onClose={stopExit}
@@ -190,8 +198,8 @@ function ResumePrompt({ onResume, onRestart }: { onResume: () => void; onRestart
   )
 }
 
-function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
-  step: Step; index: number; total: number; navPhase: 'nav' | 'arrive'
+function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onClose }: {
+  step: Step; index: number; total: number; navPhase: 'nav' | 'arrive'; revealed: boolean
   onCta: () => void; onSkip: () => void; onClose: () => void
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
@@ -228,10 +236,11 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
   const vw = typeof window !== 'undefined' ? window.innerWidth : 400
   const centered = step.type === 'center'
   const interactive = !!step.interactive
+  const isReveal = revealed && !!step.reveal
   // Only cut a hole when the target is actually on-screen — otherwise the blockers
   // would cover the viewport and trap scrolling (and misalign the tour).
   const inView = !!rect && rect.bottom > 24 && rect.top < vh - 24 && rect.right > 8 && rect.left < vw - 8
-  const hasHole = !!target && !!rect && inView && !interactive
+  const hasHole = !!target && !!rect && inView && !interactive && !isReveal
   const PAD = 6
 
   const dimAmt =
@@ -295,7 +304,7 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
         )
       })()}
 
-      {ghost && (
+      {ghost && !isReveal && (
         <div style={{ ...ghostPos, pointerEvents: 'none' }}>
           {ghost === 'pinch' ? <PinchFlip /> : <GestureGhost variant={ghost} />}
         </div>
@@ -308,27 +317,36 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
             <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontSize: 13, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{index + 1} / {total}</span>
             <button onClick={onClose} aria-label="End tour" style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
           </div>
-          <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
-          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>
-
-          {showCta ? (
+          {isReveal ? (
+            <div style={{ textAlign: 'center', paddingTop: 2 }}>
+              <img src={step.reveal} className="tour-slap-img" alt="" draggable={false} style={{ width: 132, height: 132, objectFit: 'contain', display: 'block', margin: '0 auto 10px' }} />
+              <button onClick={onCta} style={{ width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>Next</button>
+            </div>
+          ) : (
             <>
-              <button onClick={onCta} style={{ marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
-                {step.cta ?? 'Next'}
-              </button>
-              {step.finish && (
-                <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Replay any time from Settings.</p>
+              <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>
+
+              {showCta ? (
+                <>
+                  <button onClick={onCta} style={{ marginTop: 14, width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: 'pointer' }}>
+                    {step.cta ?? 'Next'}
+                  </button>
+                  {step.finish && (
+                    <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>Replay any time from Settings.</p>
+                  )}
+                </>
+              ) : (
+                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+                    {step.type === 'nav' ? 'Tap the highlighted tab' : 'Try it above'}
+                  </span>
+                  {showSkip && (
+                    <button onClick={onSkip} style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Skip →</button>
+                  )}
+                </div>
               )}
             </>
-          ) : (
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
-                {step.type === 'nav' ? 'Tap the highlighted tab' : 'Try it above'}
-              </span>
-              {showSkip && (
-                <button onClick={onSkip} style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Skip →</button>
-              )}
-            </div>
           )}
         </div>
       </div>
