@@ -72,11 +72,6 @@
   --sold-out: #c0392b;
 }
 
-/* Tour slap-reveal art: white line-art on transparent. Stays white on the dark night
-   card; inverted to black in day mode — so it reads on whichever card the theme shows. */
-.tour-slap-img { filter: none; }
-[data-theme="day"] .tour-slap-img { filter: invert(1); }
-
 /* ── Global reset ─────────────────────────────────────────── */
 * {
   -webkit-tap-highlight-color: transparent;
