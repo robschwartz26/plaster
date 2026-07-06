@@ -48,7 +48,7 @@ interface Step {
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
   { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Pinch the Wall', body: 'Pinch the poster grid to change how many columns you see. (On a laptop: ⌘/Ctrl-scroll.)', advance: { on: 'action', id: 'pinch' }, allowSkip: true, gotoRoute: '/' },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
+  { type: 'spotlight', interactive: true, ghost: 'doubletap', title: 'Open a poster', body: 'Double-tap any poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', title: 'Like what you love', body: 'Double-tap the poster to like it — a heart pops.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', title: '“I’ll be there”', body: 'Tap this to add the show to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
@@ -215,9 +215,13 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
   }, [target])
 
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 400
   const centered = step.type === 'center'
   const interactive = !!step.interactive
-  const hasHole = !!target && !!rect && !interactive
+  // Only cut a hole when the target is actually on-screen — otherwise the blockers
+  // would cover the viewport and trap scrolling (and misalign the tour).
+  const inView = !!rect && rect.bottom > 24 && rect.top < vh - 24 && rect.right > 8 && rect.left < vw - 8
+  const hasHole = !!target && !!rect && inView && !interactive
   const PAD = 6
 
   const dimAmt =
@@ -254,7 +258,7 @@ function TourLayer({ step, index, total, navPhase, onCta, onSkip, onClose }: {
 
   // Scrim: full + clickable for centered; full + NON-blocking for interactive/nav-arrive
   // explainers; 4 blockers around the hole otherwise.
-  const fullScrim = centered || interactive || (step.type === 'nav' && navPhase === 'arrive') || (!!target && !rect)
+  const fullScrim = centered || interactive || (step.type === 'nav' && navPhase === 'arrive') || (!!target && !hasHole)
   const fullScrimBlocks = centered  // only centered captures taps; interactive/explainer let touches through
 
   return createPortal(
