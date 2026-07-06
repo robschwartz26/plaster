@@ -56,7 +56,7 @@ const STEPS: Step[] = [
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', gotoRoute: '/lineup', title: 'Set List', body: 'SET LIST keeps track of the shows you’re going to — with a nifty calendar to make it even easier.', advance: { on: 'cta' }, cta: 'Next' },
   { type: 'nav', to: '/map', navLabel: 'Map', title: 'The Map', body: 'Tap Map.', arriveBody: 'Shows near you, night by night.' },
-  { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'Your chats live here — including the group chats your slaps open.' },
+  { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: 'Tap MSG.', arriveBody: 'All chats and group chats live here!' },
   { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: 'Tap You.', arriveBody: 'This is your profile — everyone you’re following, and your personal poster collection from every event you’ve gone to this year.' },
   { type: 'center', title: 'You’re all set', body: 'That’s the tour. Now go find your next night out! ☺', cta: 'Go find a show', finish: true },
 ]
