@@ -4,6 +4,7 @@ import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
 import { DateIndicator, type EventInfo } from './DateIndicator'
 import { eventLocalDate } from '@/lib/dates'
+import { reportTourAction } from '@/lib/tourBus'
 
 type WallItem =
   | { type: 'poster'; event: WallEvent; eventIdx: number }
@@ -192,6 +193,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           p.peeking = false
         }
         setCols(newCols)
+        reportTourAction('pinch')
       } else if (p.startCols === 1 && p.peekImg) {
         // Still at 1-col — peek zoom on the active poster
         const scale = Math.min(3, Math.max(1, dist / p.startDist))
@@ -229,6 +231,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       if (!e.ctrlKey) return
       e.preventDefault()
       setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, 5))
+      reportTourAction('pinch')
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)

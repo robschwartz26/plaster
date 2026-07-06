@@ -1048,7 +1048,7 @@ export function MapScreen() {
         gap: 5,
       }}>
         {/* Wheel — 33% of bar width */}
-        <div style={{ width: '33%', position: 'relative' }}>
+        <div data-tour="daywheel" style={{ width: '33%', position: 'relative' }}>
           <ScrubbingRuler centerDayIdx={liveDayIdx} isVisible={isDragging} today={today} dark={theme === 'night'} />
           <KnurlWheelPicker
             dayIdx={dayIdx}

@@ -463,6 +463,7 @@ export default function LineUpScreen() {
 
       <PlasterHeader actions={
         <button
+          data-tour="setlist"
           onClick={() => setPanelOpen(v => !v)}
           aria-label={panelOpen ? 'Close set list' : 'Open set list'}
           style={{

@@ -1071,6 +1071,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
               {user && (
                 <button
+                  data-tour="slap"
                   onClick={() => setSlapOpen(true)}
                   style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                 >

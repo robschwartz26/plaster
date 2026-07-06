@@ -565,7 +565,9 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         </div>
 
         {/* Social diamond row — who this user follows + pending requests (self only) */}
-        <SocialDiamondRow targetUserId={targetUserId} />
+        <div data-tour="following-row">
+          <SocialDiamondRow targetUserId={targetUserId} />
+        </div>
 
         {/* Editing panel (self only) */}
         {isSelf && (
