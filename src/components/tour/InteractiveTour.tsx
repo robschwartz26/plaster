@@ -4,7 +4,6 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
 import { GestureGhost } from './GestureGhost'
 import { PinchFlip } from './PinchFlip'
-import { useTheme } from '@/hooks/useTheme'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
 // dims the rest (two-tier: hard for gesture steps, light for explainers), teaches
@@ -206,7 +205,6 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   const scrolledFor = useRef<string | null>(null)
-  const { theme } = useTheme()
 
   const target = step.type === 'nav'
     ? (navPhase === 'nav' ? `nav-${step.to}` : undefined)   // spotlight the tab, then explain (no dest spotlight)
@@ -325,7 +323,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
       {/* Coach-mark card */}
       <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
         {isReveal && step.reveal && (
-          <img src={step.reveal} alt="" draggable={false} style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translate(-50%, 12%)', width: 300, height: 300, objectFit: 'contain', pointerEvents: 'none', zIndex: 1, filter: theme === 'day' ? 'none' : 'invert(1)' }} />
+          <img src={step.reveal} alt="" draggable={false} style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translate(-50%, 12%)', width: 300, height: 300, objectFit: 'contain', pointerEvents: 'none', zIndex: 1 }} />
         )}
         <div style={{ padding: 18 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
