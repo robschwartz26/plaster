@@ -21,17 +21,23 @@ const KEYFRAMES = `
 `
 
 const CLIP = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)'
+// Fixed light ink: the ghosts always sit on the dark spotlight scrim (and sometimes over
+// a real poster), so they must NOT follow the theme — var(--fg) goes black in day mode
+// and vanishes. White fill + a dark drop-shadow reads on any backdrop.
+const INK = 'rgba(255,255,255,0.97)'
+const GLOW = 'drop-shadow(0 1px 4px rgba(0,0,0,0.6)) drop-shadow(0 0 7px rgba(255,255,255,0.45))'
+const TEXT_SHADOW = '0 1px 4px rgba(0,0,0,0.6), 0 0 7px rgba(255,255,255,0.45)'
 function dia(size: number): React.CSSProperties {
-  return { width: size, height: size, clipPath: CLIP, background: 'var(--fg)', filter: 'drop-shadow(0 0 6px rgba(240,236,227,0.45))' }
+  return { width: size, height: size, clipPath: CLIP, background: INK, filter: GLOW }
 }
-const ring: React.CSSProperties = { position: 'absolute', width: 110, height: 110, border: '1.5px solid var(--fg)' }
-const chev: React.CSSProperties = { position: 'absolute', fontSize: 22, lineHeight: 1, color: 'var(--fg)' }
+const ring: React.CSSProperties = { position: 'absolute', width: 110, height: 110, border: `1.5px solid ${INK}`, filter: GLOW }
+const chev: React.CSSProperties = { position: 'absolute', fontSize: 22, lineHeight: 1, color: INK, textShadow: TEXT_SHADOW }
 const center: React.CSSProperties = { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }
 
 export function GestureGhost({ variant }: { variant: 'swipe' | 'doubletap' | 'pinch' }) {
   if (REDUCE) {
     const glyph = variant === 'swipe' ? '‹' : variant === 'pinch' ? '◇' : '◆'
-    return <div style={{ fontSize: 30, color: 'var(--fg)', lineHeight: 1, filter: 'drop-shadow(0 0 6px rgba(240,236,227,0.45))' }} aria-hidden>{glyph}</div>
+    return <div style={{ fontSize: 30, color: INK, lineHeight: 1, textShadow: TEXT_SHADOW }} aria-hidden>{glyph}</div>
   }
 
   return (
