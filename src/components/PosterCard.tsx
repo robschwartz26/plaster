@@ -1069,7 +1069,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               )}
 
               {user ? (
-                <button data-tour="rsvp" onClick={toggleAttend} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
+                <button data-tour="rsvp" onClick={() => { if (isIntercepted('rsvp') && isAttending) { reportTourAction('rsvp'); return } toggleAttend() }} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
                   {isAttending ? "I'm Going ✓" : "I'll Be There"}
                 </button>
               ) : (
