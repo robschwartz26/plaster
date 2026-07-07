@@ -459,7 +459,7 @@ export function MapScreen() {
   const centerLng = userLoc?.lng ?? PORTLAND.longitude
 
   // Map view
-  const [viewState, setViewState] = useState({ longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 12 })
+  const [viewState, setViewState] = useState({ longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 9.5 })
 
   // Data
   const [venues, setVenues] = useState<DbVenue[]>([])

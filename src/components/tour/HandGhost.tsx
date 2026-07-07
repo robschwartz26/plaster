@@ -27,14 +27,16 @@ const KEYFRAMES = `
 @keyframes hg-ripple1 {0%{transform:translate(-50%,-50%) scale(.25);opacity:0}14%{opacity:.6}34%{transform:translate(-50%,-50%) scale(1.7);opacity:0}100%{opacity:0}}
 @keyframes hg-ripple2 {0%{transform:translate(-50%,-50%) scale(.25);opacity:0}9%{opacity:.6}24%{transform:translate(-50%,-50%) scale(1.6);opacity:0}31%{transform:translate(-50%,-50%) scale(.25);opacity:0}44%{opacity:.6}59%{transform:translate(-50%,-50%) scale(1.6);opacity:0}100%{opacity:0}}
 @keyframes hg-swipe {0%{transform:translateX(70px);opacity:0}18%{opacity:1}80%{opacity:1}100%{transform:translateX(-100px);opacity:0}}
+@keyframes hg-drag {0%{transform:translateX(-10px);opacity:0}14%{transform:translateX(-10px);opacity:1}72%{transform:translateX(42px);opacity:1}100%{transform:translateX(42px);opacity:0}}
 @keyframes hg-arrow {0%,100%{opacity:.12}50%{opacity:1}}
 `
 
 export function HandGhost({ variant, size = 190 }: { variant: 'tap' | 'doubletap' | 'swipe' | 'drag'; size?: number }) {
   const fingerAnim = useMemo(() => {
     if (REDUCE) return undefined
+    if (variant === 'drag') return 'hg-drag 1.9s ease-in-out infinite'
     if (variant === 'doubletap') return 'hg-blink2 2s ease-in-out infinite'
-    return 'hg-blink1 1.9s ease-in-out infinite' // tap + drag
+    return 'hg-blink1 1.9s ease-in-out infinite' // tap
   }, [variant])
 
   if (variant === 'swipe') {
@@ -60,7 +62,7 @@ export function HandGhost({ variant, size = 190 }: { variant: 'tap' | 'doubletap
 
       {/* ››› arrows flowing right, for the logo pull */}
       {variant === 'drag' && (
-        <div style={{ position: 'absolute', left: '56%', top: '50%', transform: 'translateY(-50%)', display: 'flex', whiteSpace: 'nowrap' }}>
+        <div style={{ position: 'absolute', left: '88%', top: '50%', transform: 'translateY(-50%)', display: 'flex', whiteSpace: 'nowrap' }}>
           {[0, 1, 2, 3, 4].map((i) => (
             <span key={i} style={{ fontSize: size * 0.42, lineHeight: 1, color: INK, filter: GLOW, animation: REDUCE ? undefined : `hg-arrow 1s ease-in-out ${i * 0.13}s infinite` }}>›</span>
           ))}
