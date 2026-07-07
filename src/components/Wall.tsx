@@ -9,6 +9,7 @@ import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
+import { todayLocalDate } from '@/lib/dates'
 import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
@@ -38,7 +39,7 @@ function withWallTransition(update: () => void) {
 }
 
 export function Wall() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayLocalDate()
   const [activeFilter, setActiveFilter] = useState('All')
   const [activePosterCategory, setActivePosterCategory] = useState<string | null>(null)
   const [_activeDay, setActiveDay] = useState(today)
