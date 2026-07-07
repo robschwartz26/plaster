@@ -28,7 +28,7 @@ type Advance = { on: 'cta' } | { on: 'action'; id: string }
 interface Step {
   type: 'center' | 'spotlight' | 'nav'
   title: string
-  body: string
+  body: React.ReactNode
   cta?: string
   gotoRoute?: string        // center/spotlight: make sure we're on this screen
   // spotlight:
@@ -55,7 +55,7 @@ const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Day & night', body: 'Plaster has a day look and a night look. Pull the “plaster” logo to the right to switch.', advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Switch it back', body: 'Nice! Pull it again to flip back to where you started.', advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
-  { type: 'spotlight', demo: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch to zoom', body: 'Pinch the poster wall to change how many columns you see — from one big poster up to a five-across grid. Give it a try after the tour!', advance: { on: 'cta' }, cta: 'Next', gotoRoute: '/' },
+  { type: 'spotlight', demo: true, ghost: 'pinch', enterCmd: 'reset-grid', title: 'Pinch to zoom', body: <>Pinch the poster wall to change how many columns you see — from one big poster up to a five-across grid. <strong>Give it a try after the tour! Let’s hit Next to move along.</strong></>, advance: { on: 'cta' }, cta: 'Next', gotoRoute: '/' },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
