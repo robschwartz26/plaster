@@ -13,6 +13,7 @@
   /* Night mode (default) */
   --bg: #0c0b0b;
   --fg: #f0ece3;
+  --tour-board: rgba(240, 236, 227, 0.9); /* tour card slab — dark card → light slab */
 
   /* fg opacity variants */
   --fg-80: rgba(240,236,227,0.80);
@@ -45,6 +46,7 @@
 [data-theme="day"] {
   --bg: #f0ece3;
   --fg: #0c0b0b;
+  --tour-board: rgba(12, 11, 11, 0.9); /* tour card slab — light card → dark slab */
 
   --fg-80: rgba(12,11,11,0.80);
   --fg-70: rgba(12,11,11,0.70);

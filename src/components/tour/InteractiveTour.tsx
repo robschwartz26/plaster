@@ -335,7 +335,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
       )}
 
       {/* Coach-mark card */}
-      <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '0 8px 30px rgba(0,0,0,0.35)' }}>
+      <div style={{ position: 'fixed', ...cardPos, width: 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '6px 8px 0 var(--tour-board)' }}>
         {isReveal && step.reveal && (
           <img src={step.reveal} alt="" draggable={false} style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translate(-50%, 12%)', width: 300, height: 300, objectFit: 'contain', pointerEvents: 'none', zIndex: 1 }} />
         )}
