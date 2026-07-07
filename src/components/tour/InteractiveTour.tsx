@@ -42,6 +42,7 @@ interface Step {
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
   noDim?: boolean           // spotlight step: highlight the target (ring + ghost) but DON'T dim the rest
   ghostSize?: number        // override the gesture-hint (hand/paw) size
+  cardBottom?: boolean      // force the coach card to the bottom (don't cover top-of-page content)
   reveal?: string           // action step: on the action, reveal this image + a Next CTA (don't advance yet)
   // nav:
   to?: string
@@ -59,7 +60,7 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a poster', body: 'Double-tap the highlighted poster to open it in single view.', advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: 'Show your love!', body: 'Double-tap in single-poster view to like the event and save it to your favorites.', advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: 'Swipe sideways to move through the poster, its details, and its wall.', advance: { on: 'action', id: 'swipe' }, allowSkip: true },
-  { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 130, noDim: true, title: 'The info page', body: 'This is the info page for this event. If it tickles your fancy, tap “I’ll be there” to add it to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
+  { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 130, noDim: true, cardBottom: true, title: 'The info page', body: 'This is the info page for this event. If it tickles your fancy, tap “I’ll be there” to add it to your Line Up.', advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, title: 'Slap your friends', body: 'Excited about a show? Slap your friends and get them to come with — it opens a group chat so you can plan ahead.', advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: 'Now tap Line Up.', arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', ghost: 'tap', ghostSize: 120, gotoRoute: '/lineup', title: 'Set List', body: 'Tap SET LIST — it tracks every show you’re going to.', advance: { on: 'action', id: 'open-setlist' }, allowSkip: true },
@@ -263,7 +264,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
   let cardPos: React.CSSProperties
   if (centered) {
     cardPos = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-  } else if (hasHole && rect) {
+  } else if (hasHole && rect && !step.cardBottom) {
     const cy = rect.top + rect.height / 2
     cardPos = cy > vh / 2
       ? { top: 'max(64px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)' }
