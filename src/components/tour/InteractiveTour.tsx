@@ -70,7 +70,7 @@ const STEPS: Step[] = [
   { type: 'nav', to: '/map', navLabel: 'Map', enterCmd: 'close-setlist', title: 'The Map', body: <><strong>Tap</strong> Map.</>, arriveBody: 'Shows near you, night by night.' },
   { type: 'nav', to: '/msg', navLabel: 'MSG', title: 'Messages', body: <><strong>Tap</strong> MSG.</>, arriveBody: 'All chats and group chats live here!' },
   { type: 'nav', to: '/you', navLabel: 'You', title: 'You', body: <><strong>Tap</strong> You.</>, arriveBody: 'Hey, lookin’ sharp! ;) This is your profile — upload your pics, keep track of your friends, bands, and venues, and gaze upon your poster collection (all the events you’ve attended)!' },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Find your night out', body: <>That’s the tour! One last move — <strong>Pinch</strong> the wall to flow from one big poster up to a five-across grid, then go find your night out.</>, advance: { on: 'action', id: 'pinch' }, allowSkip: true },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Find your night out', body: <>That’s the tour! One last move — <strong>Pinch</strong> the wall to flow from one big poster up to a five-across grid, then go find your night out!</>, advance: { on: 'action', id: 'pinch' }, allowSkip: true },
 ]
 
 interface Ctx { start: () => void }
