@@ -384,6 +384,114 @@ async function extractBandsintown(url: string, now: number, maxOut: number): Pro
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
 }
 
+// ── EverOut adapter (community events; LLM extraction, NO images) ──────────────
+// EverOut (Portland Mercury) roundup/category pages are prose — no JSON-LD — so we
+// LLM-extract. City-wide: every event a different venue (→ orphan flow). We keep the
+// editorial write-up (rewritten into Plaster's voice downstream) but NEVER their
+// images: community events land with poster_image_url null and the admin supplies
+// the art in Review. Dates arrive as concrete short ranges ("July 24–26") which we
+// expand to one row per day, capped.
+const EVEROUT_PER_EVENT_CAP = 12
+const EVEROUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    events: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          title:              { type: 'string' },
+          description:        { type: 'string', description: 'A 1–3 sentence summary of the event in your own words (do NOT copy the article verbatim). Empty if none.' },
+          venue_name:         { type: 'string', description: 'Venue/location name — the part before the comma in the italic footer like "Venue, Neighborhood (date)"' },
+          venue_neighborhood: { type: 'string', description: 'Neighborhood shown after the venue (else empty)' },
+          date_start:         { type: 'string', description: 'Start date YYYY-MM-DD' },
+          date_end:           { type: 'string', description: 'End date YYYY-MM-DD (same as start for a single day)' },
+          category_hint:      { type: 'string', enum: CATEGORIES },
+          detail_url:         { type: 'string', description: 'The everout.com event link for this item (else empty)' },
+          is_past:            { type: 'boolean', description: 'true if the item is marked "Past Event"' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  required: ['events'],
+}
+function expandDates(ds: string, de: string, cap: number): string[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return []
+  const start = new Date(`${ds}T12:00:00Z`)
+  const end = /^\d{4}-\d{2}-\d{2}$/.test(de) ? new Date(`${de}T12:00:00Z`) : start
+  if (isNaN(start.getTime())) return []
+  if (isNaN(end.getTime()) || end < start) return [ds]
+  const out: string[] = []
+  const cur = new Date(start)
+  while (cur <= end && out.length < cap) {
+    out.push(cur.toISOString().slice(0, 10))
+    cur.setUTCDate(cur.getUTCDate() + 1)
+  }
+  return out
+}
+async function extractEverout(url: string, floor: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number }> {
+  const KEY = Deno.env.get('FIRECRAWL_API_KEY')
+  if (!KEY) throw new Error('FIRECRAWL_API_KEY secret not set')
+  const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
+    body: JSON.stringify({
+      url,
+      onlyMainContent: true,
+      formats: [{ type: 'json', schema: EVEROUT_SCHEMA, prompt:
+        `This is a Portland, Oregon events page (a Mercury/EverOut roundup or category list). Today is ${portlandToday()}. Extract EVERY event featured. For each item: title; a 1–3 sentence description IN YOUR OWN WORDS (never copy the article text verbatim); the venue/location name and neighborhood (from the italic footer like "Venue, Neighborhood (date)"); the closest category from the allowed list; the everout.com detail link; and the date as date_start/date_end in YYYY-MM-DD — infer the year so it is the upcoming occurrence, a single day has date_start == date_end, and a range like "July 24–26" spans those days. Set is_past=true for anything marked "Past Event". Do NOT extract images. NEVER invent data — empty string if a field is absent.` }],
+    }),
+    signal: AbortSignal.timeout(100000),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Firecrawl ${res.status}: ${body.slice(0, 300)}`)
+  }
+  const data = await res.json()
+  const rows = data?.data?.json?.events ?? []
+  const events: RawEvent[] = []
+  let beyondHorizon = 0, past = 0
+  for (const ev of rows) {
+    if (ev.is_past === true) { past++; continue }
+    const rawTitle = typeof ev.title === 'string' ? ev.title.trim() : ''
+    if (!rawTitle) continue
+    const ds = typeof ev.date_start === 'string' ? ev.date_start.trim() : ''
+    const de = typeof ev.date_end === 'string' ? ev.date_end.trim() : ds
+    const dates = expandDates(ds, de, EVEROUT_PER_EVENT_CAP)
+    if (dates.length === 0) continue // no confident date → skip rather than guess
+    const { title, soldOut } = detectSoldOut(rawTitle)
+    const category = typeof ev.category_hint === 'string' && CATEGORIES.includes(ev.category_hint) ? ev.category_hint : 'Other'
+    const venueName = typeof ev.venue_name === 'string' ? ev.venue_name.trim() : ''
+    const nbhdHint = typeof ev.venue_neighborhood === 'string' && ev.venue_neighborhood.trim() ? `EverOut neighborhood: ${ev.venue_neighborhood.trim()}` : ''
+    const detailUrl = typeof ev.detail_url === 'string' && ev.detail_url.trim() ? ev.detail_url.trim() : url
+    const desc = typeof ev.description === 'string' ? ev.description.trim() : ''
+    for (const d of dates) {
+      const start = ptTimestamp(d, null)
+      if (!start) continue
+      if (start.getTime() < floor) { past++; continue }
+      if (start.getTime() > maxOut) { beyondHorizon++; continue }
+      events.push({
+        title,
+        date: d,
+        portland_date: portlandDate(start),
+        starts_at: start.toISOString(),
+        time_display: '',
+        category,
+        poster_image_url: null,        // community events NEVER use scraped images
+        ticket_url: detailUrl,         // everout link → source_url + the needs-photo signal
+        venue_name: venueName,
+        raw_description: desc,          // rewritten into Plaster's voice downstream
+        raw_notes: nbhdHint,
+        sold_out: soldOut,
+        venue_address: '',
+        venue_website: '',
+      })
+    }
+  }
+  return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
+}
+
 // ── two-hop enrichment: follow the "Get Tickets" / event detail page ──────────
 // A venue's calendar page lists shows but rarely the blurb — the real description,
 // full lineup, time, and best poster live on each event's ticket/detail page. So
@@ -677,10 +785,17 @@ serve(async (req) => {
       let bitHost = ''
       try { bitHost = new URL(url).hostname } catch { /* keep empty */ }
       const isBandsintown = /(^|\.)bandsintown\.com$/i.test(bitHost)
+      const isEverout = /(^|\.)everout\.com$/i.test(bitHost)
+      // Community mode (EverOut, or an explicit flag): city-wide source → NO dropdown
+      // fallback (nothing may be misattributed), and events land with no image.
+      const community = body.community === true || isEverout
       const { events, beyondHorizon, past } = isBandsintown
         ? await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
+        : isEverout
+        ? await extractEverout(url, floor, maxOut)        // LLM extraction, no images
         : await firecrawlExtract(url, floor, maxOut)
-      const fallbackId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
+      // Community mode ignores the venue dropdown entirely — unmatched venues park.
+      const fallbackId: string | null = community ? null : (typeof body.venueId === 'string' && body.venueId ? body.venueId : null)
       // Follow each event's "Get Tickets" / detail page for the real show description
       // (the calendar page rarely has one). On by default; the admin can skip it.
       const deepFetch = body.deepFetch !== false

@@ -7,19 +7,21 @@ import { AutoIngest } from '@/components/admin/AutoIngest'
 // once. Auto = the Firecrawl auto-ingester (admin only — the firecrawl-ingest
 // edge fn gates is_admin). Single/Batch honour staffMode.
 export function Ingester({ staffMode = false }: { staffMode?: boolean } = {}) {
-  const [mode, setMode] = useState<'single' | 'batch' | 'auto'>('single')
-  const tab = (m: 'single' | 'batch' | 'auto', label: string) => (
+  const [mode, setMode] = useState<'single' | 'batch' | 'auto' | 'community'>('single')
+  const tab = (m: 'single' | 'batch' | 'auto' | 'community', label: string) => (
     <button onClick={() => setMode(m)} style={{ ...tabStyle, ...(mode === m ? tabActive : null) }}>{label}</button>
   )
   return (
     <div>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, flexWrap: 'wrap' }}>
         {tab('single', 'Single')}
         {tab('batch', 'Batch')}
         {!staffMode && tab('auto', 'Auto (URL)')}
+        {!staffMode && tab('community', 'Community')}
       </div>
       {mode === 'single' ? <ImportForm staffMode={staffMode} />
         : mode === 'batch' ? <BatchImport staffMode={staffMode} />
+        : mode === 'community' ? <AutoIngest community />
         : <AutoIngest />}
     </div>
   )

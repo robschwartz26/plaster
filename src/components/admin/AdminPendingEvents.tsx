@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'r
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
-import { findDuplicateIds, type PendingEvent } from '@/components/admin/reviewShared'
+import { findDuplicateIds, needsPhoto, type PendingEvent } from '@/components/admin/reviewShared'
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
@@ -378,6 +378,16 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                               {e.is_duplicate ? 'DUPLICATE · already published this date' : 'DUPLICATE · listed twice here'}
                             </span>
                           )}
+                          {needsPhoto(e) && (
+                            <span style={{
+                              fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
+                              letterSpacing: '0.08em', textTransform: 'uppercase',
+                              color: '#e0a050', background: 'rgba(224,160,80,0.12)',
+                              border: '1px solid rgba(224,160,80,0.35)', padding: '1px 6px', borderRadius: 3, flexShrink: 0,
+                            }}>
+                              📷 Needs photo
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--fg-55)' }}>
                           {e.venue_name} · {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
@@ -412,10 +422,11 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
                         onClick={() => passToPending(e.id)}
-                        disabled={isBusy}
-                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
+                        disabled={isBusy || needsPhoto(e)}
+                        title={needsPhoto(e) ? 'Add a photo first (expand ▸ Edit)' : undefined}
+                        style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 13, cursor: isBusy || needsPhoto(e) ? 'not-allowed' : 'pointer', opacity: isBusy || needsPhoto(e) ? 0.5 : 1 }}
                       >
-                        {busyId === e.id ? '…' : 'Pass to Pending →'}
+                        {busyId === e.id ? '…' : needsPhoto(e) ? 'Add photo first' : 'Pass to Pending →'}
                       </button>
                       <button
                         onClick={() => setRejectingId(prev => prev === e.id ? null : e.id)}

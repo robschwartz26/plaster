@@ -48,6 +48,12 @@ export function findDuplicateIds(rows: Array<{ id: string; venue_id: string | nu
   return dupes
 }
 
+// Community events (EverOut-sourced) deliberately land with NO image — the admin
+// supplies the art in Review. Such an event may not be published until it has one.
+export function needsPhoto(e: { source_url: string | null; poster_url: string | null }): boolean {
+  return !e.poster_url && !!e.source_url && /everout\.com/i.test(e.source_url)
+}
+
 // Build a WallEvent from a pending row so EventInfoFace can render the live info
 // page. color1/color2 come from the category gradient (same mapping the wall uses).
 export function pendingToWallEvent(e: {

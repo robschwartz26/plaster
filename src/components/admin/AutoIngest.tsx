@@ -56,7 +56,7 @@ function fmtDate(iso: string): string {
   return `${wd} ${mo} ${day}`.toUpperCase()
 }
 
-export function AutoIngest() {
+export function AutoIngest({ community = false }: { community?: boolean } = {}) {
   const [venues, setVenues] = useState<VenueRow[]>([])
   const [venueId, setVenueId] = useState('')
   const [url, setUrl] = useState('')
@@ -89,7 +89,7 @@ export function AutoIngest() {
     if (!url.trim()) { setError('Pick a venue or paste a URL.'); return }
     setBusy(true); setError(''); setData(null)
     try {
-      const json = await callIngest({ url: url.trim(), venueId: venueId || undefined, dryRun: true, commit: true, deepFetch, afterDate: afterDate || undefined }) as unknown as FetchResponse
+      const json = await callIngest({ url: url.trim(), venueId: community ? undefined : (venueId || undefined), dryRun: true, commit: true, deepFetch: community ? false : deepFetch, afterDate: afterDate || undefined, community: community || undefined }) as unknown as FetchResponse
       setData(json)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -100,28 +100,36 @@ export function AutoIngest() {
     <div style={{ fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg)' }}>
       {/* ── Source picker ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+        {!community && (
+          <div>
+            <label style={labelStyle}>Venue</label>
+            <select value={venueId} onChange={e => onPickVenue(e.target.value)} style={inputStyle}>
+              <option value="">— select a venue —</option>
+              {venues.map(v => <option key={v.id} value={v.id}>{v.name}{v.website ? '' : '  (no URL on file)'}</option>)}
+            </select>
+          </div>
+        )}
         <div>
-          <label style={labelStyle}>Venue</label>
-          <select value={venueId} onChange={e => onPickVenue(e.target.value)} style={inputStyle}>
-            <option value="">— select a venue —</option>
-            {venues.map(v => <option key={v.id} value={v.id}>{v.name}{v.website ? '' : '  (no URL on file)'}</option>)}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>Events URL {selectedVenue && !selectedVenue.website && <span style={{ color: 'var(--fg-40)' }}>— none saved, paste one</span>}</label>
-          <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://venue.com/calendar  ·  or  bandsintown.com/v/…" style={inputStyle} />
-          <p style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 5, lineHeight: 1.45 }}>
-            <strong style={{ color: 'var(--fg-55)' }}>Tip:</strong> a Bandsintown venue page (<span style={{ color: 'var(--fg-55)' }}>bandsintown.com/v/…</span>) pulls real artist write-ups and never times out. Etix/venue calendars work too, but descriptions come out thin (those sites don't publish them).
-          </p>
+          <label style={labelStyle}>{community ? 'EverOut URL' : <>Events URL {selectedVenue && !selectedVenue.website && <span style={{ color: 'var(--fg-40)' }}>— none saved, paste one</span>}</>}</label>
+          <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder={community ? 'https://everout.com/portland/articles/…  or  /events/?category=…' : 'https://venue.com/calendar  ·  or  bandsintown.com/v/…'} style={inputStyle} />
+          {community ? (
+            <p style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 5, lineHeight: 1.45 }}>
+              Paste an EverOut roundup or category page (festivals, street fairs, markets). Every event lands in Review <strong style={{ color: 'var(--fg-55)' }}>with no photo — you add the art</strong>. Unknown venues (markets, parks) park in <strong style={{ color: 'var(--fg-55)' }}>New venues</strong> to become reusable venue rows. Their images are never used.
+            </p>
+          ) : (
+            <p style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 5, lineHeight: 1.45 }}>
+              <strong style={{ color: 'var(--fg-55)' }}>Tip:</strong> a Bandsintown venue page (<span style={{ color: 'var(--fg-55)' }}>bandsintown.com/v/…</span>) pulls real artist write-ups and never times out. Etix/venue calendars work too, but descriptions come out thin (those sites don't publish them).
+            </p>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={handleFetch} disabled={busy || !url.trim()} style={{ ...primaryBtn, opacity: busy || !url.trim() ? 0.5 : 1 }}>
-            {busy ? (deepFetch ? 'Following ticket links…' : 'Rendering with Firecrawl…') : 'Fetch → send to Review'}
+            {busy ? (community ? 'Reading EverOut…' : deepFetch ? 'Following ticket links…' : 'Rendering with Firecrawl…') : 'Fetch → send to Review'}
           </button>
-          {isLocal && (
+          {isLocal && !community && (
             <button onClick={() => { setUrl('https://mississippistudios.com/'); }} style={devBtn}>DEV · Mississippi</button>
           )}
-          {busy && <span style={{ fontSize: 12, color: 'var(--fg-40)' }}>{deepFetch ? 'reads each show’s ticket page for the full description — up to ~2 min' : 'renders the page + extracts — ~30s'}</span>}
+          {busy && <span style={{ fontSize: 12, color: 'var(--fg-40)' }}>{community ? 'extracts the roundup — up to ~1 min' : deepFetch ? 'reads each show’s ticket page for the full description — up to ~2 min' : 'renders the page + extracts — ~30s'}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-55)', flexWrap: 'wrap' }}>
           <label htmlFor="ingest-after" style={{ fontWeight: 600 }}>Only events on/after</label>
@@ -130,7 +138,7 @@ export function AutoIngest() {
             ? <button onClick={() => setAfterDate('')} style={{ background: 'none', border: 'none', color: '#A855F7', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>clear</button>
             : <span style={{ color: 'var(--fg-30)' }}>optional — defaults to today</span>}
         </div>
-        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.4 }}>
+        <label style={{ display: community ? 'none' : 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.4 }}>
           <input type="checkbox" checked={deepFetch} onChange={e => setDeepFetch(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
           <span>Follow each show&rsquo;s &ldquo;Get Tickets&rdquo; link for the full description <span style={{ color: 'var(--fg-30)' }}>— richer info pages, but slower and uses more Firecrawl credits. Off = fast, blurb built from the lineup only.</span></span>
         </label>
@@ -144,6 +152,7 @@ export function AutoIngest() {
       {data && (
         <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(120,200,120,0.1)', border: '1px solid rgba(120,200,120,0.3)', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
           <strong>{data.inserted ?? 0}</strong> event{(data.inserted ?? 0) !== 1 ? 's' : ''} sent to the <strong>Review</strong> tab (pending).
+          {community && (data.inserted ?? 0) > 0 ? <span style={{ color: '#e0a050', fontWeight: 600 }}> · each awaiting a photo before it can publish</span> : null}
           {data.parked ? <span style={{ color: '#c084fc', fontWeight: 600 }}> · {data.parked} parked as {data.parkedVenues?.length ?? 0} NEW venue{(data.parkedVenues?.length ?? 0) !== 1 ? 's' : ''} → see “New venues” tab</span> : null}
           {data.skipped ? <span style={{ color: 'var(--fg-55)' }}> · {data.skipped} skipped (already in the system)</span> : null}
           {data.enriched ? <span style={{ color: 'var(--fg-55)' }}> · {data.enriched} enriched from ticket pages</span> : null}

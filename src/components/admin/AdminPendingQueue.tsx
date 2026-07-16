@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
-import { pendingToWallEvent, findDuplicateIds, type PendingEvent } from '@/components/admin/reviewShared'
+import { pendingToWallEvent, findDuplicateIds, needsPhoto, type PendingEvent } from '@/components/admin/reviewShared'
 
 // Pending stage: events that have passed review and are awaiting publish. Shown in
 // live-app format (poster + the real info-page face) so you see exactly how each
@@ -62,11 +62,13 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
   }
 
   async function approveAll() {
-    if (!user || rows.length === 0) return
+    if (!user) return
+    const publishable = rows.filter(e => !needsPhoto(e))  // never auto-publish a photo-less event
+    if (publishable.length === 0) return
     setBusyAll(true); setErr('')
     const { error } = await supabase.from('events')
       .update({ status: 'published', reviewed_by: user.id, reviewed_at: new Date().toISOString() })
-      .in('id', rows.map(e => e.id))
+      .in('id', publishable.map(e => e.id))
     setBusyAll(false)
     if (error) { setErr(error.message); return }
     fetchPending()
@@ -126,6 +128,11 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
                   ⚠ Duplicate · {e.is_duplicate ? 'already published this date' : 'listed twice here'}
                 </div>
               )}
+              {needsPhoto(e) && (
+                <div style={{ marginBottom: 10, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#e0a050' }}>
+                  📷 Needs photo · send back to Review to add art before publishing
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {/* poster */}
                 <div style={{ width: 170, flexShrink: 0 }}>
@@ -143,8 +150,8 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
 
               {/* actions */}
               <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                <button onClick={() => publish(e.id)} disabled={isBusy} style={{ flex: 1, minWidth: 120, padding: '9px 0', borderRadius: 8, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontWeight: 700, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}>
-                  {busyId === e.id ? '…' : 'Publish → Live'}
+                <button onClick={() => publish(e.id)} disabled={isBusy || needsPhoto(e)} title={needsPhoto(e) ? 'Needs a photo — send back to Review to add one' : undefined} style={{ flex: 1, minWidth: 120, padding: '9px 0', borderRadius: 8, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontWeight: 700, fontSize: 13, cursor: isBusy || needsPhoto(e) ? 'not-allowed' : 'pointer', opacity: isBusy || needsPhoto(e) ? 0.5 : 1 }}>
+                  {busyId === e.id ? '…' : needsPhoto(e) ? 'Needs photo' : 'Publish → Live'}
                 </button>
                 <button onClick={() => sendBack(e.id)} disabled={isBusy} style={{ flex: 1, minWidth: 120, padding: '9px 0', borderRadius: 8, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}>
                   ← Send back to Review
