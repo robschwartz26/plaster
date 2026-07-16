@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { optimizeImage } from '@/lib/cropUtils'
+import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
@@ -33,12 +33,41 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [err, setErr] = useState('')
+  const [infoBusy, setInfoBusy] = useState(false)
+  const [infoDrag, setInfoDrag] = useState(false)
+  const [infoErr, setInfoErr] = useState('')
 
   function takeFile(f: File | undefined) {
     if (!f || !f.type.startsWith('image/')) return
     setPosterFile(f)
     setPosterPreview(URL.createObjectURL(f))
     setSaved(false)
+  }
+
+  // Drop a screenshot of the event info → Claude Vision writes a Plaster-voice blurb
+  // (grounded in what's visible) → fills the description field for you to tweak.
+  async function describeFromScreenshot(f: File | undefined) {
+    if (!f || !f.type.startsWith('image/')) return
+    setInfoBusy(true); setInfoErr('')
+    try {
+      const blob = await resizeForExtraction(f)
+      const base64 = await blobToBase64(blob)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Not signed in')
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/firecrawl-ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ describeImage: { base64, mimeType: 'image/jpeg', title, venue: venues.find(v => v.id === venueId)?.name ?? row.venue_name ?? '' } }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((json as { error?: string }).error || `failed: ${res.status}`)
+      const blurb = ((json as { blurb?: string }).blurb ?? '').trim()
+      if (!blurb || blurb.toUpperCase() === 'NONE') throw new Error("Couldn't read event details from that image — try a clearer screenshot.")
+      setDescription(blurb); setSaved(false)
+    } catch (e) {
+      setInfoErr(e instanceof Error ? e.message : String(e))
+    } finally { setInfoBusy(false) }
   }
 
   async function save() {
@@ -134,6 +163,18 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         <div>
           <label style={lbl}>Description</label>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
+          {/* Drop a screenshot → AI writes the blurb */}
+          <div
+            onDragOver={e => { e.preventDefault(); setInfoDrag(true) }}
+            onDragLeave={() => setInfoDrag(false)}
+            onDrop={e => { e.preventDefault(); setInfoDrag(false); describeFromScreenshot(e.dataTransfer.files?.[0]) }}
+            onClick={() => document.getElementById(`info-shot-${row.id}`)?.click()}
+            style={{ marginTop: 6, padding: '9px 11px', borderRadius: 7, cursor: infoBusy ? 'wait' : 'pointer', textAlign: 'center', fontSize: 11.5, lineHeight: 1.4, color: infoBusy ? 'var(--fg-40)' : 'var(--fg-55)', border: infoDrag ? '1.5px dashed #A855F7' : '1.5px dashed var(--fg-18)', background: infoDrag ? 'rgba(168,85,247,0.06)' : 'transparent' }}
+          >
+            {infoBusy ? 'Reading screenshot…' : <>📄 Drop a <strong>screenshot of the event info</strong> → AI writes the blurb</>}
+          </div>
+          <input id={`info-shot-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => describeFromScreenshot(e.target.files?.[0] ?? undefined)} />
+          {infoErr && <span style={{ fontSize: 11, color: '#e05555' }}>{infoErr}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={save} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>

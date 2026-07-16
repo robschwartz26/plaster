@@ -651,6 +651,35 @@ serve(async (req) => {
       return new Response(JSON.stringify({ relinked, failed, found: list.length, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ DESCRIBE IMAGE: Claude Vision reads a screenshot → Plaster-voice blurb ══
+    // Also url-less, so handled before the url check. Used by the Review editor's
+    // "drop a screenshot of the event info" zone: grounded in what's visible only.
+    if (body.describeImage && typeof body.describeImage === 'object') {
+      const di = body.describeImage as { base64?: string; mimeType?: string; title?: string; venue?: string }
+      const base64 = typeof di.base64 === 'string' ? di.base64 : ''
+      if (!base64) throw new Error('describeImage: base64 required')
+      const KEY = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+      const title = typeof di.title === 'string' ? di.title.trim() : ''
+      const venue = typeof di.venue === 'string' ? di.venue.trim() : ''
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: REWRITE_MODEL,
+          max_tokens: 300,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: di.mimeType || 'image/jpeg', data: base64 } },
+            { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Read the details in the image and write a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice. Use ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown. If you cannot read any real event details in the image, respond with only the single word: NONE. Otherwise respond with ONLY the blurb text, no preamble, no quotes.` },
+          ] }],
+        }),
+      })
+      if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
+      const data = await res.json()
+      const blurb = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
+      return new Response(JSON.stringify({ blurb }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     const rawUrl = typeof body.url === 'string' ? body.url.trim() : ''
     if (!rawUrl) throw new Error('Pass a url')
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
