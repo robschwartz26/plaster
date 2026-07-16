@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, type CSSProperties } from 'react'
+import { useEffect, useState, useCallback, useMemo, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
-import { type PendingEvent } from '@/components/admin/reviewShared'
+import { findDuplicateIds, type PendingEvent } from '@/components/admin/reviewShared'
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
@@ -114,10 +114,27 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [editingId, setEditingId] = useState<string | null>(null)   // row open in the editor
   const [venues, setVenues] = useState<VenueLite[]>([])
 
+  // Duplicate flagging: intra-set dupes (same venue+date+title listed twice) OR the
+  // RPC's is_duplicate (already published this date).
+  const dupIds = useMemo(() => findDuplicateIds(rows), [rows])
+  const isDup = (e: PendingEvent) => dupIds.has(e.id) || e.is_duplicate
+  const flaggedDupes = rows.filter(isDup)
+
   useEffect(() => {
     supabase.from('venues').select('id, name, neighborhood, address').order('name')
       .then(({ data }) => setVenues((data ?? []) as VenueLite[]))
   }, [])
+
+  async function rejectAllDuplicates() {
+    if (!user || flaggedDupes.length === 0) return
+    setBusyGroup('*')
+    const { error } = await supabase.from('events')
+      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: new Date().toISOString(), rejection_reason: 'duplicate', rejection_note: null })
+      .in('id', flaggedDupes.map(e => e.id))
+    if (error) console.error('[AdminPendingEvents] reject duplicates failed', error)
+    setBusyGroup(null)
+    fetchPending()
+  }
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -206,7 +223,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   async function rejectDuplicates(group: PendingEvent[]) {
     if (!user) return
-    const dupes = group.filter(e => e.is_duplicate)
+    const dupes = group.filter(isDup)
     if (!dupes.length) return
     const key = group[0].uploader ?? group[0].created_by
     setBusyGroup(key)
@@ -271,13 +288,24 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
       <div>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           {statsStrip}
-          <button
-            onClick={() => setRejectAllOpen(o => !o)}
-            disabled={busyGroup === '*'}
-            style={{ padding: '5px 10px', background: rejectAllOpen ? 'rgba(239,68,68,0.1)' : 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1, flexShrink: 0 }}
-          >
-            {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
-          </button>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            {flaggedDupes.length > 0 && (
+              <button
+                onClick={rejectAllDuplicates}
+                disabled={busyGroup === '*'}
+                style={{ padding: '5px 10px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.5)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1 }}
+              >
+                {busyGroup === '*' ? '…' : `Reject ${flaggedDupes.length} duplicate${flaggedDupes.length !== 1 ? 's' : ''}`}
+              </button>
+            )}
+            <button
+              onClick={() => setRejectAllOpen(o => !o)}
+              disabled={busyGroup === '*'}
+              style={{ padding: '5px 10px', background: rejectAllOpen ? 'rgba(239,68,68,0.1)' : 'transparent', color: '#ef4444', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1 }}
+            >
+              {busyGroup === '*' ? '…' : `Reject all (${rows.length})`}
+            </button>
+          </div>
         </div>
         {rejectAllOpen && (
           <div style={{ marginTop: 10 }}>
@@ -288,7 +316,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
       {groupOrder.map(key => {
         const group = groupMap[key]
         const isGroupBusy = busyGroup === key
-        const dupeCount = group.filter(e => e.is_duplicate).length
+        const dupeCount = group.filter(isDup).length
 
         return (
           <div key={key}>
@@ -325,8 +353,8 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                     style={{
                       padding: '12px 14px',
                       borderRadius: 10,
-                      border: `1px solid ${e.is_duplicate ? 'rgba(239,68,68,0.3)' : 'var(--fg-15)'}`,
-                      background: e.is_duplicate ? 'rgba(239,68,68,0.04)' : 'transparent',
+                      border: `1px solid ${isDup(e) ? 'rgba(239,68,68,0.3)' : 'var(--fg-15)'}`,
+                      background: isDup(e) ? 'rgba(239,68,68,0.04)' : 'transparent',
                       fontFamily: '"Space Grotesk", sans-serif',
                       display: 'flex',
                       flexDirection: 'column',
@@ -340,14 +368,14 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
                           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--fg)' }}>{e.title}</span>
-                          {e.is_duplicate && (
+                          {isDup(e) && (
                             <span style={{
                               fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
                               letterSpacing: '0.08em', textTransform: 'uppercase',
                               color: '#ef4444', background: 'rgba(239,68,68,0.12)',
                               border: '1px solid rgba(239,68,68,0.3)', padding: '1px 6px', borderRadius: 3, flexShrink: 0,
                             }}>
-                              DUPLICATE · already published this date
+                              {e.is_duplicate ? 'DUPLICATE · already published this date' : 'DUPLICATE · listed twice here'}
                             </span>
                           )}
                         </div>

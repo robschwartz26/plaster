@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
-import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
+import { pendingToWallEvent, findDuplicateIds, type PendingEvent } from '@/components/admin/reviewShared'
 
 // Pending stage: events that have passed review and are awaiting publish. Shown in
 // live-app format (poster + the real info-page face) so you see exactly how each
@@ -16,6 +16,12 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
   const [busyAll, setBusyAll] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [err, setErr] = useState('')
+
+  // Flag intra-set duplicates (same venue+date+title listed more than once here) OR
+  // the RPC's is_duplicate (already published this date).
+  const dupIds = useMemo(() => findDuplicateIds(rows), [rows])
+  const isDup = (e: PendingEvent) => dupIds.has(e.id) || e.is_duplicate
+  const flaggedDupes = rows.filter(isDup)
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -75,6 +81,17 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
     fetchPending()
   }
 
+  async function rejectDuplicates() {
+    if (!user || flaggedDupes.length === 0) return
+    setBusyAll(true); setErr('')
+    const { error } = await supabase.from('events')
+      .update({ status: 'rejected', reviewed_by: user.id, reviewed_at: new Date().toISOString(), rejection_reason: 'duplicate', rejection_note: null })
+      .in('id', flaggedDupes.map(e => e.id))
+    setBusyAll(false)
+    if (error) { setErr(error.message); return }
+    fetchPending()
+  }
+
   if (loading) return <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13 }}>Loading…</p>
   if (rows.length === 0) return <p style={{ color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontStyle: 'italic' }}>Nothing in Pending — events you pass from Review land here.</p>
 
@@ -83,12 +100,19 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
       {/* Batch toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 13, color: 'var(--fg-65)' }}><strong>{rows.length}</strong> awaiting publish</span>
-        <button onClick={approveAll} disabled={busyAll} style={{ marginLeft: 'auto', padding: '7px 14px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: busyAll ? 'wait' : 'pointer', opacity: busyAll ? 0.6 : 1 }}>
-          {busyAll ? '…' : `Approve all (${rows.length}) → Live`}
-        </button>
-        <button onClick={sendAllBack} disabled={busyAll} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontSize: 13, fontWeight: 600, cursor: busyAll ? 'wait' : 'pointer', opacity: busyAll ? 0.6 : 1 }}>
-          Send all back
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {flaggedDupes.length > 0 && (
+            <button onClick={rejectDuplicates} disabled={busyAll} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid rgba(239,68,68,0.5)', background: 'rgba(239,68,68,0.1)', color: '#ef4444', fontSize: 13, fontWeight: 700, cursor: busyAll ? 'wait' : 'pointer', opacity: busyAll ? 0.6 : 1 }}>
+              {busyAll ? '…' : `Reject ${flaggedDupes.length} duplicate${flaggedDupes.length !== 1 ? 's' : ''}`}
+            </button>
+          )}
+          <button onClick={approveAll} disabled={busyAll} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: busyAll ? 'wait' : 'pointer', opacity: busyAll ? 0.6 : 1 }}>
+            {busyAll ? '…' : `Approve all (${rows.length}) → Live`}
+          </button>
+          <button onClick={sendAllBack} disabled={busyAll} style={{ padding: '7px 14px', borderRadius: 8, border: '1px solid var(--fg-25)', background: 'transparent', color: 'var(--fg-65)', fontSize: 13, fontWeight: 600, cursor: busyAll ? 'wait' : 'pointer', opacity: busyAll ? 0.6 : 1 }}>
+            Send all back
+          </button>
+        </div>
       </div>
       {err && <p style={{ margin: '0 0 12px', fontSize: 12, color: '#e05555' }}>{err}</p>}
 
@@ -96,7 +120,12 @@ export function AdminPendingQueue({ onCountChange }: { onCountChange?: (n: numbe
         {rows.map(e => {
           const isBusy = busyId === e.id || busyAll
           return (
-            <div key={e.id} style={{ border: '1px solid var(--fg-15)', borderRadius: 12, padding: 12 }}>
+            <div key={e.id} style={{ border: `1px solid ${isDup(e) ? 'rgba(239,68,68,0.4)' : 'var(--fg-15)'}`, background: isDup(e) ? 'rgba(239,68,68,0.04)' : 'transparent', borderRadius: 12, padding: 12 }}>
+              {isDup(e) && (
+                <div style={{ marginBottom: 10, fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ef4444' }}>
+                  ⚠ Duplicate · {e.is_duplicate ? 'already published this date' : 'listed twice here'}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
                 {/* poster */}
                 <div style={{ width: 170, flexShrink: 0 }}>

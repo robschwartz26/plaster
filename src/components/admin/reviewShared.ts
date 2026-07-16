@@ -27,6 +27,27 @@ export interface PendingEvent {
   sold_out: boolean | null
 }
 
+// Flag INTRA-SET duplicates: same venue + Portland date + normalized title appearing
+// more than once in this list (e.g. the same show ingested from two sources, or a
+// relink that re-added one). Returns the ids to treat as duplicates — the FIRST
+// occurrence in each group is kept, the rest are flagged.
+function normTitle(s: string): string {
+  return (s || '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+function ptDate(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(new Date(iso))
+}
+export function findDuplicateIds(rows: Array<{ id: string; venue_id: string | null; starts_at: string; title: string }>): Set<string> {
+  const seen = new Set<string>()
+  const dupes = new Set<string>()
+  for (const r of rows) {
+    const key = `${r.venue_id ?? ''}|${ptDate(r.starts_at)}|${normTitle(r.title)}`
+    if (seen.has(key)) dupes.add(r.id)
+    else seen.add(key)
+  }
+  return dupes
+}
+
 // Build a WallEvent from a pending row so EventInfoFace can render the live info
 // page. color1/color2 come from the category gradient (same mapping the wall uses).
 export function pendingToWallEvent(e: {
