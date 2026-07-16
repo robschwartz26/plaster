@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase'
 import { posterThumb } from '@/lib/posterThumb'
-import { useStaffPreviewFocus } from '@/contexts/StaffPreviewFocus'
+import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
+import { type PendingEvent } from '@/components/admin/reviewShared'
+
+interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
 interface UploadRow {
   id: string
@@ -147,14 +151,48 @@ export function UploadHistory() {
   const [confirmId, setConfirmId] = useState<string | null>(null)   // row awaiting delete confirm
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteErr, setDeleteErr] = useState<{ id: string; msg: string } | null>(null)
-  const { requestFocus } = useStaffPreviewFocus()
+  // Inline edit: double-click a row → edit it in a modal → it floats to the top.
+  const [venues, setVenues] = useState<VenueLite[]>([])
+  const [editRow, setEditRow] = useState<PendingEvent | null>(null)
+  const [editLoading, setEditLoading] = useState(false)
+  const [recentlyEdited, setRecentlyEdited] = useState<string[]>([]) // most-recent first
+
+  function refetch() {
+    return supabase.rpc('upload_history', { p_limit: 200 }).then(({ data }) => setRows((data ?? []) as UploadRow[]))
+  }
 
   useEffect(() => {
     supabase.rpc('upload_history', { p_limit: 200 }).then(({ data }) => {
       setRows((data ?? []) as UploadRow[])
       setLoading(false)
     })
+    supabase.from('venues').select('id, name, neighborhood, address').order('name')
+      .then(({ data }) => setVenues((data ?? []) as VenueLite[]))
   }, [])
+
+  // Double-click → fetch the full event and open the editor.
+  async function openEdit(id: string) {
+    setEditLoading(true); setEditRow(null)
+    const { data } = await supabase.from('events').select('*, venues(name)').eq('id', id).single()
+    setEditLoading(false)
+    if (!data) return
+    const d = data as Record<string, unknown>
+    setEditRow({
+      id: d.id as string, title: (d.title as string) ?? '', starts_at: d.starts_at as string,
+      venue_id: (d.venue_id as string | null) ?? null, venue_name: ((d.venues as { name?: string } | null)?.name) ?? null,
+      poster_url: (d.poster_url as string | null) ?? null, category: (d.category as string | null) ?? null,
+      description: (d.description as string | null) ?? null, address: (d.address as string | null) ?? null,
+      sold_out: (d.sold_out as boolean | null) ?? false,
+      created_by: (d.created_by as string) ?? '', uploader: null, created_at: (d.created_at as string) ?? '',
+      is_duplicate: false, duplicate_of: null, source_url: (d.source_url as string | null) ?? null,
+      ai_confidence: (d.ai_confidence as number | null) ?? null, flag_note: null, passed_review: false,
+    })
+  }
+
+  function onEdited(id: string) {
+    setRecentlyEdited(prev => [id, ...prev.filter(x => x !== id)]) // float to top
+    refetch()
+  }
 
   // Quick-delete a recently-uploaded event. Admin-only via RLS (events_delete);
   // .select('id') makes an RLS-blocked delete detectable (0 rows) rather than a
@@ -181,7 +219,26 @@ export function UploadHistory() {
     setColorOn(v => { const next = !v; saveColorOn(next); return next })
   }
 
-  const sorted = applySortState(rows, sort)
+  const sortedBase = applySortState(rows, sort)
+  // Rows edited this session float to the top (most-recently edited first).
+  const sorted = recentlyEdited.length === 0 ? sortedBase : [
+    ...recentlyEdited.map(id => sortedBase.find(r => r.id === id)).filter((r): r is UploadRow => !!r),
+    ...sortedBase.filter(r => !recentlyEdited.includes(r.id)),
+  ]
+
+  // Edit modal (double-click a row → edit it here → it floats to the top)
+  const editOverlay = (editRow || editLoading) ? createPortal(
+    <div onClick={() => { setEditRow(null); setEditLoading(false) }} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.62)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(760px, 96vw)', margin: '24px 0', background: 'var(--bg)', borderRadius: 14, border: '1px solid var(--fg-15)', padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: 'var(--fg)' }}>Edit event</span>
+          <button onClick={() => { setEditRow(null); setEditLoading(false) }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--fg-55)', fontSize: 20, lineHeight: 1, cursor: 'pointer', padding: 4 }} title="Close">×</button>
+        </div>
+        {editLoading ? <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>Loading…</p>
+          : editRow ? <ReviewRowEditor row={editRow} venues={venues} onSaved={() => onEdited(editRow.id)} />
+          : null}
+      </div>
+    </div>, document.body) : null
 
   // Arrow indicator for active sort column
   const arrow = (col: ColKey) => sort.col === col ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''
@@ -292,7 +349,7 @@ export function UploadHistory() {
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
             {sorted.map(row => (
-              <div key={row.id} onDoubleClick={() => requestFocus(row.id)} title="Double-click to preview in the live app view" style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' }}>
+              <div key={row.id} onDoubleClick={() => openEdit(row.id)} title="Double-click to edit" style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' }}>
                 <div style={{ position: 'relative', paddingBottom: '140%', borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)' }}>
                   {row.poster_url ? (
                     <img
@@ -348,6 +405,7 @@ export function UploadHistory() {
             ))}
           </div>
         </div>
+        {editOverlay}
       </div>
     )
   }
@@ -410,7 +468,7 @@ export function UploadHistory() {
 
           {/* ── Data rows (double-click a row → pop it up in the live-app view) ── */}
           {sorted.map(row => (
-            <div key={row.id} style={{ display: 'contents' }} onDoubleClick={() => requestFocus(row.id)} title="Double-click to preview in the live app view">
+            <div key={row.id} style={{ display: 'contents' }} onDoubleClick={() => openEdit(row.id)} title="Double-click to edit">
               {/* Poster thumb */}
               <div style={{ ...dataCell(), padding: '5px 6px 5px 8px' }}>
                 {row.poster_url ? (
@@ -505,6 +563,7 @@ export function UploadHistory() {
           ))}
         </div>
       </div>
+      {editOverlay}
     </div>
   )
 }
