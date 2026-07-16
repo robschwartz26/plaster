@@ -1,24 +1,10 @@
 import { useEffect, useState, useCallback, type CSSProperties } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
+import { type PendingEvent } from '@/components/admin/reviewShared'
 
-interface PendingEvent {
-  id: string
-  title: string
-  starts_at: string
-  venue_id: string | null
-  venue_name: string | null
-  poster_url: string | null
-  category: string | null
-  created_by: string
-  uploader: string | null
-  created_at: string
-  is_duplicate: boolean
-  duplicate_of: string | null
-  source_url: string | null
-  ai_confidence: number | null
-  flag_note: string | null
-}
+interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
 interface Stats {
   pending_count: number
@@ -125,6 +111,13 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectAllOpen, setRejectAllOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)   // row open in the editor
+  const [venues, setVenues] = useState<VenueLite[]>([])
+
+  useEffect(() => {
+    supabase.from('venues').select('id, name, neighborhood, address').order('name')
+      .then(({ data }) => setVenues((data ?? []) as VenueLite[]))
+  }, [])
 
   const fetchPending = useCallback(async () => {
     setLoading(true)
@@ -137,7 +130,8 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
       setRows([])
       onCountChange?.(0)
     } else {
-      const r = (pendingRes.data ?? []) as PendingEvent[]
+      // Review stage = pending events that have NOT yet passed review.
+      const r = ((pendingRes.data ?? []) as PendingEvent[]).filter(e => !e.passed_review)
       setRows(r)
       onCountChange?.(r.length)
     }
@@ -147,16 +141,13 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
 
   useEffect(() => { fetchPending() }, [fetchPending])
 
-  async function approve(id: string) {
+  // Pass review → moves the event to the Pending (live-preview) stage.
+  async function passToPending(id: string) {
     if (!user) return
     setBusyId(id)
-    const { error } = await supabase.from('events').update({
-      status: 'published',
-      reviewed_by: user.id,
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', id)
+    const { error } = await supabase.from('events').update({ passed_review: true }).eq('id', id)
     setBusyId(null)
-    if (error) console.error('[AdminPendingEvents] approve failed', error)
+    if (error) console.error('[AdminPendingEvents] pass to pending failed', error)
     fetchPending()
   }
 
@@ -188,13 +179,12 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
-  async function approveAll(group: PendingEvent[]) {
+  async function passAll(group: PendingEvent[]) {
     if (!user) return
     const key = group[0].uploader ?? group[0].created_by
     setBusyGroup(key)
-    const now = new Date().toISOString()
     await Promise.all(group.map(e =>
-      supabase.from('events').update({ status: 'published', reviewed_by: user.id, reviewed_at: now }).eq('id', e.id)
+      supabase.from('events').update({ passed_review: true }).eq('id', e.id)
     ))
     setBusyGroup(null)
     fetchPending()
@@ -317,11 +307,11 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                   </button>
                 )}
                 <button
-                  onClick={() => approveAll(group)}
+                  onClick={() => passAll(group)}
                   disabled={isGroupBusy}
                   style={{ padding: '5px 10px', background: 'transparent', color: '#A855F7', border: '1px solid rgba(168,85,247,0.4)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: isGroupBusy ? 'wait' : 'pointer', opacity: isGroupBusy ? 0.5 : 1 }}
                 >
-                  {isGroupBusy ? '…' : 'Approve all'}
+                  {isGroupBusy ? '…' : 'Pass all to Pending'}
                 </button>
               </div>
             </div>
@@ -393,11 +383,11 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
-                        onClick={() => approve(e.id)}
+                        onClick={() => passToPending(e.id)}
                         disabled={isBusy}
                         style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
                       >
-                        {busyId === e.id ? '…' : 'Approve'}
+                        {busyId === e.id ? '…' : 'Pass to Pending →'}
                       </button>
                       <button
                         onClick={() => setRejectingId(prev => prev === e.id ? null : e.id)}
@@ -422,6 +412,17 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         onCancel={() => setRejectingId(null)}
                         onPick={(reason, note) => reject(e.id, reason, note)}
                       />
+                    )}
+
+                    {/* Edit — text fields + poster re-upload + live info-page preview */}
+                    <button
+                      onClick={() => setEditingId(prev => prev === e.id ? null : e.id)}
+                      style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: '#A855F7' }}
+                    >
+                      {editingId === e.id ? '▾ Hide editor' : '▸ Edit & preview info page'}
+                    </button>
+                    {editingId === e.id && (
+                      <ReviewRowEditor row={e} venues={venues} onSaved={fetchPending} />
                     )}
                   </div>
                 )

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { posterThumb } from '@/lib/posterThumb'
+import { useStaffPreviewFocus } from '@/contexts/StaffPreviewFocus'
 
 interface UploadRow {
   id: string
@@ -53,9 +54,22 @@ function colColor(col: string, on: boolean): string {
 }
 
 // ── Table layout ──────────────────────────────────────────────
-// poster | title | venue | neighborhood | type | uploader | date | status
-const GRID = '44px minmax(110px,2fr) minmax(88px,1.5fr) minmax(80px,1.2fr) 74px 86px 66px 70px'
-const MIN_TABLE_W = 620
+// poster | title | venue | neighborhood | type | uploader | date | status | actions
+const GRID = '44px minmax(110px,2fr) minmax(88px,1.5fr) minmax(80px,1.2fr) 74px 86px 66px 70px 66px'
+const MIN_TABLE_W = 686
+
+// ── Row delete button styles (quick-delete with a single "are you sure") ──────
+const iconBtn: React.CSSProperties = { background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }
+const confirmYes: React.CSSProperties = { ...iconBtn, color: '#e05555', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }
+const confirmNo: React.CSSProperties = { ...iconBtn, color: 'var(--fg-40)', fontFamily: '"Barlow Condensed", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }
+
+function TrashIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  )
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 function fmtShort(iso: string) {
@@ -130,6 +144,10 @@ export function UploadHistory() {
   const [view, setView] = useState<ViewMode>('list')
   const [colorOn, setColorOn] = useState(loadColorOn)
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null)
+  const [confirmId, setConfirmId] = useState<string | null>(null)   // row awaiting delete confirm
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteErr, setDeleteErr] = useState<{ id: string; msg: string } | null>(null)
+  const { requestFocus } = useStaffPreviewFocus()
 
   useEffect(() => {
     supabase.rpc('upload_history', { p_limit: 200 }).then(({ data }) => {
@@ -137,6 +155,20 @@ export function UploadHistory() {
       setLoading(false)
     })
   }, [])
+
+  // Quick-delete a recently-uploaded event. Admin-only via RLS (events_delete);
+  // .select('id') makes an RLS-blocked delete detectable (0 rows) rather than a
+  // silent no-op. Child rows cascade-delete, so no FK cleanup needed here.
+  async function handleDelete(id: string) {
+    setDeletingId(id); setDeleteErr(null)
+    const { data, error } = await supabase.from('events').delete().eq('id', id).select('id')
+    setDeletingId(null); setConfirmId(null)
+    if (error || !data || data.length === 0) {
+      setDeleteErr({ id, msg: error?.message || 'delete blocked (0 rows) — are you admin?' })
+      return
+    }
+    setRows(prev => prev.filter(r => r.id !== id))
+  }
 
   function handleSort(col: ColKey) {
     setSort(prev => prev.col === col
@@ -260,7 +292,7 @@ export function UploadHistory() {
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
             {sorted.map(row => (
-              <div key={row.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div key={row.id} onDoubleClick={() => requestFocus(row.id)} title="Double-click to preview in the live app view" style={{ display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' }}>
                 <div style={{ position: 'relative', paddingBottom: '140%', borderRadius: 5, overflow: 'hidden', background: 'var(--fg-08)' }}>
                   {row.poster_url ? (
                     <img
@@ -273,6 +305,19 @@ export function UploadHistory() {
                   )}
                   <div style={{ position: 'absolute', top: 4, right: 4 }}>
                     <StatusPill status={row.status} />
+                  </div>
+                  {/* Quick delete (confirm once) */}
+                  <div style={{ position: 'absolute', top: 4, left: 4 }} onDoubleClick={e => e.stopPropagation()}>
+                    {confirmId === row.id ? (
+                      <div style={{ display: 'flex', gap: 3, background: 'rgba(0,0,0,0.55)', borderRadius: 4, padding: '2px 4px' }}>
+                        <button onClick={e => { e.stopPropagation(); handleDelete(row.id) }} disabled={deletingId === row.id} style={confirmYes}>{deletingId === row.id ? '…' : 'Yes'}</button>
+                        <button onClick={e => { e.stopPropagation(); setConfirmId(null) }} style={{ ...confirmNo, color: '#ddd' }}>No</button>
+                      </div>
+                    ) : (
+                      <button onClick={e => { e.stopPropagation(); setConfirmId(row.id); setDeleteErr(null) }} title="Delete this event" style={{ ...iconBtn, color: '#fff', background: 'rgba(0,0,0,0.45)', borderRadius: 4, padding: 3 }}>
+                        <TrashIcon />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
@@ -295,6 +340,9 @@ export function UploadHistory() {
                   <div title={row.rejection_note ?? undefined} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, fontWeight: 600, color: '#8a9bb0', lineHeight: 1.2, cursor: row.rejection_note ? 'help' : 'default' }}>
                     rejected · {REASON_LABELS[row.rejection_reason] ?? row.rejection_reason}
                   </div>
+                )}
+                {deleteErr?.id === row.id && (
+                  <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 9, color: '#e05555', lineHeight: 1.2 }}>delete failed</div>
                 )}
               </div>
             ))}
@@ -357,9 +405,12 @@ export function UploadHistory() {
             <span style={{ color: 'var(--fg-55)', fontWeight: 700 }}>Status</span>
           </div>
 
-          {/* ── Data rows ── */}
+          {/* Actions header (empty) */}
+          <div style={{ ...hdrCell('date', false), cursor: 'default' }} />
+
+          {/* ── Data rows (double-click a row → pop it up in the live-app view) ── */}
           {sorted.map(row => (
-            <React.Fragment key={row.id}>
+            <div key={row.id} style={{ display: 'contents' }} onDoubleClick={() => requestFocus(row.id)} title="Double-click to preview in the live app view">
               {/* Poster thumb */}
               <div style={{ ...dataCell(), padding: '5px 6px 5px 8px' }}>
                 {row.poster_url ? (
@@ -423,13 +474,34 @@ export function UploadHistory() {
                 )}
               </div>
 
+              {/* Actions — quick delete with a single "are you sure" */}
+              <div style={{ ...dataCell(), justifyContent: 'center', overflow: 'visible', gap: 5 }} onDoubleClick={e => e.stopPropagation()}>
+                {confirmId === row.id ? (
+                  <>
+                    <button onClick={e => { e.stopPropagation(); handleDelete(row.id) }} disabled={deletingId === row.id} style={confirmYes} title="Confirm delete">{deletingId === row.id ? '…' : 'Yes'}</button>
+                    <button onClick={e => { e.stopPropagation(); setConfirmId(null) }} style={confirmNo} title="Cancel">No</button>
+                  </>
+                ) : (
+                  <button onClick={e => { e.stopPropagation(); setConfirmId(row.id); setDeleteErr(null) }} style={{ ...iconBtn, color: 'var(--fg-40)' }} title="Delete this event">
+                    <TrashIcon />
+                  </button>
+                )}
+              </div>
+
               {/* Full-width rejection note — revealed on tap of the reason chip */}
               {expandedNoteId === row.id && row.rejection_note && (
                 <div style={{ gridColumn: '1 / -1', padding: '6px 12px 8px 52px', borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', fontStyle: 'italic' }}>
                   rejected · {REASON_LABELS[row.rejection_reason ?? ''] ?? row.rejection_reason} — {row.rejection_note}
                 </div>
               )}
-            </React.Fragment>
+
+              {/* Full-width delete error, if the delete was blocked */}
+              {deleteErr?.id === row.id && (
+                <div style={{ gridColumn: '1 / -1', padding: '6px 12px 8px 52px', borderBottom: '1px solid var(--fg-08)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: '#e05555' }}>
+                  delete failed — {deleteErr.msg}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>

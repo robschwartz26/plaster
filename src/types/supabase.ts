@@ -549,6 +549,7 @@ export type Database = {
           location_lng: number | null
           neighborhood: string | null
           poster_offset_x: number | null
+          passed_review: boolean
           poster_offset_y: number | null
           poster_url: string | null
           recurrence_frequency: string | null
@@ -601,6 +602,7 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
+          passed_review?: boolean
           starts_at: string
           status?: string
           title: string
@@ -640,6 +642,7 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
+          passed_review?: boolean
           starts_at?: string
           status?: string
           title?: string
@@ -1498,15 +1501,19 @@ export type Database = {
       admin_pending_events: {
         Args: never
         Returns: {
+          address: string
           ai_confidence: number
           category: string
           created_at: string
           created_by: string
+          description: string
           duplicate_of: string
           flag_note: string
           id: string
           is_duplicate: boolean
+          passed_review: boolean
           poster_url: string
+          sold_out: boolean
           source_url: string
           starts_at: string
           title: string

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { StaffPreviewFocusProvider } from '@/contexts/StaffPreviewFocus'
 import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
@@ -206,6 +207,16 @@ function StaffDashboard() {
     setOpen(prev => { const next = { ...prev, [key]: !prev[key] }; savePanelOpen(next); return next })
   }
 
+  // Focus a specific event in the Preview panel's live-app view (opens the panel if
+  // closed). Driven by double-clicking an Upload-history row.
+  const [focusEventId, setFocusEventId] = useState<string | null>(null)
+  const requestFocus = useCallback((id: string) => {
+    setFocusEventId(id)
+    setOpen(prev => { if (prev.preview) return prev; const next = { ...prev, preview: true }; savePanelOpen(next); return next })
+  }, [savePanelOpen])
+  const clearFocus = useCallback(() => setFocusEventId(null), [])
+  const focusValue = useMemo(() => ({ focusEventId, requestFocus, clearFocus }), [focusEventId, requestFocus, clearFocus])
+
   if (!canIngest) {
     return (
       <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', color: 'var(--fg)', background: 'var(--bg)' }}>
@@ -382,6 +393,7 @@ function StaffDashboard() {
   }
 
   return (
+    <StaffPreviewFocusProvider value={focusValue}>
     <div style={{ height: '100dvh', background: 'var(--bg)', color: 'var(--fg)', display: 'flex', flexDirection: 'column' }}>
       {topBar}
 
@@ -452,5 +464,6 @@ function StaffDashboard() {
       {/* Back-compat: admins keep the app bottom nav on narrow/mobile */}
       {isAdmin && !isWide && <AdminBottomNav />}
     </div>
+    </StaffPreviewFocusProvider>
   )
 }

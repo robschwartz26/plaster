@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { BatchImport } from '@/components/admin/BatchImport'
+import { AutoIngest } from '@/components/admin/AutoIngest'
 
-// Single is the default tab and the single-poster flow is untouched; Batch is the
-// opt-in many-at-once mode. Both honour staffMode.
+// Single = the default single-poster flow (untouched). Batch = many posters at
+// once. Auto = the Firecrawl auto-ingester (admin only — the firecrawl-ingest
+// edge fn gates is_admin). Single/Batch honour staffMode.
 export function Ingester({ staffMode = false }: { staffMode?: boolean } = {}) {
-  const [mode, setMode] = useState<'single' | 'batch'>('single')
-  const tab = (m: 'single' | 'batch', label: string) => (
+  const [mode, setMode] = useState<'single' | 'batch' | 'auto'>('single')
+  const tab = (m: 'single' | 'batch' | 'auto', label: string) => (
     <button onClick={() => setMode(m)} style={{ ...tabStyle, ...(mode === m ? tabActive : null) }}>{label}</button>
   )
   return (
@@ -14,8 +16,11 @@ export function Ingester({ staffMode = false }: { staffMode?: boolean } = {}) {
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
         {tab('single', 'Single')}
         {tab('batch', 'Batch')}
+        {!staffMode && tab('auto', 'Auto (URL)')}
       </div>
-      {mode === 'single' ? <ImportForm staffMode={staffMode} /> : <BatchImport staffMode={staffMode} />}
+      {mode === 'single' ? <ImportForm staffMode={staffMode} />
+        : mode === 'batch' ? <BatchImport staffMode={staffMode} />
+        : <AutoIngest />}
     </div>
   )
 }

@@ -49,7 +49,7 @@ async function fileFromDrop(e: React.DragEvent): Promise<File | null> {
   return new File([bytes], `dropped-${Date.now()}.${ext}`, { type: mimeType })
 }
 
-export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) {
+export function ImportForm({ staffMode = false, landInReview = false, onDone }: { staffMode?: boolean; landInReview?: boolean; onDone?: () => void } = {}) {
   const [venues, setVenues] = useState<Venue[]>([])
 
   useEffect(() => {
@@ -377,6 +377,9 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
           source_url: sourceUrl.trim() || null,
           ai_confidence: aiConfidence,
           flag_note: flagNote.trim() || null,
+          // landInReview: manual "old-fashioned" add from the Review tab lands in the
+          // editable Review stage (pending + not-yet-passed) instead of publishing.
+          ...(landInReview ? { status: 'pending', passed_review: false } : {}),
         }
 
         if (isRecurring) {
@@ -434,6 +437,7 @@ export function ImportForm({ staffMode = false }: { staffMode?: boolean } = {}) 
 
       setSuccessTitle(form.title)
       setPhase('done')
+      onDone?.() // let the Review tab refresh its list
     } catch (e) {
       setErrorMsg(String(e)); setPhase('error')
     }
