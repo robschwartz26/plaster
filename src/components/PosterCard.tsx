@@ -143,6 +143,18 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
+// Categories where the title is an artist worth an auto-search play button.
+const MUSIC_CATEGORIES = new Set(['Live Music', 'Jazz', 'Classical'])
+// Light cleanup of a title into an artist search query — strip sold-out markers only
+// (over-cleaning risks dropping the actual name; search engines handle the rest).
+function cleanArtistQuery(title: string): string {
+  return title
+    .replace(/\s*[([]\s*sold[\s-]?out\s*[)\]]/gi, '')
+    .replace(/\bsold[\s-]?out\b\s*[:\-–]?\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim() || title
+}
+
 // ── HeartPill (2-5 col) ────────────────────────────────────────────────────
 
 function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean; onLike: () => void }) {
@@ -1114,6 +1126,26 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </span>
                 </button>
               )}
+
+              {/* Auto-search fallback: no claimed track yet + a music event → look the
+                  artist up on YouTube / Spotify. Deep-links a search; opens the app. */}
+              {!showTrack && MUSIC_CATEGORIES.has(event.category ?? '') && (() => {
+                const q = cleanArtistQuery(event.title)
+                return (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    {([
+                      { label: 'YouTube', href: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
+                      { label: 'Spotify', href: `https://open.spotify.com/search/${encodeURIComponent(q)}` },
+                    ] as const).map(s => (
+                      <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                        style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', textDecoration: 'none', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+                        <span style={{ width: 0, height: 0, borderLeft: '9px solid var(--fg-65)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', flexShrink: 0 }} />
+                        {s.label}
+                      </a>
+                    ))}
+                  </div>
+                )
+              })()}
               <ClaimShow eventId={event.id} active={!!isActive} />
 
               {/* Portaled to body — PosterCard's 1-col strip is transformed, which
