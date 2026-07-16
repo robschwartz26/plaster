@@ -548,7 +548,14 @@ serve(async (req) => {
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
     const now = Date.now()
     const horizonDays = Number.isFinite(body.maxDays) ? Math.min(365, Math.max(1, Math.round(body.maxDays))) : DEFAULT_HORIZON_DAYS
-    const maxOut = now + horizonDays * 24 * 60 * 60 * 1000
+    // Optional "only events on/after this date" (YYYY-MM-DD, Portland time). Defaults to
+    // now. `floor` is the lower bound for which events to keep; the horizon window
+    // extends horizonDays from whichever is later (now or the chosen start date).
+    const afterMs = typeof body.afterDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.afterDate)
+      ? (ptTimestamp(body.afterDate, '00:00')?.getTime() ?? now)
+      : now
+    const floor = afterMs
+    const maxOut = Math.max(now, floor) + horizonDays * 24 * 60 * 60 * 1000
 
     // Venue list for per-event resolution (handles sister-venue calendars).
     const { data: allVenues } = await supabaseService.from('venues').select('id, name, neighborhood, address')
@@ -671,13 +678,13 @@ serve(async (req) => {
       try { bitHost = new URL(url).hostname } catch { /* keep empty */ }
       const isBandsintown = /(^|\.)bandsintown\.com$/i.test(bitHost)
       const { events, beyondHorizon, past } = isBandsintown
-        ? await extractBandsintown(url, now, maxOut)   // deterministic JSON-LD parse
-        : await firecrawlExtract(url, now, maxOut)
+        ? await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
+        : await firecrawlExtract(url, floor, maxOut)
       const fallbackId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
       // Follow each event's "Get Tickets" / detail page for the real show description
       // (the calendar page rarely has one). On by default; the admin can skip it.
       const deepFetch = body.deepFetch !== false
-      const enriched = deepFetch ? await enrichFromDetailPages(events, now, maxOut, now + DRYRUN_DEADLINE_MS) : 0
+      const enriched = deepFetch ? await enrichFromDetailPages(events, floor, maxOut, now + DRYRUN_DEADLINE_MS) : 0
       const resolved = events.map(e => ({ e, rv: resolveVenue(e.venue_name, fallbackId) }))
       // Compose the Plaster-voice info-page blurb NOW (parallelized) so the admin
       // reviews the real, complete info page — poster + description — before publishing.

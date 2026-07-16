@@ -64,6 +64,7 @@ export function AutoIngest() {
   const [error, setError] = useState('')
   const [data, setData] = useState<FetchResponse | null>(null)
   const [deepFetch, setDeepFetch] = useState(true)
+  const [afterDate, setAfterDate] = useState('')  // only ingest events on/after this date
 
   const isLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
 
@@ -88,7 +89,7 @@ export function AutoIngest() {
     if (!url.trim()) { setError('Pick a venue or paste a URL.'); return }
     setBusy(true); setError(''); setData(null)
     try {
-      const json = await callIngest({ url: url.trim(), venueId: venueId || undefined, dryRun: true, commit: true, deepFetch }) as unknown as FetchResponse
+      const json = await callIngest({ url: url.trim(), venueId: venueId || undefined, dryRun: true, commit: true, deepFetch, afterDate: afterDate || undefined }) as unknown as FetchResponse
       setData(json)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -121,6 +122,13 @@ export function AutoIngest() {
             <button onClick={() => { setUrl('https://mississippistudios.com/'); }} style={devBtn}>DEV · Mississippi</button>
           )}
           {busy && <span style={{ fontSize: 12, color: 'var(--fg-40)' }}>{deepFetch ? 'reads each show’s ticket page for the full description — up to ~2 min' : 'renders the page + extracts — ~30s'}</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-55)', flexWrap: 'wrap' }}>
+          <label htmlFor="ingest-after" style={{ fontWeight: 600 }}>Only events on/after</label>
+          <input id="ingest-after" type="date" value={afterDate} onChange={e => setAfterDate(e.target.value)} style={{ padding: '6px 8px', borderRadius: 7, border: '1px solid var(--fg-18)', background: 'var(--bg)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12 }} />
+          {afterDate
+            ? <button onClick={() => setAfterDate('')} style={{ background: 'none', border: 'none', color: '#A855F7', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}>clear</button>
+            : <span style={{ color: 'var(--fg-30)' }}>optional — defaults to today</span>}
         </div>
         <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: 'var(--fg-55)', lineHeight: 1.4 }}>
           <input type="checkbox" checked={deepFetch} onChange={e => setDeepFetch(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
