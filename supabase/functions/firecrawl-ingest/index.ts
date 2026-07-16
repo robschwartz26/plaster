@@ -294,6 +294,83 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
 }
 
+// ── Bandsintown adapter (deterministic JSON-LD, no LLM extraction) ─────────────
+// Bandsintown venue/city pages embed the full event list as schema.org MusicEvent
+// objects in an "eventsJsonLd" array — name/startDate/url/location/image, all real
+// and complete. Parsing that is instant and never truncates (the JSON-schema
+// extractor timed out on the 100-event page). The show WRITE-UP isn't in this array
+// (description is just the artist name), so it still comes from the two-hop to each
+// event's /e/ page — which, unlike etix, returns real content.
+function sliceJsonArray(html: string, key: string): string | null {
+  const at = html.indexOf(`"${key}":`)
+  if (at < 0) return null
+  const start = html.indexOf('[', at)
+  if (start < 0) return null
+  let depth = 0, inStr = false, esc = false
+  for (let k = start; k < html.length; k++) {
+    const c = html[k]
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === '"') inStr = false; continue }
+    if (c === '"') inStr = true
+    else if (c === '[') depth++
+    else if (c === ']') { depth--; if (depth === 0) return html.slice(start, k + 1) }
+  }
+  return null
+}
+async function extractBandsintown(url: string, now: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number }> {
+  const KEY = Deno.env.get('FIRECRAWL_API_KEY')
+  if (!KEY) throw new Error('FIRECRAWL_API_KEY secret not set')
+  const res = await fetch('https://api.firecrawl.dev/v2/scrape', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${KEY}` },
+    body: JSON.stringify({ url, formats: ['rawHtml'] }),
+    signal: AbortSignal.timeout(60000),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Firecrawl ${res.status}: ${body.slice(0, 300)}`)
+  }
+  const data = await res.json()
+  const html = typeof data?.data?.rawHtml === 'string' ? data.data.rawHtml : ''
+  const arrStr = sliceJsonArray(html, 'eventsJsonLd')
+  if (!arrStr) return { events: [], beyondHorizon: 0, past: 0 }
+  // deno-lint-ignore no-explicit-any
+  let rows: any[] = []
+  try { rows = JSON.parse(arrStr) } catch { return { events: [], beyondHorizon: 0, past: 0 } }
+  const events: RawEvent[] = []
+  let beyondHorizon = 0, past = 0
+  for (const ev of rows) {
+    const perf = Array.isArray(ev.performer) ? ev.performer.map((p: { name?: string }) => p?.name).filter(Boolean).join(', ') : (ev.performer?.name || '')
+    const rawTitle = String(perf || (typeof ev.name === 'string' ? ev.name.split(' @ ')[0] : '')).trim()
+    const sd = typeof ev.startDate === 'string' ? ev.startDate : ''
+    const date = sd.slice(0, 10)
+    if (!rawTitle || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
+    const time = /T\d{2}:\d{2}/.test(sd) ? sd.slice(11, 16) : null
+    const start = ptTimestamp(date, time)
+    if (!start) continue
+    if (start.getTime() < now) { past++; continue }
+    if (start.getTime() > maxOut) { beyondHorizon++; continue }
+    const { title, soldOut } = detectSoldOut(rawTitle)
+    const image = Array.isArray(ev.image) ? ev.image[0] : ev.image
+    const venueName = typeof ev.location?.name === 'string' ? ev.location.name.trim() : ''
+    const timeDisplay = time ? new Date(start).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true }) : ''
+    events.push({
+      title,
+      date,
+      portland_date: portlandDate(start),
+      starts_at: start.toISOString(),
+      time_display: timeDisplay,
+      category: 'Live Music', // Bandsintown is music-only
+      poster_image_url: typeof image === 'string' && image.trim() ? image.trim() : null,
+      ticket_url: typeof ev.url === 'string' && ev.url.trim() ? ev.url.trim() : null,
+      venue_name: venueName,
+      raw_description: '', // the write-up comes from the two-hop to the /e/ page
+      raw_notes: '',
+      sold_out: soldOut,
+    })
+  }
+  return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
+}
+
 // ── two-hop enrichment: follow the "Get Tickets" / event detail page ──────────
 // A venue's calendar page lists shows but rarely the blurb — the real description,
 // full lineup, time, and best poster live on each event's ticket/detail page. So
@@ -484,7 +561,12 @@ serve(async (req) => {
 
     // ═══ DRY RUN: extract → (optionally) commit to pending → return for review ══
     if (body.dryRun === true) {
-      const { events, beyondHorizon, past } = await firecrawlExtract(url, now, maxOut)
+      let bitHost = ''
+      try { bitHost = new URL(url).hostname } catch { /* keep empty */ }
+      const isBandsintown = /(^|\.)bandsintown\.com$/i.test(bitHost)
+      const { events, beyondHorizon, past } = isBandsintown
+        ? await extractBandsintown(url, now, maxOut)   // deterministic JSON-LD parse
+        : await firecrawlExtract(url, now, maxOut)
       const fallbackId: string | null = typeof body.venueId === 'string' && body.venueId ? body.venueId : null
       // Follow each event's "Get Tickets" / detail page for the real show description
       // (the calendar page rarely has one). On by default; the admin can skip it.

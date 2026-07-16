@@ -107,7 +107,10 @@ export function AutoIngest() {
         </div>
         <div>
           <label style={labelStyle}>Events URL {selectedVenue && !selectedVenue.website && <span style={{ color: 'var(--fg-40)' }}>— none saved, paste one</span>}</label>
-          <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://venue.com/calendar" style={inputStyle} />
+          <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder="https://venue.com/calendar  ·  or  bandsintown.com/v/…" style={inputStyle} />
+          <p style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 5, lineHeight: 1.45 }}>
+            <strong style={{ color: 'var(--fg-55)' }}>Tip:</strong> a Bandsintown venue page (<span style={{ color: 'var(--fg-55)' }}>bandsintown.com/v/…</span>) pulls real artist write-ups and never times out. Etix/venue calendars work too, but descriptions come out thin (those sites don't publish them).
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={handleFetch} disabled={busy || !url.trim()} style={{ ...primaryBtn, opacity: busy || !url.trim() ? 0.5 : 1 }}>
