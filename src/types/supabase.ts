@@ -730,6 +730,9 @@ export type Database = {
           raw_venue_name: string | null
           sold_out: boolean | null
           source_url: string | null
+          category: string | null
+          raw_venue_address: string | null
+          raw_venue_website: string | null
           starts_at: string
           status: string
           title: string
@@ -747,6 +750,9 @@ export type Database = {
           raw_venue_name?: string | null
           sold_out?: boolean | null
           source_url?: string | null
+          category?: string | null
+          raw_venue_address?: string | null
+          raw_venue_website?: string | null
           starts_at: string
           status?: string
           title: string
@@ -764,6 +770,9 @@ export type Database = {
           raw_venue_name?: string | null
           sold_out?: boolean | null
           source_url?: string | null
+          category?: string | null
+          raw_venue_address?: string | null
+          raw_venue_website?: string | null
           starts_at?: string
           status?: string
           title?: string

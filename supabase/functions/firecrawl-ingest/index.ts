@@ -217,6 +217,8 @@ const EXTRACT_SCHEMA = {
           poster_image_url: { type: 'string', description: 'FULL-RESOLUTION event/gig poster or artwork image URL — never a thumbnail, sprite, logo, or placeholder' },
           ticket_url:       { type: 'string', description: 'Link to buy tickets / the event detail page (else empty)' },
           venue_name:       { type: 'string', description: 'The venue or room hosting THIS specific event, if the page names it (calendars sometimes list sister venues); else empty' },
+          venue_address:    { type: 'string', description: 'Street address of the venue if the page shows it (else empty)' },
+          venue_website:    { type: 'string', description: 'The venue’s own website URL if the page shows it (else empty)' },
           sold_out:         { type: 'boolean' },
         },
         required: ['title', 'date'],
@@ -239,6 +241,8 @@ interface RawEvent {
   raw_description: string
   raw_notes: string
   sold_out: boolean
+  venue_address: string  // scraped venue address (for new-venue intake pre-fill)
+  venue_website: string  // scraped venue website (for new-venue intake pre-fill)
 }
 
 async function firecrawlExtract(url: string, now: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number }> {
@@ -289,6 +293,8 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
       raw_description: typeof ev.raw_description === 'string' ? ev.raw_description.trim() : '',
       raw_notes: typeof ev.raw_notes === 'string' ? ev.raw_notes.trim() : '',
       sold_out: titleSold || ev.sold_out === true,
+      venue_address: typeof ev.venue_address === 'string' ? ev.venue_address.trim() : '',
+      venue_website: typeof ev.venue_website === 'string' ? ev.venue_website.trim() : '',
     })
   }
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
@@ -352,6 +358,11 @@ async function extractBandsintown(url: string, now: number, maxOut: number): Pro
     const { title, soldOut } = detectSoldOut(rawTitle)
     const image = Array.isArray(ev.image) ? ev.image[0] : ev.image
     const venueName = typeof ev.location?.name === 'string' ? ev.location.name.trim() : ''
+    // Build a street address from the JSON-LD PostalAddress (for new-venue intake).
+    const addr = ev.location?.address
+    const venueAddress = addr && typeof addr === 'object'
+      ? [addr.streetAddress, addr.addressLocality, addr.addressRegion].filter((s: unknown) => typeof s === 'string' && s).join(', ')
+      : ''
     const timeDisplay = time ? new Date(start).toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour: 'numeric', minute: '2-digit', hour12: true }) : ''
     events.push({
       title,
@@ -366,6 +377,8 @@ async function extractBandsintown(url: string, now: number, maxOut: number): Pro
       raw_description: '', // the write-up comes from the two-hop to the /e/ page
       raw_notes: '',
       sold_out: soldOut,
+      venue_address: venueAddress,
+      venue_website: typeof ev.location?.sameAs === 'string' ? ev.location.sameAs.trim() : '',
     })
   }
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
@@ -488,15 +501,21 @@ serve(async (req) => {
     // Venue list for per-event resolution (handles sister-venue calendars).
     const { data: allVenues } = await supabaseService.from('venues').select('id, name, neighborhood, address')
     const venueList = (allVenues ?? []) as Array<{ id: string; name: string; neighborhood: string | null; address: string | null }>
-    function resolveVenue(extractedName: string, fallbackId: string | null): { id: string | null; name: string | null; meta: { neighborhood: string | null; address: string | null } } {
-      if (extractedName) {
+    // Resolve an extracted venue name to one of our venues.
+    //   named + matches ≥ threshold → that venue
+    //   named + NO match            → NEW venue: orphanName set, id null → PARK (never fall back)
+    //   NOT named                   → fall back to the dropdown venue (single-venue-page case)
+    function resolveVenue(extractedName: string, fallbackId: string | null): { id: string | null; name: string | null; meta: { neighborhood: string | null; address: string | null }; orphanName: string | null } {
+      if (extractedName && extractedName.trim()) {
         const exact = venueList.find(v => normalizeName(v.name) === normalizeName(extractedName))
         const best = exact ?? venueList.map(v => ({ v, s: nameSimilarity(extractedName, v.name) })).sort((a, b) => b.s - a.s)[0]?.v
         const scored = exact ? 1 : (best ? nameSimilarity(extractedName, best.name) : 0)
-        if (best && scored >= VENUE_MATCH_THRESHOLD) return { id: best.id, name: best.name, meta: { neighborhood: best.neighborhood, address: best.address } }
+        if (best && scored >= VENUE_MATCH_THRESHOLD) return { id: best.id, name: best.name, meta: { neighborhood: best.neighborhood, address: best.address }, orphanName: null }
+        // Named on the page but unknown to us → park as a NEW venue. Do NOT misattribute.
+        return { id: null, name: null, meta: { neighborhood: null, address: null }, orphanName: extractedName.trim() }
       }
       const fb = fallbackId ? venueList.find(v => v.id === fallbackId) : null
-      return { id: fb?.id ?? fallbackId ?? null, name: fb?.name ?? null, meta: { neighborhood: fb?.neighborhood ?? null, address: fb?.address ?? null } }
+      return { id: fb?.id ?? fallbackId ?? null, name: fb?.name ?? null, meta: { neighborhood: fb?.neighborhood ?? null, address: fb?.address ?? null }, orphanName: null }
     }
 
     // Insert a batch of extracted events. Dedupes against events already in the
@@ -508,6 +527,7 @@ serve(async (req) => {
       // Cap re-hosting by an absolute request deadline; any posters not re-hosted in
       // time keep their remote URL (still works, just not EXIF-stripped/re-hosted).
       const imageDeadline = Math.min(Date.now() + IMAGE_TOTAL_BUDGET_MS, now + INSERT_DEADLINE_MS)
+      // Dedupe index vs existing events (any status).
       const index = new Set<string>()
       const candVenueIds = [...new Set(rows.map(r => resolveVenue(r.venue_name ?? '', fallbackId).id).filter((x): x is string => !!x))]
       if (candVenueIds.length) {
@@ -519,23 +539,57 @@ serve(async (req) => {
           index.add(`${ex.venue_id}|${portlandDate(new Date(ex.starts_at))}|${normalizeName(ex.title)}`)
         }
       }
-      let inserted = 0, failed = 0, skipped = 0
+      // Dedupe index vs already-parked open orphans (so re-fetching doesn't re-park).
+      const orphanIndex = new Set<string>()
+      {
+        const { data: openO } = await supabaseService.from('ingest_orphans').select('title, starts_at, raw_venue_name').eq('status', 'open')
+        for (const o of (openO ?? []) as Array<{ title: string; starts_at: string; raw_venue_name: string | null }>) {
+          orphanIndex.add(`${normalizeName(o.raw_venue_name ?? '')}|${portlandDate(new Date(o.starts_at))}|${normalizeName(o.title)}`)
+        }
+      }
+      let inserted = 0, failed = 0, skipped = 0, parked = 0
+      const parkedVenues = new Set<string>()
       const errors: string[] = []
       for (const ev of rows.slice(0, MAX_EVENTS)) {
         if (!ev?.title || !ev?.starts_at) { failed++; continue }
         const rv = resolveVenue(ev.venue_name ?? '', fallbackId)
-        if (!rv.id) { failed++; errors.push(`${ev.title}: no venue`); continue }
-        const key = `${rv.id}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
-        if (index.has(key)) { skipped++; continue }
-        const posterUrl = await rehostImage(supabaseService, ev.poster_image_url ?? null, imageDeadline)
         const category = typeof ev.category === 'string' && CATEGORIES.includes(ev.category) ? ev.category : 'Live Music'
         // Prefer the blurb composed at extract time; only compose here if missing.
         const description = (typeof ev.description === 'string' && ev.description.trim())
           ? ev.description.trim()
           : await composeDescription({
-              title: ev.title, venueName: rv.name ?? '', category,
+              title: ev.title, venueName: rv.name ?? ev.venue_name ?? '', category,
               timeDisplay: ev.time_display ?? '', rawDescription: ev.raw_description ?? '', rawNotes: ev.raw_notes ?? '', soldOut: ev.sold_out ?? false,
             })
+
+        // NEW VENUE (named on the page but unknown to us): park, never misattribute.
+        if (rv.orphanName) {
+          const okey = `${normalizeName(rv.orphanName)}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
+          if (orphanIndex.has(okey)) { skipped++; continue }
+          const { error: orphErr } = await supabaseService.from('ingest_orphans').insert({
+            title: ev.title,
+            starts_at: ev.starts_at,
+            raw_venue_name: rv.orphanName,
+            image_url: ev.poster_image_url ?? null, // raw; re-hosted at relink
+            description,                              // already composed in Plaster's voice
+            source_url: url,
+            event_url: ev.ticket_url ?? null,
+            sold_out: ev.sold_out ?? false,
+            confidence: 90,
+            created_by: user.id,
+            category,
+            raw_venue_address: ev.venue_address || null,
+            raw_venue_website: ev.venue_website || null,
+          })
+          if (orphErr) { failed++; errors.push(`${ev.title}: ${orphErr.message}`) }
+          else { parked++; parkedVenues.add(rv.orphanName); orphanIndex.add(okey) }
+          continue
+        }
+        if (!rv.id) { failed++; errors.push(`${ev.title}: no venue`); continue }
+
+        const key = `${rv.id}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
+        if (index.has(key)) { skipped++; continue }
+        const posterUrl = await rehostImage(supabaseService, ev.poster_image_url ?? null, imageDeadline)
         const { error: insErr } = await supabaseService.from('events').insert({
           venue_id: rv.id,
           title: ev.title,
@@ -556,7 +610,55 @@ serve(async (req) => {
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
         else { inserted++; index.add(key) }
       }
-      return { inserted, failed, skipped, errors }
+      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors }
+    }
+
+    // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
+    // Self-contained (no scrape-sources dependency): re-hosts the stored poster, keeps
+    // the already-composed description + real category, attaches the venue's
+    // neighborhood/address, inserts as PENDING (→ Review), marks the orphan linked.
+    if (body.relink && typeof body.relink === 'object') {
+      const rl = body.relink as { venueId?: string; rawVenueName?: string; orphanIds?: unknown }
+      const venueId = typeof rl.venueId === 'string' ? rl.venueId : ''
+      const rawVenueName = typeof rl.rawVenueName === 'string' ? rl.rawVenueName : ''
+      const orphanIds = Array.isArray(rl.orphanIds) ? rl.orphanIds.filter((x): x is string => typeof x === 'string') : null
+      if (!venueId) throw new Error('relink: venueId required')
+      const venue = venueList.find(v => v.id === venueId)
+      if (!venue) throw new Error('relink: venue not found')
+      let q = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
+      if (orphanIds && orphanIds.length) q = q.in('id', orphanIds)
+      else if (rawVenueName) q = q.eq('raw_venue_name', rawVenueName)
+      else throw new Error('relink: orphanIds or rawVenueName required')
+      const { data: orphans } = await q
+      // deno-lint-ignore no-explicit-any
+      const list = (orphans ?? []) as any[]
+      const imageDeadline = Math.min(Date.now() + IMAGE_TOTAL_BUDGET_MS, now + INSERT_DEADLINE_MS)
+      let relinked = 0, failed = 0
+      for (const o of list) {
+        const posterUrl = await rehostImage(supabaseService, o.image_url ?? null, imageDeadline)
+        const cat = typeof o.category === 'string' && CATEGORIES.includes(o.category) ? o.category : 'Live Music'
+        const { data: ins, error: insErr } = await supabaseService.from('events').insert({
+          venue_id: venueId,
+          title: o.title,
+          category: cat,
+          poster_url: posterUrl,
+          starts_at: o.starts_at,
+          description: o.description ?? null,
+          neighborhood: venue.neighborhood,
+          address: venue.address,
+          view_count: 0,
+          like_count: 0,
+          status: 'pending', // → Review (passed_review defaults false)
+          sold_out: o.sold_out ?? false,
+          created_by: user.id,
+          source_url: o.event_url || o.source_url || null,
+          ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
+        }).select('id').single()
+        if (insErr) { failed++; continue }
+        await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
+        relinked++
+      }
+      return new Response(JSON.stringify({ relinked, failed }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ DRY RUN: extract → (optionally) commit to pending → return for review ══

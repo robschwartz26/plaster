@@ -30,6 +30,7 @@ interface FetchedEvent {
 interface FetchResponse {
   url: string; count: number; beyondHorizon: number; past: number; enriched: number; deepFetch: boolean
   committed: boolean; inserted?: number; failed?: number; skipped?: number; errors?: string[]
+  parked?: number; parkedVenues?: string[]
   events: FetchedEvent[]
 }
 
@@ -135,6 +136,7 @@ export function AutoIngest() {
       {data && (
         <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(120,200,120,0.1)', border: '1px solid rgba(120,200,120,0.3)', fontSize: 13, marginBottom: 12, lineHeight: 1.5 }}>
           <strong>{data.inserted ?? 0}</strong> event{(data.inserted ?? 0) !== 1 ? 's' : ''} sent to the <strong>Review</strong> tab (pending).
+          {data.parked ? <span style={{ color: '#c084fc', fontWeight: 600 }}> · {data.parked} parked as {data.parkedVenues?.length ?? 0} NEW venue{(data.parkedVenues?.length ?? 0) !== 1 ? 's' : ''} → see “New venues” tab</span> : null}
           {data.skipped ? <span style={{ color: 'var(--fg-55)' }}> · {data.skipped} skipped (already in the system)</span> : null}
           {data.enriched ? <span style={{ color: 'var(--fg-55)' }}> · {data.enriched} enriched from ticket pages</span> : null}
           {data.failed ? <span style={{ color: 'var(--fg-55)' }}> · {data.failed} failed</span> : null}

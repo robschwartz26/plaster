@@ -3,8 +3,14 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { NEIGHBORHOODS, inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
 import { callScrapeFn } from '@/components/admin/AdminAutoIngest'
 
-export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
-  const [form, setForm] = useState({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
+type VenueFormFields = { name: string; neighborhood: string; address: string; website: string; instagram: string; hours: string }
+
+export function VenueForm({ onVenueAdded, initial, onCreated }: {
+  onVenueAdded: () => void
+  initial?: Partial<VenueFormFields>            // seed values (e.g. from a scraped orphan)
+  onCreated?: (venueId: string) => void | Promise<void>  // caller handles relink; skips the legacy scrape-sources relink
+}) {
+  const [form, setForm] = useState<VenueFormFields>({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '', ...initial })
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -43,11 +49,16 @@ export function VenueForm({ onVenueAdded }: { onVenueAdded: () => void }) {
       setForm({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
       onVenueAdded()
       setTimeout(() => setStatus('idle'), 3000)
-      // Orphan auto-relink: fuzzy-match any parked scraped events against the new
-      // venue's name (fire-and-forget — the Orphans section in Auto-Ingest shows state).
       if (data?.id) {
-        callScrapeFn({ relinkOrphans: { venueId: data.id } })
-          .catch(err => console.warn('[VenueForm] orphan relink failed', err))
+        if (onCreated) {
+          // New-venue intake flow: the caller relinks this venue's orphans via the
+          // new firecrawl-ingest function (no scrape-sources dependency).
+          await Promise.resolve(onCreated(data.id))
+        } else {
+          // Legacy path: fuzzy-relink any parked scrape-sources orphans (fire-and-forget).
+          callScrapeFn({ relinkOrphans: { venueId: data.id } })
+            .catch(err => console.warn('[VenueForm] orphan relink failed', err))
+        }
       }
     }
   }

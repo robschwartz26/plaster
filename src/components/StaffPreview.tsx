@@ -6,13 +6,14 @@ import { dbEventToWallEvent } from '@/lib/adapters'
 import { PosterGrid } from './PosterGrid'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { AdminPendingQueue } from '@/components/admin/AdminPendingQueue'
+import { AdminNewVenues } from '@/components/admin/AdminNewVenues'
 import { ImportForm } from '@/components/admin/ImportForm'
 import { UploadHistory } from '@/components/UploadHistory'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { useStaffPreviewFocus } from '@/contexts/StaffPreviewFocus'
 import { type WallEvent } from '@/types/event'
 
-type Tab = 'mine' | 'review' | 'pending' | 'live' | 'history'
+type Tab = 'mine' | 'review' | 'pending' | 'newvenues' | 'live' | 'history'
 
 function TabBtn({
   active,
@@ -53,6 +54,7 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
   const [tab, setTab] = useState<Tab>(isAdmin ? 'review' : 'mine')
   const [reviewCount, setReviewCount] = useState(0)
   const [pendingCount, setPendingCount] = useState(0)
+  const [newVenueCount, setNewVenueCount] = useState(0)
   const [showManualAdd, setShowManualAdd] = useState(false)
   const [mine, setMine] = useState<WallEvent[]>([])
   const [live, setLive] = useState<WallEvent[]>([])
@@ -110,10 +112,15 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
   // Stage counts for the Review/Pending tab badges (admin only).
   const refreshStageCounts = useCallback(async () => {
     if (!isAdmin) return
-    const { data } = await supabase.rpc('admin_pending_events')
-    const all = (data ?? []) as Array<{ passed_review: boolean }>
+    const [pendRes, orphRes] = await Promise.all([
+      supabase.rpc('admin_pending_events'),
+      supabase.from('ingest_orphans').select('raw_venue_name').eq('status', 'open'),
+    ])
+    const all = (pendRes.data ?? []) as Array<{ passed_review: boolean }>
     setReviewCount(all.filter(e => !e.passed_review).length)
     setPendingCount(all.filter(e => e.passed_review).length)
+    const orphans = (orphRes.data ?? []) as Array<{ raw_venue_name: string | null }>
+    setNewVenueCount(new Set(orphans.map(o => o.raw_venue_name ?? '')).size)
   }, [isAdmin])
   useEffect(() => { refreshStageCounts() }, [refreshStageCounts])
 
@@ -149,6 +156,7 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
           <>
             <TabBtn active={tab === 'review'} onClick={() => setTab('review')}>Review{reviewCount > 0 ? ` · ${reviewCount}` : ''}</TabBtn>
             <TabBtn active={tab === 'pending'} onClick={() => setTab('pending')}>Pending{pendingCount > 0 ? ` · ${pendingCount}` : ''}</TabBtn>
+            <TabBtn active={tab === 'newvenues'} onClick={() => setTab('newvenues')}>New venues{newVenueCount > 0 ? ` · ${newVenueCount}` : ''}</TabBtn>
           </>
         ) : (
           <TabBtn active={tab === 'mine'} onClick={() => setTab('mine')}>Your uploads</TabBtn>
@@ -194,6 +202,13 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
         {tab === 'pending' && (
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
             <AdminPendingQueue onCountChange={setPendingCount} />
+          </div>
+        )}
+
+        {/* New venues tab — parked orphans awaiting a venue (admin only) */}
+        {tab === 'newvenues' && (
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
+            <AdminNewVenues onCountChange={setNewVenueCount} />
           </div>
         )}
 
