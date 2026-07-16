@@ -491,6 +491,58 @@ serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}))
+
+    // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
+    // Handled FIRST — a relink request carries no url, so it must run before the url
+    // check below. Self-contained (no scrape-sources): re-hosts the stored poster,
+    // keeps the already-composed description + real category, attaches the venue's
+    // neighborhood/address, inserts as PENDING (→ Review), marks the orphan linked.
+    if (body.relink && typeof body.relink === 'object') {
+      const rl = body.relink as { venueId?: string; rawVenueName?: string; orphanIds?: unknown }
+      const venueId = typeof rl.venueId === 'string' ? rl.venueId : ''
+      const rawVenueName = typeof rl.rawVenueName === 'string' ? rl.rawVenueName : ''
+      const orphanIds = Array.isArray(rl.orphanIds) ? rl.orphanIds.filter((x): x is string => typeof x === 'string') : null
+      if (!venueId) throw new Error('relink: venueId required')
+      const { data: venue } = await supabaseService.from('venues').select('id, name, neighborhood, address').eq('id', venueId).single()
+      if (!venue) throw new Error('relink: venue not found')
+      let q = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
+      if (orphanIds && orphanIds.length) q = q.in('id', orphanIds)
+      else if (rawVenueName) q = q.eq('raw_venue_name', rawVenueName)
+      else throw new Error('relink: orphanIds or rawVenueName required')
+      const { data: orphans } = await q
+      // deno-lint-ignore no-explicit-any
+      const list = (orphans ?? []) as any[]
+      const relinkNow = Date.now()
+      const imageDeadline = relinkNow + IMAGE_TOTAL_BUDGET_MS
+      let relinked = 0, failed = 0
+      const errs: string[] = []
+      for (const o of list) {
+        const posterUrl = await rehostImage(supabaseService, o.image_url ?? null, imageDeadline)
+        const cat = typeof o.category === 'string' && CATEGORIES.includes(o.category) ? o.category : 'Live Music'
+        const { data: ins, error: insErr } = await supabaseService.from('events').insert({
+          venue_id: venueId,
+          title: o.title,
+          category: cat,
+          poster_url: posterUrl,
+          starts_at: o.starts_at,
+          description: o.description ?? null,
+          neighborhood: venue.neighborhood,
+          address: venue.address,
+          view_count: 0,
+          like_count: 0,
+          status: 'pending', // → Review (passed_review defaults false)
+          sold_out: o.sold_out ?? false,
+          created_by: user.id,
+          source_url: o.event_url || o.source_url || null,
+          ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
+        }).select('id').single()
+        if (insErr) { failed++; errs.push(insErr.message); continue }
+        await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
+        relinked++
+      }
+      return new Response(JSON.stringify({ relinked, failed, found: list.length, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     const rawUrl = typeof body.url === 'string' ? body.url.trim() : ''
     if (!rawUrl) throw new Error('Pass a url')
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
@@ -611,54 +663,6 @@ serve(async (req) => {
         else { inserted++; index.add(key) }
       }
       return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors }
-    }
-
-    // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
-    // Self-contained (no scrape-sources dependency): re-hosts the stored poster, keeps
-    // the already-composed description + real category, attaches the venue's
-    // neighborhood/address, inserts as PENDING (→ Review), marks the orphan linked.
-    if (body.relink && typeof body.relink === 'object') {
-      const rl = body.relink as { venueId?: string; rawVenueName?: string; orphanIds?: unknown }
-      const venueId = typeof rl.venueId === 'string' ? rl.venueId : ''
-      const rawVenueName = typeof rl.rawVenueName === 'string' ? rl.rawVenueName : ''
-      const orphanIds = Array.isArray(rl.orphanIds) ? rl.orphanIds.filter((x): x is string => typeof x === 'string') : null
-      if (!venueId) throw new Error('relink: venueId required')
-      const venue = venueList.find(v => v.id === venueId)
-      if (!venue) throw new Error('relink: venue not found')
-      let q = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
-      if (orphanIds && orphanIds.length) q = q.in('id', orphanIds)
-      else if (rawVenueName) q = q.eq('raw_venue_name', rawVenueName)
-      else throw new Error('relink: orphanIds or rawVenueName required')
-      const { data: orphans } = await q
-      // deno-lint-ignore no-explicit-any
-      const list = (orphans ?? []) as any[]
-      const imageDeadline = Math.min(Date.now() + IMAGE_TOTAL_BUDGET_MS, now + INSERT_DEADLINE_MS)
-      let relinked = 0, failed = 0
-      for (const o of list) {
-        const posterUrl = await rehostImage(supabaseService, o.image_url ?? null, imageDeadline)
-        const cat = typeof o.category === 'string' && CATEGORIES.includes(o.category) ? o.category : 'Live Music'
-        const { data: ins, error: insErr } = await supabaseService.from('events').insert({
-          venue_id: venueId,
-          title: o.title,
-          category: cat,
-          poster_url: posterUrl,
-          starts_at: o.starts_at,
-          description: o.description ?? null,
-          neighborhood: venue.neighborhood,
-          address: venue.address,
-          view_count: 0,
-          like_count: 0,
-          status: 'pending', // → Review (passed_review defaults false)
-          sold_out: o.sold_out ?? false,
-          created_by: user.id,
-          source_url: o.event_url || o.source_url || null,
-          ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
-        }).select('id').single()
-        if (insErr) { failed++; continue }
-        await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
-        relinked++
-      }
-      return new Response(JSON.stringify({ relinked, failed }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ DRY RUN: extract → (optionally) commit to pending → return for review ══
