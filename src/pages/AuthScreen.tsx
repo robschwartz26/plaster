@@ -19,7 +19,13 @@ export function AuthScreen() {
   const [otp, setOtp] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const { signIn, signUp, verifySignupOtp } = useAuth()
+  // Password recovery sub-flow: null = normal auth; 'request' = ask for email;
+  // 'code' = enter the emailed code + a new password (both on one screen so the
+  // recovery session that verifyOtp creates doesn't bounce us off /auth before
+  // the new password is set).
+  const [resetStage, setResetStage] = useState<null | 'request' | 'code'>(null)
+  const [newPassword, setNewPassword] = useState('')
+  const { signIn, signUp, verifySignupOtp, sendPasswordReset, verifyPasswordResetOtp, updatePassword } = useAuth()
 
   useEffect(() => {
     return () => { if (cooldownRef.current) clearInterval(cooldownRef.current) }
@@ -87,6 +93,71 @@ export function AuthScreen() {
     }
   }
 
+  // ── Password recovery ─────────────────────────────────────────────────────
+  function openReset() {
+    setError(null)
+    setNewPassword('')
+    setOtp('')
+    setResetStage('request')
+  }
+
+  function closeReset() {
+    if (cooldownRef.current) clearInterval(cooldownRef.current)
+    setResendCooldown(0)
+    setError(null)
+    setOtp('')
+    setNewPassword('')
+    setResetStage(null)
+  }
+
+  async function handleSendReset(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (!email || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { error } = await sendPasswordReset(email)
+      if (error) { setError(error.message); return }
+      setResetStage('code')
+      startCooldown()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResendReset() {
+    if (resendCooldown > 0 || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      const { error } = await sendPasswordReset(email)
+      if (error) { setError(error.message); return }
+      startCooldown()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleResetSubmit(e?: React.FormEvent) {
+    e?.preventDefault()
+    if (otp.length < 4 || newPassword.length < 6 || busy) return
+    setError(null)
+    setBusy(true)
+    try {
+      // 1) verify the recovery code → establishes a recovery session
+      const { error: vErr } = await verifyPasswordResetOtp(email, otp)
+      if (vErr) { setError(vErr.message); return }
+      // 2) set the new password on that session. AuthRoute may navigate us off
+      // /auth the moment the session lands, but this call is already in flight
+      // and completes regardless — end state is "password changed + signed in".
+      const { error: uErr } = await updatePassword(newPassword)
+      if (uErr) { setError(uErr.message); return }
+      // Signed in now; onAuthStateChange → AuthRoute routes onward.
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div
       style={{
@@ -101,7 +172,99 @@ export function AuthScreen() {
       {/* Centered content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>
 
-      {emailSent ? (
+      {resetStage === 'request' ? (
+        <form onSubmit={handleSendReset} style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, lineHeight: 1 }}>🔑</div>
+          <h2 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--fg)' }}>
+            Reset your password
+          </h2>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+            Enter your email and we'll send you a reset code.
+          </p>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(null) }}
+            style={inputStyle}
+          />
+          {error && <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{error}</p>}
+          <button
+            type="submit"
+            disabled={busy || !email}
+            style={{ width: '100%', padding: '14px 0', borderRadius: 14, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: busy || !email ? 'not-allowed' : 'pointer', opacity: busy || !email ? 0.5 : 1, transition: 'opacity 150ms ease' }}
+          >
+            {busy ? '…' : 'Send reset code'}
+          </button>
+          <button type="button" onClick={closeReset} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>
+            Back to sign in
+          </button>
+        </form>
+      ) : resetStage === 'code' ? (
+        <form onSubmit={handleResetSubmit} style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
+          <div style={{ fontSize: 40, lineHeight: 1 }}>✉️</div>
+          <h2 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--fg)' }}>
+            Enter your code
+          </h2>
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+            We sent a reset code to<br />
+            <strong style={{ color: 'var(--fg)' }}>{email}</strong>.<br />
+            Enter it and choose a new password.
+          </p>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={10}
+            placeholder="Enter code"
+            value={otp}
+            onChange={(e) => { setOtp(e.target.value.replace(/\D/g, '').slice(0, 10)); setError(null) }}
+            style={{ ...inputStyle, textAlign: 'center', fontSize: 22, letterSpacing: '0.3em', fontWeight: 700 }}
+          />
+          <div style={{ position: 'relative', width: '100%' }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="New password"
+              value={newPassword}
+              onChange={(e) => { setNewPassword(e.target.value); setError(null) }}
+              autoComplete="new-password"
+              style={{ ...inputStyle, paddingRight: 44 }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(s => !s)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', padding: 6, cursor: 'pointer', color: 'var(--fg-55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+          <p style={{ margin: '-6px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>
+            At least 6 characters.
+          </p>
+          {error && <p style={{ color: '#f87171', fontSize: 13, margin: 0 }}>{error}</p>}
+          <button
+            type="submit"
+            disabled={busy || otp.length < 4 || newPassword.length < 6}
+            style={{ width: '100%', padding: '14px 0', borderRadius: 14, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, cursor: busy || otp.length < 4 || newPassword.length < 6 ? 'not-allowed' : 'pointer', opacity: busy || otp.length < 4 || newPassword.length < 6 ? 0.5 : 1, transition: 'opacity 150ms ease' }}
+          >
+            {busy ? '…' : 'Reset password'}
+          </button>
+          <button
+            type="button"
+            onClick={handleResendReset}
+            disabled={resendCooldown > 0 || busy}
+            style={{ padding: '13px 0', width: '100%', borderRadius: 14, border: '1.5px solid var(--fg-25)', background: 'transparent', color: resendCooldown > 0 ? 'var(--fg-40)' : 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 || busy ? 'not-allowed' : 'pointer', transition: 'color 150ms ease' }}
+          >
+            {busy ? '…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Didn't get it? Resend code"}
+          </button>
+          <button type="button" onClick={closeReset} style={{ background: 'none', border: 'none', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', padding: '4px 0' }}>
+            Back to sign in
+          </button>
+        </form>
+      ) : emailSent ? (
         <div style={{ width: '100%', maxWidth: 340, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, textAlign: 'center' }}>
           <div style={{ fontSize: 40, lineHeight: 1 }}>✉️</div>
           <h2 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--fg)' }}>
@@ -349,6 +512,16 @@ export function AuthScreen() {
         >
           {busy ? '…' : tab === 'signin' ? 'Sign in' : 'Create account'}
         </button>
+
+        {tab === 'signin' && (
+          <button
+            type="button"
+            onClick={openReset}
+            style={{ background: 'none', border: 'none', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, cursor: 'pointer', padding: '2px 0', marginTop: 2 }}
+          >
+            Forgot password?
+          </button>
+        )}
       </form>
         </>
       )}

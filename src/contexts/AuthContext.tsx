@@ -32,6 +32,9 @@ interface AuthContextValue {
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
   verifySignupOtp: (email: string, token: string) => Promise<{ error: Error | null }>
+  sendPasswordReset: (email: string) => Promise<{ error: Error | null }>
+  verifyPasswordResetOtp: (email: string, token: string) => Promise<{ error: Error | null }>
+  updatePassword: (password: string) => Promise<{ error: Error | null }>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -103,11 +106,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error as Error | null }
   }
 
+  // Password recovery, OTP-code style (no deep link needed — mirrors signup).
+  // Emails a recovery code; requires the Supabase "Reset Password" template to
+  // include {{ .Token }} so the user receives a 6-digit code, not just a link.
+  async function sendPasswordReset(email: string) {
+    const { error } = await supabase.auth.resetPasswordForEmail(email)
+    return { error: error as Error | null }
+  }
+
+  // Verifies the recovery code and establishes a (recovery) session so the new
+  // password can be set with updatePassword below.
+  async function verifyPasswordResetOtp(email: string, token: string) {
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'recovery' })
+    return { error: error as Error | null }
+  }
+
+  async function updatePassword(password: string) {
+    const { error } = await supabase.auth.updateUser({ password })
+    return { error: error as Error | null }
+  }
+
   const isAdmin = profile?.is_admin === true
   const canIngest = (profile?.is_admin || profile?.is_ingester) === true
 
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, canIngest, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp }}>
+    <AuthContext.Provider value={{ user, session, profile, isAdmin, canIngest, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp, sendPasswordReset, verifyPasswordResetOtp, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )
