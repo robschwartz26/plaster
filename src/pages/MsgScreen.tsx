@@ -225,12 +225,15 @@ export function MsgScreen() {
   const [conversations,    setConversations]    = useState<ConversationRow[]>([])
   const [convLoading,      setConvLoading]      = useState(true)
   const [slapEvents,   setSlapEvents]   = useState<Record<string, { id: string; title: string; poster_url: string | null }>>({})
-  // Slap RSVP is DB-driven, not remembered in state: the open thread's slap
-  // event resolves to one of three values from the attendees table. 'unknown'
-  // = lookup not yet resolved (render nothing, no flash for someone who's
-  // going); 'not_going' = show the RSVP button; 'going' = show the quiet
-  // acknowledgment. There's no dismiss — the row IS the source of truth.
-  const [slapRsvp, setSlapRsvp] = useState<'unknown' | 'not_going' | 'going'>('unknown')
+  // Slap RSVP is DB-driven, not remembered in local UI state: goingSlapEventIds
+  // is which of the open thread's slapped events the user actually attends, read
+  // fresh from the attendees table on every mount (survives leaving/re-entering
+  // and app restarts). slapChecked gates the button until the lookup resolves so
+  // it never flashes at someone who's going. When you're going there is NO
+  // floating element — a fixed "you're going" marker lives on the slap card in
+  // the message stream instead (the chat just stays a chat).
+  const [goingSlapEventIds, setGoingSlapEventIds] = useState<Set<string>>(new Set())
+  const [slapChecked, setSlapChecked] = useState(false)
   const [slapRsvpError, setSlapRsvpError] = useState<string | null>(null)
   const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
   const [groupEditOpen, setGroupEditOpen] = useState(false)
@@ -746,34 +749,44 @@ export function MsgScreen() {
     })
   }, [messages]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The event the open thread was slapped to (most recent slap message).
+  // The event the open thread was slapped to (most recent slap message) — this
+  // is what the floating RSVP button acts on.
   const threadSlapEventId = (() => {
     for (let i = messages.length - 1; i >= 0; i--) { const m = messages[i]; if (m.message_type === 'slap' && m.event_id) return m.event_id }
     return null
   })()
 
-  // Read the truth from attendees every time the thread's slap event changes
-  // (open, re-open, app restart) — nothing is cached across mounts. Resets to
-  // 'unknown' first so re-entry never flashes the button at someone going.
+  // Every slapped event in the open thread (a thread can hold more than one),
+  // as a stable key so the lookup only re-runs when that set actually changes.
+  const slapEventIdsKey = messages
+    .filter(m => m.message_type === 'slap' && m.event_id)
+    .map(m => m.event_id as string)
+    .join(',')
+
+  // Read the truth from attendees on every mount / thread change — nothing is
+  // cached across mounts. slapChecked flips false→true around the async read so
+  // the button never flashes before we know whether the user is already going.
   useEffect(() => {
-    setSlapRsvp('unknown')
+    setSlapChecked(false)
     setSlapRsvpError(null)
-    if (!user || !threadSlapEventId) return
+    const ids = slapEventIdsKey ? slapEventIdsKey.split(',') : []
+    if (!user || ids.length === 0) { setGoingSlapEventIds(new Set()); setSlapChecked(true); return }
     let cancelled = false
-    supabase.from('attendees').select('event_id').eq('user_id', user.id).eq('event_id', threadSlapEventId).maybeSingle()
+    supabase.from('attendees').select('event_id').eq('user_id', user.id).in('event_id', ids)
       .then(({ data, error }) => {
         if (cancelled) return
         if (error) {
-          // Don't hide the row on a failed lookup — fall back to the button so a
-          // going user can re-confirm (a dup insert is treated as success below).
+          // Don't strand a going user: leave the set empty (button shows) so they
+          // can re-confirm — a duplicate insert is treated as success below.
           console.error('[slap rsvp] attendees lookup failed:', error)
-          setSlapRsvp('not_going')
-          return
+          setGoingSlapEventIds(new Set())
+        } else {
+          setGoingSlapEventIds(new Set((data ?? []).map(r => r.event_id as string)))
         }
-        setSlapRsvp(data ? 'going' : 'not_going')
+        setSlapChecked(true)
       })
     return () => { cancelled = true }
-  }, [threadSlapEventId, user?.id])
+  }, [slapEventIdsKey, user?.id])
 
   async function rsvpFromChat(eventId: string) {
     if (!user) return
@@ -781,7 +794,8 @@ export function MsgScreen() {
     const { error } = await supabase.from('attendees').insert({ event_id: eventId, user_id: user.id })
     if (!error || error.code === '23505') {
       // Success, or already-going (unique violation) — both mean "you're in".
-      setSlapRsvp('going')
+      // The card marker appears and the floating button drops away.
+      setGoingSlapEventIds(prev => new Set([...prev, eventId]))
     } else {
       // Never swallow the failure — surface it so it can't hide as a dead button.
       console.error('[slap rsvp] insert failed:', error)
@@ -1403,6 +1417,14 @@ export function MsgScreen() {
                             {ev?.title ?? 'a show'}
                           </button>
                           <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>tap to see the event →</p>
+                          {/* Fixed in-chat RSVP marker — stays part of the slap card
+                              once you're going. No floating element; the thread just
+                              carries on as a normal group chat. */}
+                          {msg.event_id && goingSlapEventIds.has(msg.event_id) && (
+                            <p style={{ margin: '12px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, color: 'var(--slap-green-text)' }}>
+                              ✓ You're going · in your Set List
+                            </p>
+                          )}
                         </div>
                       </div>
                     )
@@ -1501,29 +1523,21 @@ export function MsgScreen() {
                 </div>
               )}
 
-              {/* Slap RSVP — purely DB-driven from the attendees table. 'unknown'
-                  renders nothing (no flash for someone who's already going);
-                  'going' shows a quiet, non-interactive acknowledgment; otherwise
-                  the RSVP button. No ✕/dismiss — the attendees row is the truth,
-                  so there is nothing to remember or dismiss. */}
-              {threadSlapEventId && slapRsvp !== 'unknown' && (
+              {/* Slap RSVP prompt — a transient call-to-action, shown only while
+                  the user has NOT yet RSVP'd to the thread's latest slap. Once
+                  they're going it disappears entirely (nothing floats here) and a
+                  fixed "you're going" marker lives on the slap card instead. Gated
+                  on slapChecked so it never flashes before the DB lookup resolves. */}
+              {threadSlapEventId && slapChecked && !goingSlapEventIds.has(threadSlapEventId) && (
                 <div style={{ flexShrink: 0, padding: '8px 12px 0' }}>
-                  {slapRsvp === 'going' ? (
-                    <div style={{ padding: '11px 16px', textAlign: 'center', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, opacity: 0.85 }}>
-                      You're going ✓ · it's in your Set List
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => rsvpFromChat(threadSlapEventId)}
-                        style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
-                      >
-                        Going ✓
-                      </button>
-                      {slapRsvpError && (
-                        <p style={{ margin: '6px 2px 0', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, textAlign: 'center' }}>{slapRsvpError}</p>
-                      )}
-                    </>
+                  <button
+                    onClick={() => rsvpFromChat(threadSlapEventId)}
+                    style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
+                  >
+                    Going ✓
+                  </button>
+                  {slapRsvpError && (
+                    <p style={{ margin: '6px 2px 0', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, textAlign: 'center' }}>{slapRsvpError}</p>
                   )}
                 </div>
               )}
