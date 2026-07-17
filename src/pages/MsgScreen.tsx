@@ -225,8 +225,13 @@ export function MsgScreen() {
   const [conversations,    setConversations]    = useState<ConversationRow[]>([])
   const [convLoading,      setConvLoading]      = useState(true)
   const [slapEvents,   setSlapEvents]   = useState<Record<string, { id: string; title: string; poster_url: string | null }>>({})
-  const [goingEventIds, setGoingEventIds] = useState<Set<string>>(new Set())
-  const [slapDismissed, setSlapDismissed] = useState<Set<string>>(new Set())
+  // Slap RSVP is DB-driven, not remembered in state: the open thread's slap
+  // event resolves to one of three values from the attendees table. 'unknown'
+  // = lookup not yet resolved (render nothing, no flash for someone who's
+  // going); 'not_going' = show the RSVP button; 'going' = show the quiet
+  // acknowledgment. There's no dismiss — the row IS the source of truth.
+  const [slapRsvp, setSlapRsvp] = useState<'unknown' | 'not_going' | 'going'>('unknown')
+  const [slapRsvpError, setSlapRsvpError] = useState<string | null>(null)
   const [convSlapPoster, setConvSlapPoster] = useState<Record<string, string>>({})
   const [groupEditOpen, setGroupEditOpen] = useState(false)
   const [avatarFullscreenId, setAvatarFullscreenId] = useState<string | null>(null)
@@ -747,16 +752,41 @@ export function MsgScreen() {
     return null
   })()
 
+  // Read the truth from attendees every time the thread's slap event changes
+  // (open, re-open, app restart) — nothing is cached across mounts. Resets to
+  // 'unknown' first so re-entry never flashes the button at someone going.
   useEffect(() => {
+    setSlapRsvp('unknown')
+    setSlapRsvpError(null)
     if (!user || !threadSlapEventId) return
+    let cancelled = false
     supabase.from('attendees').select('event_id').eq('user_id', user.id).eq('event_id', threadSlapEventId).maybeSingle()
-      .then(({ data }) => { if (data) setGoingEventIds(prev => new Set([...prev, threadSlapEventId])) })
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) {
+          // Don't hide the row on a failed lookup — fall back to the button so a
+          // going user can re-confirm (a dup insert is treated as success below).
+          console.error('[slap rsvp] attendees lookup failed:', error)
+          setSlapRsvp('not_going')
+          return
+        }
+        setSlapRsvp(data ? 'going' : 'not_going')
+      })
+    return () => { cancelled = true }
   }, [threadSlapEventId, user?.id])
 
   async function rsvpFromChat(eventId: string) {
     if (!user) return
+    setSlapRsvpError(null)
     const { error } = await supabase.from('attendees').insert({ event_id: eventId, user_id: user.id })
-    if (!error || error.code === '23505') setGoingEventIds(prev => new Set([...prev, eventId]))
+    if (!error || error.code === '23505') {
+      // Success, or already-going (unique violation) — both mean "you're in".
+      setSlapRsvp('going')
+    } else {
+      // Never swallow the failure — surface it so it can't hide as a dead button.
+      console.error('[slap rsvp] insert failed:', error)
+      setSlapRsvpError("Couldn't RSVP — tap to try again.")
+    }
   }
 
   // Poster thumbnail for slap-originated conversations (shown at the row's right).
@@ -1471,21 +1501,30 @@ export function MsgScreen() {
                 </div>
               )}
 
-              {/* Slap RSVP — floats above the composer while the thread has a slap
-                  and the user hasn't gone or dismissed it this session */}
-              {threadSlapEventId && openConvId && !slapDismissed.has(openConvId) && !goingEventIds.has(threadSlapEventId) && (
-                <div style={{ flexShrink: 0, padding: '8px 12px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button
-                    onClick={() => rsvpFromChat(threadSlapEventId)}
-                    style={{ flex: 1, padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
-                  >
-                    Going ✓
-                  </button>
-                  <button
-                    onClick={() => setSlapDismissed(prev => new Set([...prev, openConvId]))}
-                    aria-label="Dismiss"
-                    style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  >✕</button>
+              {/* Slap RSVP — purely DB-driven from the attendees table. 'unknown'
+                  renders nothing (no flash for someone who's already going);
+                  'going' shows a quiet, non-interactive acknowledgment; otherwise
+                  the RSVP button. No ✕/dismiss — the attendees row is the truth,
+                  so there is nothing to remember or dismiss. */}
+              {threadSlapEventId && slapRsvp !== 'unknown' && (
+                <div style={{ flexShrink: 0, padding: '8px 12px 0' }}>
+                  {slapRsvp === 'going' ? (
+                    <div style={{ padding: '11px 16px', textAlign: 'center', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, opacity: 0.85 }}>
+                      You're going ✓ · it's in your Set List
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => rsvpFromChat(threadSlapEventId)}
+                        style={{ width: '100%', padding: '11px 16px', borderRadius: 10, border: '1.5px solid var(--slap-green-border)', background: 'transparent', color: 'var(--slap-green-text)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', textAlign: 'center' }}
+                      >
+                        Going ✓
+                      </button>
+                      {slapRsvpError && (
+                        <p style={{ margin: '6px 2px 0', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, textAlign: 'center' }}>{slapRsvpError}</p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
