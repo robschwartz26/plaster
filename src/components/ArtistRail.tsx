@@ -13,6 +13,16 @@ const RAIL_CONFIG: Record<string, Disc[]> = {
   'Classical':  ['spotify', 'youtube', 'google'],
   'Dance':      ['spotify', 'youtube', 'google'],
   'Comedy':     ['youtube', 'google'],
+  'Drag':       ['youtube', 'google'],   // performers have real YT presence
+  'Film':       ['youtube', 'google'],   // YouTube search = the trailer
+  'Theater':    ['google'],
+  'Burlesque':  ['google'],
+  'Art':        ['google'],
+  'Literary':   ['google'],
+  'Spoken':     ['google'],
+  'Trivia':     ['google'],
+  'Karaoke':    ['google'],
+  'Other':      ['google'],
 }
 export function hasRail(category: string | null | undefined): boolean {
   return !!category && category in RAIL_CONFIG
@@ -29,7 +39,10 @@ function cleanArtist(e: WallEvent): string {
 // "…band" for musicians, "…comedian" for comedy (not "John Mulaney band").
 const GOOGLE_SUFFIX: Record<string, string> = {
   'Live Music': 'band', 'Jazz': 'jazz', 'Classical': 'classical', 'Dance': 'band',
-  'Comedy': 'comedian',
+  'Comedy': 'comedian', 'Drag': 'drag queen', 'Theater': 'play Portland',
+  'Burlesque': 'burlesque', 'Film': 'film', 'Art': 'artist', 'Literary': 'author',
+  'Spoken': 'poet', 'Trivia': 'trivia Portland', 'Karaoke': 'Portland',
+  'Other': 'Portland',
 }
 const HREF: Record<Disc, (q: string, category: string) => string> = {
   spotify: q => `https://open.spotify.com/search/${encodeURIComponent(q)}`,
