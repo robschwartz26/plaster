@@ -17,6 +17,7 @@ import { SlapHand } from '@/components/SlapHand'
 import { posterThumb } from '@/lib/posterThumb'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { ClaimShow } from '@/components/ClaimShow'
+import { ArtistRail } from '@/components/ArtistRail'
 import { fetchApprovedTrack } from '@/lib/eventClaims'
 import { reportTourAction, isIntercepted } from '@/lib/tourBus'
 
@@ -143,26 +144,6 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-// Categories that also get a Spotify button (title is a recording artist).
-const MUSIC_CATEGORIES = new Set(['Live Music', 'Jazz', 'Classical'])
-// A genre keyword appended to the YouTube search so it finds the right person —
-// "Allison O'Connor comedy", "Jane Smith author". Empty = search the title alone.
-const SEARCH_CONTEXT: Record<string, string> = {
-  'Live Music': 'music', 'Jazz': 'jazz', 'Classical': 'classical',
-  'Comedy': 'comedy', 'Drag': 'drag', 'Burlesque': 'burlesque',
-  'Dance': 'dance', 'Theater': 'theater', 'Film': 'film',
-  'Literary': 'author', 'Spoken': 'spoken word', 'Art': 'artist',
-}
-// Light cleanup of a title into a search query — strip sold-out markers only
-// (over-cleaning risks dropping the actual name; search engines handle the rest).
-function cleanArtistQuery(title: string): string {
-  return title
-    .replace(/\s*[([]\s*sold[\s-]?out\s*[)\]]/gi, '')
-    .replace(/\bsold[\s-]?out\b\s*[:\-–]?\s*/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim() || title
-}
-
 // ── HeartPill (2-5 col) ────────────────────────────────────────────────────
 
 function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean; onLike: () => void }) {
@@ -228,6 +209,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   // ── 1-col: 3-panel strip state ─────────────────────────────────────────
   const stripRef = useRef<HTMLDivElement>(null)
+  const railTouchRef = useRef(false)          // touch started on the artist rail → ignore for swipe/like
+  const [railSummon, setRailSummon] = useState(0) // bump to re-show the rail on tap
   const panelIdxRef = useRef<0 | 1 | 2>(restingPanel)
   const [panelIdx, _setPanelIdx] = useState<0 | 1 | 2>(restingPanel)
   useEffect(() => { if (panelIdx === 1) reportTourAction('swipe') }, [panelIdx])
@@ -391,6 +374,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (!el) return
 
     const onStart = (e: TouchEvent) => {
+      // Taps that start on the artist rail belong to the rail — never swipe/like.
+      railTouchRef.current = !!((e.target as HTMLElement)?.closest?.('[data-artist-rail]'))
+      if (railTouchRef.current) return
       if (e.touches.length !== 1 || loopingRef.current) return
       swipe.current = {
         active: true,
@@ -405,6 +391,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     }
 
     const onMove = (e: TouchEvent) => {
+      if (railTouchRef.current) return
       const s = swipe.current
 
       // If a second finger lands during a swipe, abort and snap back —
@@ -453,6 +440,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     }
 
     const onEnd = (e: TouchEvent) => {
+      if (railTouchRef.current) { railTouchRef.current = false; return }
       const s = swipe.current
 
       // If other fingers are still down, the pinch isn't fully ended yet —
@@ -471,6 +459,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
       // Double-tap-to-like: only on poster panel (panelIdx 0), no significant movement
       if (!s.movedSignificantly && Math.abs(dx) < 10 && Math.abs(dy) < 10 && panelIdxRef.current === 0) {
+        setRailSummon(v => v + 1) // any tap on the poster re-summons the artist rail
         const now = Date.now()
         if (now - lastTapTimeRef.current < 300) {
           lastTapTimeRef.current = 0
@@ -731,6 +720,8 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 Listen
               </button>
             )}
+            {/* Artist media rail — fallback when no claimed track; music/comedy only */}
+            {panelIdx === 0 && !showTrack && <ArtistRail event={event} summon={railSummon} />}
           </div>
 
           {/* Panel 2: Info */}
@@ -1135,29 +1126,6 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 </button>
               )}
 
-              {/* Auto-search fallback: no claimed track yet → look the act up. YouTube
-                  for any genre (with a genre keyword so it finds the right person);
-                  Spotify only for music. Deep-links a search; opens the app. */}
-              {!showTrack && (() => {
-                const name = cleanArtistQuery(event.title)
-                const ctx = SEARCH_CONTEXT[event.category ?? ''] ?? ''
-                const ytQuery = ctx ? `${name} ${ctx}` : name
-                const links = [
-                  { label: 'YouTube', href: `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQuery)}` },
-                  ...(MUSIC_CATEGORIES.has(event.category ?? '') ? [{ label: 'Spotify', href: `https://open.spotify.com/search/${encodeURIComponent(name)}` }] : []),
-                ]
-                return (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    {links.map(s => (
-                      <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                        style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', textDecoration: 'none', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
-                        <span style={{ width: 0, height: 0, borderLeft: '9px solid var(--fg-65)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', flexShrink: 0 }} />
-                        {s.label}
-                      </a>
-                    ))}
-                  </div>
-                )
-              })()}
               <ClaimShow eventId={event.id} active={!!isActive} />
 
               {/* Portaled to body — PosterCard's 1-col strip is transformed, which

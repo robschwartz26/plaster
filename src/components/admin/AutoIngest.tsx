@@ -65,6 +65,22 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
   const [data, setData] = useState<FetchResponse | null>(null)
   const [deepFetch, setDeepFetch] = useState(true)
   const [afterDate, setAfterDate] = useState('')  // only ingest events on/after this date
+  const [backfill, setBackfill] = useState('')     // artist-name backfill status
+
+  async function runBackfill() {
+    setBackfill('Backfilling…')
+    try {
+      let total = 0, remaining = 1, guard = 0
+      while (remaining > 0 && guard++ < 100) {
+        const r = await callIngest({ backfillArtists: { limit: 40 } }) as { updated?: number; remaining?: number; processed?: number }
+        total += r.updated ?? 0
+        remaining = r.remaining ?? 0
+        setBackfill(`Backfilling… ${total} named · ${remaining} left`)
+        if ((r.processed ?? 0) === 0) break
+      }
+      setBackfill(`Done — ${total} artist names filled`)
+    } catch (e) { setBackfill(e instanceof Error ? e.message : String(e)) }
+  }
 
   const isLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
 
@@ -130,6 +146,11 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
             <button onClick={() => { setUrl('https://mississippistudios.com/'); }} style={devBtn}>DEV · Mississippi</button>
           )}
           {busy && <span style={{ fontSize: 12, color: 'var(--fg-40)' }}>{community ? 'extracts the roundup — up to ~1 min' : deepFetch ? 'reads each show’s ticket page for the full description — up to ~2 min' : 'renders the page + extracts — ~30s'}</span>}
+        </div>
+        {/* Admin utility: backfill clean artist names for existing music/comedy events */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-40)', flexWrap: 'wrap' }}>
+          <button onClick={runBackfill} style={{ padding: '5px 10px', borderRadius: 6, border: '1px solid var(--fg-18)', background: 'transparent', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>Backfill artist names</button>
+          {backfill && <span>{backfill}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--fg-55)', flexWrap: 'wrap' }}>
           <label htmlFor="ingest-after" style={{ fontWeight: 600 }}>Only events on/after</label>

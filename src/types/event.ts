@@ -21,6 +21,7 @@ export interface WallEvent {
   sold_out?: boolean
   sold_out_report_count?: number
   show_times?: string[] | null
+  artist_name?: string | null
   trending_score: number
   recurrence_group_id?: string | null
 }

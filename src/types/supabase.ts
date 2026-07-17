@@ -549,6 +549,7 @@ export type Database = {
           location_lng: number | null
           neighborhood: string | null
           poster_offset_x: number | null
+          artist_name: string | null
           passed_review: boolean
           poster_offset_y: number | null
           poster_url: string | null
@@ -602,6 +603,7 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
+          artist_name?: string | null
           passed_review?: boolean
           starts_at: string
           status?: string
@@ -642,6 +644,7 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
+          artist_name?: string | null
           passed_review?: boolean
           starts_at?: string
           status?: string
@@ -730,6 +733,7 @@ export type Database = {
           raw_venue_name: string | null
           sold_out: boolean | null
           source_url: string | null
+          artist_name: string | null
           category: string | null
           raw_venue_address: string | null
           raw_venue_website: string | null
@@ -752,6 +756,7 @@ export type Database = {
           source_url?: string | null
           category?: string | null
           raw_venue_address?: string | null
+          artist_name?: string | null
           raw_venue_website?: string | null
           starts_at: string
           status?: string
@@ -772,6 +777,7 @@ export type Database = {
           source_url?: string | null
           category?: string | null
           raw_venue_address?: string | null
+          artist_name?: string | null
           raw_venue_website?: string | null
           starts_at?: string
           status?: string

@@ -22,7 +22,7 @@ const WALL_PAGE = 300 // events per fetch window (initial + each load-more page)
 // Slim select — ONLY the columns dbEventToWallEvent reads for wall rendering
 // (description and other long-text excluded; the 1-col info panel lazy-fetches
 // detail). Shared verbatim by the initial fetch and loadMore.
-const EVENT_SELECT = 'id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, venues(name)'
+const EVENT_SELECT = 'id, title, venue_id, starts_at, category, poster_url, fill_frame, focal_x, focal_y, poster_offset_x, poster_offset_y, view_count, like_count, sold_out, sold_out_report_count, show_times, trending_score, recurrence_group_id, artist_name, venues(name)'
 
 // Wrap a filter-chip change in a View Transition so surviving posters glide to
 // their new grid slots while removed ones fade. flushSync forces React to commit

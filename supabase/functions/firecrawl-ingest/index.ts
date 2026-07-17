@@ -182,6 +182,24 @@ async function composeDescription(f: DescFacts): Promise<string | null> {
   } catch { return null }
 }
 
+// Derive the clean headliner name from an event title (for the backfill). Returns
+// the name, or '' when the title is not a single act (festival/market/generic) or
+// on any error — '' means "processed, no artist" so the rail falls back to the title.
+async function extractArtistName(title: string, KEY: string): Promise<string> {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: REWRITE_MODEL, max_tokens: 40, messages: [{ role: 'user', content:
+        `Extract the clean headliner/act name from this event title — a band, musician, comedian, or performer. Return ONLY the name: no tour name, no "presented by", no support acts, no all-caps styling (e.g. "Pigeons Playing Ping Pong", not "PIGEONS PLAYING PING PONG - FALL TOUR 2026"). If the title is NOT a single act (a festival, market, trivia night, or generic event), respond with only the word NONE.\n\nTitle: ${title}` }] }),
+    })
+    if (!res.ok) return ''
+    const data = await res.json()
+    const t = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
+    return (!t || t.toUpperCase() === 'NONE') ? '' : t
+  } catch { return '' }
+}
+
 // Run an async map with bounded concurrency (keeps Fetch fast without hammering the API).
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
@@ -217,6 +235,7 @@ const EXTRACT_SCHEMA = {
           poster_image_url: { type: 'string', description: 'FULL-RESOLUTION event/gig poster or artwork image URL — never a thumbnail, sprite, logo, or placeholder' },
           ticket_url:       { type: 'string', description: 'Link to buy tickets / the event detail page (else empty)' },
           venue_name:       { type: 'string', description: 'The venue or room hosting THIS specific event, if the page names it (calendars sometimes list sister venues); else empty' },
+          artist_name:      { type: 'string', description: 'The clean headliner/act name ONLY — no tour name, no "presented by", no support acts, no all-caps styling (e.g. "Pigeons Playing Ping Pong", not "PIGEONS PLAYING PING PONG - FALL TOUR"). Empty if not a single act.' },
           venue_address:    { type: 'string', description: 'Street address of the venue if the page shows it (else empty)' },
           venue_website:    { type: 'string', description: 'The venue’s own website URL if the page shows it (else empty)' },
           sold_out:         { type: 'boolean' },
@@ -243,6 +262,7 @@ interface RawEvent {
   sold_out: boolean
   venue_address: string  // scraped venue address (for new-venue intake pre-fill)
   venue_website: string  // scraped venue website (for new-venue intake pre-fill)
+  artist_name: string    // clean headliner name for the media rail ('' if unknown)
 }
 
 async function firecrawlExtract(url: string, now: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number }> {
@@ -295,6 +315,7 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
       sold_out: titleSold || ev.sold_out === true,
       venue_address: typeof ev.venue_address === 'string' ? ev.venue_address.trim() : '',
       venue_website: typeof ev.venue_website === 'string' ? ev.venue_website.trim() : '',
+      artist_name: typeof ev.artist_name === 'string' ? ev.artist_name.trim() : '',
     })
   }
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
@@ -379,6 +400,7 @@ async function extractBandsintown(url: string, now: number, maxOut: number): Pro
       sold_out: soldOut,
       venue_address: venueAddress,
       venue_website: typeof ev.location?.sameAs === 'string' ? ev.location.sameAs.trim() : '',
+      artist_name: title, // Bandsintown title IS the clean performer name
     })
   }
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
@@ -401,6 +423,7 @@ const EVEROUT_SCHEMA = {
         type: 'object',
         properties: {
           title:              { type: 'string' },
+          artist_name:        { type: 'string', description: 'The clean performer/act name if this is a single act (comedian, band, author) — no tour name or extra words. Empty for multi-act festivals, markets, or non-performer events.' },
           description:        { type: 'string', description: 'A 1–3 sentence summary of the event in your own words (do NOT copy the article verbatim). Empty if none.' },
           venue_name:         { type: 'string', description: 'Venue/location name — the part before the comma in the italic footer like "Venue, Neighborhood (date)"' },
           venue_neighborhood: { type: 'string', description: 'Neighborhood shown after the venue (else empty)' },
@@ -486,6 +509,7 @@ async function extractEverout(url: string, floor: number, maxOut: number): Promi
         sold_out: soldOut,
         venue_address: '',
         venue_website: '',
+        artist_name: typeof ev.artist_name === 'string' ? ev.artist_name.trim() : '',
       })
     }
   }
@@ -643,6 +667,7 @@ serve(async (req) => {
           created_by: user.id,
           source_url: o.event_url || o.source_url || null,
           ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
+          artist_name: o.artist_name ?? null,
         }).select('id').single()
         if (insErr) { failed++; errs.push(insErr.message); continue }
         await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
@@ -678,6 +703,26 @@ serve(async (req) => {
       const data = await res.json()
       const blurb = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
       return new Response(JSON.stringify({ blurb }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
+    // ═══ BACKFILL ARTIST NAMES: one-time (batched) — derive artist_name from title ══
+    // Run repeatedly until { remaining: 0 }. Only touches rail categories; marks
+    // non-acts with '' so they aren't rescanned. url-less, so handled before the check.
+    if (body.backfillArtists) {
+      const KEY = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+      const RAIL_CATS = ['Live Music', 'Jazz', 'Classical', 'Dance', 'Comedy']
+      const limit = (typeof body.backfillArtists === 'object' && Number.isFinite(body.backfillArtists.limit)) ? Math.min(60, Math.max(1, Math.round(body.backfillArtists.limit))) : 40
+      const { data: rows } = await supabaseService.from('events').select('id, title').is('artist_name', null).in('category', RAIL_CATS).limit(limit)
+      const list = (rows ?? []) as Array<{ id: string; title: string }>
+      let updated = 0
+      await mapLimit(list, 8, async (e) => {
+        const name = await extractArtistName(e.title, KEY)
+        await supabaseService.from('events').update({ artist_name: name }).eq('id', e.id) // '' marks processed
+        if (name) updated++
+      })
+      const { count } = await supabaseService.from('events').select('id', { count: 'exact', head: true }).is('artist_name', null).in('category', RAIL_CATS)
+      return new Response(JSON.stringify({ processed: list.length, updated, remaining: count ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     const rawUrl = typeof body.url === 'string' ? body.url.trim() : ''
@@ -776,6 +821,7 @@ serve(async (req) => {
             category,
             raw_venue_address: ev.venue_address || null,
             raw_venue_website: ev.venue_website || null,
+            artist_name: ev.artist_name?.trim() || null,
           })
           if (orphErr) { failed++; errors.push(`${ev.title}: ${orphErr.message}`) }
           else { parked++; parkedVenues.add(rv.orphanName); orphanIndex.add(okey) }
@@ -802,6 +848,7 @@ serve(async (req) => {
           created_by: user.id,
           source_url: ev.ticket_url || url,
           ai_confidence: 90,
+          artist_name: ev.artist_name?.trim() || null,
         })
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
         else { inserted++; index.add(key) }

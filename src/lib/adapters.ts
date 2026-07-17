@@ -10,7 +10,7 @@ export type WallEventRow = Pick<DbEvent,
   | 'id' | 'title' | 'venue_id' | 'starts_at' | 'category' | 'poster_url'
   | 'fill_frame' | 'focal_x' | 'focal_y' | 'poster_offset_x' | 'poster_offset_y'
   | 'view_count' | 'like_count' | 'sold_out' | 'sold_out_report_count'
-  | 'show_times' | 'trending_score' | 'recurrence_group_id' | 'venues'
+  | 'show_times' | 'trending_score' | 'recurrence_group_id' | 'artist_name' | 'venues'
 >
 
 export function dbEventToWallEvent(e: WallEventRow): WallEvent {
@@ -36,6 +36,7 @@ export function dbEventToWallEvent(e: WallEventRow): WallEvent {
     sold_out: e.sold_out ?? false,
     sold_out_report_count: e.sold_out_report_count ?? 0,
     show_times: e.show_times ?? null,
+    artist_name: e.artist_name ?? null,
     trending_score: Number(e.trending_score ?? 0),
     recurrence_group_id: e.recurrence_group_id ?? null,
   }
