@@ -987,6 +987,7 @@ export type Database = {
           interests: string[]
           is_admin: boolean
           is_ingester: boolean
+          is_official: boolean
           is_public: boolean
           is_suspended: boolean
           music_embed_url: string | null
@@ -994,6 +995,7 @@ export type Database = {
           phone_hash: string | null
           show_social_publicly: boolean
           username: string | null
+          username_ci: string | null
           venue_id: string | null
         }
         Insert: {
@@ -1012,6 +1014,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_ingester?: boolean
+          is_official?: boolean
           is_public?: boolean
           is_suspended?: boolean
           music_embed_url?: string | null
@@ -1037,6 +1040,7 @@ export type Database = {
           interests?: string[]
           is_admin?: boolean
           is_ingester?: boolean
+          is_official?: boolean
           is_public?: boolean
           is_suspended?: boolean
           music_embed_url?: string | null

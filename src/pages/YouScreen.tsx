@@ -80,7 +80,9 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   useEffect(() => {
     if (propUserId) { setTargetUserId(propUserId); return }
     if (paramUsername) {
-      supabase.from('profiles').select('id').eq('username', paramUsername).single()
+      // Case-insensitive lookup: match on username_ci (lower(username)) so
+      // /u/plasterbob and /u/plasterBob both resolve to the same profile.
+      supabase.from('profiles').select('id').eq('username_ci', paramUsername.trim().toLowerCase()).single()
         .then(({ data }) => { if (data) setTargetUserId(data.id); else setNotFound(true) })
       return
     }
