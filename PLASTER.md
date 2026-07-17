@@ -746,6 +746,7 @@ Hard-won rules and anti-patterns discovered across development sessions.
 
 ## Backlog
 
+- **1.0.1 — coarse location for nearby venues:** round user lat/lng to ~2 decimal places (≈1.1 km) in `NearbyVenues.tsx` BEFORE the `nearby_venue_accounts` RPC call, so the transmitted coords are genuinely coarse (matches the "not precise beyond need" spirit of the privacy declarations; App Privacy 1.0 declares Precise Location · App Functionality · Not Linked · no tracking). Deliberately NOT done for 1.0 — build frozen for App Store submission 2026-07-17.
 - ✅ **Auto-ingest legal (DONE 2026-06-11):** takedown / third-party-content clause added to TermsOfUse — see the "Event listings and third-party content" section (listings compiled from venue/public/staff/user sources, accuracy not guaranteed, poster artwork belongs to venues/artists/promoters, documented correction/removal path via Contact, no implied affiliation/endorsement).
 - ✅ **Community/UGC legal (DONE 2026-06-16):** community-wall/marketplace clause added to TermsOfUse — "Community posts and neighborhood content" section (UGC = poster's responsibility; prohibited goods/content list; Plaster not a party to any sale/transaction, meet-in-public/at-own-risk; lost-pet posts are courtesy, no guaranteed outcome; non-exclusive display license + removal path). Effective date bumped to June 16, 2026.
 
