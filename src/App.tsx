@@ -55,7 +55,7 @@ function AppRoutes() {
       <Routes>
         {/* Routes outside the app shell */}
         <Route path="/auth"       element={<AuthRoute><AuthScreen /></AuthRoute>} />
-        <Route path="/admin"      element={<Admin />} />
+        <Route path="/admin"      element={<ProtectedRoute><Admin /></ProtectedRoute>} />
         <Route path="/staff"      element={<ProtectedRoute><Staff /></ProtectedRoute>} />
         <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/terms"      element={<TermsOfUse />} />

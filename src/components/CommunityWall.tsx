@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { useAuth } from '@/contexts/AuthContext'
 import { optimizeImage, blobToBase64 } from '@/lib/cropUtils'
 import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
@@ -145,7 +146,7 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
               <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)', lineHeight: 1.5 }}>
                 Your business post is saved. Pay to send it for review — we'll publish it once it's approved.
               </p>
-              {STRIPE_BUSINESS_POST_URL ? (
+              {STRIPE_BUSINESS_POST_URL && !Capacitor.isNativePlatform() ? (
                 <a href={STRIPE_BUSINESS_POST_URL} target="_blank" rel="noopener noreferrer" style={{ ...primaryBtn, textDecoration: 'none', display: 'inline-block' }}>Complete payment</a>
               ) : (
                 <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(217,119,6,0.9)' }}>Payment isn't set up yet — an admin will reach out to finish it.</p>
@@ -176,7 +177,12 @@ function ComposeSheet({ neighborhood, onClose, onPosted }: { neighborhood: strin
             </div>
 
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              {([['personal', 'Personal'], ['lost_pet', 'Lost pet'], ['business', 'Business']] as const).map(([val, label]) => {
+              {/* App Store 3.1.1: paid business posts settle via an external Stripe
+                  link, which Apple forbids inside the iOS app — hide the type on
+                  native. Web keeps it. */}
+              {([['personal', 'Personal'], ['lost_pet', 'Lost pet'], ['business', 'Business']] as const)
+                .filter(([val]) => val !== 'business' || !Capacitor.isNativePlatform())
+                .map(([val, label]) => {
                 const on = postType === val
                 return (
                   <button key={val} onClick={() => setPostType(val)} style={{ flex: 1, padding: '7px 0', borderRadius: 6, border: `1px solid ${on ? 'var(--fg-55)' : 'var(--fg-15)'}`, background: on ? 'var(--fg-08)' : 'transparent', color: on ? 'var(--fg)' : 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>{label}</button>

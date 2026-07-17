@@ -874,7 +874,9 @@ serve(async (req) => {
       const fallbackId: string | null = community ? null : (typeof body.venueId === 'string' && body.venueId ? body.venueId : null)
       // Follow each event's "Get Tickets" / detail page for the real show description
       // (the calendar page rarely has one). On by default; the admin can skip it.
-      const deepFetch = body.deepFetch !== false
+      // Community/EverOut never two-hops (their detail pages aren't the write-up
+      // source and hopping risks hallucination) — enforce server-side, not just UI.
+      const deepFetch = community ? false : body.deepFetch !== false
       const enriched = deepFetch ? await enrichFromDetailPages(events, floor, maxOut, now + DRYRUN_DEADLINE_MS) : 0
       const resolved = events.map(e => ({ e, rv: resolveVenue(e.venue_name, fallbackId) }))
       // Compose the Plaster-voice info-page blurb NOW (parallelized) so the admin

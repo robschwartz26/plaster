@@ -25,10 +25,16 @@ function cleanArtist(e: WallEvent): string {
     .replace(/\s+/g, ' ')
     .trim()
 }
-const HREF: Record<Disc, (q: string) => string> = {
+// Google gets a genre qualifier so the search lands on the right person —
+// "…band" for musicians, "…comedian" for comedy (not "John Mulaney band").
+const GOOGLE_SUFFIX: Record<string, string> = {
+  'Live Music': 'band', 'Jazz': 'jazz', 'Classical': 'classical', 'Dance': 'band',
+  'Comedy': 'comedian',
+}
+const HREF: Record<Disc, (q: string, category: string) => string> = {
   spotify: q => `https://open.spotify.com/search/${encodeURIComponent(q)}`,
   youtube: q => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
-  google:  q => `https://www.google.com/search?q=${encodeURIComponent(`${q} band`)}`,
+  google:  (q, category) => `https://www.google.com/search?q=${encodeURIComponent(`${q} ${GOOGLE_SUFFIX[category] ?? 'band'}`)}`,
 }
 
 // Discs are always paper-and-ink, NOT theme-aware: a black disc on the dark night
@@ -86,7 +92,7 @@ export function ArtistRail({ event, summon, ring = false }: { event: WallEvent; 
         <a
           key={kind}
           data-artist-rail
-          href={HREF[kind](q)}
+          href={HREF[kind](q, event.category)}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={`Search this artist on ${kind}`}

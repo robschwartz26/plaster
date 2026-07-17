@@ -634,7 +634,10 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                           {resolveError ?? 'Paste a Spotify or Bandcamp link.'}
                         </p>
                       )}
-                      {window.location.hostname === 'localhost' && (
+                      {/* import.meta.env.DEV, NOT hostname==='localhost': the Capacitor
+                          WebView serves from capacitor://localhost, so a hostname check
+                          is TRUE in the shipped iOS app and leaks DEV buttons to users. */}
+                      {import.meta.env.DEV && (
                         <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                           <button type="button" onClick={() => setMusicUrl('https://open.spotify.com/track/4cOdK2wGLETKBW3PvgPWqT')}
                             style={{ padding: '5px 10px', borderRadius: 6, border: '1px dashed var(--fg-25)', background: 'transparent', color: 'var(--fg-40)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, cursor: 'pointer' }}>DEV: Spotify</button>

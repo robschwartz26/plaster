@@ -82,7 +82,8 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
     } catch (e) { setBackfill(e instanceof Error ? e.message : String(e)) }
   }
 
-  const isLocal = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname)
+  // Vite DEV flag, not a hostname test — capacitor://localhost would match on device.
+  const isLocal = import.meta.env.DEV
 
   useEffect(() => {
     supabase.from('venues').select('id, name, website, address, neighborhood').order('name')

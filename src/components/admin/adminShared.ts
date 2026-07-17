@@ -5,7 +5,10 @@ import { type CategoryName } from '@/lib/categories'
 // ── Constants ────────────────────────────────────────────────
 
 export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
-export const IS_DEV = window.location.hostname === 'localhost'
+// import.meta.env.DEV, NOT a hostname check: Capacitor serves the shipped app from
+// capacitor://localhost, so hostname==='localhost' is TRUE on device and would leak
+// dev-only UI into the App Store build.
+export const IS_DEV = import.meta.env.DEV
 
 export const NEIGHBORHOODS = [
   'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',

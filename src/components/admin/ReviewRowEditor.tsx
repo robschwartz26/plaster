@@ -91,8 +91,10 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         sold_out: soldOut,
         starts_at: new Date(startsAt).toISOString(),
         poster_url: newPosterUrl,
-        // keep address/neighborhood in step with the chosen venue
-        ...(venue ? { neighborhood: venue.neighborhood, address: venue.address } : {}),
+        // keep address/neighborhood in step with the chosen venue; clearing the
+        // venue clears them too (no stale address from the previous venue)
+        neighborhood: venue?.neighborhood ?? null,
+        address: venue?.address ?? null,
       }).eq('id', row.id)
       if (updErr) throw updErr
       setPosterUrl(newPosterUrl); setPosterFile(null)
