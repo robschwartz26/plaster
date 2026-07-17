@@ -143,9 +143,17 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-// Categories where the title is an artist worth an auto-search play button.
+// Categories that also get a Spotify button (title is a recording artist).
 const MUSIC_CATEGORIES = new Set(['Live Music', 'Jazz', 'Classical'])
-// Light cleanup of a title into an artist search query — strip sold-out markers only
+// A genre keyword appended to the YouTube search so it finds the right person —
+// "Allison O'Connor comedy", "Jane Smith author". Empty = search the title alone.
+const SEARCH_CONTEXT: Record<string, string> = {
+  'Live Music': 'music', 'Jazz': 'jazz', 'Classical': 'classical',
+  'Comedy': 'comedy', 'Drag': 'drag', 'Burlesque': 'burlesque',
+  'Dance': 'dance', 'Theater': 'theater', 'Film': 'film',
+  'Literary': 'author', 'Spoken': 'spoken word', 'Art': 'artist',
+}
+// Light cleanup of a title into a search query — strip sold-out markers only
 // (over-cleaning risks dropping the actual name; search engines handle the rest).
 function cleanArtistQuery(title: string): string {
   return title
@@ -1127,16 +1135,20 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 </button>
               )}
 
-              {/* Auto-search fallback: no claimed track yet + a music event → look the
-                  artist up on YouTube / Spotify. Deep-links a search; opens the app. */}
-              {!showTrack && MUSIC_CATEGORIES.has(event.category ?? '') && (() => {
-                const q = cleanArtistQuery(event.title)
+              {/* Auto-search fallback: no claimed track yet → look the act up. YouTube
+                  for any genre (with a genre keyword so it finds the right person);
+                  Spotify only for music. Deep-links a search; opens the app. */}
+              {!showTrack && (() => {
+                const name = cleanArtistQuery(event.title)
+                const ctx = SEARCH_CONTEXT[event.category ?? ''] ?? ''
+                const ytQuery = ctx ? `${name} ${ctx}` : name
+                const links = [
+                  { label: 'YouTube', href: `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQuery)}` },
+                  ...(MUSIC_CATEGORIES.has(event.category ?? '') ? [{ label: 'Spotify', href: `https://open.spotify.com/search/${encodeURIComponent(name)}` }] : []),
+                ]
                 return (
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    {([
-                      { label: 'YouTube', href: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
-                      { label: 'Spotify', href: `https://open.spotify.com/search/${encodeURIComponent(q)}` },
-                    ] as const).map(s => (
+                    {links.map(s => (
                       <a key={s.label} href={s.href} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                         style={{ flex: 1, boxSizing: 'border-box', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--fg-15)', background: 'var(--fg-08)', textDecoration: 'none', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
                         <span style={{ width: 0, height: 0, borderLeft: '9px solid var(--fg-65)', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', flexShrink: 0 }} />
