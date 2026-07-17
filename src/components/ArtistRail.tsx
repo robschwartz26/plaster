@@ -31,12 +31,17 @@ const HREF: Record<Disc, (q: string) => string> = {
   google:  q => `https://www.google.com/search?q=${encodeURIComponent(`${q} band`)}`,
 }
 
-const svgBase = { width: 17, height: 17, viewBox: '0 0 26 26', fill: 'none', stroke: 'var(--fg)', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
+// Discs are always paper-and-ink, NOT theme-aware: a black disc on the dark night
+// poster disappears, so we pin the day colors (cream paper #f0ece3 + ink #0c0b0b)
+// in both themes.
+const PAPER = '#f0ece3'
+const INK = '#0c0b0b'
+const svgBase = { width: 17, height: 17, viewBox: '0 0 26 26', fill: 'none', stroke: INK, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 const ICON: Record<Disc, React.ReactNode> = {
   youtube: (
     <svg {...svgBase}>
       <rect x="3.5" y="7" width="19" height="12" rx="3.6" strokeWidth="2" />
-      <path d="M11 10.2 L16.6 13 L11 15.8 Z" fill="var(--fg)" stroke="none" />
+      <path d="M11 10.2 L16.6 13 L11 15.8 Z" fill={INK} stroke="none" />
     </svg>
   ),
   spotify: (
@@ -88,9 +93,9 @@ export function ArtistRail({ event, summon, ring = false }: { event: WallEvent; 
           style={{
             pointerEvents: visible ? 'auto' : 'none',
             width: 36, height: 36, borderRadius: '50%',
-            background: 'var(--paper, var(--bg))',
+            background: PAPER,
             boxShadow: '0 1px 5px rgba(0,0,0,0.42)',
-            border: ring ? '1.5px solid var(--fg)' : 'none',
+            border: ring ? `1.5px solid ${INK}` : 'none',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             textDecoration: 'none', flexShrink: 0,
           }}
