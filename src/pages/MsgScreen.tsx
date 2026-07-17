@@ -274,6 +274,7 @@ export function MsgScreen() {
   const messageRefs               = useRef<Map<string, HTMLDivElement | null>>(new Map())
   const suppressNextAutoScrollRef = useRef(false)
   const initialScrollDoneRef = useRef(false)
+  const initialLoadWindowRef = useRef(false)
 
   // GIF state
   const [gifPickerOpen, setGifPickerOpen] = useState(false)
@@ -548,6 +549,15 @@ export function MsgScreen() {
   // ── Reset initial-scroll flag when conversation changes ──────────────────
   useEffect(() => {
     initialScrollDoneRef.current = false
+    // Arm an initial-load window: for ~1.5s after opening a thread, ANY content
+    // that expands height (async slap posters, GIFs finishing load) must pull the
+    // view to the newest message. The steady-state "within 200px" guard is too
+    // strict on a cold open — a slap poster + a couple GIFs can push content down
+    // by more than 200px, and the old guard then stranded the user mid-thread.
+    // After the window closes we honor the guard so scrolling history isn't yanked.
+    initialLoadWindowRef.current = true
+    const t = setTimeout(() => { initialLoadWindowRef.current = false }, 1500)
+    return () => clearTimeout(t)
   }, [openConvId])
 
   useEffect(() => {
@@ -591,7 +601,9 @@ export function MsgScreen() {
     if (!container || !inner) return
     const observer = new ResizeObserver(() => {
       const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
-      if (distanceFromBottom < 200) {
+      // Initial-load window → always snap to newest (late slap poster / GIFs);
+      // afterward → only snap if the user is already near the bottom.
+      if (initialLoadWindowRef.current || distanceFromBottom < 200) {
         container.scrollTop = 999999
       }
     })
