@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">plaster</string>
+    <string name="title_activity_main">plaster</string>
+    <string name="package_name">com.plaster.the.wall.app</string>
+    <string name="custom_url_scheme">com.plaster.the.wall.app</string>
+</resources>
