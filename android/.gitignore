@@ -99,3 +99,8 @@ app/src/main/assets/public
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
 app/src/main/res/xml/config.xml
+
+# Firebase config — kept out of the (public) repo. Contains the FCM project
+# config + Android API key. Download from Firebase console → Project Settings →
+# your Android app → google-services.json, and place at android/app/.
+app/google-services.json

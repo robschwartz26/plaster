@@ -1,11 +1,13 @@
 /**
  * usePushNotifications
  *
- * Registers the current device with APNS (iOS) on app launch, captures the
- * device token, and upserts it into the device_tokens table tied to the
- * current user. The server can then dispatch pushes by querying this table.
+ * Registers the current device for push on app launch — APNs on iOS, FCM on
+ * Android (Capacitor's push plugin picks the right transport per platform) —
+ * captures the device token, and upserts it into device_tokens tied to the
+ * current user, tagged with the correct platform. The server dispatches pushes
+ * by querying this table per platform.
  *
- * Only runs on native iOS — does nothing on web/dev server.
+ * Only runs on native (iOS/Android) — does nothing on web/dev server.
  */
 
 import { useEffect } from 'react'
@@ -36,7 +38,10 @@ export function usePushNotifications() {
       'registration',
       async (token) => {
         if (!mounted) return
-        console.log('[push] APNS token:', token.value.slice(0, 12) + '...')
+        // 'ios' → APNs token, 'android' → FCM token. getPlatform() returns 'ios'
+        // on iOS (behavior unchanged) and 'android' on Android.
+        const platform = Capacitor.getPlatform()
+        console.log(`[push] ${platform} token:`, token.value.slice(0, 12) + '...')
 
         const { error } = await supabase
           .from('device_tokens')
@@ -44,7 +49,7 @@ export function usePushNotifications() {
             {
               user_id: user!.id,
               token: token.value,
-              platform: 'ios',
+              platform,
               last_seen_at: new Date().toISOString(),
             },
             { onConflict: 'user_id,token' },
