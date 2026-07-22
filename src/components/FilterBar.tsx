@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { CATEGORIES } from '@/lib/categories'
+import { Heart } from '@/components/Heart'
 
 const CATS = CATEGORIES
 type Cat = typeof CATS[number]
@@ -196,7 +197,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
             className="font-body font-medium"
             style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
-            {chip === '♥' ? '♥︎' : chip}
+            {chip === '♥' ? <Heart size={13} /> : chip}
           </button>
         ))}
       </div>

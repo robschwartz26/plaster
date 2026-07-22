@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
 import { HandGhost } from './HandGhost'
 import { PinchFlip } from './PinchFlip'
+import { Heart } from '@/components/Heart'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
 // dims the rest (two-tier: hard for gesture steps, light for explainers), teaches
@@ -27,7 +28,7 @@ type Advance = { on: 'cta' } | { on: 'action'; id: string }
 
 interface Step {
   type: 'center' | 'spotlight' | 'nav'
-  title: string
+  title: React.ReactNode
   body: React.ReactNode
   cta?: string
   gotoRoute?: string        // center/spotlight: make sure we're on this screen
@@ -60,7 +61,7 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Day & night', body: <>Plaster has a day look and a night look. <strong>Pull</strong> the “plaster” logo to the right to switch.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Switch it back', body: <>Nice! <strong>Pull</strong> it again to flip back to where you started.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a poster', body: <><strong>Double-tap</strong> the highlighted poster to open it in single view.</>, advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
-  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: 'Show your love ♥', body: <><strong>Double-tap</strong> in single-poster view to like the event and save it to your favorites.</>, advance: { on: 'action', id: 'like' }, allowSkip: true },
+  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: <>Show your love <Heart /></>, body: <><strong>Double-tap</strong> in single-poster view to like the event and save it to your favorites.</>, advance: { on: 'action', id: 'like' }, allowSkip: true },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: <><strong>Swipe</strong> sideways to move through the poster, its details, and its wall.</>, advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 110, noDim: true, cardWidth: 240, cardOverride: { top: 'max(80px, env(safe-area-inset-top))', right: 12 }, intercept: 'rsvp', title: 'The info page', body: <>The event’s info page. <strong>Tap</strong> “I’ll be there” if you wanna go — it’ll add this show to your Set List.</>, advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, title: 'Slap your friends', body: <>Excited about a show? <strong>Slap</strong> your friends and get them to come with — it opens a group chat so you can plan ahead.</>, advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },

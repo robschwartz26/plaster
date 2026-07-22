@@ -1,4 +1,5 @@
 import 'mapbox-gl/dist/mapbox-gl.css'
+import { Heart } from '@/components/Heart'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Map, { Marker } from 'react-map-gl/mapbox'
@@ -777,7 +778,7 @@ export function MapScreen() {
                 lineHeight: 1.6,
               }}
             >
-              {chip === '♥' ? '♥\uFE0E' : chip}
+              {chip === '♥' ? <Heart /> : chip}
             </button>
           )
         })}
