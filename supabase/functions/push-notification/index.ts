@@ -1,10 +1,13 @@
 // deno-lint-ignore-file no-explicit-any
 //
-// push-notification — dispatches APNS pushes for new notification rows.
+// push-notification — dispatches pushes for new notification rows.
 //
 // Triggered by a DB webhook on notifications INSERT. Reads the notification
-// row, queries device_tokens for the recipient's iOS tokens, signs an APNS
-// JWT, and sends a push to each token.
+// row, queries device_tokens for the recipient's tokens, and delivers to each:
+//   platform='ios'     → APNs (ES256 .p8 JWT, HTTP/2)
+//   platform='android' → FCM HTTP v1 (RS256 service-account OAuth token)
+// The two transports carry the SAME title/body/data so in-app tap-routing by
+// `kind` works identically on both platforms.
 //
 // Notification kinds and how they map to push messages:
 //   mention                  → "@<sender> mentioned you"
@@ -62,6 +65,62 @@ async function makeApnsJwt(keyId: string, teamId: string, privateKeyPem: string)
   )
 }
 
+// ── FCM HTTP v1 (Android) ───────────────────────────────────────────────────
+// RS256 (not ES256): the service-account private_key is an RSA PKCS8 key. We
+// mint a short-lived Google OAuth2 access token from it, then send each message
+// to the FCM v1 endpoint. The OAuth token is minted ONCE per invocation and
+// reused across all android tokens (it's valid ~1h).
+
+interface ServiceAccount {
+  client_email: string
+  private_key: string
+  project_id: string
+}
+
+async function importRs256Key(privateKeyPem: string): Promise<CryptoKey> {
+  const pemContents = privateKeyPem
+    .replace(/-----BEGIN PRIVATE KEY-----/, '')
+    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/\s/g, '')
+  const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
+  return await crypto.subtle.importKey(
+    'pkcs8',
+    binaryDer,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+}
+
+async function mintFcmAccessToken(sa: ServiceAccount): Promise<string> {
+  const key = await importRs256Key(sa.private_key)
+  const assertion = await create(
+    { alg: 'RS256', typ: 'JWT' },
+    {
+      iss: sa.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.messaging',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: getNumericDate(0),
+      exp: getNumericDate(3600),
+    },
+    key,
+  )
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion,
+    }),
+  })
+  if (!res.ok) {
+    // Body may contain error detail but NOT the private key — safe to surface.
+    throw new Error(`FCM OAuth token mint failed: ${res.status} ${await res.text()}`)
+  }
+  const json = await res.json()
+  return json.access_token as string
+}
+
 function buildPushBody(notif: NotificationRow, senderUsername: string | null): { title: string; body: string } {
   const sender = senderUsername ? `@${senderUsername}` : 'Someone'
 
@@ -113,12 +172,13 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // Fetch iOS device tokens for the recipient
+    // Fetch ALL device tokens for the recipient (iOS + Android); we branch by
+    // platform below.
     const { data: tokens, error: tokenError } = await admin
       .from('device_tokens')
       .select('token, platform')
       .eq('user_id', record.recipient_id)
-      .eq('platform', 'ios')
+      .in('platform', ['ios', 'android'])
 
     if (tokenError) {
       console.error('[push] device_tokens query failed:', tokenError)
@@ -173,10 +233,79 @@ serve(async (req) => {
       return { status: res.status, body }
     }
 
+    // ── FCM (Android) setup: mirror the APNs routing keys as string data, and
+    // mint ONE OAuth token for the whole invocation (only if an android token
+    // exists). ──────────────────────────────────────────────────────────────
+    const fcmData: Record<string, string> = {
+      notification_id: record.id,
+      kind: record.kind,
+      source_id: record.source_id ?? '',
+      target_event_id: record.target_event_id ?? '',
+    }
+    const hasAndroid = (tokens as DeviceToken[]).some(t => t.platform === 'android')
+    let fcmAccessToken: string | null = null
+    let fcmProjectId: string | null = null
+    if (hasAndroid) {
+      const saRaw = Deno.env.get('FCM_SERVICE_ACCOUNT')
+      if (!saRaw) {
+        console.error('[push] FCM_SERVICE_ACCOUNT not set — skipping android delivery')
+      } else {
+        try {
+          const sa = JSON.parse(saRaw) as ServiceAccount
+          fcmProjectId = sa.project_id
+          fcmAccessToken = await mintFcmAccessToken(sa)
+        } catch (e: any) {
+          console.error('[push] FCM setup failed:', e?.message ?? e)
+        }
+      }
+    }
+
+    const sendToFcm = async (deviceToken: string): Promise<{ status: number; body: string }> => {
+      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${fcmProjectId}/messages:send`, {
+        method: 'POST',
+        headers: {
+          'authorization': `Bearer ${fcmAccessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            token: deviceToken,
+            notification: { title, body },
+            data: fcmData,
+            android: { priority: 'high' },
+          },
+        }),
+      })
+      const respBody = res.status !== 200 ? await res.text() : ''
+      return { status: res.status, body: respBody }
+    }
+
     const results: any[] = []
     for (const t of tokens as DeviceToken[]) {
       const short = t.token.slice(0, 8) + '...'
 
+      // ── Android (FCM v1) ──────────────────────────────────────────────────
+      if (t.platform === 'android') {
+        if (!fcmAccessToken || !fcmProjectId) {
+          results.push({ token: short, platform: 'android', status: 0, error: 'fcm not configured' })
+          continue
+        }
+        const { status, body: errBody } = await sendToFcm(t.token)
+        console.log(`[push] fcm → ${short}: ${status}${errBody ? ' ' + errBody : ''}`)
+        if (status !== 200) {
+          console.error(`[push] fcm failure ${status} for ${short}: ${errBody}`)
+          // FCM returns 404 + error.status UNREGISTERED for a permanently dead
+          // token — prune it, mirroring the APNs 410 cleanup.
+          if (status === 404 || errBody.includes('UNREGISTERED')) {
+            await admin.from('device_tokens').delete().eq('token', t.token)
+            console.log(`[push] removed unregistered fcm token ${short}`)
+          }
+        }
+        results.push({ token: short, platform: 'android', status, error: errBody || null })
+        continue
+      }
+
+      // ── iOS (APNs) — unchanged ────────────────────────────────────────────
       // Try production first
       let { status, body: errBody } = await sendToApns(APNS_PROD, t.token)
       console.log(`[push] prod → ${short}: ${status}${errBody ? ' ' + errBody : ''}`)
@@ -197,7 +326,7 @@ serve(async (req) => {
         }
       }
 
-      results.push({ token: short, status, error: errBody || null })
+      results.push({ token: short, platform: 'ios', status, error: errBody || null })
     }
 
     return new Response(JSON.stringify({ ok: true, results }), { status: 200 })
