@@ -32,4 +32,20 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Camera: take a profile photo / capture for posts (@capacitor/camera).
+         Library picks use the permission-less Android Photo Picker. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Contacts: Find Friends matches people already on Plaster. Only SHA-256
+         hashes ever leave the device (hashed client-side). -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Location: suggest nearby venues + center the map. Requested at runtime by
+         the WebView geolocation prompt (handled by Capacitor). Never stored. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Camera is optional — the app degrades gracefully if the device has none. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>
