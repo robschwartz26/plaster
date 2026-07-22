@@ -9,7 +9,13 @@ import { StatusBar } from '@capacitor/status-bar'
 
 if (Capacitor.isNativePlatform()) {
   Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => { /* silent */ })
-  StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
+  // iOS: @capacitor/status-bar overlays the WebView (edge-to-edge). On Android,
+  // @capacitor-community/safe-area owns edge-to-edge + inset polyfill (see
+  // MainActivity), so we must NOT drive the status-bar plugin there — it would
+  // conflict. Status-bar content color is set per-theme in useTheme.
+  if (Capacitor.getPlatform() === 'ios') {
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
+  }
 }
 
 // Block native browser pinch-zoom everywhere except the poster grid,
