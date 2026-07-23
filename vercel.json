@@ -3,7 +3,11 @@
     { "source": "/privacy.html", "destination": "/privacy", "permanent": true },
     { "source": "/terms.html",   "destination": "/terms",   "permanent": true }
   ],
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/e/:id", "destination": "/api/event?id=:id" },
+    { "source": "/get", "destination": "/api/get" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/",

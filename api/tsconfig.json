@@ -1,0 +1,16 @@
+{
+  "//": "Standalone tsconfig for the Vercel serverless functions in /api. NOT part of the root `tsc -b` project graph (tsconfig.app = src only), so it can't break the frontend build. Vercel compiles these functions itself; this exists for local typechecking + editor support.",
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom"],
+    "types": ["node", "@vercel/node"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true
+  },
+  "include": ["**/*.ts"]
+}
