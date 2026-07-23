@@ -14,6 +14,7 @@ import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { FounderBadge } from '@/components/FounderBadge'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { parseMusicEmbed, isValidMusicUrl, isBandcampPageUrl } from '@/lib/musicEmbed'
@@ -64,6 +65,7 @@ type DisplayProfile = {
   banner_url: string | null
   banner_focal_y: number
   home_neighborhood: string | null
+  is_official: boolean | null
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -107,10 +109,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         banner_url: (selfProfile as unknown as { banner_url?: string | null }).banner_url ?? null,
         banner_focal_y: (selfProfile as unknown as { banner_focal_y?: number }).banner_focal_y ?? 0.5,
         home_neighborhood: selfProfile.home_neighborhood ?? null,
+        is_official: (selfProfile as unknown as { is_official?: boolean }).is_official ?? null,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood, is_official')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -420,11 +423,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
-                {displayProfile.home_neighborhood && (
+                {displayProfile.is_official ? (
+                  <FounderBadge size="md" />
+                ) : displayProfile.home_neighborhood ? (
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
                     {displayProfile.home_neighborhood}
                   </span>
-                )}
+                ) : null}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -480,11 +485,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
-                {displayProfile.home_neighborhood && (
+                {displayProfile.is_official ? (
+                  <FounderBadge size="md" />
+                ) : displayProfile.home_neighborhood ? (
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
                     {displayProfile.home_neighborhood}
                   </span>
-                )}
+                ) : null}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>

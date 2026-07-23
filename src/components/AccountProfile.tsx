@@ -9,6 +9,7 @@ import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { FounderBadge } from '@/components/FounderBadge'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { createOrGetConversation } from '@/lib/messaging'
 
@@ -24,6 +25,7 @@ interface AccountData {
   banner_focal_y: number
   avatar_diamond_url: string | null
   music_embed_url: string | null
+  is_official: boolean | null
 }
 
 interface VenueEvent {
@@ -92,7 +94,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     if (!resolvedId) return
     setLoading(true)
     supabase.from('profiles')
-      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url, music_embed_url')
+      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url, music_embed_url, is_official')
       .eq('id', resolvedId)
       .single()
       .then(async ({ data: prof }) => {
@@ -376,6 +378,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         <h1 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--fg)', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <span>{displayName}</span>
           <AccountTypeBadge accountType={account.account_type} size="md" />
+          {account.is_official && <FounderBadge size="md" />}
         </h1>
         {subtitle && (
           <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
