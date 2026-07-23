@@ -11,7 +11,7 @@ import { PinchFlip } from './PinchFlip'
 // real gesture/click (via tourBus) or navigates to the target screen. Resumable.
 
 export const TOUR_SEEN_KEY = 'plaster_tour_seen'
-const TOUR_STEP_KEY = 'plaster_tour_step'
+export const TOUR_STEP_KEY = 'plaster_tour_step'
 export function hasSeenTour(): boolean {
   try { return localStorage.getItem(TOUR_SEEN_KEY) === '1' } catch { return false }
 }

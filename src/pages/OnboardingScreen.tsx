@@ -12,6 +12,7 @@ import { FindFriends } from '@/components/FindFriends'
 import { NearbyVenues } from '@/components/NearbyVenues'
 import { WelcomeScreen } from '@/components/WelcomeScreen'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
+import { TOUR_SEEN_KEY, TOUR_STEP_KEY } from '@/components/tour/InteractiveTour'
 import { SEXTANT_LABELS, type Sextant } from '@/lib/neighborhoods'
 
 const INTERESTS = [
@@ -191,7 +192,17 @@ export function OnboardingScreen() {
     return (
       <WelcomeScreen
         avatarUrl={avatarPreview ?? profile?.avatar_diamond_url ?? null}
-        onEnter={() => navigate('/', { replace: true })}
+        onEnter={() => {
+          // A fresh signup just finished — force the interactive tour to auto-run
+          // for this new user. The tour's auto-start is gated by a DEVICE-level
+          // "seen" flag, which a previous account on this device may have set;
+          // clearing it (plus any stale resume step) guarantees every new signup
+          // gets the walkthrough, even on a shared/returning device. Existing users
+          // skip onboarding entirely, so they're unaffected (and can still replay
+          // from Settings → "Take a tour").
+          try { localStorage.removeItem(TOUR_SEEN_KEY); localStorage.removeItem(TOUR_STEP_KEY) } catch { /* ignore */ }
+          navigate('/', { replace: true })
+        }}
       />
     )
   }
