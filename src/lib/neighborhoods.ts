@@ -45,6 +45,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: 'Hayden Island', sextant: 'N' },
   { name: 'Humboldt', sextant: 'N' },
   { name: 'Kenton', sextant: 'N' },
+  { name: 'Mississippi', sextant: 'N' }, // N Mississippi Ave corridor (Boise) — district, not an official assoc
   { name: 'Overlook', sextant: 'N' },
   { name: 'Piedmont', sextant: 'N' },
   { name: 'Portsmouth', sextant: 'N' },
@@ -89,14 +90,17 @@ export const NEIGHBORHOODS: Neighborhood[] = [
 
   // ── SE — Southeast (28) ──
   { name: 'Ardenwald-Johnson Creek', sextant: 'SE' },
+  { name: 'Belmont', sextant: 'SE' }, // SE Belmont corridor (Sunnyside) — district, not an official assoc
   { name: 'Brentwood-Darlington', sextant: 'SE' },
   { name: 'Brooklyn', sextant: 'SE' },
   { name: 'Buckman', sextant: 'SE' },
   { name: 'Centennial', sextant: 'SE' },
   { name: 'Creston-Kenilworth', sextant: 'SE' },
+  { name: 'Division', sextant: 'SE' }, // SE Division corridor (Richmond) — district, not an official assoc
   { name: 'Eastmoreland', sextant: 'SE' },
   { name: 'Foster-Powell', sextant: 'SE' },
   { name: 'Glenfair', sextant: 'SE' },
+  { name: 'Hawthorne', sextant: 'SE' }, // SE Hawthorne corridor (Sunnyside/Richmond) — district, not an official assoc
   { name: 'Hazelwood', sextant: 'SE' },
   { name: 'Hosford-Abernethy', sextant: 'SE' },
   { name: 'Kerns', sextant: 'SE' },
