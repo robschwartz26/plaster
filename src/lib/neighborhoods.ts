@@ -53,6 +53,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
 
   // ── NE — Northeast (23) ──
   { name: 'Alameda', sextant: 'NE' },
+  { name: 'Alberta', sextant: 'NE' }, // district corridor (Alberta Arts), not an official assoc — but people identify with it
   { name: 'Argay Terrace', sextant: 'NE' },
   { name: 'Beaumont-Wilshire', sextant: 'NE' },
   { name: 'Concordia', sextant: 'NE' },
