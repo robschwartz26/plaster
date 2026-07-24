@@ -169,6 +169,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
+  const [attendedTotal, setAttendedTotal] = useState(0)
   const [counts,   setCounts]   = useState<FollowCounts>({ followers: 0, following: 0 })
 
   // Avatar state (self only)
@@ -194,7 +195,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!targetUserId) return
     fetchAttended()
     fetchCounts()
-  }, [targetUserId])
+  }, [targetUserId, displayProfile?.is_official])
 
   useEffect(() => {
     if (!user?.id || !isSelf) { setPendingAccountType(null); return }
@@ -231,10 +232,28 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   async function fetchAttended() {
     if (!targetUserId) return
+    // Official/founder accounts (PlasterBob) are "the watcher on the wall" — the
+    // persona has been to everything. Rather than mass-inserting real RSVP rows
+    // (which would flood every follower's feed and inflate event counts), their
+    // attended grid is a live view of every published event. No DB writes.
+    if (displayProfile?.is_official) {
+      const [{ data }, { count }] = await Promise.all([
+        supabase.from('events')
+          .select('id, title, poster_url, starts_at, category')
+          .eq('status', 'published').order('starts_at', { ascending: false }).limit(24),
+        supabase.from('events').select('*', { count: 'exact', head: true }).eq('status', 'published'),
+      ])
+      const rows = (data as AttendedEvent['events'][] | null) ?? []
+      setAttended(rows.map(ev => ({ event_id: ev.id, events: ev })))
+      setAttendedTotal(count ?? rows.length)
+      return
+    }
     const { data } = await supabase.from('attendees')
       .select('event_id, events(id, title, poster_url, starts_at, category)')
       .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24)
-    setAttended((data as AttendedEvent[] | null) ?? [])
+    const rows = (data as AttendedEvent[] | null) ?? []
+    setAttended(rows)
+    setAttendedTotal(rows.length)
   }
 
   async function fetchCounts() {
@@ -440,7 +459,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                 {[
                   { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
                   { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
-                  { label: 'attended',  count: attended.length,  tab: null },
+                  { label: 'attended',  count: attendedTotal,  tab: null },
                 ].map(({ label, count, tab }) => (
                   <div
                     key={label}
@@ -502,7 +521,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                 {[
                   { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
                   { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
-                  { label: 'attended',  count: attended.length,  tab: null },
+                  { label: 'attended',  count: attendedTotal,  tab: null },
                 ].map(({ label, count, tab }) => (
                   <div
                     key={label}
