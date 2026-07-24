@@ -1792,6 +1792,23 @@ export function MsgScreen() {
               zIndex: 201,
             }}
           >
+            {(() => {
+              const body = messages.find(m => m.id === msgContextMenu.id)?.body
+              if (!body) return null
+              return (
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(body); setMsgContextMenu(null) }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', borderBottom: '1px solid var(--fg-08)',
+                    cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Copy
+                </button>
+              )
+            })()}
             {msgContextMenu.senderId === user?.id ? (
               <button
                 onClick={() => { setDeleteConfirmMsgId(msgContextMenu.id); setMsgContextMenu(null) }}
