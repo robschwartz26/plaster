@@ -15,6 +15,7 @@ import { SocialDiamondRow } from '@/components/SocialDiamondRow'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 import { FounderBadge } from '@/components/FounderBadge'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { parseMusicEmbed, isValidMusicUrl, isBandcampPageUrl } from '@/lib/musicEmbed'
@@ -121,6 +122,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   // Profile edit state (self only)
   const [editing,  setEditing]  = useState(false)
   const [bio,      setBio]      = useState(selfProfile?.bio ?? '')
+  const [bioError, setBioError] = useState<string | null>(null)
   const [isPublic, setIsPublic] = useState(selfProfile?.is_public ?? true)
   const [busy,     setBusy]     = useState(false)
   const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
@@ -269,6 +271,10 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   async function saveProfile() {
     if (!user) return
+    // Objectionable-content gate (Apple 1.2)
+    const bioVerdict = moderateText(bio)
+    if (!bioVerdict.ok) { setBioError(moderationMessage(bioVerdict, 'bio')); return }
+    setBioError(null)
     setBusy(true)
 
     // Guard: never persist an invalid music link (empty clears it). A Bandcamp page
@@ -602,8 +608,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           <AnimatePresence>
             {editing && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', marginBottom: 20 }}>
-                <textarea placeholder="Bio (optional)" value={bio} onChange={e => setBio(e.target.value)} rows={3}
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+                <textarea placeholder="Bio (optional)" value={bio} onChange={e => { setBio(e.target.value); if (bioError) setBioError(null) }} rows={3}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${bioError ? 'var(--sold-out)' : 'var(--fg-18)'}`, background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: bioError ? 4 : 10 }} />
+                {bioError && (
+                  <p style={{ margin: '0 0 10px', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{bioError}</p>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <span style={{ fontSize: 14, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif' }}>Public profile</span>
                   <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { PencilLine, Plus } from 'lucide-react'
+import { PencilLine, Plus, MoreHorizontal } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
@@ -18,6 +18,8 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { UserActionsMenu } from '@/components/UserActionsMenu'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -242,6 +244,9 @@ export function MsgScreen() {
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
   const [messageText,      setMessageText]      = useState('')
+  const [composerError,    setComposerError]    = useState<string | null>(null)
+  const [memberActionsOpen, setMemberActionsOpen] = useState(false)
+  const [actionUser, setActionUser] = useState<{ id: string; username: string | null } | null>(null)
   const [sending,          setSending]          = useState(false)
   const messagesEndRef       = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -717,6 +722,12 @@ export function MsgScreen() {
   async function sendMessage() {
     const body = messageText.trim()
     if ((!body && !pendingGif) || !openConvId || !user || sending) return
+    // Objectionable-content gate (Apple 1.2) — block before anything is sent.
+    if (body) {
+      const verdict = moderateText(body)
+      if (!verdict.ok) { setComposerError(moderationMessage(verdict, 'message')); return }
+    }
+    setComposerError(null)
     setMessageText('')
     const gif = pendingGif
     const gifQuery = pendingGifQuery
@@ -1354,13 +1365,40 @@ export function MsgScreen() {
                   )
                 })()}
 
+                {/* Block / report — reachable from inside the conversation (Apple 1.2) */}
+                {openConv && (() => {
+                  const d = getConversationDisplay(openConv)
+                  if (!d.isGroup && d.primaryUser) {
+                    return (
+                      <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                        <UserActionsMenu
+                          targetUserId={d.primaryUser.id}
+                          targetUsername={d.primaryUser.username}
+                          onActionComplete={closeConv}
+                        />
+                      </div>
+                    )
+                  }
+                  if (d.isGroup && openConv.members.length > 0) {
+                    return (
+                      <button
+                        onClick={() => setMemberActionsOpen(true)}
+                        style={{ ...headerIconBtn(), flexShrink: 0, marginLeft: 'auto' }}
+                        aria-label="Member safety actions"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                    )
+                  }
+                  return null
+                })()}
+
                 {/* Add people button */}
                 <button
                   onClick={() => setAddPeopleOpen(true)}
                   style={{
                     ...headerIconBtn(),
                     flexShrink: 0,
-                    marginLeft: 'auto',
                   }}
                   aria-label="Add people"
                 >
@@ -1554,6 +1592,13 @@ export function MsgScreen() {
                 </div>
               )}
 
+              {/* Objectionable-content rejection (Apple 1.2) */}
+              {composerError && (
+                <div style={{ flexShrink: 0, padding: '8px 16px 0' }}>
+                  <p style={{ margin: 0, color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{composerError}</p>
+                </div>
+              )}
+
               {/* Input bar */}
               <div style={{
                 flexShrink: 0, borderTop: '1px solid var(--fg-08)',
@@ -1581,7 +1626,7 @@ export function MsgScreen() {
                   type="text"
                   placeholder="Message…"
                   value={messageText}
-                  onChange={e => setMessageText(e.target.value)}
+                  onChange={e => { setMessageText(e.target.value); if (composerError) setComposerError(null) }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                   style={{
                     flex: 1, padding: '10px 14px', borderRadius: 20,
@@ -1753,18 +1798,97 @@ export function MsgScreen() {
                 Delete message
               </button>
             ) : (
+              <>
+                <button
+                  onClick={() => { setReportingMessage({ id: msgContextMenu.id, senderId: msgContextMenu.senderId }); setMsgContextMenu(null) }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Report message
+                </button>
+                <button
+                  onClick={() => {
+                    const sid = msgContextMenu.senderId
+                    const uname = openConv?.members.find(m => m.id === sid)?.username ?? null
+                    setActionUser({ id: sid, username: uname })
+                    setMsgContextMenu(null)
+                  }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    borderTop: '1px solid var(--fg-08)',
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: '#ef4444', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Block or report user
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Controlled block/report for a specific user (from message menu or group list) ── */}
+      {actionUser && (
+        <UserActionsMenu
+          key={actionUser.id}
+          targetUserId={actionUser.id}
+          targetUsername={actionUser.username}
+          hideTrigger
+          controlledOpen
+          onControlledClose={() => setActionUser(null)}
+          onActionComplete={() => {
+            // If we just blocked the sole other person in a 1-on-1, leave the thread.
+            if (openConv && !getConversationDisplay(openConv).isGroup) closeConv()
+          }}
+        />
+      )}
+
+      {/* ── Group: pick a member to block/report (Apple 1.2) ── */}
+      {memberActionsOpen && openConv && (
+        <div
+          onClick={() => setMemberActionsOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', background: 'var(--bg)',
+              borderTop: '1px solid var(--fg-15)', borderRadius: '16px 16px 0 0',
+              padding: '24px 20px calc(24px + env(safe-area-inset-bottom))',
+              display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '85vh', overflowY: 'auto',
+            }}
+          >
+            <p style={{ margin: '0 0 4px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--fg)' }}>
+              Block or report a member
+            </p>
+            {openConv.members.map(m => (
               <button
-                onClick={() => { setReportingMessage({ id: msgContextMenu.id, senderId: msgContextMenu.senderId }); setMsgContextMenu(null) }}
+                key={m.id}
+                onClick={() => { setActionUser({ id: m.id, username: m.username }); setMemberActionsOpen(false) }}
                 style={{
-                  display: 'block', width: '100%', padding: '14px 20px',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
-                  color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '12px 14px', borderRadius: 10, border: '1px solid var(--fg-15)',
+                  background: 'transparent', cursor: 'pointer', textAlign: 'left',
                 }}
               >
-                Report message
+                <Diamond diamondUrl={m.avatar_diamond_url} fallbackUrl={m.avatar_url} size={28} />
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+                  @{m.username ?? 'user'}
+                </span>
               </button>
-            )}
+            ))}
+            <button
+              onClick={() => setMemberActionsOpen(false)}
+              style={{ padding: 13, borderRadius: 10, border: '1px solid var(--fg-15)', background: 'none', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginTop: 4 }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

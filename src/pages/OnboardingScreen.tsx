@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { isObjectionable } from '@/lib/contentFilter'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
 import { Diamond } from '@/components/Diamond'
@@ -47,6 +48,11 @@ export function OnboardingScreen() {
     if (!clean) { setUsernameError('Username is required'); return }
     if (!/^[a-zA-Z0-9_]{2,30}$/.test(clean)) {
       setUsernameError('2–30 chars, letters/numbers/underscores only')
+      return
+    }
+    // Objectionable-content gate (Apple 1.2) — no slurs/hate in handles.
+    if (isObjectionable(clean)) {
+      setUsernameError('Please choose a different username')
       return
     }
     setBusy(true)

@@ -522,6 +522,17 @@ export function AuthScreen() {
             Forgot password?
           </button>
         )}
+
+        {/* Terms presented before logging in too (Apple 1.2). Signup uses the
+            required checkbox above; sign-in shows this passive acknowledgement. */}
+        {tab === 'signin' && (
+          <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', lineHeight: 1.5 }}>
+            By continuing, you agree to our{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7', textDecoration: 'underline' }}>Terms of Use</a>
+            {' '}and{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7', textDecoration: 'underline' }}>Privacy Policy</a>.
+          </p>
+        )}
       </form>
         </>
       )}

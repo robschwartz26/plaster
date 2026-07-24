@@ -11,6 +11,7 @@ import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { SoldOutChip } from '@/components/SoldOutChip'
 import { SlapSheet } from '@/components/SlapSheet'
 import { SlapHand } from '@/components/SlapHand'
@@ -253,6 +254,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [posts, setPosts] = useState<WallPost[]>([])
   const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set())
   const [newPostText, setNewPostText] = useState('')
+  const [postError, setPostError] = useState<string | null>(null)
   const [postLoading, setPostLoading] = useState(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyContext, setReplyContext] = useState<string | null>(null)
@@ -585,6 +587,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── Submit post ────────────────────────────────────────────────────────
   async function submitPost() {
     if (!user || (!newPostText.trim() && !pendingGif) || postLoading) return
+    // Objectionable-content gate (Apple 1.2)
+    const postVerdict = moderateText(newPostText.trim())
+    if (!postVerdict.ok) { setPostError(moderationMessage(postVerdict, 'post')); return }
+    setPostError(null)
     setPostLoading(true)
     const gif = pendingGif
     const gifQuery = pendingGifQuery
@@ -617,6 +623,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── Submit reply ──────────────────────────────────────────────────────
   async function submitReply(parentId: string) {
     if (!user || !replyText.trim() || postLoading) return
+    // Objectionable-content gate (Apple 1.2)
+    const replyVerdict = moderateText(replyText.trim())
+    if (!replyVerdict.ok) { setPostError(moderationMessage(replyVerdict, 'reply')); return }
+    setPostError(null)
     setPostLoading(true)
     const { error } = await supabase.from('event_wall_posts').insert({
       event_id: event.id, user_id: user.id, body: replyText.trim(), parent_id: parentId,
@@ -1355,7 +1365,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 >GIF</button>
                 <MentionInput
                   value={newPostText}
-                  onChange={setNewPostText}
+                  onChange={(v: string) => { setNewPostText(v); if (postError) setPostError(null) }}
                   onSubmit={submitPost}
                   placeholder="leave a note on the wall…"
                   maxLength={280}
@@ -1366,6 +1376,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </svg>
                 </button>
               </div>
+              {postError && (
+                <p style={{ margin: '6px 2px 0', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{postError}</p>
+              )}
               {/* GIF picker for wall posts */}
               <GifPicker
                 open={gifPickerOpen}
