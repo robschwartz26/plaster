@@ -1487,6 +1487,13 @@ export function MsgScreen() {
                       onTouchStart={e => startLongPress(e, msg)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
+                      onContextMenu={e => e.preventDefault()}
+                      style={{
+                        // Stop iOS's native text-selection / copy-paste callout from
+                        // hijacking the long-press so our Report/Block menu opens cleanly.
+                        WebkitUserSelect: 'none', userSelect: 'none',
+                        WebkitTouchCallout: 'none',
+                      }}
                     >
                       {showTimestampBefore(msg, prev) && (
                         <p style={{
