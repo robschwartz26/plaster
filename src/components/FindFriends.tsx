@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
@@ -27,6 +28,15 @@ function contactKey(c: DeviceContact): string {
   return `${c.name}|${c.phones[0] ?? ''}`
 }
 
+// Resolve `p`, but never wait longer than `ms` — fall back to `fallback`.
+// Guards against a native plugin call that never settles.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
 export function FindFriends({ onDone }: Props) {
   const [screen, setScreen] = useState<ScreenState>('softening')
   const [matched, setMatched] = useState<MatchedUser[]>([])
@@ -52,13 +62,25 @@ export function FindFriends({ onDone }: Props) {
     try {
       setScreen('loading')
 
-      const perm = await ensureContactsPermission()
+      // Contacts only exist on the native app. On web/localhost the Capacitor
+      // plugin has no implementation and its calls can hang forever — so short-
+      // circuit to the (empty) results screen instead of spinning.
+      if (!Capacitor.isNativePlatform()) {
+        setMatched([])
+        setUnmatched([])
+        setScreen('results')
+        return
+      }
+
+      // Time-box the native calls so a stalled permission/read can never trap
+      // the user on the spinner. Falls through to denied/empty on timeout.
+      const perm = await withTimeout(ensureContactsPermission(), 12000, 'denied' as const)
       if (perm === 'denied') {
         setScreen('denied')
         return
       }
 
-      const contacts = await readDeviceContacts()
+      const contacts = await withTimeout(readDeviceContacts(), 15000, [] as DeviceContact[])
       console.log('[FindFriends] read', contacts.length, 'contacts')
 
       // hash → contact name map
@@ -139,27 +161,16 @@ export function FindFriends({ onDone }: Props) {
     ? unmatched.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
     : unmatched
 
-  // ── Softening ─────────────────────────────────────────────────────────────
-  if (screen === 'softening') {
+  // ── Softening / Loading ─────────────────────────────────────────────────
+  // Always offer a way out — the user must never be trapped on the spinner.
+  if (screen === 'softening' || screen === 'loading') {
     return (
       <div style={containerStyle}>
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Finding your friends on Plaster</h2>
-          <p style={bodyStyle}>Checking your contacts…</p>
+          <p style={bodyStyle}>{screen === 'softening' ? 'Checking your contacts…' : 'Matching contacts…'}</p>
           <Spinner />
-        </div>
-      </div>
-    )
-  }
-
-  // ── Loading ───────────────────────────────────────────────────────────────
-  if (screen === 'loading') {
-    return (
-      <div style={containerStyle}>
-        <div style={centeredStyle}>
-          <h2 style={headingStyle}>Finding your friends on Plaster</h2>
-          <p style={bodyStyle}>Matching contacts…</p>
-          <Spinner />
+          <button onClick={onDone} style={{ ...skipBtn, marginTop: 16 }}>Skip for now</button>
         </div>
       </div>
     )
