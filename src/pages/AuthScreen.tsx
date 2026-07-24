@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -8,6 +9,14 @@ type Tab = 'signin' | 'signup'
 const RESEND_COOLDOWN = 60
 
 export function AuthScreen() {
+  const navigate = useNavigate()
+  // In-app navigation to the legal pages. Plain <a target="_blank"> links are
+  // dead inside the iOS WebView (Capacitor), so tapping them did nothing —
+  // this routes to the /terms and /privacy pages within the app instead.
+  const openLegal = (path: '/terms' | '/privacy') => (e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    navigate(path)
+  }
   const [tab, setTab] = useState<Tab>('signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -468,19 +477,19 @@ export function AuthScreen() {
             />
             <span>
               I agree to the{' '}
-              <a
-                href="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#A855F7', textDecoration: 'underline' }}
-              >Terms of Use</a>
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={openLegal('/terms')}
+                style={{ color: '#A855F7', textDecoration: 'underline', cursor: 'pointer' }}
+              >Terms of Use</span>
               {' '}and{' '}
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#A855F7', textDecoration: 'underline' }}
-              >Privacy Policy</a>.
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={openLegal('/privacy')}
+                style={{ color: '#A855F7', textDecoration: 'underline', cursor: 'pointer' }}
+              >Privacy Policy</span>.
               I will not post objectionable content.
             </span>
           </label>
@@ -528,9 +537,9 @@ export function AuthScreen() {
         {tab === 'signin' && (
           <p style={{ margin: '10px 0 0', textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', lineHeight: 1.5 }}>
             By continuing, you agree to our{' '}
-            <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7', textDecoration: 'underline' }}>Terms of Use</a>
+            <span role="button" tabIndex={0} onClick={openLegal('/terms')} style={{ color: '#A855F7', textDecoration: 'underline', cursor: 'pointer' }}>Terms of Use</span>
             {' '}and{' '}
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7', textDecoration: 'underline' }}>Privacy Policy</a>.
+            <span role="button" tabIndex={0} onClick={openLegal('/privacy')} style={{ color: '#A855F7', textDecoration: 'underline', cursor: 'pointer' }}>Privacy Policy</span>.
           </p>
         )}
       </form>
