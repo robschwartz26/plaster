@@ -40,8 +40,19 @@ export function NearbyVenues({ onDone }: Props) {
       return
     }
 
+    // Hard guard: getCurrentPosition's own `timeout` does NOT cover the time the
+    // permission prompt sits unanswered, so it can hang indefinitely. This
+    // settled-flag + wall-clock timeout guarantees we always move on.
+    let settled = false
+    const finish = (fn: () => void) => { if (settled) return; settled = true; clearTimeout(hardTimeout); fn() }
+    const hardTimeout = setTimeout(() => finish(() => {
+      setMessage("We couldn't get your location. You can follow venues from the map anytime.")
+      setVenues([])
+      setScreen('results')
+    }), 14000)
+
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+      (pos) => finish(async () => {
         try {
           const { data, error } = await supabase.rpc('nearby_venue_accounts', {
             user_lat: pos.coords.latitude,
@@ -60,8 +71,8 @@ export function NearbyVenues({ onDone }: Props) {
           setMessage("Couldn't load nearby venues. You can continue and explore them on the map.")
           setScreen('error')
         }
-      },
-      (err) => {
+      }),
+      (err) => finish(() => {
         console.log('[NearbyVenues] geolocation error:', err.code, err.message)
         if (err.code === 1) {
           setMessage("Location access is off. You can follow venues from the map anytime.")
@@ -70,7 +81,7 @@ export function NearbyVenues({ onDone }: Props) {
         }
         setVenues([])
         setScreen('results')
-      },
+      }),
       { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     )
   }
@@ -142,6 +153,7 @@ export function NearbyVenues({ onDone }: Props) {
           }}>
             Finding venues near you…
           </p>
+          <button onClick={onDone} style={{ ...skipBtn, marginTop: 8 }}>Skip for now</button>
         </div>
       ) : screen === 'error' ? (
         <div style={{
@@ -164,6 +176,7 @@ export function NearbyVenues({ onDone }: Props) {
             {message ?? "Couldn't load nearby venues."}
           </p>
           <button onClick={requestAndLoad} style={outlineBtn}>Try again</button>
+          <button onClick={onDone} style={skipBtn}>Skip for now</button>
         </div>
       ) : (
         <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
