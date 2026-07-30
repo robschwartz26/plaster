@@ -86,7 +86,12 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     if (accountProfileIdProp) { setResolvedId(accountProfileIdProp); return }
     if (!venueIdProp) return
     supabase.from('profiles').select('id').eq('venue_id', venueIdProp).eq('account_type', 'venue').maybeSingle()
-      .then(({ data }) => { if (data?.id) setResolvedId(data.id) })
+      .then(({ data }) => {
+        if (data?.id) setResolvedId(data.id)
+        // No account resolved (venue has no account, or viewer is a guest and
+        // RLS hides profiles) → land on "Not found" instead of spinning forever.
+        else setLoading(false)
+      })
   }, [accountProfileIdProp, venueIdProp])
 
   // Step 2: load profile + type-specific data

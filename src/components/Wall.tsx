@@ -189,6 +189,10 @@ export function Wall() {
   }
 
   function handleVenueTap(venueId: string) {
+    // Guest mode: venue PAGES are account profiles (follow, socials, banner) —
+    // members-only. The venue's name/address stay visible on the event info
+    // panel, so general content remains browsable (Apple 5.1.1(v)).
+    if (!requireAuth('Sign up to follow venues and see their pages')) return
     navigate(`/venue/${venueId}`)
   }
 

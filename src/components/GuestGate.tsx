@@ -16,7 +16,7 @@
  * browsing — dismissing returns them exactly where they were. Never a dead end.
  */
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -38,14 +38,25 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [message, setMessage] = useState<string | null>(null)
+  // iOS ghost-click guard: gated actions often fire from touch gestures
+  // (double-tap-to-like, touchend handlers), and iOS dispatches a synthetic
+  // click ~300ms later that would land on the just-mounted backdrop and
+  // instantly dismiss the sheet ("flashes on and off"). Ignore backdrop
+  // dismissals for the first 450ms after opening.
+  const openedAt = useRef(0)
 
   const requireAuth = useCallback((msg?: string) => {
     if (user) return true
+    openedAt.current = Date.now()
     setMessage(msg ?? DEFAULT_MESSAGE)
     return false
   }, [user])
 
   const close = () => setMessage(null)
+  const closeFromBackdrop = () => {
+    if (Date.now() - openedAt.current < 450) return
+    setMessage(null)
+  }
 
   return (
     <GuestGateContext.Provider value={{ requireAuth }}>
@@ -53,7 +64,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
 
       {message && (
         <div
-          onClick={close}
+          onClick={closeFromBackdrop}
           style={{
             position: 'fixed', inset: 0, zIndex: 300,
             background: 'rgba(0,0,0,0.55)',
