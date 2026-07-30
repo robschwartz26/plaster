@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useGuestGate } from '@/components/GuestGate'
 
 const NAV_ITEMS = [
   {
@@ -61,12 +62,16 @@ const NAV_ITEMS = [
   },
 ]
 
-// Guest mode (Apple 5.1.1(v)): guests browse with a trimmed nav. The social
-// tabs (LINE UP, MSG) are hidden — not greyed out — and YOU becomes a purple
-// SIGN UP affordance. Wall stays center. Signed-in users get the full 5 tabs.
+// Guest mode (Apple 5.1.1(v)): guests see the full-width nav — LINE UP and
+// MSG stay visible (the shape of the product advertises itself) but tapping
+// them opens the sign-up gate with a pitch for that feature. YOU becomes a
+// purple SIGN UP affordance. Wall stays center. Signed-in users: unchanged.
+const GUEST_GATE_COPY: Record<string, string> = {
+  '/lineup': "Sign up to see what Portland's going to — your friends, your venues, your queue",
+  '/msg': 'Sign up to message friends and plan your nights out',
+}
 const GUEST_NAV_ITEMS = [
-  NAV_ITEMS.find(i => i.path === '/map')!,
-  NAV_ITEMS.find(i => i.path === '/')!,
+  ...NAV_ITEMS.filter(i => i.path !== '/you'),
   {
     label: 'Sign Up',
     path: '/auth',
@@ -85,6 +90,7 @@ export function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { requireAuth } = useGuestGate()
   const [unreadCount, setUnreadCount] = useState(0)
   const [pendingConnects, setPendingConnects] = useState(0)
 
@@ -163,7 +169,12 @@ export function BottomNav() {
           <button
             key={path}
             data-tour={`nav-${path}`}
-            onClick={() => isSignUp ? navigate('/auth', { state: { tab: 'signup' } }) : navigate(path)}
+            onClick={() => {
+              if (isSignUp) { navigate('/auth', { state: { tab: 'signup' } }); return }
+              // Guest taps on the social tabs open the gate instead of navigating
+              if (!user && GUEST_GATE_COPY[path]) { requireAuth(GUEST_GATE_COPY[path]); return }
+              navigate(path)
+            }}
             className="flex flex-col items-center gap-1"
             style={{
               color: isSignUp ? '#A855F7' : 'var(--fg)',
