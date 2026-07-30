@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { isValidMusicUrl } from '@/lib/musicEmbed'
 import { MusicUrlInput } from '@/components/MusicUrlInput'
 import { fetchMyClaim, submitClaim, withdrawClaim, type MyClaim } from '@/lib/eventClaims'
+import { supabase } from '@/lib/supabase'
 
 // Artist-only "this is my show" claim UI, shown in the poster info panel.
 // The artist pastes a per-show track; the claim is pending until an admin approves.
@@ -37,6 +38,9 @@ export function ClaimShow({ eventId, active }: { eventId: string; active: boolea
     const { error: e } = await submitClaim(eventId, user.id, url)
     setBusy(false)
     if (e) { setError(e); return }
+    // Email alert to plasterpdx@ (fire-and-forget — never blocks the claim)
+    supabase.functions.invoke('claim-alert', { body: { kind: 'show_claim' } })
+      .then(({ error: alertErr }) => { if (alertErr) console.warn('[ClaimShow] alert email failed:', alertErr) })
     setOpen(false); setTrackUrl(''); setEffective(''); setValid(false)
     const c = await fetchMyClaim(eventId, user.id)
     setClaim(c)

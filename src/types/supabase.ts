@@ -1326,6 +1326,61 @@ export type Database = {
         }
         Relationships: []
       }
+      venue_claims: {
+        Row: {
+          id: string
+          note: string | null
+          profile_id: string
+          requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          profile_id: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          profile_id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_claims_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_claims_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_claims_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_sources: {
         Row: {
           default_category: string
@@ -1452,6 +1507,22 @@ export type Database = {
       accept_follow_request: {
         Args: { follower_user_id: string }
         Returns: undefined
+      }
+      admin_approve_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
+      admin_reject_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
+      event_artist_tags: {
+        Args: { p_event_id: string }
+        Returns: {
+          artist_id: string
+          username: string
+          avatar_diamond_url: string
+        }[]
       }
       activity_feed: {
         Args: {

@@ -5,6 +5,7 @@ import { Ingester } from '@/components/admin/Ingester'
 import { AdminPendingEvents } from '@/components/admin/AdminPendingEvents'
 import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
 import { AdminEventClaims } from '@/components/admin/AdminEventClaims'
+import { AdminVenueClaims } from '@/components/admin/AdminVenueClaims'
 import { AdminTools } from '@/components/admin/AdminTools'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueBoard } from '@/components/VenueBoard'
@@ -363,7 +364,7 @@ function StaffDashboard() {
       case 'ingester':   return <Ingester staffMode={!isAdmin} />
       case 'board':      return <VenueBoard />
       case 'history':    return <UploadHistory />
-      case 'review':     return <><AdminEventClaims /><AdminCommunityPosts /><AdminPendingEvents /></>
+      case 'review':     return <><AdminVenueClaims /><AdminEventClaims /><AdminCommunityPosts /><AdminPendingEvents /></>
       case 'tools':      return <AdminTools />
       case 'team':       return teamContent
     }

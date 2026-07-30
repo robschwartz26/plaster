@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
@@ -13,6 +14,7 @@ import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
 import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { useGuestGate } from '@/components/GuestGate'
+import { fetchArtistTags, type ArtistTag } from '@/lib/venueClaims'
 import { SoldOutChip } from '@/components/SoldOutChip'
 import { SlapSheet } from '@/components/SlapSheet'
 import { SlapHand } from '@/components/SlapHand'
@@ -183,6 +185,17 @@ const TAN60 = Math.tan(Math.PI / 3)
 export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName }: Props) {
   const { user, isAdmin } = useAuth()
   const { requireAuth } = useGuestGate()
+  const navigate = useNavigate()
+
+  // Approved artist tags ("@lowdownbrass") for the info panel — public via
+  // SECURITY DEFINER RPC so guests see them too. Loaded once per active card.
+  const [artistTags, setArtistTags] = useState<ArtistTag[]>([])
+  useEffect(() => {
+    if (!isActive || cols !== 1) return
+    let cancelled = false
+    fetchArtistTags(event.id).then(tags => { if (!cancelled) setArtistTags(tags) })
+    return () => { cancelled = true }
+  }, [isActive, cols, event.id])
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
   const dimmed = (activeFilter !== 'All' && !matches) || (searchQuery.trim() !== '' && !matchesQuery)
@@ -1081,6 +1094,32 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
                   {detail.description}
                 </p>
+              )}
+
+              {/* Approved artist tags — the band ON Plaster. Tap → their artist
+                  page (guests get the sign-up gate; profiles are members-only). */}
+              {artistTags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '-8px 0 20px' }}>
+                  {artistTags.filter(t => t.username).map(t => (
+                    <button
+                      key={t.artist_id}
+                      onClick={() => {
+                        if (!requireAuth(`Sign up to see @${t.username} and follow artists you love`)) return
+                        navigate(`/profile/${t.username}`)
+                      }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '3px 10px', borderRadius: 20,
+                        background: event.color2 + '33', border: `1px solid ${event.color2}55`,
+                        fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700,
+                        color: event.color2, cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 9, lineHeight: 1 }}>◆</span>
+                      @{t.username}
+                    </button>
+                  ))}
+                </div>
               )}
 
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
