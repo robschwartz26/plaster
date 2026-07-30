@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader } from '@/components/PlasterHeader'
@@ -10,6 +10,10 @@ const RESEND_COOLDOWN = 60
 
 export function AuthScreen() {
   const navigate = useNavigate()
+  // Guest mode: the GuestGate sheet and the guest nav's SIGN UP button pass
+  // the tab to open ({ state: { tab: 'signup' } }). Default stays 'signin'.
+  const location = useLocation()
+  const requestedTab = (location.state as { tab?: Tab } | null)?.tab
   // In-app navigation to the legal pages. Plain <a target="_blank"> links are
   // dead inside the iOS WebView (Capacitor), so tapping them did nothing —
   // this routes to the /terms and /privacy pages within the app instead.
@@ -17,7 +21,7 @@ export function AuthScreen() {
     e.preventDefault(); e.stopPropagation()
     navigate(path)
   }
-  const [tab, setTab] = useState<Tab>('signin')
+  const [tab, setTab] = useState<Tab>(requestedTab ?? 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -176,7 +180,21 @@ export function AuthScreen() {
         flexDirection: 'column',
       }}
     >
-      <PlasterHeader actions={<span />} />
+      <PlasterHeader actions={
+        /* Guest mode: auth is never a dead end — guests can always step back
+           out to the public wall (Apple 5.1.1(v)). */
+        <button
+          onClick={() => navigate('/')}
+          style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: 'var(--fg-55)', padding: 0,
+            fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700,
+            fontSize: 13, letterSpacing: '0.1em',
+          }}
+        >
+          BROWSE THE WALL →
+        </button>
+      } />
 
       {/* Centered content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 28px' }}>

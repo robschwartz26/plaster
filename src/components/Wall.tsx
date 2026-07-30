@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
 import { useAuth } from '@/contexts/AuthContext'
+import { useGuestGate } from '@/components/GuestGate'
 import { CommunityWall } from '@/components/CommunityWall'
 
 const WALL_CACHE_KEY = 'wall-cache-v3' // v3: status-filtered — flush cached admin walls holding pending events
@@ -60,6 +61,7 @@ export function Wall() {
   const [prevUrlMap, setPrevUrlMap] = useState<Record<string, string>>({})
 
   const { user, isAdmin, profile } = useAuth()
+  const { requireAuth } = useGuestGate()
   const navigate = useNavigate()
   const location = useLocation()
   const openEventId = (location.state as { openEventId?: string } | null)?.openEventId ?? null
@@ -164,6 +166,8 @@ export function Wall() {
   }, [openEventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLike(eventId: string) {
+    // Guest mode: hearts look live but gate on tap (Apple 5.1.1(v))
+    if (!requireAuth('♥ Sign up to save shows you love')) return
     if (!user) return
     if (likedIds.has(eventId)) {
       // Unlike

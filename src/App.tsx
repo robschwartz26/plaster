@@ -61,14 +61,18 @@ function AppRoutes() {
         <Route path="/terms"      element={<TermsOfUse />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
-        {/* App shell with persistent BottomNav */}
-        <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+        {/* App shell with persistent BottomNav.
+            Guest mode (Apple 5.1.1(v)): the shell itself is open — guests browse
+            the Wall/Map/venues with no session. Only the account-based screens
+            keep a ProtectedRoute (deep links there bounce to /auth); in-app,
+            guests never see those tabs and gated actions open the GuestGate. */}
+        <Route element={<AppLayout />}>
           <Route path="/"          element={<ErrorBoundary><Wall /></ErrorBoundary>} />
-          <Route path="/lineup"    element={<ErrorBoundary><LineUp /></ErrorBoundary>} />
+          <Route path="/lineup"    element={<ProtectedRoute><ErrorBoundary><LineUp /></ErrorBoundary></ProtectedRoute>} />
           <Route path="/map"       element={<ErrorBoundary><MapScreen /></ErrorBoundary>} />
-          <Route path="/msg"       element={<ErrorBoundary><MsgScreen /></ErrorBoundary>} />
-          <Route path="/you"              element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
-          <Route path="/profile/:username" element={<ErrorBoundary><YouScreen /></ErrorBoundary>} />
+          <Route path="/msg"       element={<ProtectedRoute><ErrorBoundary><MsgScreen /></ErrorBoundary></ProtectedRoute>} />
+          <Route path="/you"              element={<ProtectedRoute><ErrorBoundary><YouScreen /></ErrorBoundary></ProtectedRoute>} />
+          <Route path="/profile/:username" element={<ProtectedRoute><ErrorBoundary><YouScreen /></ErrorBoundary></ProtectedRoute>} />
           <Route path="/venues"    element={<ErrorBoundary><VenuesScreen /></ErrorBoundary>} />
           <Route path="/venue/:id" element={<ErrorBoundary><VenueProfile /></ErrorBoundary>} />
           <Route path="/tonight"   element={<ErrorBoundary><Tonight /></ErrorBoundary>} />

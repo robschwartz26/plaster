@@ -61,6 +61,26 @@ const NAV_ITEMS = [
   },
 ]
 
+// Guest mode (Apple 5.1.1(v)): guests browse with a trimmed nav. The social
+// tabs (LINE UP, MSG) are hidden — not greyed out — and YOU becomes a purple
+// SIGN UP affordance. Wall stays center. Signed-in users get the full 5 tabs.
+const GUEST_NAV_ITEMS = [
+  NAV_ITEMS.find(i => i.path === '/map')!,
+  NAV_ITEMS.find(i => i.path === '/')!,
+  {
+    label: 'Sign Up',
+    path: '/auth',
+    center: false,
+    icon: (size: number) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="9" cy="8" r="4" />
+        <path d="M2 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+        <path d="M19 8v6M16 11h6" />
+      </svg>
+    ),
+  },
+]
+
 export function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -129,7 +149,8 @@ export function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {NAV_ITEMS.map(({ label, path, center, icon }) => {
+      {(user ? NAV_ITEMS : GUEST_NAV_ITEMS).map(({ label, path, center, icon }) => {
+        const isSignUp = path === '/auth'
         const active = path === '/'
           ? location.pathname === '/'
           : location.pathname.startsWith(path)
@@ -142,15 +163,15 @@ export function BottomNav() {
           <button
             key={path}
             data-tour={`nav-${path}`}
-            onClick={() => navigate(path)}
+            onClick={() => isSignUp ? navigate('/auth', { state: { tab: 'signup' } }) : navigate(path)}
             className="flex flex-col items-center gap-1"
             style={{
-              color: 'var(--fg)',
+              color: isSignUp ? '#A855F7' : 'var(--fg)',
               minWidth: center ? 56 : 44,
             }}
           >
             <div style={{ position: 'relative', display: 'inline-flex' }}>
-              <div style={{ opacity: active ? 1 : 0.3, display: 'inline-flex' }}>
+              <div style={{ opacity: isSignUp || active ? 1 : 0.3, display: 'inline-flex' }}>
                 {icon(iconSize)}
               </div>
               {badgeCount > 0 && (
@@ -179,7 +200,7 @@ export function BottomNav() {
             </div>
             <span
               className="font-body font-medium uppercase"
-              style={{ fontSize: 9, letterSpacing: '0.08em', opacity: active ? 1 : 0.3 }}
+              style={{ fontSize: 9, letterSpacing: '0.08em', opacity: isSignUp || active ? 1 : 0.3 }}
             >
               {label}
             </span>

@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
+import { useAuth } from '@/contexts/AuthContext'
 import { HandGhost } from './HandGhost'
 import { PinchFlip } from './PinchFlip'
 
@@ -118,11 +119,15 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
     if (active && !resumePrompt) { try { localStorage.setItem(TOUR_STEP_KEY, String(i)) } catch { /* ignore */ } }
   }, [i, active, resumePrompt])
 
-  // Auto-run once for a new user.
+  // Auto-run once for a new user. Signed-in only: guests browsing the public
+  // wall (guest mode, Apple 5.1.1(v)) shouldn't get a tour that teaches
+  // RSVP/slap gestures they can't perform yet — it fires right after signup
+  // instead (onboarding clears the seen-flags).
+  const { user } = useAuth()
   const autoStarted = useRef(false)
   useEffect(() => {
-    if (!autoStarted.current && !hasSeenTour()) { autoStarted.current = true; start() }
-  }, [start])
+    if (user && !autoStarted.current && !hasSeenTour()) { autoStarted.current = true; start() }
+  }, [start, user])
 
   const step = active && !resumePrompt ? STEPS[i] : null
 
