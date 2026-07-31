@@ -4,7 +4,7 @@ import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
 import { FollowButton } from '@/components/FollowButton'
-import { ensureContactsPermission, readDeviceContacts, type DeviceContact } from '@/lib/contactHash'
+import { ensureContactsPermission, readDeviceContacts, normalizePhone, type DeviceContact } from '@/lib/contactHash'
 import { openAppSettings } from '@/lib/pickImage'
 
 interface Props {
@@ -35,6 +35,52 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
     p,
     new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
   ])
+}
+
+const INVITE_TEXT = "Join me on Plaster — Portland's music & events app: https://plasterthewall.com"
+
+// Manual invite: type a number → opens Messages with the invite prefilled.
+// Works without contacts permission (it's just an sms: deep link — we never
+// see or store the number). Shown on the results + denied screens.
+function InviteByNumber() {
+  const [num, setNum] = useState('')
+  const normalized = normalizePhone(num)
+  function send() {
+    if (!normalized) return
+    const sep = Capacitor.getPlatform() === 'android' ? '?' : '&'
+    window.open(`sms:${normalized}${sep}body=${encodeURIComponent(INVITE_TEXT)}`, '_self')
+    setNum('')
+  }
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '4px 16px 10px' }}>
+      <input
+        type="tel"
+        inputMode="tel"
+        placeholder="Or text a number an invite…"
+        value={num}
+        onChange={e => setNum(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') send() }}
+        style={{
+          flex: 1, padding: '10px 14px', borderRadius: 10,
+          border: '1px solid var(--fg-15)', background: 'var(--fg-08)',
+          color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 14, outline: 'none', boxSizing: 'border-box', minWidth: 0,
+        }}
+      />
+      <button
+        onClick={send}
+        disabled={!normalized}
+        style={{
+          flexShrink: 0, padding: '0 16px', borderRadius: 10, border: 'none',
+          background: normalized ? '#A855F7' : 'var(--fg-15)', color: '#fff',
+          fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700,
+          cursor: normalized ? 'pointer' : 'default',
+        }}
+      >
+        Invite
+      </button>
+    </div>
+  )
 }
 
 export function FindFriends({ onDone }: Props) {
@@ -204,8 +250,9 @@ export function FindFriends({ onDone }: Props) {
       <div style={containerStyle}>
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Contacts access is off</h2>
-          <p style={bodyStyle}>Enable contacts access for Plaster in Settings, or skip for now.</p>
+          <p style={bodyStyle}>Enable contacts access for Plaster in Settings, or invite someone directly by number.</p>
           <button onClick={() => openAppSettings()} style={primaryBtn}>Open Settings</button>
+          <div style={{ width: '100%' }}><InviteByNumber /></div>
           <button onClick={onDone} style={skipBtn}>Skip</button>
         </div>
       </div>
@@ -273,6 +320,9 @@ export function FindFriends({ onDone }: Props) {
 
         {/* Invite section */}
         <div style={sectionHeaderStyle}>Invite to Plaster ({unmatched.length})</div>
+
+        {/* Manual invite — works even with no matching contacts */}
+        <InviteByNumber />
 
         {/* Sticky search */}
         <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2, padding: '8px 16px 6px' }}>

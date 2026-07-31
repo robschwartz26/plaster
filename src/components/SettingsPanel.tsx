@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
 import { PrivacyPanel } from './PrivacyPanel'
+import { FindFriends } from './FindFriends'
 import { useInteractiveTour } from './tour/InteractiveTour'
 import { useTheme } from '@/hooks/useTheme'
 import { useAuth } from '@/contexts/AuthContext'
@@ -21,6 +22,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [showSocial, setShowSocial] = useState<boolean>(true)
   const [savingPrivacy, setSavingPrivacy] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
+  const [findFriendsOpen, setFindFriendsOpen] = useState(false)
   const { start: startTour } = useInteractiveTour()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
@@ -100,6 +102,43 @@ export function SettingsPanel({ open, onClose }: Props) {
         onToggle={togglePrivacy}
         disabled={savingPrivacy}
       />
+
+      <button
+        onClick={() => setFindFriendsOpen(true)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 0',
+          background: 'none',
+          border: 'none',
+          borderBottom: '1px solid var(--fg-08)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{
+            margin: 0,
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 14, fontWeight: 600, color: 'var(--fg)',
+          }}>
+            Find friends & invite
+          </p>
+          <p style={{
+            margin: '2px 0 0',
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 12, color: 'var(--fg-55)',
+          }}>
+            See who's on Plaster and invite people
+          </p>
+        </div>
+        <span style={{
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 16, color: 'var(--fg-40)',
+        }}>›</span>
+      </button>
 
       <button
         onClick={() => setPrivacyOpen(true)}
@@ -273,6 +312,13 @@ export function SettingsPanel({ open, onClose }: Props) {
       )}
     </BottomSheet>
     <PrivacyPanel open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
+    {/* Find friends & invite — reuses the onboarding FindFriends flow, which
+        carries its own 5.1.2 consent screen before any contacts access. */}
+    {findFriendsOpen && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top)' }}>
+        <FindFriends onDone={() => setFindFriendsOpen(false)} />
+      </div>
+    )}
     </>
   )
 }
