@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
@@ -11,7 +11,7 @@ interface Props {
   onDone: () => void
 }
 
-type ScreenState = 'softening' | 'loading' | 'results' | 'denied' | 'error'
+type ScreenState = 'consent' | 'loading' | 'results' | 'denied' | 'error'
 
 interface MatchedUser {
   id: string
@@ -38,25 +38,21 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 }
 
 export function FindFriends({ onDone }: Props) {
-  const [screen, setScreen] = useState<ScreenState>('softening')
+  const [screen, setScreen] = useState<ScreenState>('consent')
   const [matched, setMatched] = useState<MatchedUser[]>([])
   const [unmatched, setUnmatched] = useState<DeviceContact[]>([])
   const [contactNames, setContactNames] = useState<Map<string, string>>(new Map())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const hasRun = useRef(false)
 
   // Build a map from key → DeviceContact for sendBulkInvite
   const contactById = useRef<Map<string, DeviceContact>>(new Map())
 
-  useEffect(() => {
-    if (hasRun.current) return
-    hasRun.current = true
-
-    // Brief softener before triggering the permission prompt
-    const timer = setTimeout(() => runMatching(), 700)
-    return () => clearTimeout(timer)
-  }, [])
+  // Apple 5.1.2 (informed consent): matching does NOT auto-run. The 'consent'
+  // screen explains exactly what leaves the device (one-way hashes only) and
+  // what happens server-side, and the user must explicitly tap "Find my
+  // friends" before the iOS Contacts prompt ever fires. Declining skips the
+  // feature entirely — no permission prompt, no data sent.
 
   async function runMatching() {
     try {
@@ -161,14 +157,40 @@ export function FindFriends({ onDone }: Props) {
     ? unmatched.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
     : unmatched
 
-  // ── Softening / Loading ─────────────────────────────────────────────────
+  // ── Consent (Apple 5.1.2 — informed consent BEFORE any data leaves) ──────
+  // Plain-English disclosure of exactly what is sent and why. The iOS Contacts
+  // prompt fires only after the user explicitly agrees; Skip touches nothing.
+  if (screen === 'consent') {
+    return (
+      <div style={containerStyle}>
+        <div style={centeredStyle}>
+          <h2 style={headingStyle}>Find your friends on Plaster</h2>
+          <p style={{ ...bodyStyle, textAlign: 'left' }}>
+            Here's exactly how it works:
+          </p>
+          <ul style={{ ...bodyStyle, textAlign: 'left', margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <li><strong style={{ color: 'var(--fg)' }}>Your contacts never leave your phone.</strong> Names, photos, and your address book stay on your device.</li>
+            <li>To check for matches, we send only <strong style={{ color: 'var(--fg)' }}>anonymous one-way codes</strong> (cryptographic hashes) of your contacts' phone numbers and email addresses to our server.</li>
+            <li>The codes are compared against Plaster members and <strong style={{ color: 'var(--fg)' }}>immediately discarded</strong> — we never store them.</li>
+            <li>No one is contacted or invited unless <strong style={{ color: 'var(--fg)' }}>you</strong> choose to.</li>
+          </ul>
+          <button onClick={() => runMatching()} style={{ ...primaryBtn, marginTop: 16 }}>
+            I agree — find my friends
+          </button>
+          <button onClick={onDone} style={skipBtn}>Skip — don't use my contacts</button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Loading ──────────────────────────────────────────────────────────────
   // Always offer a way out — the user must never be trapped on the spinner.
-  if (screen === 'softening' || screen === 'loading') {
+  if (screen === 'loading') {
     return (
       <div style={containerStyle}>
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Finding your friends on Plaster</h2>
-          <p style={bodyStyle}>{screen === 'softening' ? 'Checking your contacts…' : 'Matching contacts…'}</p>
+          <p style={bodyStyle}>Matching contacts…</p>
           <Spinner />
           <button onClick={onDone} style={{ ...skipBtn, marginTop: 16 }}>Skip for now</button>
         </div>
@@ -197,7 +219,7 @@ export function FindFriends({ onDone }: Props) {
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Something went wrong</h2>
           <p style={bodyStyle}>We couldn't read your contacts. You can try again or skip.</p>
-          <button onClick={() => { hasRun.current = false; runMatching() }} style={primaryBtn}>Try again</button>
+          <button onClick={() => runMatching()} style={primaryBtn}>Try again</button>
           <button onClick={onDone} style={skipBtn}>Skip</button>
         </div>
       </div>
