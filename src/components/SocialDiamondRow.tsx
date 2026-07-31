@@ -18,9 +18,11 @@ type DiamondRowEntry = {
 
 interface Props {
   targetUserId: string
+  /** Self-view only: renders a "+" invite diamond at the end of the row. */
+  onInvite?: () => void
 }
 
-export function SocialDiamondRow({ targetUserId }: Props) {
+export function SocialDiamondRow({ targetUserId, onInvite }: Props) {
   const navigate = useNavigate()
   const [entries,    setEntries]    = useState<DiamondRowEntry[]>([])
   const [loading,    setLoading]    = useState(true)
@@ -72,7 +74,10 @@ export function SocialDiamondRow({ targetUserId }: Props) {
     await fetchData()
   }
 
-  if (loading || entries.length === 0) return null
+  // With an invite tile the row is worth showing even when you follow no one
+  // yet (self view) — the + diamond is the call to action.
+  if (loading) return null
+  if (entries.length === 0 && !onInvite) return null
 
   const anyPending = entries.some(e => e.kind === 'pending_incoming')
 
@@ -173,6 +178,36 @@ export function SocialDiamondRow({ targetUserId }: Props) {
             </div>
           )
         })}
+
+        {/* Invite tile — quick-add at the end of the row (self view only) */}
+        {onInvite && (
+          <div
+            onClick={onInvite}
+            style={{
+              flexShrink: 0,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+              width: 80, cursor: 'pointer',
+            }}
+          >
+            <svg width={48} height={48} viewBox="0 0 48 48" fill="none" aria-label="Invite friends">
+              <polygon
+                points="24,1.5 46.5,24 24,46.5 1.5,24"
+                fill="var(--fg-08)"
+                stroke="var(--fg-40)"
+                strokeWidth="1.5"
+                strokeDasharray="4 3"
+              />
+              <path d="M24 17v14M17 24h14" stroke="var(--fg-65)" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span style={{
+              fontSize: 11,
+              color: 'var(--fg-65)',
+              fontFamily: '"Space Grotesk", sans-serif',
+            }}>
+              Invite
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Accept/Decline modal */}

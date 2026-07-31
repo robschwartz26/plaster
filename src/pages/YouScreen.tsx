@@ -12,6 +12,7 @@ import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploa
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
+import { FindFriends } from '@/components/FindFriends'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
 import { FounderBadge } from '@/components/FounderBadge'
@@ -123,6 +124,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   const [editing,  setEditing]  = useState(false)
   const [bio,      setBio]      = useState(selfProfile?.bio ?? '')
   const [bioError, setBioError] = useState<string | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [isPublic, setIsPublic] = useState(selfProfile?.is_public ?? true)
   const [busy,     setBusy]     = useState(false)
   const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
@@ -598,9 +600,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           )}
         </div>
 
-        {/* Social diamond row — who this user follows + pending requests (self only) */}
+        {/* Social diamond row — who this user follows + pending requests. On
+            self view the row ends with a dashed + diamond that opens the
+            Find Friends / invite flow (its own 5.1.2 consent screen inside). */}
         <div data-tour="following-row">
-          <SocialDiamondRow targetUserId={targetUserId} />
+          <SocialDiamondRow targetUserId={targetUserId} onInvite={isSelf ? () => setInviteOpen(true) : undefined} />
         </div>
 
         {/* Editing panel (self only) */}
@@ -775,6 +779,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           open={followListOpen}
           onClose={() => setFollowListOpen(false)}
         />
+      )}
+
+      {/* Find friends & invite — opened from the + diamond in the social row */}
+      {isSelf && inviteOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top)' }}>
+          <FindFriends onDone={() => setInviteOpen(false)} />
+        </div>
       )}
 
       {/* Own avatar fullscreen */}
