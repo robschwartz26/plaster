@@ -14,6 +14,12 @@ export const NEIGHBORHOODS = [
   'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',
   'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
   'Division', 'Burnside',
+  // Metro cities outside Portland proper — venues live there too (Edgefield,
+  // Reser, the amphitheater…) and an honest city tag beats shoehorning into a
+  // Portland sextant. NOTE: distinct from the onboarding home-neighborhood
+  // picker (lib/neighborhoods.ts), which stays Portland-only by design.
+  'Troutdale', 'Gresham', 'Beaverton', 'Hillsboro', 'Milwaukie',
+  'Lake Oswego', 'Oregon City', 'Happy Valley', 'Vancouver WA',
 ]
 
 // ── Shared input styles ──────────────────────────────────────
