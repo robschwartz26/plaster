@@ -4,6 +4,7 @@ import { type WallEvent } from '@/types/event'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '@/lib/cropUtils'
 import { CATEGORIES } from '@/lib/categories'
 import { eventLocalDate, eventLocalTime } from '@/lib/dates'
+import { fileFromDrop } from '@/components/admin/adminShared'
 
 const IS_DEV = import.meta.env.DEV
 
@@ -66,6 +67,13 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 
   // ── Image fetch (needed for Save Crop upload) ──────────────
   const [imageFile, setImageFile] = useState<File | null>(null)
+
+  // ── Poster replacement (drop a new image onto the poster) ──
+  const [replaceDrag, setReplaceDrag] = useState(false)
+  const [pendingReplace, setPendingReplace] = useState<File | null>(null)
+  const [pendingReplacePreview, setPendingReplacePreview] = useState<string | null>(null)
+  const [groupCount, setGroupCount] = useState(0) // sibling occurrences sharing recurrence_group_id
+  const [replacing, setReplacing] = useState(false)
 
   // ── Details form ───────────────────────────────────────────
   const [venues, setVenues] = useState<Venue[]>([])
@@ -226,6 +234,69 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     }
   }
 
+  // ── Replace poster (drop a new image onto the current one) ─────────────
+  // Accepts local files AND images dragged off a webpage (fileFromDrop).
+  // Recurring events (shared recurrence_group_id) get a choice: replace the
+  // poster on every occurrence, or just this date.
+  async function handleReplaceDrop(e: React.DragEvent) {
+    e.preventDefault(); e.stopPropagation()
+    setReplaceDrag(false)
+    if (cropMode) return // crop handles its own gestures
+    setSaveError('')
+    try {
+      const f = await fileFromDrop(e)
+      if (!f) { setSaveError('That drop had no image — drag the image itself, or drop a saved file.'); return }
+      setPendingReplace(f)
+      setPendingReplacePreview(URL.createObjectURL(f))
+      // Count sibling occurrences → offer the all-vs-one choice only when real
+      let siblings = 0
+      if (event.recurrence_group_id) {
+        const { count } = await supabase.from('events')
+          .select('id', { count: 'exact', head: true })
+          .eq('recurrence_group_id', event.recurrence_group_id)
+        siblings = count ?? 0
+      }
+      setGroupCount(siblings)
+      if (siblings <= 1) await applyReplace('one', f) // not recurring — replace immediately
+    } catch {
+      setSaveError("Couldn't fetch that image — save it locally and drop the file.")
+    }
+  }
+
+  async function applyReplace(scope: 'one' | 'all', fileOverride?: File) {
+    const f = fileOverride ?? pendingReplace
+    if (!f || replacing) return
+    setReplacing(true); setSaveError('')
+    previousUrlRef.current = event.poster_url
+    try {
+      const optimized = await optimizeImage(f)
+      const slug = event.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)
+      const filename = `${Date.now()}-${slug || 'poster'}.jpg`
+      const { error: upErr } = await supabase.storage.from('posters')
+        .upload(filename, optimized, { contentType: 'image/jpeg', upsert: false })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('posters').getPublicUrl(filename)
+      // New art → old focal/offset tuning no longer applies; reset to neutral.
+      const patch = { poster_url: urlData.publicUrl, focal_x: 0.5, focal_y: 0.5, poster_offset_x: 0, poster_offset_y: 0 }
+      const q = supabase.from('events').update(patch)
+      const { error: updErr } = scope === 'all' && event.recurrence_group_id
+        ? await q.eq('recurrence_group_id', event.recurrence_group_id)
+        : await q.eq('id', event.id)
+      if (updErr) throw updErr
+      setFocalX(0.5); setFocalY(0.5); setOffsetX(0); setOffsetY(0)
+      setImageFile(new File([optimized], 'poster.jpg', { type: 'image/jpeg' })) // crop now works on the new art
+      setPendingReplace(null); setPendingReplacePreview(null); setGroupCount(0)
+      onCropSaved(urlData.publicUrl)
+      if (scope === 'one') { // group replaces skip undo (it only restores this event)
+        setUndoAvailable(true)
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+        undoTimerRef.current = setTimeout(() => setUndoAvailable(false), 30_000)
+      }
+    } catch (e2) {
+      setSaveError(String(e2))
+    } finally { setReplacing(false) }
+  }
+
   // ── Save Crop ──────────────────────────────────────────────
   const handleSaveCrop = async () => {
     if (!imageFile) { console.warn('[SaveCrop] No imageFile — aborting'); return }
@@ -364,7 +435,10 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                   setOffsetY(Math.round(Math.min(50, Math.max(-50, d.startOffsetY + (e.clientY - d.startY) / d.imgH * 100))))
                 }}
                 onPointerUp={cropMode ? undefined : () => { offsetDragRef.current = null }}
-                style={{ position: 'relative', lineHeight: 0, display: 'inline-block', maxWidth: '100%', cursor: cropMode ? 'default' : 'move', touchAction: cropMode ? 'auto' : 'none', userSelect: 'none' }}
+                onDragOver={e => { e.preventDefault(); if (!cropMode) setReplaceDrag(true) }}
+                onDragLeave={() => setReplaceDrag(false)}
+                onDrop={handleReplaceDrop}
+                style={{ position: 'relative', lineHeight: 0, display: 'inline-block', maxWidth: '100%', cursor: cropMode ? 'default' : 'move', touchAction: cropMode ? 'auto' : 'none', userSelect: 'none', outline: replaceDrag ? '2px dashed #A855F7' : 'none', outlineOffset: 2 }}
               >
                 <img
                   ref={imgRef}
@@ -381,6 +455,14 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                     pointerEvents: 'none',
                   }}
                 />
+
+                {(replaceDrag || replacing) && !cropMode && (
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700, color: '#fff', background: 'rgba(168,85,247,0.9)', padding: '8px 14px', borderRadius: 8 }}>
+                      {replacing ? 'Replacing poster…' : 'Drop to replace poster'}
+                    </span>
+                  </div>
+                )}
 
                 {cropMode && (
                   <>
@@ -455,6 +537,32 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                 </div>
               )}
             </div>
+
+            {/* Recurring event: choose replace scope for the dropped poster */}
+            {pendingReplace && groupCount > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14, padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.08)' }}>
+                {pendingReplacePreview && (
+                  <img src={pendingReplacePreview} alt="" style={{ width: 34, height: 50, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+                )}
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'rgba(255,255,255,0.85)', flex: 1, minWidth: 160 }}>
+                  This is a recurring event ({groupCount} dates). Replace the poster on…
+                </span>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => applyReplace('all')} disabled={replacing}
+                    style={{ padding: '7px 13px', background: '#A855F7', border: 'none', borderRadius: 6, color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer', opacity: replacing ? 0.6 : 1 }}>
+                    All {groupCount} dates
+                  </button>
+                  <button onClick={() => applyReplace('one')} disabled={replacing}
+                    style={{ padding: '7px 13px', background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 6, color: 'rgba(255,255,255,0.85)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: replacing ? 0.6 : 1 }}>
+                    Just this one
+                  </button>
+                  <button onClick={() => { setPendingReplace(null); setPendingReplacePreview(null); setGroupCount(0) }} disabled={replacing}
+                    style={{ padding: '7px 10px', background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.4)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Crop controls */}
             {cropMode ? (
