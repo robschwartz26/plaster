@@ -23,6 +23,7 @@ const RAIL_CONFIG: Record<string, Disc[]> = {
   'Trivia':     ['google'],
   'Karaoke':    ['google'],
   'Festivals':  ['google'],  // festival name → google lands on the fest site/lineup
+  'Markets':    ['google'],  // market name → hours/vendors/site
   'Other':      ['google'],
 }
 export function hasRail(category: string | null | undefined): boolean {

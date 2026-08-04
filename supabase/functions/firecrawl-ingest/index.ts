@@ -40,7 +40,7 @@ const DRYRUN_DEADLINE_MS = 90000
 const INSERT_DEADLINE_MS = 135000
 const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
 
-const CATEGORIES = ['Live Music','Dance','Comedy','Drag','Jazz','Trivia','Karaoke','Theater','Burlesque','Classical','Film','Festivals','Art','Literary','Spoken','Other']
+const CATEGORIES = ['Live Music','Dance','Comedy','Drag','Jazz','Trivia','Karaoke','Theater','Burlesque','Classical','Film','Festivals','Markets','Art','Literary','Spoken','Other']
 
 // ── time helpers (America/Los_Angeles) ───────────────────────────────────────
 // Month heuristic for PT offset — exact DST boundary is irrelevant at event-time.
