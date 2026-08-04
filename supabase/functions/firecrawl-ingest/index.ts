@@ -692,17 +692,31 @@ serve(async (req) => {
         headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
           model: REWRITE_MODEL,
-          max_tokens: 300,
+          max_tokens: 400,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: di.mimeType || 'image/jpeg', data: base64 } },
-            { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Read the details in the image and write a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice. Use ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown. If you cannot read any real event details in the image, respond with only the single word: NONE. Otherwise respond with ONLY the blurb text, no preamble, no quotes.` },
+            { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Today is ${portlandToday()} (America/Los_Angeles). Read the details in the image and respond with ONLY a JSON object (no preamble, no code fences) of this exact shape: {"blurb": string|null, "title": string|null, "date": string|null, "time": string|null}. blurb: a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice, using ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown; null if no real event details are readable. title: the event's actual title/headliner as shown in the image, ONLY if clearly visible — null otherwise. date: the event date as YYYY-MM-DD, ONLY if clearly visible; if the year is not shown, use the next occurrence of that date on or after today — null if no date is visible. time: the START time as 24-hour HH:MM, ONLY if clearly visible (prefer the show/start time over doors; if only doors is shown, use doors) — null otherwise.` },
           ] }],
         }),
       })
       if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
       const data = await res.json()
-      const blurb = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
-      return new Response(JSON.stringify({ blurb }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      const raw = (data.content?.[0]?.text ?? '').trim()
+      // Parse the structured reply; tolerate stray text/fences around the JSON.
+      let blurb = '', exTitle: string | null = null, exDate: string | null = null, exTime: string | null = null
+      try {
+        const m = raw.match(/\{[\s\S]*\}/)
+        const j = JSON.parse(m ? m[0] : raw)
+        blurb = typeof j.blurb === 'string' ? j.blurb.trim() : ''
+        exTitle = typeof j.title === 'string' && j.title.trim() ? j.title.trim() : null
+        exDate = typeof j.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? j.date : null
+        exTime = typeof j.time === 'string' && /^\d{2}:\d{2}$/.test(j.time) ? j.time : null
+      } catch {
+        // Model fell back to plain text — treat it as the blurb (legacy behavior)
+        blurb = raw.replace(/^["'\s]+|["'\s]+$/g, '').trim()
+        if (blurb.toUpperCase() === 'NONE') blurb = ''
+      }
+      return new Response(JSON.stringify({ blurb, title: exTitle, date: exDate, time: exTime }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ BACKFILL ARTIST NAMES: one-time (batched) — derive artist_name from title ══

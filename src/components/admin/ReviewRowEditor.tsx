@@ -45,7 +45,8 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   }
 
   // Drop a screenshot of the event info → Claude Vision writes a Plaster-voice blurb
-  // (grounded in what's visible) → fills the description field for you to tweak.
+  // AND corrects title / date / time when they're clearly visible in the image
+  // (grounded only — the server returns null for anything it can't actually read).
   async function describeFromScreenshot(f: File | undefined) {
     if (!f || !f.type.startsWith('image/')) return
     setInfoBusy(true); setInfoErr('')
@@ -62,9 +63,20 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error((json as { error?: string }).error || `failed: ${res.status}`)
-      const blurb = ((json as { blurb?: string }).blurb ?? '').trim()
-      if (!blurb || blurb.toUpperCase() === 'NONE') throw new Error("Couldn't read event details from that image — try a clearer screenshot.")
-      setDescription(blurb); setSaved(false)
+      const { blurb, title: exTitle, date: exDate, time: exTime } =
+        json as { blurb?: string | null; title?: string | null; date?: string | null; time?: string | null }
+      if (!blurb && !exTitle && !exDate && !exTime) {
+        throw new Error("Couldn't read event details from that image — try a clearer screenshot.")
+      }
+      if (blurb) setDescription(blurb.trim())
+      if (exTitle) setTitle(exTitle)
+      if (exDate) {
+        // New date + (extracted time, else keep the field's current time-of-day)
+        setStartsAt(`${exDate}T${exTime ?? startsAt.slice(11, 16) ?? '20:00'}`)
+      } else if (exTime) {
+        setStartsAt(`${startsAt.slice(0, 10)}T${exTime}`)
+      }
+      setSaved(false)
     } catch (e) {
       setInfoErr(e instanceof Error ? e.message : String(e))
     } finally { setInfoBusy(false) }
@@ -173,7 +185,7 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
             onClick={() => document.getElementById(`info-shot-${row.id}`)?.click()}
             style={{ marginTop: 6, padding: '9px 11px', borderRadius: 7, cursor: infoBusy ? 'wait' : 'pointer', textAlign: 'center', fontSize: 11.5, lineHeight: 1.4, color: infoBusy ? 'var(--fg-40)' : 'var(--fg-55)', border: infoDrag ? '1.5px dashed #A855F7' : '1.5px dashed var(--fg-18)', background: infoDrag ? 'rgba(168,85,247,0.06)' : 'transparent' }}
           >
-            {infoBusy ? 'Reading screenshot…' : <>📄 Drop a <strong>screenshot of the event info</strong> → AI writes the blurb</>}
+            {infoBusy ? 'Reading screenshot…' : <>📄 Drop a <strong>screenshot of the event info</strong> → AI fills blurb + title/date/time</>}
           </div>
           <input id={`info-shot-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => describeFromScreenshot(e.target.files?.[0] ?? undefined)} />
           {infoErr && <span style={{ fontSize: 11, color: '#e05555' }}>{infoErr}</span>}
