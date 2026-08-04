@@ -4,6 +4,7 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
+import { extractEventFromImage, friendlyExtractionError } from '@/components/admin/adminShared'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -34,14 +35,37 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   const [saved, setSaved] = useState(false)
   const [err, setErr] = useState('')
   const [infoBusy, setInfoBusy] = useState(false)
+  const [extractBusy, setExtractBusy] = useState(false)
   const [infoDrag, setInfoDrag] = useState(false)
   const [infoErr, setInfoErr] = useState('')
 
-  function takeFile(f: File | undefined) {
+  // Dropping a poster stages it for upload AND runs the same AI extraction as
+  // the Single ingester, filling title/date/time/category (and description if
+  // empty) from the poster. Everything stays editable; nothing hits the DB
+  // until Save. Extraction failure never blocks the upload itself.
+  async function takeFile(f: File | undefined) {
     if (!f || !f.type.startsWith('image/')) return
     setPosterFile(f)
     setPosterPreview(URL.createObjectURL(f))
     setSaved(false)
+    setExtractBusy(true); setErr('')
+    try {
+      const blob = await resizeForExtraction(f)
+      const base64 = await blobToBase64(blob)
+      const ex = await extractEventFromImage({ base64, mimeType: 'image/jpeg' })
+      if (ex.title?.trim()) setTitle(ex.title.trim())
+      if (ex.category) setCategory(ex.category)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ex.date ?? '')) {
+        const time = /^\d{2}:\d{2}/.test(ex.time ?? '') ? ex.time.slice(0, 5) : startsAt.slice(11, 16) || '20:00'
+        setStartsAt(`${ex.date}T${time}`)
+      }
+      // Poster blurb only fills an EMPTY description — never stomps a scraped
+      // or hand-edited one (the screenshot drop zone below is for rewriting).
+      if (!description.trim() && ex.description?.trim()) setDescription(ex.description.trim())
+      if (ex.sold_out) setSoldOut(true)
+    } catch (e) {
+      setErr(`Poster staged, but AI read failed: ${friendlyExtractionError(e)}`)
+    } finally { setExtractBusy(false) }
   }
 
   // Drop a screenshot of the event info → Claude Vision writes a Plaster-voice blurb
@@ -137,8 +161,8 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
           {(posterPreview ?? posterUrl)
             ? <img src={posterPreview ?? posterUrl!} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-30)', fontSize: 11 }}>no poster</div>}
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '4px 6px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, textAlign: 'center', letterSpacing: '0.04em' }}>
-            {dragging ? 'drop to replace' : 'drop / click to replace'}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '4px 6px', background: extractBusy ? 'rgba(168,85,247,0.8)' : 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, textAlign: 'center', letterSpacing: '0.04em' }}>
+            {extractBusy ? 'AI reading poster…' : dragging ? 'drop to replace' : 'drop / click to replace'}
           </div>
         </div>
         <input id={`review-poster-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => takeFile(e.target.files?.[0] ?? undefined)} />
