@@ -20,6 +20,7 @@ export const NEIGHBORHOODS = [
   // picker (lib/neighborhoods.ts), which stays Portland-only by design.
   'Troutdale', 'Gresham', 'Beaverton', 'Hillsboro', 'Milwaukie',
   'Lake Oswego', 'Oregon City', 'Happy Valley', 'Vancouver WA',
+  'Forest Grove', // McMenamins Grand Lodge
 ]
 
 // ── Shared input styles ──────────────────────────────────────
