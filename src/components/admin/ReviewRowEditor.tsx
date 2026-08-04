@@ -4,7 +4,7 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
-import { extractEventFromImage, friendlyExtractionError } from '@/components/admin/adminShared'
+import { extractEventFromImage, friendlyExtractionError, fileFromDrop } from '@/components/admin/adminShared'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -38,6 +38,22 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   const [extractBusy, setExtractBusy] = useState(false)
   const [infoDrag, setInfoDrag] = useState(false)
   const [infoErr, setInfoErr] = useState('')
+
+  // Accepts local files AND images dragged straight off a webpage (like the
+  // Single ingester) — web drags carry a URL, not a File, and were silently
+  // ignored before. fileFromDrop resolves both.
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    setExtractBusy(true) // covers the URL fetch for web drags
+    try {
+      const f = await fileFromDrop(e)
+      if (!f) { setErr('That drop had no image — try dragging the image itself, or save it and drop the file.'); return }
+      await takeFile(f)
+    } catch {
+      setErr("Couldn't fetch that image from the page — save it locally and drop the file.")
+    } finally { setExtractBusy(false) }
+  }
 
   // Dropping a poster stages it for upload AND runs the same AI extraction as
   // the Single ingester, filling title/date/time/category (and description if
@@ -154,7 +170,7 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
-          onDrop={e => { e.preventDefault(); setDragging(false); takeFile(e.dataTransfer.files?.[0]) }}
+          onDrop={handleDrop}
           onClick={() => document.getElementById(`review-poster-${row.id}`)?.click()}
           style={{ position: 'relative', paddingBottom: '150%', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', background: 'var(--fg-08)', border: dragging ? '2px dashed #A855F7' : '1px solid var(--fg-15)' }}
         >
