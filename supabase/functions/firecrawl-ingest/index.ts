@@ -321,6 +321,136 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
 }
 
+// ── Fetch-first JSON-LD extractor (FREE — no Firecrawl, no LLM) ───────────────
+// Most ticketing/venue platforms (Eventbrite, TicketWeb, Squarespace, WordPress
+// event plugins…) embed schema.org Event objects as <script type="application/
+// ld+json"> in the RAW HTML — no JS rendering needed. A plain fetch + parse gets
+// everything deterministically. Returns null when the page has no Event JSON-LD
+// (or the fetch fails/bot-walls) → caller falls back to Firecrawl. When the page
+// DOES have Event JSON-LD, we trust it fully — even if all events fall outside
+// the window — because Firecrawl would only re-read the same data for money.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+const LD_TYPE_CATEGORY: Record<string, string> = {
+  MusicEvent: 'Live Music', ComedyEvent: 'Comedy', TheaterEvent: 'Theater',
+  DanceEvent: 'Dance', ScreeningEvent: 'Film', Festival: 'Festivals',
+  VisualArtsEvent: 'Art', LiteraryEvent: 'Literary',
+}
+function stripTags(x: string): string { return x.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
+// deno-lint-ignore no-explicit-any
+function ldFirst(x: any): any { return Array.isArray(x) ? x[0] : x }
+// deno-lint-ignore no-explicit-any
+function ldImageUrl(img: any, base: string): string | null {
+  const one = ldFirst(img)
+  const raw = typeof one === 'string' ? one : (one && typeof one.url === 'string' ? one.url : null)
+  if (!raw) return null
+  try { return new URL(raw, base).href } catch { return null }
+}
+async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number } | null> {
+  let html = ''
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html' }, signal: AbortSignal.timeout(20000) })
+    if (!res.ok) return null
+    html = await res.text()
+  } catch { return null }
+  if (!html || html.length > 5_000_000) return null
+
+  // Collect every ld+json block → flatten @graph/arrays → keep schema.org Events
+  // deno-lint-ignore no-explicit-any
+  const nodes: any[] = []
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(m[1].trim())
+      for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+        if (item && Array.isArray(item['@graph'])) nodes.push(...item['@graph'])
+        else if (item) nodes.push(item)
+      }
+    } catch { /* malformed block — skip */ }
+  }
+  if (nodes.length === 0) return null
+
+  // deno-lint-ignore no-explicit-any
+  const eventNodes: any[] = []
+  for (const n of nodes) {
+    const types = (Array.isArray(n?.['@type']) ? n['@type'] : [n?.['@type']]).filter((t: unknown) => typeof t === 'string') as string[]
+    if (types.some(t => /Event$/.test(t) || t === 'Festival') && !types.includes('EventSeries')) eventNodes.push(n)
+    // EventSeries → its subEvents are the real dated occurrences
+    if (types.includes('EventSeries') && Array.isArray(n?.subEvent)) eventNodes.push(...n.subEvent)
+  }
+  if (eventNodes.length === 0) return null
+
+  const events: RawEvent[] = []
+  const seen = new Set<string>()
+  let beyondHorizon = 0, past = 0
+  for (const n of eventNodes) {
+    const rawTitle = typeof n?.name === 'string' ? n.name.trim() : ''
+    const startRaw = typeof n?.startDate === 'string' ? n.startDate.trim() : ''
+    if (!rawTitle || !startRaw) continue
+    // startDate: full ISO w/ offset → trust it; date-or-naive-time → Portland rules
+    let start: Date | null = null
+    let timePart = ''
+    const dateOnly = startRaw.slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) continue
+    if (/[+-]\d{2}:?\d{2}$|Z$/.test(startRaw)) {
+      const d = new Date(startRaw)
+      if (!isNaN(d.getTime())) { start = d; timePart = startRaw.slice(11, 16) }
+    } else if (/T\d{2}:\d{2}/.test(startRaw)) {
+      timePart = startRaw.slice(11, 16)
+      start = ptTimestamp(dateOnly, timePart)
+    } else {
+      start = ptTimestamp(dateOnly, null)
+    }
+    if (!start) continue
+    if (start.getTime() < now) { past++; continue }
+    if (start.getTime() > maxOut) { beyondHorizon++; continue }
+    const key = `${normalizeName(rawTitle)}|${portlandDate(start)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const { title, soldOut: titleSold } = detectSoldOut(rawTitle)
+    const types = (Array.isArray(n['@type']) ? n['@type'] : [n['@type']]).filter((t: unknown) => typeof t === 'string') as string[]
+    const category = types.map(t => LD_TYPE_CATEGORY[t]).find(Boolean) ?? 'Live Music'
+    const offers = ldFirst(n.offers)
+    const offerUrl = offers && typeof offers.url === 'string' ? offers.url : null
+    const pageEventUrl = typeof n.url === 'string' ? n.url : null
+    let ticketUrl: string | null = null
+    try { ticketUrl = offerUrl ? new URL(offerUrl, url).href : (pageEventUrl ? new URL(pageEventUrl, url).href : null) } catch { ticketUrl = null }
+    const soldOut = titleSold || (offers && typeof offers.availability === 'string' && /SoldOut/i.test(offers.availability))
+    const loc = ldFirst(n.location)
+    const venueName = loc && typeof loc.name === 'string' ? loc.name.trim() : ''
+    let venueAddress = ''
+    if (loc?.address) {
+      const a = ldFirst(loc.address)
+      if (typeof a === 'string') venueAddress = a.trim()
+      else if (a && typeof a === 'object') venueAddress = [a.streetAddress, a.addressLocality].filter((x: unknown) => typeof x === 'string' && x).join(', ')
+    }
+    const perf = ldFirst(n.performer)
+    const artistName = perf && typeof perf.name === 'string' ? perf.name.trim() : ''
+
+    events.push({
+      title,
+      date: dateOnly,
+      portland_date: portlandDate(start),
+      starts_at: start.toISOString(),
+      time_display: timePart,
+      category,
+      poster_image_url: ldImageUrl(n.image, url),
+      ticket_url: ticketUrl,
+      venue_name: venueName,
+      raw_description: typeof n.description === 'string' ? stripTags(n.description).slice(0, 2000) : '',
+      raw_notes: '',
+      sold_out: !!soldOut,
+      venue_address: venueAddress,
+      venue_website: '',
+      artist_name: artistName,
+    })
+  }
+  // A page whose JSON-LD held real Events is authoritative even when everything
+  // fell outside the window — return counts so the caller reports honestly.
+  return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
+}
+
 // ── Bandsintown adapter (deterministic JSON-LD, no LLM extraction) ─────────────
 // Bandsintown venue/city pages embed the full event list as schema.org MusicEvent
 // objects in an "eventsJsonLd" array — name/startDate/url/location/image, all real
@@ -879,11 +1009,27 @@ serve(async (req) => {
       // Community mode (EverOut, or an explicit flag): city-wide source → NO dropdown
       // fallback (nothing may be misattributed), and events land with no image.
       const community = body.community === true || isEverout
-      const { events, beyondHorizon, past } = isBandsintown
-        ? await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
-        : isEverout
-        ? await extractEverout(url, floor, maxOut)        // LLM extraction, no images
-        : await firecrawlExtract(url, floor, maxOut)
+      // Fetch-first: try a FREE plain fetch + schema.org JSON-LD parse before
+      // paying for Firecrawl. Covers Eventbrite/TicketWeb/Squarespace/WordPress
+      // and most venue sites; Firecrawl remains the fallback for JS-walled pages.
+      let method = 'firecrawl'
+      let extractResult: { events: RawEvent[]; beyondHorizon: number; past: number }
+      if (isBandsintown) {
+        method = 'bandsintown'
+        extractResult = await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
+      } else if (isEverout) {
+        method = 'everout'
+        extractResult = await extractEverout(url, floor, maxOut)        // LLM extraction, no images
+      } else {
+        const free = await jsonLdExtract(url, floor, maxOut)
+        if (free && (free.events.length > 0 || free.beyondHorizon > 0 || free.past > 0)) {
+          method = 'jsonld-free'
+          extractResult = free
+        } else {
+          extractResult = await firecrawlExtract(url, floor, maxOut)
+        }
+      }
+      const { events, beyondHorizon, past } = extractResult
       // Community mode ignores the venue dropdown entirely — unmatched venues park.
       const fallbackId: string | null = community ? null : (typeof body.venueId === 'string' && body.venueId ? body.venueId : null)
       // Follow each event's "Get Tickets" / detail page for the real show description
@@ -909,9 +1055,9 @@ serve(async (req) => {
       // pure preview (commit:false) still returns without writing.
       if (body.commit === true) {
         const ins = await insertEvents(out, fallbackId, false)
-        return new Response(JSON.stringify({ url, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: true, ...ins, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        return new Response(JSON.stringify({ url, method, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: true, ...ins, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
-      return new Response(JSON.stringify({ url, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: false, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      return new Response(JSON.stringify({ url, method, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: false, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ IMPORT: insert an explicit selection (legacy path) ════════════════════
