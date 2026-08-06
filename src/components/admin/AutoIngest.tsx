@@ -28,10 +28,25 @@ interface FetchedEvent {
 }
 
 interface FetchResponse {
-  url: string; count: number; beyondHorizon: number; past: number; enriched: number; deepFetch: boolean
+  url: string; method?: string; count: number; beyondHorizon: number; past: number; enriched: number; deepFetch: boolean
   committed: boolean; inserted?: number; failed?: number; skipped?: number; errors?: string[]
   parked?: number; parkedVenues?: string[]
   events: FetchedEvent[]
+}
+
+// Multi-URL batch: one row per URL, processed sequentially so each request stays
+// small (a single page) — the safe granularity that never hits the 546 ceiling.
+interface BatchRow {
+  url: string
+  status: 'queued' | 'running' | 'done' | 'error'
+  detail: string
+}
+
+// Pull every http(s) URL out of pasted text — tolerates one-per-line, commas,
+// bullets, or a whole Scout-report block.
+function parseUrls(text: string): string[] {
+  const found = text.match(/https?:\/\/[^\s"'<>\])]+/g) ?? []
+  return [...new Set(found.map(u => u.replace(/[.,;]+$/, '')))]
 }
 
 async function callIngest(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -99,18 +114,48 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
     setData(null); setError('')
   }
 
+  const [batchRows, setBatchRows] = useState<BatchRow[]>([])
+  const urlList = useMemo(() => parseUrls(url), [url])
+
   // Fetch = extract + write straight to Review (pending) in one server call, so the
   // findings land in the Review tab immediately and survive navigating away. The
   // server dedupes against existing events, so re-fetching a venue won't spam dupes.
   async function handleFetch() {
-    if (!url.trim()) { setError('Pick a venue or paste a URL.'); return }
-    setBusy(true); setError(''); setData(null)
-    try {
-      const json = await callIngest({ url: url.trim(), venueId: community ? undefined : (venueId || undefined), dryRun: true, commit: true, deepFetch: community ? false : deepFetch, afterDate: afterDate || undefined, community: community || undefined }) as unknown as FetchResponse
-      setData(json)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally { setBusy(false) }
+    const urls = urlList
+    if (urls.length === 0) { setError('Pick a venue or paste at least one URL.'); return }
+    setBusy(true); setError(''); setData(null); setBatchRows([])
+
+    // Single URL → the original flow with the full event-card result view
+    if (urls.length === 1) {
+      try {
+        const json = await callIngest({ url: urls[0], venueId: community ? undefined : (venueId || undefined), dryRun: true, commit: true, deepFetch: community ? false : deepFetch, afterDate: afterDate || undefined, community: community || undefined }) as unknown as FetchResponse
+        setData(json)
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e))
+      } finally { setBusy(false) }
+      return
+    }
+
+    // Multi-URL batch: sequential, one small request per URL. A failure marks
+    // its row and moves on — the batch never dies on one bad page.
+    const rows: BatchRow[] = urls.map(u => ({ url: u, status: 'queued', detail: '' }))
+    setBatchRows([...rows])
+    for (let i = 0; i < rows.length; i++) {
+      rows[i].status = 'running'; setBatchRows([...rows])
+      try {
+        const r = await callIngest({ url: rows[i].url, venueId: community ? undefined : (venueId || undefined), dryRun: true, commit: true, deepFetch: community ? false : deepFetch, afterDate: afterDate || undefined, community: community || undefined }) as unknown as FetchResponse
+        const bits = [`${r.inserted ?? 0} to Review`]
+        if ((r.skipped ?? 0) > 0) bits.push(`${r.skipped} already had`)
+        if ((r.parked ?? 0) > 0) bits.push(`${r.parked} parked (new venue)`)
+        if ((r.failed ?? 0) > 0) bits.push(`${r.failed} failed`)
+        if (r.method === 'jsonld-free') bits.push('⚡ free')
+        rows[i].status = 'done'; rows[i].detail = bits.join(' · ')
+      } catch (e) {
+        rows[i].status = 'error'; rows[i].detail = e instanceof Error ? e.message : String(e)
+      }
+      setBatchRows([...rows])
+    }
+    setBusy(false)
   }
 
   return (
@@ -128,7 +173,9 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
         )}
         <div>
           <label style={labelStyle}>{community ? 'EverOut URL' : <>Events URL {selectedVenue && !selectedVenue.website && <span style={{ color: 'var(--fg-40)' }}>— none saved, paste one</span>}</>}</label>
-          <input type="url" value={url} onChange={e => setUrl(e.target.value)} placeholder={community ? 'https://everout.com/portland/articles/…  or  /events/?category=…' : 'https://venue.com/calendar  ·  or  bandsintown.com/v/…'} style={inputStyle} />
+          <textarea value={url} onChange={e => setUrl(e.target.value)} rows={url.includes('\n') || urlList.length > 1 ? 5 : 1}
+            placeholder={community ? 'https://everout.com/portland/articles/…  or  /events/?category=…' : 'https://venue.com/calendar  ·  or paste a LIST of URLs (one per line) — e.g. a Scout report'}
+            style={{ ...inputStyle, resize: 'vertical', minHeight: 38, lineHeight: 1.5 }} />
           {community ? (
             <p style={{ fontSize: 11, color: 'var(--fg-40)', marginTop: 5, lineHeight: 1.45 }}>
               Paste an EverOut roundup or category page (festivals, street fairs, markets). Every event lands in Review <strong style={{ color: 'var(--fg-55)' }}>with no photo — you add the art</strong>. Unknown venues (markets, parks) park in <strong style={{ color: 'var(--fg-55)' }}>New venues</strong> to become reusable venue rows. Their images are never used.
@@ -140,8 +187,12 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button onClick={handleFetch} disabled={busy || !url.trim()} style={{ ...primaryBtn, opacity: busy || !url.trim() ? 0.5 : 1 }}>
-            {busy ? (community ? 'Reading EverOut…' : deepFetch ? 'Following ticket links…' : 'Rendering with Firecrawl…') : 'Fetch → send to Review'}
+          <button onClick={handleFetch} disabled={busy || urlList.length === 0} style={{ ...primaryBtn, opacity: busy || urlList.length === 0 ? 0.5 : 1 }}>
+            {busy
+              ? (batchRows.length > 1
+                  ? `Importing ${batchRows.filter(r => r.status === 'done' || r.status === 'error').length}/${batchRows.length}…`
+                  : (community ? 'Reading EverOut…' : deepFetch ? 'Following ticket links…' : 'Fetching…'))
+              : urlList.length > 1 ? `Fetch ${urlList.length} URLs → send to Review` : 'Fetch → send to Review'}
           </button>
           {isLocal && !community && (
             <button onClick={() => { setUrl('https://mississippistudios.com/'); }} style={devBtn}>DEV · Mississippi</button>
@@ -168,6 +219,25 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
 
       {error && (
         <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(220,80,80,0.1)', border: '1px solid rgba(220,80,80,0.3)', color: 'var(--fg)', fontSize: 13, marginBottom: 12 }}>{error}</div>
+      )}
+
+      {/* ── Multi-URL batch progress: one row per URL, live status ── */}
+      {batchRows.length > 0 && (
+        <div style={{ borderRadius: 8, border: '1px solid var(--fg-15)', marginBottom: 12, overflow: 'hidden' }}>
+          <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--fg-08)', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-40)', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Batch import — {batchRows.filter(r => r.status === 'done').length} done · {batchRows.filter(r => r.status === 'error').length} failed · {batchRows.filter(r => r.status === 'queued' || r.status === 'running').length} left</span>
+            {!busy && <span style={{ color: '#4ade80' }}>everything imported is in Review</span>}
+          </div>
+          {batchRows.map((r, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '6px 12px', borderBottom: i < batchRows.length - 1 ? '1px solid var(--fg-08)' : 'none', fontSize: 12 }}>
+              <span style={{ flexShrink: 0, width: 16, textAlign: 'center' }}>
+                {r.status === 'queued' ? '·' : r.status === 'running' ? '⏳' : r.status === 'done' ? '✓' : '✗'}
+              </span>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--fg-55)', fontFamily: 'monospace', fontSize: 11 }}>{r.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+              <span style={{ flexShrink: 0, color: r.status === 'error' ? '#e05555' : r.status === 'done' ? 'var(--fg)' : 'var(--fg-40)', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.detail}</span>
+            </div>
+          ))}
+        </div>
       )}
 
       {/* ── Result banner: everything found is already in the Review tab ── */}
