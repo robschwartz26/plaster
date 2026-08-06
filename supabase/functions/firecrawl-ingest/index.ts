@@ -384,7 +384,7 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
   const seen = new Set<string>()
   let beyondHorizon = 0, past = 0
   for (const n of eventNodes) {
-    const rawTitle = typeof n?.name === 'string' ? n.name.trim() : ''
+    const rawTitle = typeof n?.name === 'string' ? decodeEntities(n.name).trim() : ''
     const startRaw = typeof n?.startDate === 'string' ? n.startDate.trim() : ''
     if (!rawTitle || !startRaw) continue
     // startDate: full ISO w/ offset → trust it; date-or-naive-time → Portland rules
@@ -418,7 +418,7 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
     try { ticketUrl = offerUrl ? new URL(offerUrl, url).href : (pageEventUrl ? new URL(pageEventUrl, url).href : null) } catch { ticketUrl = null }
     const soldOut = titleSold || (offers && typeof offers.availability === 'string' && /SoldOut/i.test(offers.availability))
     const loc = ldFirst(n.location)
-    const venueName = loc && typeof loc.name === 'string' ? loc.name.trim() : ''
+    const venueName = loc && typeof loc.name === 'string' ? decodeEntities(loc.name).trim() : ''
     let venueAddress = ''
     if (loc?.address) {
       const a = ldFirst(loc.address)
@@ -438,7 +438,7 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
       poster_image_url: ldImageUrl(n.image, url),
       ticket_url: ticketUrl,
       venue_name: venueName,
-      raw_description: typeof n.description === 'string' ? stripTags(n.description).slice(0, 2000) : '',
+      raw_description: typeof n.description === 'string' ? decodeEntities(stripTags(n.description)).slice(0, 2000) : '',
       raw_notes: '',
       sold_out: !!soldOut,
       venue_address: venueAddress,
@@ -1021,7 +1021,7 @@ serve(async (req) => {
         method = 'everout'
         extractResult = await extractEverout(url, floor, maxOut)        // LLM extraction, no images
       } else {
-        const free = await jsonLdExtract(url, floor, maxOut)
+        const free = await jsonLdExtract(url, floor, maxOut).catch(() => null)
         if (free && (free.events.length > 0 || free.beyondHorizon > 0 || free.past > 0)) {
           method = 'jsonld-free'
           extractResult = free
