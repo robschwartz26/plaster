@@ -381,6 +381,7 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
   if (eventNodes.length === 0) return null
 
   const events: RawEvent[] = []
+  const nodeUrls: string[] = []  // canonical url of each event's own node (parallel to events)
   const seen = new Set<string>()
   let beyondHorizon = 0, past = 0
   for (const n of eventNodes) {
@@ -428,6 +429,7 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
     const perf = ldFirst(n.performer)
     const artistName = perf && typeof perf.name === 'string' ? perf.name.trim() : ''
 
+    nodeUrls.push(pageEventUrl ? (() => { try { return new URL(pageEventUrl, url).href } catch { return '' } })() : '')
     events.push({
       title,
       date: dateOnly,
@@ -446,9 +448,23 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
       artist_name: artistName,
     })
   }
+  // Page-scope filter: ticketing hubs (merctickets, etc.) embed a CITY-WIDE
+  // event graph on every page. If one parsed event's canonical URL IS the page
+  // we were asked to import, the admin meant THAT event — keep it plus its own
+  // venue's other events (useful same-venue backfill, e.g. Holocene/Crystal),
+  // and drop the cross-venue spray. Calendar pages (no node matches the page
+  // URL) keep everything.
+  const canon = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '')
+  const pageCanon = canon(url)
+  const matchIdx = nodeUrls.findIndex(u => u && canon(u) === pageCanon)
+  let out = events
+  if (matchIdx >= 0) {
+    const targetVenue = normalizeName(events[matchIdx].venue_name || '')
+    out = events.filter((e, i) => i === matchIdx || !e.venue_name || normalizeName(e.venue_name) === targetVenue)
+  }
   // A page whose JSON-LD held real Events is authoritative even when everything
   // fell outside the window — return counts so the caller reports honestly.
-  return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
+  return { events: out.slice(0, MAX_EVENTS), beyondHorizon, past }
 }
 
 // ── Bandsintown adapter (deterministic JSON-LD, no LLM extraction) ─────────────
