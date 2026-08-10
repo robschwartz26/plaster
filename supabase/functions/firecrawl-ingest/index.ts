@@ -982,7 +982,7 @@ serve(async (req) => {
     // table (ANY status) at the same venue + Portland date with a matching title,
     // so re-running a fetch doesn't spam duplicate pendings. Also dedupes within
     // the batch. Returns counts + first errors.
-    async function insertEvents(rows: Array<RawEvent & { description?: string }>, fallbackId: string | null, publish: boolean) {
+    async function insertEvents(rows: Array<RawEvent & { description?: string }>, fallbackId: string | null, publish: boolean, skipDedupe = false) {
       const status = publish ? 'published' : 'pending'
       // Cap re-hosting by an absolute request deadline; any posters not re-hosted in
       // time keep their remote URL (still works, just not EXIF-stripped/re-hosted).
@@ -1050,7 +1050,7 @@ serve(async (req) => {
         if (!rv.id) { failed++; errors.push(`${ev.title}: no venue`); continue }
 
         const key = `${rv.id}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
-        if (index.has(key)) { skipped++; continue }
+        if (!skipDedupe && index.has(key)) { skipped++; continue }
         const posterUrl = await rehostImage(supabaseService, ev.poster_image_url ?? null, imageDeadline)
         const { data: insData, error: insErr } = await supabaseService.from('events').insert({
           venue_id: rv.id,
@@ -1088,6 +1088,7 @@ serve(async (req) => {
       // Panel-selected venue: used as the FALLBACK — a venue named in the
       // capture still wins (resolveVenue), but a nameless grab attributes here.
       const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
+      const clipperForce = (body.clipper as { force?: boolean }).force === true
       const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
@@ -1208,13 +1209,29 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: 'error', reason: 'clipper: html or image_base64 required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
-      const ins = await insertEvents(events, clipperFallbackId, false)
+      // Pre-compose the Plaster-voice blurb so (a) the panel can PREVIEW it and
+      // (b) insertEvents uses it verbatim. Resolve the venue for voice context.
+      const rv0 = events[0] ? resolveVenue(events[0].venue_name ?? '', clipperFallbackId) : null
+      if (events[0]) {
+        const composed = await composeDescription({
+          title: events[0].title, venueName: rv0?.name ?? events[0].venue_name ?? '', category: events[0].category,
+          timeDisplay: events[0].time_display, rawDescription: events[0].raw_description, rawNotes: events[0].raw_notes, soldOut: events[0].sold_out,
+        })
+        ;(events[0] as RawEvent & { description?: string }).description = composed
+      }
+      const ins = await insertEvents(events, clipperFallbackId, false, clipperForce)
       const status = (ins.inserted ?? 0) > 0 ? 'saved' : (ins.parked ?? 0) > 0 ? 'orphaned' : (ins.skipped ?? 0) > 0 ? 'duplicate' : 'error'
+      const e0 = events[0] as (RawEvent & { description?: string }) | undefined
       return new Response(JSON.stringify({
         status, method, count: events.length,
         inserted: ins.inserted, skipped: ins.skipped, parked: ins.parked, failed: ins.failed,
-        event_name: events[0]?.title ?? null,
+        event_name: e0?.title ?? null,
         event_ids: ins.insertedIds ?? [],
+        preview: e0 ? {
+          title: e0.title, date: e0.date, time: e0.time_display || null,
+          venue: rv0?.name ?? e0.venue_name ?? null, category: e0.category,
+          description: e0.description ?? null, sold_out: e0.sold_out,
+        } : null,
         reason: status === 'error' ? (ins.errors?.[0] ?? 'insert failed') : undefined,
       }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }

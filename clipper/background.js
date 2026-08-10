@@ -73,6 +73,10 @@ async function logResult(entry) {
   log.unshift({ id: crypto.randomUUID(), at: Date.now(), ...entry })
   await chrome.storage.local.set({ log: log.slice(0, 40) })
 }
+async function removeLog(id) {
+  const { log = [] } = await chrome.storage.local.get('log')
+  await chrome.storage.local.set({ log: log.filter(r => r.id !== id) })
+}
 async function updateLog(id, patch) {
   const { log = [] } = await chrome.storage.local.get('log')
   const i = log.findIndex(r => r.id === id)
@@ -105,7 +109,7 @@ async function stagePoster({ base64, mime, thumb, fromUrl, tabId }) {
 }
 
 // ── ship a capture (uses the staged poster when present) ────────────────────
-async function ingest({ imageBase64, mimeType, tab, thumb }) {
+async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replaceLogId = null }) {
   const { token, endpoint } = await getSettings()
   if (!token) {
     BADGE.error()
@@ -125,6 +129,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb }) {
           image_base64: imageBase64, mimeType: mimeType || 'image/png',
           ...(staged ? { poster_base64: staged.b64, poster_mime: staged.mime } : {}),
           ...(venueId ? { venue_id: venueId } : {}),
+          ...(force ? { force: true } : {}),
         },
       }),
     })
@@ -138,7 +143,14 @@ async function ingest({ imageBase64, mimeType, tab, thumb }) {
       return
     }
     ;(BADGE[json.status] || BADGE.error)()
-    await logResult({ status: json.status, event: json.event_name, reason: json.reason, url: tab?.url, thumb: staged?.thumb ?? thumb, eventIds: json.event_ids || [] })
+    if (replaceLogId) await removeLog(replaceLogId)
+    await logResult({
+      status: json.status, event: json.event_name, reason: json.reason,
+      url: tab?.url, thumb: staged?.thumb ?? thumb, eventIds: json.event_ids || [],
+      preview: json.preview ?? null,
+      // duplicates keep their payload so 'Send to Review anyway' can force it through
+      ...(json.status === 'duplicate' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null } } : {}),
+    })
     if (json.status === 'saved' || json.status === 'orphaned' || json.status === 'duplicate') {
       await chrome.storage.local.remove('staged') // stage consumed — ready for the next event
     }
@@ -232,6 +244,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       sendResponse({ ok: true })
     })()
     return true
+  }
+
+  if (msg?.type === 'plaster-force') {
+    ;(async () => {
+      const { log = [] } = await chrome.storage.local.get('log')
+      const entry = log.find(r => r.id === msg.logId)
+      const rp = entry?.retryPayload
+      if (!rp) return
+      // replay with the ORIGINAL context (staged poster + venue at capture time)
+      const stash = await chrome.storage.local.get(['staged', 'venueId'])
+      await chrome.storage.local.set({ staged: rp.staged ?? null, venueId: rp.venueId ?? null })
+      await ingest({ imageBase64: rp.imageBase64, mimeType: rp.mimeType, tab: { url: rp.url, title: rp.title }, thumb: entry.thumb, force: true, replaceLogId: msg.logId })
+      await chrome.storage.local.set({ staged: stash.staged ?? null, venueId: stash.venueId ?? null })
+      if (!stash.staged) await chrome.storage.local.remove('staged')
+    })()
+    return
   }
 
   if (msg?.type === 'plaster-erase') {

@@ -4,13 +4,20 @@
 <meta charset="utf-8">
 <style>
   body { margin: 0; padding: 14px; background: #0c0b0b; color: #f0ece3; font: 13px "Space Grotesk", system-ui, sans-serif; }
-  h1 { font: 900 22px Georgia, serif; margin: 0 0 12px; }
-  button.act { display: block; width: 100%; margin-bottom: 8px; padding: 11px 12px; border: none; border-radius: 10px; background: #A855F7; color: #fff; font: 700 13px "Space Grotesk", system-ui, sans-serif; cursor: pointer; text-align: left; }
-  button.act.secondary { background: rgba(240,236,227,0.08); color: #f0ece3; border: 1px solid rgba(240,236,227,0.18); font-weight: 600; }
+  .top { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+  h1 { font: 900 22px Georgia, serif; margin: 0; }
+  #info-btn { width: 24px; height: 24px; border-radius: 50%; border: 1px solid rgba(240,236,227,0.25); background: none; color: rgba(240,236,227,0.6); font: 700 13px Georgia, serif; cursor: pointer; }
+  #cheat { display: none; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: rgba(240,236,227,0.05); border: 1px solid rgba(240,236,227,0.12); font-size: 12px; line-height: 1.7; }
+  #cheat.open { display: block; }
+  #cheat b { color: #c084fc; font-family: monospace; }
+  #venue { width: 100%; margin: 0 0 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid rgba(240,236,227,0.2); background: rgba(240,236,227,0.06); color: #f0ece3; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
+  #venue.set { border-color: rgba(168,85,247,0.6); background: rgba(168,85,247,0.1); color: #c084fc; }
+  button.act { display: block; width: 100%; margin-bottom: 8px; padding: 9px 12px; border-radius: 10px; background: rgba(240,236,227,0.08); color: #f0ece3; border: 1px solid rgba(240,236,227,0.18); font: 600 12.5px "Space Grotesk", system-ui, sans-serif; cursor: pointer; text-align: left; }
   .kbd { float: right; opacity: 0.7; font-weight: 600; }
-  #feed { margin-top: 14px; border-top: 1px solid rgba(240,236,227,0.12); }
-  .card { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid rgba(240,236,227,0.08); }
-  .card img { width: 54px; height: 76px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: rgba(240,236,227,0.06); }
+  #feed { margin-top: 12px; border-top: 1px solid rgba(240,236,227,0.12); }
+  .card { padding: 10px 0; border-bottom: 1px solid rgba(240,236,227,0.08); }
+  .card .head { display: flex; gap: 10px; cursor: pointer; position: relative; padding-right: 22px; }
+  .card img.thumb { width: 54px; height: 76px; object-fit: cover; border-radius: 6px; flex-shrink: 0; background: rgba(240,236,227,0.06); }
   .noimg { width: 54px; height: 76px; border-radius: 6px; flex-shrink: 0; background: rgba(240,236,227,0.06); }
   .body { flex: 1; min-width: 0; }
   .pill { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -23,12 +30,18 @@
   .name { font-weight: 700; margin: 4px 0 2px; line-height: 1.3; }
   .meta { color: rgba(240,236,227,0.45); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .reason { color: rgba(240,236,227,0.6); font-size: 11.5px; margin-top: 2px; line-height: 1.35; }
-  .erase { margin-top: 6px; padding: 4px 12px; border-radius: 8px; border: 1px solid rgba(248,113,113,0.4); background: none; color: #f87171; font: 600 11px "Space Grotesk", system-ui, sans-serif; cursor: pointer; }
-  .foot { margin-top: 10px; font-size: 11px; color: rgba(240,236,227,0.4); line-height: 1.5; }
+  .dismiss { position: absolute; top: 0; right: 0; width: 20px; height: 20px; border: none; border-radius: 50%; background: rgba(240,236,227,0.08); color: rgba(240,236,227,0.5); font-size: 12px; line-height: 1; cursor: pointer; }
+  .detail { display: none; margin-top: 8px; padding: 9px 11px; border-radius: 8px; background: rgba(240,236,227,0.04); border: 1px solid rgba(240,236,227,0.1); font-size: 12px; line-height: 1.55; }
+  .card.open .detail { display: block; }
+  .detail .field { color: rgba(240,236,227,0.45); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 7px 0 1px; }
+  .detail .field:first-child { margin-top: 0; }
+  .btnrow { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .mini { padding: 5px 12px; border-radius: 8px; font: 600 11px "Space Grotesk", system-ui, sans-serif; cursor: pointer; }
+  .mini.go { border: none; background: #A855F7; color: #fff; }
+  .mini.warn { border: 1px solid rgba(248,113,113,0.4); background: none; color: #f87171; }
+  .foot { margin-top: 10px; font-size: 11px; color: rgba(240,236,227,0.4); line-height: 1.6; }
   a { color: #A855F7; text-decoration: none; }
   .empty { padding: 22px 0; color: rgba(240,236,227,0.35); text-align: center; }
-  #venue { width: 100%; margin: 0 0 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid rgba(240,236,227,0.2); background: rgba(240,236,227,0.06); color: #f0ece3; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
-  #venue.set { border-color: rgba(168,85,247,0.6); background: rgba(168,85,247,0.1); color: #c084fc; }
   #staged .slot { display: flex; gap: 10px; align-items: center; padding: 10px; margin-bottom: 10px; border: 1.5px dashed rgba(168,85,247,0.55); border-radius: 12px; background: rgba(168,85,247,0.07); }
   #staged img { width: 54px; height: 76px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
   #staged .t { flex: 1; min-width: 0; }
@@ -38,20 +51,25 @@
 </style>
 </head>
 <body>
-  <h1>plaster clipper</h1>
+  <div class="top">
+    <h1>plaster clipper</h1>
+    <button id="info-btn" title="Hotkeys">i</button>
+  </div>
+  <div id="cheat">
+    <b>⌥-click</b> / double-click an image → stage as poster<br>
+    <b>⌘⇧P</b> stage a custom poster region<br>
+    <b>⌘⇧S</b> grab the info region → ingest<br>
+    <b>⌘⇧K</b> grab the whole page → ingest
+  </div>
   <select id="venue" title="Venue for these captures — a venue named in the capture still wins">
     <option value="">venue: auto-detect from capture</option>
   </select>
   <div id="staged"></div>
-  <div class="foot" style="margin:0 0 8px">⌥-click or double-click any image on a page to stage it as the poster</div>
-  <button class="act secondary" id="poster">Stage poster (custom region) <span class="kbd">⌘⇧P</span></button>
-  <button class="act" id="region">Grab the info → ingest <span class="kbd">⌘⇧S</span></button>
-  <button class="act" id="window">Whole page grab <span class="kbd">⌘⇧K</span></button>
-  <button class="act secondary" id="sweep">Sweep all tabs (grabs each one)</button>
+  <button class="act" id="poster">Stage poster (custom region) <span class="kbd">⌘⇧P</span></button>
   <div id="feed"><div class="empty">Captures show up here</div></div>
   <div class="foot">
-    Saved events wait in <a href="https://plasterthewall.com/staff" target="_blank">Staff → Review</a> for your approval ·
-    <a href="#" id="opts">Options</a> · <a href="#" id="clear">Clear list</a>
+    Saved events wait in <a href="https://plasterthewall.com/staff" target="_blank">Staff → Review</a> ·
+    <a href="#" id="sweep">Sweep tabs</a> · <a href="#" id="opts">Options</a> · <a href="#" id="clear">Clear list</a>
   </div>
   <script src="panel.js"></script>
 </body>

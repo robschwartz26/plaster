@@ -1,14 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Plaster Clipper",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
   "permissions": [
     "tabs",
     "scripting",
     "contextMenus",
     "storage",
-    "sidePanel"
+    "sidePanel",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
