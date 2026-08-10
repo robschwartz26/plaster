@@ -112,7 +112,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb }) {
     await logResult({ status: 'error', reason: 'No token set — open Options', url: tab?.url })
     return
   }
-  const { staged } = await chrome.storage.local.get('staged')
+  const { staged, venueId } = await chrome.storage.local.get(['staged', 'venueId'])
   BADGE.busy()
   await logResult({ id: 'pending-marker', status: 'working', reason: 'Claude is reading the capture…', url: tab?.url, thumb: staged?.thumb ?? thumb })
   try {
@@ -124,6 +124,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb }) {
           url: tab?.url || '', title: tab?.title || '',
           image_base64: imageBase64, mimeType: mimeType || 'image/png',
           ...(staged ? { poster_base64: staged.b64, poster_mime: staged.mime } : {}),
+          ...(venueId ? { venue_id: venueId } : {}),
         },
       }),
     })

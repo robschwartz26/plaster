@@ -1084,7 +1084,10 @@ serve(async (req) => {
     // Everything lands in pending Review via the same insertEvents (dedupe,
     // venue fuzzy-match, orphan parking) as every other ingest path.
     if (body.clipper && typeof body.clipper === 'object') {
-      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string; poster_base64?: string; poster_mime?: string }
+      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string; poster_base64?: string; poster_mime?: string; venue_id?: string }
+      // Panel-selected venue: used as the FALLBACK — a venue named in the
+      // capture still wins (resolveVenue), but a nameless grab attributes here.
+      const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
       const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
@@ -1205,7 +1208,7 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: 'error', reason: 'clipper: html or image_base64 required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
-      const ins = await insertEvents(events, null, false)
+      const ins = await insertEvents(events, clipperFallbackId, false)
       const status = (ins.inserted ?? 0) > 0 ? 'saved' : (ins.parked ?? 0) > 0 ? 'orphaned' : (ins.skipped ?? 0) > 0 ? 'duplicate' : 'error'
       return new Response(JSON.stringify({
         status, method, count: events.length,

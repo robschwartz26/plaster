@@ -1,4 +1,38 @@
 // Side panel: capture actions + the live feed (status, thumbnails, erase).
+const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoZXR3Z2RscHVsZ25qZXR1b3BlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODM3MTAsImV4cCI6MjA5MTY1OTcxMH0.JxW96nBhEHDMBbaTswau_XaZACPLTp9LgXggWQn-iAQ'
+
+// ── venue picker: sets the fallback venue for captures ──────────────────────
+async function initVenues() {
+  const sel = document.getElementById('venue')
+  const { endpoint, venueId, venueCache } = await chrome.storage.local.get(['endpoint', 'venueId', 'venueCache'])
+  const origin = new URL(endpoint || 'https://lhetwgdlpulgnjetuope.supabase.co/functions/v1/x').origin
+  const fill = (venues) => {
+    for (const v of venues) {
+      const o = document.createElement('option')
+      o.value = v.id; o.textContent = 'venue: ' + v.name
+      sel.appendChild(o)
+    }
+    if (venueId) { sel.value = venueId; sel.classList.toggle('set', !!sel.value) }
+  }
+  if (Array.isArray(venueCache) && venueCache.length) fill(venueCache)
+  try {
+    const res = await fetch(origin + '/rest/v1/venues?select=id,name&order=name.asc&limit=500', {
+      headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY },
+    })
+    const venues = await res.json()
+    if (Array.isArray(venues) && venues.length) {
+      await chrome.storage.local.set({ venueCache: venues })
+      const keep = sel.value
+      while (sel.options.length > 1) sel.remove(1)
+      fill(venues)
+      if (keep) sel.value = keep
+    }
+  } catch { /* offline — cached list stands */ }
+  sel.addEventListener('change', async () => {
+    await chrome.storage.local.set({ venueId: sel.value || null })
+    sel.classList.toggle('set', !!sel.value)
+  })
+}
 const PILL = {
   working: 'reading…', saved: 'in review', duplicate: 'duplicate',
   orphaned: 'new venue', error: 'error', erased: 'erased',
@@ -67,5 +101,5 @@ document.getElementById('sweep').addEventListener('click', () => act('sweep'))
 document.getElementById('opts').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage() })
 document.getElementById('clear').addEventListener('click', async (e) => { e.preventDefault(); await chrome.storage.local.set({ log: [] }); render() })
 
-render(); renderStaged()
+render(); renderStaged(); initVenues()
 chrome.storage.onChanged.addListener((c) => { if (c.log) render(); if (c.staged) renderStaged() })
