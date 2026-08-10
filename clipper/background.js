@@ -13,9 +13,14 @@ const DEFAULT_ENDPOINT = 'https://lhetwgdlpulgnjetuope.supabase.co/functions/v1/
 // to pass Supabase's edge relay; all real auth is the x-clipper-token below.
 const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxoZXR3Z2RscHVsZ25qZXR1b3BlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYwODM3MTAsImV4cCI6MjA5MTY1OTcxMH0.JxW96nBhEHDMBbaTswau_XaZACPLTp9LgXggWQn-iAQ'
 
+// Set on every service-worker start (not just install) so the toolbar button
+// always opens the panel, even after Chrome restarts or extension reloads.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
+
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
-  chrome.contextMenus.create({ id: 'plaster-stage', title: 'Stage as Plaster poster', contexts: ['image'] })
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({ id: 'plaster-stage', title: 'Stage as Plaster poster', contexts: ['image'] })
+  })
 })
 
 async function getSettings() {
