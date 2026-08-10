@@ -108,17 +108,33 @@ async function stagePoster({ base64, mime, thumb, fromUrl, tabId }) {
   if (tabId) toast(tabId, '📌 Poster staged — now grab the info (⌘⇧S)', true)
 }
 
-// ── ship a capture (uses the staged poster when present) ────────────────────
-async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replaceLogId = null }) {
+// ── ship a capture — PIPELINED ──────────────────────────────────────────────
+// Everything is snapshotted the moment the grab fires: the staged poster and
+// venue are consumed IMMEDIATELY (so Rob can stage the next event while this
+// one processes), a 'reading…' card is created for THIS capture, and the
+// request resolves that card in place whenever Claude finishes. Any number of
+// captures can be in flight at once.
+async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replaceLogId = null, stagedOverride, venueOverride }) {
   const { token, endpoint } = await getSettings()
   if (!token) {
     BADGE.error()
     await logResult({ status: 'error', reason: 'No token set — open Options', url: tab?.url })
     return
   }
-  const { staged, venueId } = await chrome.storage.local.get(['staged', 'venueId'])
+  // Snapshot + consume the stage NOW — the pipeline moves on without waiting.
+  let staged, venueId
+  if (stagedOverride !== undefined) {
+    staged = stagedOverride; venueId = venueOverride ?? null
+  } else {
+    const st = await chrome.storage.local.get(['staged', 'venueId'])
+    staged = st.staged ?? null; venueId = st.venueId ?? null
+    if (staged) await chrome.storage.local.remove('staged')
+    chrome.action.setBadgeText({ text: '' })
+  }
+  const logId = crypto.randomUUID()
+  if (replaceLogId) await removeLog(replaceLogId)
+  await logResult({ id: logId, status: 'working', reason: 'Claude is reading the capture…', url: tab?.url, thumb: staged?.thumb ?? thumb })
   BADGE.busy()
-  await logResult({ id: 'pending-marker', status: 'working', reason: 'Claude is reading the capture…', url: tab?.url, thumb: staged?.thumb ?? thumb })
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -134,26 +150,19 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replac
       }),
     })
     const json = await res.json().catch(() => ({}))
-    const { log = [] } = await chrome.storage.local.get('log')
-    await chrome.storage.local.set({ log: log.filter(r => r.id !== 'pending-marker') })
     if (!res.ok) {
       BADGE.error()
-      await logResult({ status: 'error', reason: json.error || json.reason || `HTTP ${res.status}`, url: tab?.url, thumb: staged?.thumb ?? thumb })
+      await updateLog(logId, { status: 'error', reason: json.error || json.reason || `HTTP ${res.status}` })
       if (tab?.id) toast(tab.id, '✗ Plaster: ' + (json.reason || json.error || 'failed'), false)
       return
     }
     ;(BADGE[json.status] || BADGE.error)()
-    if (replaceLogId) await removeLog(replaceLogId)
-    await logResult({
+    await updateLog(logId, {
       status: json.status, event: json.event_name, reason: json.reason,
-      url: tab?.url, thumb: staged?.thumb ?? thumb, eventIds: json.event_ids || [],
-      preview: json.preview ?? null,
+      eventIds: json.event_ids || [], preview: json.preview ?? null,
       // duplicates keep their payload so 'Send to Review anyway' can force it through
       ...(json.status === 'duplicate' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null } } : {}),
     })
-    if (json.status === 'saved' || json.status === 'orphaned' || json.status === 'duplicate') {
-      await chrome.storage.local.remove('staged') // stage consumed — ready for the next event
-    }
     if (tab?.id) {
       const msg = json.status === 'saved' ? `✓ Saved to Review — ${json.event_name ?? 'event'}`
         : json.status === 'duplicate' ? `Already on the wall — ${json.event_name ?? 'event'}`
@@ -162,10 +171,8 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replac
       toast(tab.id, msg, json.status === 'saved' || json.status === 'orphaned')
     }
   } catch (e) {
-    const { log = [] } = await chrome.storage.local.get('log')
-    await chrome.storage.local.set({ log: log.filter(r => r.id !== 'pending-marker') })
     BADGE.error()
-    await logResult({ status: 'error', reason: String(e).slice(0, 120), url: tab?.url, thumb })
+    await updateLog(logId, { status: 'error', reason: String(e).slice(0, 120) })
   }
 }
 
@@ -253,11 +260,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const rp = entry?.retryPayload
       if (!rp) return
       // replay with the ORIGINAL context (staged poster + venue at capture time)
-      const stash = await chrome.storage.local.get(['staged', 'venueId'])
-      await chrome.storage.local.set({ staged: rp.staged ?? null, venueId: rp.venueId ?? null })
-      await ingest({ imageBase64: rp.imageBase64, mimeType: rp.mimeType, tab: { url: rp.url, title: rp.title }, thumb: entry.thumb, force: true, replaceLogId: msg.logId })
-      await chrome.storage.local.set({ staged: stash.staged ?? null, venueId: stash.venueId ?? null })
-      if (!stash.staged) await chrome.storage.local.remove('staged')
+      await ingest({ imageBase64: rp.imageBase64, mimeType: rp.mimeType, tab: { url: rp.url, title: rp.title }, thumb: entry.thumb, force: true, replaceLogId: msg.logId, stagedOverride: rp.staged ?? null, venueOverride: rp.venueId ?? null })
     })()
     return
   }
