@@ -4,6 +4,23 @@ const PILL = {
   orphaned: 'new venue', error: 'error', erased: 'erased',
 }
 
+async function renderStaged() {
+  const { staged } = await chrome.storage.local.get('staged')
+  const el = document.getElementById('staged')
+  el.innerHTML = ''
+  if (!staged) return
+  const slot = document.createElement('div'); slot.className = 'slot'
+  if (staged.thumb) { const img = document.createElement('img'); img.src = staged.thumb; slot.appendChild(img) }
+  const t = document.createElement('div'); t.className = 't'
+  const label = document.createElement('div'); label.className = 'label'; label.textContent = 'Poster pending'
+  const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = 'Now grab the info (⌘⇧S) — this image becomes the poster.'
+  const rej = document.createElement('button'); rej.className = 'reject'; rej.textContent = 'Reject — pick another'
+  rej.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'plaster-action', action: 'reject-staged' }))
+  t.appendChild(label); t.appendChild(hint); t.appendChild(rej)
+  slot.appendChild(t)
+  el.appendChild(slot)
+}
+
 async function render() {
   const { log = [] } = await chrome.storage.local.get('log')
   const feed = document.getElementById('feed')
@@ -44,10 +61,11 @@ async function render() {
 
 function act(action) { chrome.runtime.sendMessage({ type: 'plaster-action', action }) }
 document.getElementById('region').addEventListener('click', () => act('region'))
+document.getElementById('poster').addEventListener('click', () => act('poster-region'))
 document.getElementById('window').addEventListener('click', () => act('window'))
 document.getElementById('sweep').addEventListener('click', () => act('sweep'))
 document.getElementById('opts').addEventListener('click', (e) => { e.preventDefault(); chrome.runtime.openOptionsPage() })
 document.getElementById('clear').addEventListener('click', async (e) => { e.preventDefault(); await chrome.storage.local.set({ log: [] }); render() })
 
-render()
-chrome.storage.onChanged.addListener((c) => { if (c.log) render() })
+render(); renderStaged()
+chrome.storage.onChanged.addListener((c) => { if (c.log) render(); if (c.staged) renderStaged() })

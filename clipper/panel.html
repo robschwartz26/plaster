@@ -27,11 +27,19 @@
   .foot { margin-top: 10px; font-size: 11px; color: rgba(240,236,227,0.4); line-height: 1.5; }
   a { color: #A855F7; text-decoration: none; }
   .empty { padding: 22px 0; color: rgba(240,236,227,0.35); text-align: center; }
+  #staged .slot { display: flex; gap: 10px; align-items: center; padding: 10px; margin-bottom: 10px; border: 1.5px dashed rgba(168,85,247,0.55); border-radius: 12px; background: rgba(168,85,247,0.07); }
+  #staged img { width: 54px; height: 76px; object-fit: cover; border-radius: 6px; flex-shrink: 0; }
+  #staged .t { flex: 1; min-width: 0; }
+  #staged .label { font-weight: 700; color: #c084fc; font-size: 11px; letter-spacing: 0.07em; text-transform: uppercase; }
+  #staged .hint { color: rgba(240,236,227,0.55); font-size: 11.5px; margin-top: 3px; line-height: 1.4; }
+  #staged .reject { margin-top: 6px; padding: 4px 12px; border-radius: 8px; border: 1px solid rgba(248,113,113,0.4); background: none; color: #f87171; font: 600 11px "Space Grotesk", system-ui, sans-serif; cursor: pointer; }
 </style>
 </head>
 <body>
   <h1>plaster clipper</h1>
-  <button class="act" id="region">Region grab <span class="kbd">⌘⇧S</span></button>
+  <div id="staged"></div>
+  <button class="act secondary" id="poster">Stage poster (region) <span class="kbd">⌘⇧P</span></button>
+  <button class="act" id="region">Grab the info → ingest <span class="kbd">⌘⇧S</span></button>
   <button class="act" id="window">Whole page grab <span class="kbd">⌘⇧K</span></button>
   <button class="act secondary" id="sweep">Sweep all tabs (grabs each one)</button>
   <div id="feed"><div class="empty">Captures show up here</div></div>

@@ -1084,7 +1084,7 @@ serve(async (req) => {
     // Everything lands in pending Review via the same insertEvents (dedupe,
     // venue fuzzy-match, orphan parking) as every other ingest path.
     if (body.clipper && typeof body.clipper === 'object') {
-      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string }
+      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string; poster_base64?: string; poster_mime?: string }
       const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
@@ -1130,6 +1130,24 @@ serve(async (req) => {
       let events: RawEvent[] = []
       let method = ''
 
+      // Staged poster (two-step clip): Rob picks the poster image FIRST, then
+      // captures the info. When present, the staged image is the event's
+      // poster and the info capture is only read for fields.
+      let stagedPosterUrl: string | null = null
+      if (typeof c.poster_base64 === 'string' && c.poster_base64.length > 100) {
+        try {
+          const pmime = typeof c.poster_mime === 'string' && /^image\//.test(c.poster_mime) ? c.poster_mime : 'image/png'
+          const bin = atob(c.poster_base64)
+          if (bin.length <= MAX_IMAGE_BYTES) {
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const path = `clipper/${crypto.randomUUID()}.${pmime === 'image/jpeg' ? 'jpg' : 'png'}`
+            const { error: upErr } = await supabaseService.storage.from('posters').upload(path, bytes, { contentType: pmime, upsert: false })
+            if (!upErr) stagedPosterUrl = supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
+          }
+        } catch { /* staged upload is best-effort */ }
+      }
+
       if (typeof c.image_base64 === 'string' && c.image_base64.length > 100) {
         // ── Screenshot mode (⌘⇧E region / ⌘⇧F window) ──
         method = 'clipper-shot'
@@ -1141,9 +1159,11 @@ serve(async (req) => {
         if (!j || j.none === true) {
           return new Response(JSON.stringify({ status: 'error', reason: 'no event found in the screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
         }
-        // The screenshot itself is the poster (his ⌘⇧4 workflow).
-        let posterUrl: string | null = null
+        // Staged poster wins; otherwise the screenshot itself is the poster
+        // (the classic ⌘⇧4 workflow).
+        let posterUrl: string | null = stagedPosterUrl
         try {
+          if (posterUrl) throw 'staged' // skip uploading the info shot as art
           const bin = atob(c.image_base64)
           if (bin.length <= MAX_IMAGE_BYTES) {
             const bytes = new Uint8Array(bin.length)
@@ -1163,7 +1183,7 @@ serve(async (req) => {
         if (parsed && parsed.events.length > 0) {
           method = 'clipper-jsonld'
           events = parsed.events
-          if (c.poster_url && events.length === 1) events[0].poster_image_url = c.poster_url
+          if ((stagedPosterUrl || c.poster_url) && events.length === 1) events[0].poster_image_url = stagedPosterUrl ?? c.poster_url ?? null
         } else {
           method = 'clipper-llm'
           const text = decodeEntities(stripTags(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '))).slice(0, 15000)
@@ -1177,7 +1197,7 @@ serve(async (req) => {
           const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
           let ogImage: string | null = null
           try { ogImage = ogMatch ? new URL(ogMatch[1], url).href : null } catch { ogImage = null }
-          const row = rowFromClip(j, c.poster_url ?? ogImage)
+          const row = rowFromClip(j, stagedPosterUrl ?? c.poster_url ?? ogImage)
           if ('error' in row) return new Response(JSON.stringify({ status: 'error', reason: row.error }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
           events = [row]
         }
