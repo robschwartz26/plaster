@@ -1093,7 +1093,7 @@ serve(async (req) => {
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
 
-      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()} — if the year is not shown, use the next upcoming occurrence. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
+      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()} — if the year is not shown, use the next upcoming occurrence. If the printed year would place the event in the PAST, it is reused/stale artwork for a recurring event — use the next upcoming occurrence of that month and day instead. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
 
       // deno-lint-ignore no-explicit-any
       async function askClaude(content: any[]): Promise<Record<string, unknown> | null> {
@@ -1114,13 +1114,24 @@ serve(async (req) => {
         const date = typeof j.date === 'string' ? j.date.trim() : ''
         if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'could not read a title + date' }
         const timeStr = typeof j.time === 'string' ? j.time.trim() : ''
-        const start = ptTimestamp(date, parseShowTime(timeStr))
+        let start = ptTimestamp(date, parseShowTime(timeStr))
         if (!start) return { error: `unusable date ${date}` }
+        // Reused poster art (recurring nights) often prints an old year. The
+        // clipper is a live human capture, so a past date = stale year: roll
+        // the month/day forward to the next occurrence on/after today.
+        let rolledDate = date
+        for (let bump = 0; start.getTime() < floor && bump < 3; bump++) {
+          const y = parseInt(rolledDate.slice(0, 4), 10) + 1
+          rolledDate = `${y}${rolledDate.slice(4)}`
+          const next = ptTimestamp(rolledDate, parseShowTime(timeStr))
+          if (!next) break
+          start = next
+        }
         if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
-        if (start.getTime() > maxOut) return { error: `event date ${date} is beyond the horizon` }
+        if (start.getTime() > maxOut) return { error: `event date ${rolledDate} is beyond the horizon` }
         const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
         return {
-          title: cleanTitle, date, portland_date: portlandDate(start), starts_at: start.toISOString(),
+          title: cleanTitle, date: rolledDate, portland_date: portlandDate(start), starts_at: start.toISOString(),
           time_display: timeStr, category: typeof j.category === 'string' && CATEGORIES.includes(j.category) ? j.category : 'Live Music',
           poster_image_url: posterUrl, ticket_url: null,
           venue_name: typeof j.venue_name === 'string' ? decodeEntities(j.venue_name).trim() : '',
