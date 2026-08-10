@@ -215,6 +215,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return
   }
 
+  if (msg?.type === 'plaster-stage-image') {
+    ;(async () => { await stageFromUrl(msg.srcUrl, sender.tab) })()
+    return
+  }
+
   if (msg?.type === 'plaster-action') {
     ;(async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
@@ -261,11 +266,10 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command === 'window-grab') windowGrab(tab)
 })
 
-// ── right-click an image → STAGE it as the poster ───────────────────────────
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (info.menuItemId !== 'plaster-stage' || !info.srcUrl) return
+// ── stage an image by URL (dblclick / ⌥-click / right-click all land here) ──
+async function stageFromUrl(srcUrl, tab) {
   try {
-    const res = await fetch(info.srcUrl)
+    const res = await fetch(srcUrl)
     const blob = await res.blob()
     if (blob.size > 6 * 1024 * 1024) { BADGE.error(); await logResult({ status: 'error', reason: 'image too large (>6MB)', url: tab?.url }); return }
     const mime = blob.type && blob.type.startsWith('image/') ? blob.type : 'image/png'
@@ -276,6 +280,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     BADGE.error()
     await logResult({ status: 'error', reason: 'image fetch failed: ' + String(e).slice(0, 100), url: tab?.url })
   }
+}
+
+// right-click menu
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId !== 'plaster-stage' || !info.srcUrl) return
+  await stageFromUrl(info.srcUrl, tab)
 })
 
 // ── sweep ───────────────────────────────────────────────────────────────────

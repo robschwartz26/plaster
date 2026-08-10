@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Plaster Clipper",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
   "permissions": [
     "tabs",
@@ -45,5 +45,16 @@
       },
       "description": "Stage a POSTER region (then grab the info with the region grab)"
     }
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "stage-click.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }
