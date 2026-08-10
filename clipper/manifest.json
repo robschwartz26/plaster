@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Plaster Clipper",
+  "version": "1.0.0",
+  "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
+  "permissions": ["tabs", "scripting", "contextMenus", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Plaster Clipper",
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "region-grab": {
+      "suggested_key": { "default": "Ctrl+Shift+S", "mac": "Command+Shift+S" },
+      "description": "Region grab → Plaster (drag a box, like ⌘⇧4)"
+    },
+    "window-grab": {
+      "suggested_key": { "default": "Ctrl+Shift+D", "mac": "Command+Shift+D" },
+      "description": "Grab the whole visible page → Plaster"
+    }
+  }
+}

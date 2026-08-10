@@ -128,6 +128,8 @@ async function stripMetadataBestEffort(bytes: Uint8Array): Promise<Uint8Array | 
 // deno-lint-ignore no-explicit-any
 async function rehostImage(supabaseService: any, imageUrl: string | null, deadline: number): Promise<string | null> {
   if (!imageUrl) return null
+  // Already ours (e.g. a clipper screenshot uploaded moments ago) — keep as-is.
+  if (imageUrl.startsWith(Deno.env.get('SUPABASE_URL') ?? '\u0000')) return imageUrl
   if (Date.now() > deadline) return imageUrl
   try {
     const res = await fetch(imageUrl, {
@@ -353,6 +355,11 @@ async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<
     html = await res.text()
   } catch { return null }
   if (!html || html.length > 5_000_000) return null
+  return jsonLdFromHtml(html, url, now, maxOut)
+}
+
+// Same parser, but on HTML we already hold (the clipper ships the rendered DOM).
+function jsonLdFromHtml(html: string, url: string, now: number, maxOut: number): { events: RawEvent[]; beyondHorizon: number; past: number } | null {
 
   // Collect every ld+json block → flatten @graph/arrays → keep schema.org Events
   // deno-lint-ignore no-explicit-any
@@ -753,22 +760,49 @@ async function enrichFromDetailPages(events: RawEvent[], now: number, maxOut: nu
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-  }
   const supabaseService = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const { data: { user }, error: authError } = await supabaseService.auth.getUser(authHeader.replace('Bearer ', ''))
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+
+  // ── Clipper auth: dedicated bearer secret, honored ONLY for the clipper
+  // branch (enforced below). The browser extension never holds Supabase keys.
+  const clipperHeader = req.headers.get('x-clipper-token')
+  let user: { id: string } | null = null
+  let clipperAuthed = false
+  if (clipperHeader) {
+    const expect = Deno.env.get('CLIPPER_TOKEN')
+    if (!expect || clipperHeader !== expect) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: adminRow } = await supabaseService.from('profiles').select('id').eq('is_admin', true).order('created_at', { ascending: true }).limit(1).maybeSingle()
+    if (!adminRow?.id) {
+      return new Response(JSON.stringify({ error: 'no admin profile' }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    user = { id: adminRow.id }
+    clipperAuthed = true
+  } else {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: { user: jwtUser }, error: authError } = await supabaseService.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (authError || !jwtUser) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: profile } = await supabaseService.from('profiles').select('is_admin').eq('id', jwtUser.id).single()
+    if (!profile?.is_admin) {
+      return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    user = jwtUser
   }
-  const { data: profile } = await supabaseService.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) {
-    return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-  }
+
+  const authedUser = user!  // assigned on every surviving path above
 
   try {
     const body = await req.json().catch(() => ({}))
+    // The clipper token unlocks NOTHING except the clipper branch.
+    // deno-lint-ignore no-explicit-any
+    if (clipperAuthed && !(body as any)?.clipper) {
+      return new Response(JSON.stringify({ error: 'clipper token only permits clipper captures' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
 
     // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
     // Handled FIRST — a relink request carries no url, so it must run before the url
@@ -810,7 +844,7 @@ serve(async (req) => {
           like_count: 0,
           status: 'pending', // → Review (passed_review defaults false)
           sold_out: o.sold_out ?? false,
-          created_by: user.id,
+          created_by: authedUser.id,
           source_url: o.event_url || o.source_url || null,
           ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
           artist_name: o.artist_name ?? null,
@@ -885,7 +919,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ processed: list.length, updated, remaining: count ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
-    const rawUrl = typeof body.url === 'string' ? body.url.trim() : ''
+    const clipperUrl = (body.clipper && typeof body.clipper === 'object' && typeof (body.clipper as { url?: string }).url === 'string') ? ((body.clipper as { url: string }).url).trim() : ''
+    const rawUrl = typeof body.url === 'string' ? body.url.trim() : clipperUrl
     if (!rawUrl) throw new Error('Pass a url')
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
     const now = Date.now()
@@ -977,7 +1012,7 @@ serve(async (req) => {
             event_url: ev.ticket_url ?? null,
             sold_out: ev.sold_out ?? false,
             confidence: 90,
-            created_by: user.id,
+            created_by: authedUser.id,
             category,
             raw_venue_address: ev.venue_address || null,
             raw_venue_website: ev.venue_website || null,
@@ -1005,7 +1040,7 @@ serve(async (req) => {
           like_count: 0,
           status, // service role bypasses the ingest-status trigger — set explicitly
           sold_out: ev.sold_out ?? false,
-          created_by: user.id,
+          created_by: authedUser.id,
           source_url: ev.ticket_url || url,
           ai_confidence: 90,
           artist_name: ev.artist_name?.trim() || null,
@@ -1014,6 +1049,125 @@ serve(async (req) => {
         else { inserted++; index.add(key) }
       }
       return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors }
+    }
+
+    // ═══ CLIPPER: capture from the browser extension — Rob navigates, we package ══
+    // {clipper:{url, title, html?}} → parse the RENDERED DOM he was looking at
+    //   (JSON-LD first — free; LLM on the page text as fallback).
+    // {clipper:{url, title, image_base64, mimeType}} → his ⌘⇧4 workflow: the
+    //   screenshot IS the poster; Claude Vision reads the fields off it.
+    // Everything lands in pending Review via the same insertEvents (dedupe,
+    // venue fuzzy-match, orphan parking) as every other ingest path.
+    if (body.clipper && typeof body.clipper === 'object') {
+      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string }
+      const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
+      const KEY = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+
+      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()} — if the year is not shown, use the next upcoming occurrence. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
+
+      // deno-lint-ignore no-explicit-any
+      async function askClaude(content: any[]): Promise<Record<string, unknown> | null> {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 600, messages: [{ role: 'user', content }] }),
+          signal: AbortSignal.timeout(60000),
+        })
+        if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
+        const data = await res.json()
+        const raw = (data.content?.[0]?.text ?? '').trim()
+        try { const m = raw.match(/\{[\s\S]*\}/); return JSON.parse(m ? m[0] : raw) } catch { return null }
+      }
+
+      function rowFromClip(j: Record<string, unknown>, posterUrl: string | null): RawEvent | { error: string } {
+        const title = typeof j.title === 'string' ? decodeEntities(j.title).trim() : ''
+        const date = typeof j.date === 'string' ? j.date.trim() : ''
+        if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'could not read a title + date' }
+        const timeStr = typeof j.time === 'string' ? j.time.trim() : ''
+        const start = ptTimestamp(date, parseShowTime(timeStr))
+        if (!start) return { error: `unusable date ${date}` }
+        if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
+        if (start.getTime() > maxOut) return { error: `event date ${date} is beyond the horizon` }
+        const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
+        return {
+          title: cleanTitle, date, portland_date: portlandDate(start), starts_at: start.toISOString(),
+          time_display: timeStr, category: typeof j.category === 'string' && CATEGORIES.includes(j.category) ? j.category : 'Live Music',
+          poster_image_url: posterUrl, ticket_url: null,
+          venue_name: typeof j.venue_name === 'string' ? decodeEntities(j.venue_name).trim() : '',
+          raw_description: typeof j.description === 'string' ? j.description.trim() : '',
+          raw_notes: '', sold_out: titleSold || j.sold_out === true,
+          venue_address: typeof j.venue_address === 'string' ? j.venue_address.trim() : '',
+          venue_website: '', artist_name: '',
+        }
+      }
+
+      let events: RawEvent[] = []
+      let method = ''
+
+      if (typeof c.image_base64 === 'string' && c.image_base64.length > 100) {
+        // ── Screenshot mode (⌘⇧E region / ⌘⇧F window) ──
+        method = 'clipper-shot'
+        const mime = typeof c.mimeType === 'string' && /^image\//.test(c.mimeType) ? c.mimeType : 'image/png'
+        const j = await askClaude([
+          { type: 'image', source: { type: 'base64', media_type: mime, data: c.image_base64 } },
+          { type: 'text', text: `This screenshot shows a live-event listing (poster and/or details)${pageTitle ? ` from a page titled "${pageTitle}"` : ''}. Read the event's details from the image. ${CLIP_FIELDS}` },
+        ])
+        if (!j || j.none === true) {
+          return new Response(JSON.stringify({ status: 'error', reason: 'no event found in the screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        }
+        // The screenshot itself is the poster (his ⌘⇧4 workflow).
+        let posterUrl: string | null = null
+        try {
+          const bin = atob(c.image_base64)
+          if (bin.length <= MAX_IMAGE_BYTES) {
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const path = `clipper/${crypto.randomUUID()}.${mime === 'image/jpeg' ? 'jpg' : 'png'}`
+            const { error: upErr } = await supabaseService.storage.from('posters').upload(path, bytes, { contentType: mime, upsert: false })
+            if (!upErr) posterUrl = supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
+          }
+        } catch { /* poster upload is best-effort; the event still lands */ }
+        const row = rowFromClip(j, posterUrl)
+        if ('error' in row) return new Response(JSON.stringify({ status: 'error', reason: row.error }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        events = [row]
+      } else if (typeof c.html === 'string' && c.html.trim().length > 0) {
+        // ── Tab mode (⌘⇧S): the rendered DOM is the one-page-with-everything ──
+        const html = c.html.slice(0, 1_500_000)
+        const parsed = jsonLdFromHtml(html, url, floor, maxOut)
+        if (parsed && parsed.events.length > 0) {
+          method = 'clipper-jsonld'
+          events = parsed.events
+          if (c.poster_url && events.length === 1) events[0].poster_image_url = c.poster_url
+        } else {
+          method = 'clipper-llm'
+          const text = decodeEntities(stripTags(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '))).slice(0, 15000)
+          if (text.replace(/\s+/g, ' ').trim().length < MIN_DETAIL_CHARS) {
+            return new Response(JSON.stringify({ status: 'error', reason: 'page has too little readable text — try the region screenshot instead' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
+          const j = await askClaude([{ type: 'text', text: `This is the visible text of a live-event page${pageTitle ? ` titled "${pageTitle}"` : ''} (${url}). Extract THE event this page is about. ${CLIP_FIELDS}\n\nPAGE TEXT:\n${text}` }])
+          if (!j || j.none === true) {
+            return new Response(JSON.stringify({ status: 'error', reason: 'no event found on the page — try the region screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
+          const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+          let ogImage: string | null = null
+          try { ogImage = ogMatch ? new URL(ogMatch[1], url).href : null } catch { ogImage = null }
+          const row = rowFromClip(j, c.poster_url ?? ogImage)
+          if ('error' in row) return new Response(JSON.stringify({ status: 'error', reason: row.error }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          events = [row]
+        }
+      } else {
+        return new Response(JSON.stringify({ status: 'error', reason: 'clipper: html or image_base64 required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      const ins = await insertEvents(events, null, false)
+      const status = (ins.inserted ?? 0) > 0 ? 'saved' : (ins.parked ?? 0) > 0 ? 'orphaned' : (ins.skipped ?? 0) > 0 ? 'duplicate' : 'error'
+      return new Response(JSON.stringify({
+        status, method, count: events.length,
+        inserted: ins.inserted, skipped: ins.skipped, parked: ins.parked, failed: ins.failed,
+        event_name: events[0]?.title ?? null,
+        reason: status === 'error' ? (ins.errors?.[0] ?? 'insert failed') : undefined,
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ DRY RUN: extract → (optionally) commit to pending → return for review ══
