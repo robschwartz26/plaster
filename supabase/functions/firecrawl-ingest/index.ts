@@ -337,6 +337,17 @@ const LD_TYPE_CATEGORY: Record<string, string> = {
   DanceEvent: 'Dance', ScreeningEvent: 'Film', Festival: 'Festivals',
   VisualArtsEvent: 'Art', LiteraryEvent: 'Literary',
 }
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', nbsp: ' ', quot: '"', apos: "'", rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201c', rdquo: '\u201d',
+  hellip: '\u2026', ndash: '\u2013', mdash: '\u2014', eacute: '\u00e9', egrave: '\u00e8', agrave: '\u00e0',
+  ouml: '\u00f6', uuml: '\u00fc', ntilde: '\u00f1', ccedil: '\u00e7',
+}
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (m, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return m } })
+    .replace(/&#(\d+);/g, (m, dec) => { try { return String.fromCodePoint(parseInt(dec, 10)) } catch { return m } })
+    .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
+}
 function stripTags(x: string): string { return x.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
 // deno-lint-ignore no-explicit-any
 function ldFirst(x: any): any { return Array.isArray(x) ? x[0] : x }
