@@ -1089,6 +1089,9 @@ serve(async (req) => {
       // capture still wins (resolveVenue), but a nameless grab attributes here.
       const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
       const clipperForce = (body.clipper as { force?: boolean }).force === true
+      // Scraper runs cap the window (~90d) to keep Review sane; a CLIP is a
+      // deliberate human choice — accept anything up to a year out.
+      const clipMaxOut = Math.max(now, floor) + 365 * 24 * 60 * 60 * 1000
       const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
@@ -1128,7 +1131,7 @@ serve(async (req) => {
           start = next
         }
         if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
-        if (start.getTime() > maxOut) return { error: `event date ${rolledDate} is beyond the horizon` }
+        if (start.getTime() > clipMaxOut) return { error: `event date ${rolledDate} is more than a year out` }
         const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
         return {
           title: cleanTitle, date: rolledDate, portland_date: portlandDate(start), starts_at: start.toISOString(),
@@ -1194,7 +1197,7 @@ serve(async (req) => {
       } else if (typeof c.html === 'string' && c.html.trim().length > 0) {
         // ── Tab mode (⌘⇧S): the rendered DOM is the one-page-with-everything ──
         const html = c.html.slice(0, 1_500_000)
-        const parsed = jsonLdFromHtml(html, url, floor, maxOut)
+        const parsed = jsonLdFromHtml(html, url, floor, clipMaxOut)
         if (parsed && parsed.events.length > 0) {
           method = 'clipper-jsonld'
           events = parsed.events
