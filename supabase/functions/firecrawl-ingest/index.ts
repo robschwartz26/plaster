@@ -811,7 +811,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     // The clipper token unlocks NOTHING except the clipper branch.
     // deno-lint-ignore no-explicit-any
-    if (clipperAuthed && !(body as any)?.clipper) {
+    if (clipperAuthed && !((body as any)?.clipper || (body as any)?.clipper_delete)) {
       return new Response(JSON.stringify({ error: 'clipper token only permits clipper captures' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
@@ -930,6 +930,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ processed: list.length, updated, remaining: count ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ CLIPPER ERASE: pull a just-captured event back out of the queue ═══════
+    // Token-scoped destructive op, deliberately narrow: deletes ONLY rows still
+    // status='pending' (never anything published/live on the wall).
+    if (body.clipper_delete && typeof body.clipper_delete === 'object') {
+      const cd = body.clipper_delete as { event_id?: string }
+      const id = typeof cd.event_id === 'string' ? cd.event_id : ''
+      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('clipper_delete: event_id required')
+      const { data: del, error: delErr } = await supabaseService.from('events')
+        .delete().eq('id', id).eq('status', 'pending').select('id')
+      if (delErr) throw delErr
+      return new Response(JSON.stringify({ deleted: del?.length ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     const clipperUrl = (body.clipper && typeof body.clipper === 'object' && typeof (body.clipper as { url?: string }).url === 'string') ? ((body.clipper as { url: string }).url).trim() : ''
     const rawUrl = typeof body.url === 'string' ? body.url.trim() : clipperUrl
     if (!rawUrl) throw new Error('Pass a url')
@@ -997,6 +1010,7 @@ serve(async (req) => {
       let inserted = 0, failed = 0, skipped = 0, parked = 0
       const parkedVenues = new Set<string>()
       const errors: string[] = []
+      const insertedIds: string[] = []
       for (const ev of rows.slice(0, MAX_EVENTS)) {
         if (!ev?.title || !ev?.starts_at) { failed++; continue }
         const rv = resolveVenue(ev.venue_name ?? '', fallbackId)
@@ -1038,7 +1052,7 @@ serve(async (req) => {
         const key = `${rv.id}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
         if (index.has(key)) { skipped++; continue }
         const posterUrl = await rehostImage(supabaseService, ev.poster_image_url ?? null, imageDeadline)
-        const { error: insErr } = await supabaseService.from('events').insert({
+        const { data: insData, error: insErr } = await supabaseService.from('events').insert({
           venue_id: rv.id,
           title: ev.title,
           category,
@@ -1055,11 +1069,11 @@ serve(async (req) => {
           source_url: ev.ticket_url || url,
           ai_confidence: 90,
           artist_name: ev.artist_name?.trim() || null,
-        })
+        }).select('id')
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
-        else { inserted++; index.add(key) }
+        else { inserted++; index.add(key); if (insData?.[0]?.id) insertedIds.push(insData[0].id as string) }
       }
-      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors }
+      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors, insertedIds }
     }
 
     // ═══ CLIPPER: capture from the browser extension — Rob navigates, we package ══
@@ -1177,6 +1191,7 @@ serve(async (req) => {
         status, method, count: events.length,
         inserted: ins.inserted, skipped: ins.skipped, parked: ins.parked, failed: ins.failed,
         event_name: events[0]?.title ?? null,
+        event_ids: ins.insertedIds ?? [],
         reason: status === 'error' ? (ins.errors?.[0] ?? 'insert failed') : undefined,
       }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
