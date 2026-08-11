@@ -4,6 +4,7 @@ const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const PILL = {
   working: 'reading…', saved: 'in review', duplicate: 'duplicate',
   orphaned: 'new venue', error: 'error', erased: 'erased', confirm: 'a year out — confirm?',
+  'confirm-venue': 'which venue?',
 }
 const openCards = new Set() // expanded log ids (survives re-renders)
 
@@ -119,6 +120,21 @@ async function render() {
       detail.appendChild(none)
     }
     const row = document.createElement('div'); row.className = 'btnrow'
+    if (r.status === 'confirm-venue' && r.retryPayload) {
+      const yes = document.createElement('button'); yes.className = 'mini go'
+      yes.textContent = `Yes — this is ${r.confirmVenueName ?? 'the selected venue'}`
+      yes.addEventListener('click', () => {
+        yes.disabled = true; yes.textContent = 'Filing…'
+        chrome.runtime.sendMessage({ type: 'plaster-force', logId: r.id, choice: 'yes' })
+      })
+      row.appendChild(yes)
+      const no = document.createElement('button'); no.className = 'mini warn'; no.textContent = 'No — park as new venue'
+      no.addEventListener('click', () => {
+        no.disabled = true; no.textContent = 'Parking…'
+        chrome.runtime.sendMessage({ type: 'plaster-force', logId: r.id, choice: 'no' })
+      })
+      row.appendChild(no)
+    }
     if (r.status === 'confirm' && r.retryPayload) {
       const ok = document.createElement('button'); ok.className = 'mini go'; ok.textContent = 'Yes — save it'
       ok.addEventListener('click', () => {

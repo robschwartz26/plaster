@@ -1177,6 +1177,8 @@ serve(async (req) => {
       const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
       const clipperForce = (body.clipper as { force?: boolean }).force === true
       const clipperAllowFar = (body.clipper as { allow_far?: boolean }).allow_far === true
+      const clipperAssumeVenue = (body.clipper as { assume_venue?: boolean }).assume_venue === true
+      const clipperParkOk = (body.clipper as { park_ok?: boolean }).park_ok === true
       // Scraper runs cap the window (~90d) to keep Review sane; a CLIP is a
       // deliberate human choice — accept anything up to a year out, or up to
       // 3 years when the admin explicitly confirmed a far-future date.
@@ -1343,6 +1345,22 @@ serve(async (req) => {
         })
         ;(events[0] as RawEvent & { description?: string }).description = composed
       }
+      // Venue didn't resolve but the panel has a venue selected → ask the human
+      // instead of parking a misread ("The 1/50") as a brand-new venue.
+      if (rv0?.orphanName && clipperFallbackId && !clipperAssumeVenue && !clipperParkOk) {
+        const sel = venueList.find(v => v.id === clipperFallbackId)
+        const e0c = events[0] as (RawEvent & { description?: string })
+        return new Response(JSON.stringify({
+          status: 'confirm-venue',
+          reason: `capture reads venue as \u201c${rv0.orphanName}\u201d`,
+          confirm_venue_name: sel?.name ?? 'the selected venue',
+          event_name: e0c.title,
+          preview: { title: e0c.title, date: e0c.date, time: e0c.time_display || null, venue: rv0.orphanName, category: e0c.category, description: e0c.description ?? null, sold_out: e0c.sold_out },
+        }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+      // Confirmed: the picker venue is correct — drop the misread name so the
+      // fallback attributes it there.
+      if (clipperAssumeVenue && events[0]) events[0].venue_name = ''
       const ins = await insertEvents(events, clipperFallbackId, false, clipperForce)
       const status = (ins.inserted ?? 0) > 0 ? 'saved' : (ins.parked ?? 0) > 0 ? 'orphaned' : (ins.skipped ?? 0) > 0 ? 'duplicate' : 'error'
       const e0 = events[0] as (RawEvent & { description?: string }) | undefined
