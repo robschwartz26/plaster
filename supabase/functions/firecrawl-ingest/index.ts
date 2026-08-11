@@ -1176,9 +1176,11 @@ serve(async (req) => {
       // capture still wins (resolveVenue), but a nameless grab attributes here.
       const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
       const clipperForce = (body.clipper as { force?: boolean }).force === true
+      const clipperAllowFar = (body.clipper as { allow_far?: boolean }).allow_far === true
       // Scraper runs cap the window (~90d) to keep Review sane; a CLIP is a
-      // deliberate human choice — accept anything up to a year out.
-      const clipMaxOut = Math.max(now, floor) + 365 * 24 * 60 * 60 * 1000
+      // deliberate human choice — accept anything up to a year out, or up to
+      // 3 years when the admin explicitly confirmed a far-future date.
+      const clipMaxOut = Math.max(now, floor) + (clipperAllowFar ? 3 * 365 : 365) * 24 * 60 * 60 * 1000
       const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
@@ -1233,7 +1235,7 @@ serve(async (req) => {
           start = next
         }
         if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
-        if (start.getTime() > clipMaxOut) return { error: `event date ${rolledDate} is more than a year out` }
+        if (start.getTime() > clipMaxOut) return { error: `dated ${rolledDate} — more than a year out`, needsConfirm: true, farTitle: title, farDate: rolledDate }
         const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
         return {
           title: cleanTitle, date: rolledDate, portland_date: portlandDate(start), starts_at: start.toISOString(),
@@ -1294,7 +1296,10 @@ serve(async (req) => {
           }
         } catch { /* poster upload is best-effort; the event still lands */ }
         const row = rowFromClip(j, posterUrl)
-        if ('error' in row) return new Response(JSON.stringify({ status: 'error', reason: row.error }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        if ('error' in row) {
+          const st = (row as { needsConfirm?: boolean }).needsConfirm ? 'confirm' : 'error'
+          return new Response(JSON.stringify({ status: st, reason: row.error, event_name: (row as { farTitle?: string }).farTitle ?? null }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        }
         events = [row]
       } else if (typeof c.html === 'string' && c.html.trim().length > 0) {
         // ── Tab mode (⌘⇧S): the rendered DOM is the one-page-with-everything ──
@@ -1318,7 +1323,10 @@ serve(async (req) => {
           let ogImage: string | null = null
           try { ogImage = ogMatch ? new URL(ogMatch[1], url).href : null } catch { ogImage = null }
           const row = rowFromClip(j, stagedPosterUrl ?? c.poster_url ?? ogImage)
-          if ('error' in row) return new Response(JSON.stringify({ status: 'error', reason: row.error }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          if ('error' in row) {
+            const st = (row as { needsConfirm?: boolean }).needsConfirm ? 'confirm' : 'error'
+            return new Response(JSON.stringify({ status: st, reason: row.error, event_name: (row as { farTitle?: string }).farTitle ?? null }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
           events = [row]
         }
       } else {

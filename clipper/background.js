@@ -39,6 +39,7 @@ const BADGE = {
   staged: () => badge('P', '#A855F7'),
   saved: () => badge('✓', '#16a34a'),
   duplicate: () => badge('DUP', '#b45309'),
+  confirm: () => badge('1yr?', '#b45309'),
   orphaned: () => badge('NEW', '#7c3aed'),
   error: () => badge('ERR', '#dc2626'),
 }
@@ -114,7 +115,7 @@ async function stagePoster({ base64, mime, thumb, fromUrl, tabId }) {
 // one processes), a 'reading…' card is created for THIS capture, and the
 // request resolves that card in place whenever Claude finishes. Any number of
 // captures can be in flight at once.
-async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replaceLogId = null, stagedOverride, venueOverride }) {
+async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowFar = false, replaceLogId = null, stagedOverride, venueOverride }) {
   const { token, endpoint } = await getSettings()
   if (!token) {
     BADGE.error()
@@ -146,6 +147,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replac
           ...(staged ? { poster_base64: staged.b64, poster_mime: staged.mime } : {}),
           ...(venueId ? { venue_id: venueId } : {}),
           ...(force ? { force: true } : {}),
+          ...(allowFar ? { allow_far: true } : {}),
         },
       }),
     })
@@ -160,11 +162,12 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, replac
     await updateLog(logId, {
       status: json.status, event: json.event_name, reason: json.reason,
       eventIds: json.event_ids || [], preview: json.preview ?? null,
-      // duplicates keep their payload so 'Send to Review anyway' can force it through
-      ...(json.status === 'duplicate' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null } } : {}),
+      // duplicates + far-date confirms keep their payload for one-click replay
+      ...(json.status === 'duplicate' || json.status === 'confirm' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null } } : {}),
     })
     if (tab?.id) {
       const msg = json.status === 'saved' ? `✓ Saved to Review — ${json.event_name ?? 'event'}`
+        : json.status === 'confirm' ? `Over a year out — confirm in the panel`
         : json.status === 'duplicate' ? `Already on the wall — ${json.event_name ?? 'event'}`
         : json.status === 'orphaned' ? `Saved — new venue parked for approval`
         : `✗ ${json.reason ?? 'failed'}`
@@ -261,8 +264,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const entry = log.find(r => r.id === msg.logId)
       const rp = entry?.retryPayload
       if (!rp) return
-      // replay with the ORIGINAL context (staged poster + venue at capture time)
-      await ingest({ imageBase64: rp.imageBase64, mimeType: rp.mimeType, tab: { url: rp.url, title: rp.title }, thumb: entry.thumb, force: true, replaceLogId: msg.logId, stagedOverride: rp.staged ?? null, venueOverride: rp.venueId ?? null })
+      // replay with the ORIGINAL context (staged poster + venue at capture time);
+      // duplicates replay with force (skip dedupe), far-date confirms with allow_far
+      const isConfirm = entry.status === 'confirm'
+      await ingest({ imageBase64: rp.imageBase64, mimeType: rp.mimeType, tab: { url: rp.url, title: rp.title }, thumb: entry.thumb, force: !isConfirm, allowFar: isConfirm, replaceLogId: msg.logId, stagedOverride: rp.staged ?? null, venueOverride: rp.venueId ?? null })
     })()
     return
   }

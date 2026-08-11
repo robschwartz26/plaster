@@ -3,7 +3,7 @@ const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 const PILL = {
   working: 'reading…', saved: 'in review', duplicate: 'duplicate',
-  orphaned: 'new venue', error: 'error', erased: 'erased',
+  orphaned: 'new venue', error: 'error', erased: 'erased', confirm: 'a year out — confirm?',
 }
 const openCards = new Set() // expanded log ids (survives re-renders)
 
@@ -119,6 +119,14 @@ async function render() {
       detail.appendChild(none)
     }
     const row = document.createElement('div'); row.className = 'btnrow'
+    if (r.status === 'confirm' && r.retryPayload) {
+      const ok = document.createElement('button'); ok.className = 'mini go'; ok.textContent = 'Yes — save it'
+      ok.addEventListener('click', () => {
+        ok.disabled = true; ok.textContent = 'Saving…'
+        chrome.runtime.sendMessage({ type: 'plaster-force', logId: r.id })
+      })
+      row.appendChild(ok)
+    }
     if (r.status === 'duplicate' && r.retryPayload) {
       const force = document.createElement('button'); force.className = 'mini go'; force.textContent = 'Send to Review anyway'
       force.addEventListener('click', () => {
