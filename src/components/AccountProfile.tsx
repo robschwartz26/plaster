@@ -137,7 +137,8 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         } else if (isVenue) {
           // 2: venue data
           queries.push(supabase.from('venues').select('*').eq('id', p.venue_id!).single())
-          // 3: upcoming events
+          // 3: upcoming events — full calendar (busy rooms carry 40–50+ upcoming;
+          // a low cap silently hid shows and lied on the 'upcoming' stat)
           queries.push(
             supabase.from('events')
               .select('id, title, starts_at, poster_url, category')
@@ -145,7 +146,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
               .eq('venue_id', p.venue_id!)
               .gte('starts_at', new Date().toISOString())
               .order('starts_at', { ascending: true })
-              .limit(20)
+              .limit(200)
           )
         }
 
