@@ -1007,6 +1007,13 @@ serve(async (req) => {
           const dd = new Date(`${d}T00:00:00Z`)
           start = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), srcTime.getUTCHours(), srcTime.getUTCMinutes()))
         }
+        // phantom +1-year guard: a schedule item ~a year+ out whose previous-
+        // year date is still upcoming is a model year slip — snap it back
+        if (start.getTime() - nowMs > 300 * 24 * 60 * 60 * 1000) {
+          const back = `${parseInt(d.slice(0, 4), 10) - 1}${d.slice(4)}`
+          const backStart = ptTimestamp(back, t)
+          if (backStart && backStart.getTime() >= nowMs) start = backStart
+        }
         if (start.getTime() < nowMs || start.getTime() > clipMax) { skippedN++; continue }
         const key = `${portlandDate(start)}|${normalizeName(src.title)}`
         if (idx.has(key)) { skippedN++; continue }
@@ -1176,7 +1183,7 @@ serve(async (req) => {
       const KEY = Deno.env.get('ANTHROPIC_API_KEY')
       if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
 
-      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()} — if the year is not shown, use the next upcoming occurrence. If the printed year would place the event in the PAST, it is reused/stale artwork for a recurring event — use the next upcoming occurrence of that month and day instead. When BOTH a date inside poster artwork AND a date in the page's own listing text are visible, trust the LISTING date — reused poster art often carries a previous edition's date. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
+      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "year_printed": boolean, "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()}. year_printed: true ONLY if a 4-digit year is actually visible in the capture. If the year is not shown, set year_printed false and use any year in the date — the server derives the real year. If the printed year would place the event in the PAST, it is reused/stale artwork for a recurring event — use the next upcoming occurrence of that month and day instead. When BOTH a date inside poster artwork AND a date in the page's own listing text are visible, trust the LISTING date — reused poster art often carries a previous edition's date. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
 
       // deno-lint-ignore no-explicit-any
       async function askClaude(content: any[]): Promise<Record<string, unknown> | null> {
@@ -1199,10 +1206,25 @@ serve(async (req) => {
         const timeStr = typeof j.time === 'string' ? j.time.trim() : ''
         let start = ptTimestamp(date, parseShowTime(timeStr))
         if (!start) return { error: `unusable date ${date}` }
+        let rolledDate = date
+        // NO YEAR PRINTED → never trust model year math (observed systematic
+        // +1-year slips). Derive deterministically: this year's occurrence of
+        // that month/day, or next year's if it already passed.
+        if (j.year_printed !== true) {
+          const md = date.slice(5)
+          const todayStr = portlandToday()
+          const thisYear = parseInt(todayStr.slice(0, 4), 10)
+          let candDate = `${thisYear}-${md}`
+          let cand = ptTimestamp(candDate, parseShowTime(timeStr))
+          if (cand && portlandDate(cand) < todayStr) {
+            candDate = `${thisYear + 1}-${md}`
+            cand = ptTimestamp(candDate, parseShowTime(timeStr))
+          }
+          if (cand) { rolledDate = candDate; start = cand }
+        }
         // Reused poster art (recurring nights) often prints an old year. The
         // clipper is a live human capture, so a past date = stale year: roll
         // the month/day forward to the next occurrence on/after today.
-        let rolledDate = date
         for (let bump = 0; start.getTime() < floor && bump < 3; bump++) {
           const y = parseInt(rolledDate.slice(0, 4), 10) + 1
           rolledDate = `${y}${rolledDate.slice(4)}`
