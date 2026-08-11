@@ -943,6 +943,86 @@ serve(async (req) => {
       return new Response(JSON.stringify({ deleted: del?.length ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ CLIPPER SCHEDULE: highlight a printed run of dates → clone the event ══
+    // {clipper_schedule:{event_id, image_base64, mimeType}} — Claude Vision reads
+    // the highlighted schedule; each date becomes a pending COPY of the source
+    // event (same poster/blurb/venue), deduped against existing rows.
+    if (body.clipper_schedule && typeof body.clipper_schedule === 'object') {
+      const cs = body.clipper_schedule as { event_id?: string; image_base64?: string; mimeType?: string }
+      const srcId = typeof cs.event_id === 'string' ? cs.event_id : ''
+      if (!/^[0-9a-f-]{36}$/i.test(srcId)) throw new Error('clipper_schedule: event_id required')
+      if (typeof cs.image_base64 !== 'string' || cs.image_base64.length < 100) throw new Error('clipper_schedule: image required')
+      const { data: src } = await supabaseService.from('events').select('*').eq('id', srcId).maybeSingle()
+      if (!src) return new Response(JSON.stringify({ status: 'error', reason: 'source event not found' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+
+      const KEY2 = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY2) throw new Error('ANTHROPIC_API_KEY secret not set')
+      const mime2 = typeof cs.mimeType === 'string' && /^image\//.test(cs.mimeType) ? cs.mimeType : 'image/png'
+      const schedRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KEY2, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 1000,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mime2, data: cs.image_base64 } },
+            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${src.title}". Today is ${portlandToday()}. List EVERY date shown. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Include only what is actually printed — never invent dates. If no real dates are visible, respond {"occurrences":[]}.` },
+          ] }],
+          signal: undefined,
+        }),
+        signal: AbortSignal.timeout(60000),
+      })
+      if (!schedRes.ok) { const t = await schedRes.text().catch(() => ''); throw new Error(`Anthropic ${schedRes.status}: ${t.slice(0, 200)}`) }
+      const schedData = await schedRes.json()
+      const rawTxt = (schedData.content?.[0]?.text ?? '').trim()
+      let occurrences: Array<{ date?: string; time?: string | null }> = []
+      try { const m = rawTxt.match(/\{[\s\S]*\}/); occurrences = (JSON.parse(m ? m[0] : rawTxt).occurrences ?? []) } catch { occurrences = [] }
+      if (!occurrences.length) {
+        return new Response(JSON.stringify({ status: 'error', reason: 'no dates found in that selection' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // dedupe vs this venue's existing rows (any status) + the source's own date
+      const idx = new Set<string>()
+      if (src.venue_id) {
+        const { data: existing } = await supabaseService.from('events')
+          .select('title, starts_at').eq('venue_id', src.venue_id)
+          .gte('starts_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        for (const ex of (existing ?? []) as Array<{ title: string; starts_at: string }>) {
+          idx.add(`${portlandDate(new Date(ex.starts_at))}|${normalizeName(ex.title)}`)
+        }
+      }
+      const nowMs = Date.now()
+      const clipMax = nowMs + 365 * 24 * 60 * 60 * 1000
+      const srcTime = new Date(src.starts_at)
+      const srcHHMM = `${String(srcTime.getUTCHours()).padStart(2, '0')}:${String(srcTime.getUTCMinutes()).padStart(2, '0')}`
+      let added = 0, skippedN = 0
+      const newIds: string[] = []
+      const addedDates: string[] = []
+      for (const oc of occurrences.slice(0, 40)) {
+        const d = typeof oc.date === 'string' ? oc.date.trim() : ''
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue
+        const t = typeof oc.time === 'string' && oc.time ? parseShowTime(oc.time) : null
+        let start = ptTimestamp(d, t)
+        if (!start) continue
+        if (!t) { // no time printed → reuse the source event's time of day (UTC-preserved)
+          const dd = new Date(`${d}T00:00:00Z`)
+          start = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), srcTime.getUTCHours(), srcTime.getUTCMinutes()))
+        }
+        if (start.getTime() < nowMs || start.getTime() > clipMax) { skippedN++; continue }
+        const key = `${portlandDate(start)}|${normalizeName(src.title)}`
+        if (idx.has(key)) { skippedN++; continue }
+        const { data: ins2, error: insErr2 } = await supabaseService.from('events').insert({
+          venue_id: src.venue_id, title: src.title, category: src.category,
+          poster_url: src.poster_url, starts_at: start.toISOString(),
+          description: src.description, neighborhood: src.neighborhood, address: src.address,
+          view_count: 0, like_count: 0, status: 'pending', sold_out: false,
+          created_by: src.created_by ?? authedUser.id, source_url: src.source_url,
+          ai_confidence: src.ai_confidence ?? 90, artist_name: src.artist_name,
+        }).select('id')
+        if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(d); idx.add(key) }
+      }
+      return new Response(JSON.stringify({ status: added > 0 ? 'saved' : 'duplicate', added, skipped: skippedN, event_ids: newIds, dates: addedDates }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     const clipperUrl = (body.clipper && typeof body.clipper === 'object' && typeof (body.clipper as { url?: string }).url === 'string') ? ((body.clipper as { url: string }).url).trim() : ''
     const rawUrl = typeof body.url === 'string' ? body.url.trim() : clipperUrl
     if (!rawUrl) throw new Error('Pass a url')
@@ -1074,85 +1154,6 @@ serve(async (req) => {
         else { inserted++; index.add(key); if (insData?.[0]?.id) insertedIds.push(insData[0].id as string) }
       }
       return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors, insertedIds }
-    }
-
-    // ═══ CLIPPER SCHEDULE: highlight a printed run of dates → clone the event ══
-    // {clipper_schedule:{event_id, image_base64, mimeType}} — Claude Vision reads
-    // the highlighted schedule; each date becomes a pending COPY of the source
-    // event (same poster/blurb/venue), deduped against existing rows.
-    if (body.clipper_schedule && typeof body.clipper_schedule === 'object') {
-      const cs = body.clipper_schedule as { event_id?: string; image_base64?: string; mimeType?: string }
-      const srcId = typeof cs.event_id === 'string' ? cs.event_id : ''
-      if (!/^[0-9a-f-]{36}$/i.test(srcId)) throw new Error('clipper_schedule: event_id required')
-      if (typeof cs.image_base64 !== 'string' || cs.image_base64.length < 100) throw new Error('clipper_schedule: image required')
-      const { data: src } = await supabaseService.from('events').select('*').eq('id', srcId).maybeSingle()
-      if (!src) return new Response(JSON.stringify({ status: 'error', reason: 'source event not found' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-
-      const KEY2 = Deno.env.get('ANTHROPIC_API_KEY')
-      if (!KEY2) throw new Error('ANTHROPIC_API_KEY secret not set')
-      const mime2 = typeof cs.mimeType === 'string' && /^image\//.test(cs.mimeType) ? cs.mimeType : 'image/png'
-      const schedRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': KEY2, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({
-          model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 1000,
-          messages: [{ role: 'user', content: [
-            { type: 'image', source: { type: 'base64', media_type: mime2, data: cs.image_base64 } },
-            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${src.title}". Today is ${portlandToday()}. List EVERY date shown. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Include only what is actually printed — never invent dates. If no real dates are visible, respond {"occurrences":[]}.` },
-          ] }],
-          signal: undefined,
-        }),
-        signal: AbortSignal.timeout(60000),
-      })
-      if (!schedRes.ok) { const t = await schedRes.text().catch(() => ''); throw new Error(`Anthropic ${schedRes.status}: ${t.slice(0, 200)}`) }
-      const schedData = await schedRes.json()
-      const rawTxt = (schedData.content?.[0]?.text ?? '').trim()
-      let occurrences: Array<{ date?: string; time?: string | null }> = []
-      try { const m = rawTxt.match(/\{[\s\S]*\}/); occurrences = (JSON.parse(m ? m[0] : rawTxt).occurrences ?? []) } catch { occurrences = [] }
-      if (!occurrences.length) {
-        return new Response(JSON.stringify({ status: 'error', reason: 'no dates found in that selection' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-      }
-
-      // dedupe vs this venue's existing rows (any status) + the source's own date
-      const idx = new Set<string>()
-      if (src.venue_id) {
-        const { data: existing } = await supabaseService.from('events')
-          .select('title, starts_at').eq('venue_id', src.venue_id)
-          .gte('starts_at', new Date(now - 24 * 60 * 60 * 1000).toISOString())
-        for (const ex of (existing ?? []) as Array<{ title: string; starts_at: string }>) {
-          idx.add(`${portlandDate(new Date(ex.starts_at))}|${normalizeName(ex.title)}`)
-        }
-      }
-      const clipMax = Math.max(now, now) + 365 * 24 * 60 * 60 * 1000
-      const srcTime = new Date(src.starts_at)
-      const srcHHMM = `${String(srcTime.getUTCHours()).padStart(2, '0')}:${String(srcTime.getUTCMinutes()).padStart(2, '0')}`
-      let added = 0, skippedN = 0
-      const newIds: string[] = []
-      const addedDates: string[] = []
-      for (const oc of occurrences.slice(0, 40)) {
-        const d = typeof oc.date === 'string' ? oc.date.trim() : ''
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue
-        const t = typeof oc.time === 'string' && oc.time ? parseShowTime(oc.time) : null
-        let start = ptTimestamp(d, t)
-        if (!start) continue
-        if (!t) { // no time printed → reuse the source event's time of day (UTC-preserved)
-          const dd = new Date(`${d}T00:00:00Z`)
-          start = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), srcTime.getUTCHours(), srcTime.getUTCMinutes()))
-        }
-        if (start.getTime() < now || start.getTime() > clipMax) { skippedN++; continue }
-        const key = `${portlandDate(start)}|${normalizeName(src.title)}`
-        if (idx.has(key)) { skippedN++; continue }
-        const { data: ins2, error: insErr2 } = await supabaseService.from('events').insert({
-          venue_id: src.venue_id, title: src.title, category: src.category,
-          poster_url: src.poster_url, starts_at: start.toISOString(),
-          description: src.description, neighborhood: src.neighborhood, address: src.address,
-          view_count: 0, like_count: 0, status: 'pending', sold_out: false,
-          created_by: src.created_by ?? authedUser.id, source_url: src.source_url,
-          ai_confidence: src.ai_confidence ?? 90, artist_name: src.artist_name,
-        }).select('id')
-        if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(d); idx.add(key) }
-      }
-      return new Response(JSON.stringify({ status: added > 0 ? 'saved' : 'duplicate', added, skipped: skippedN, event_ids: newIds, dates: addedDates }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ CLIPPER: capture from the browser extension — Rob navigates, we package ══
