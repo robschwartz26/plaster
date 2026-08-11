@@ -965,7 +965,7 @@ serve(async (req) => {
           model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 1000,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: mime2, data: cs.image_base64 } },
-            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${src.title}". Today is ${portlandToday()}. List EVERY date shown. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Include only what is actually printed — never invent dates. If no real dates are visible, respond {"occurrences":[]}.` },
+            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${src.title}". Today is ${portlandToday()}. List EVERY performance date shown, expanding shorthand: a range like "Aug 14\u201317" means EACH day in the range; weekday patterns like "Thursdays\u2013Saturdays through Oct 4" or "every Friday in September" mean each matching calendar date; a calendar grid means each marked day. If different dates show different times (e.g. "2pm & 7:30pm Sundays"), emit one occurrence per date+time. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Expand only what is actually printed — never invent dates beyond what the text implies. If no real dates are visible, respond {"occurrences":[]}.` },
           ] }],
           signal: undefined,
         }),
