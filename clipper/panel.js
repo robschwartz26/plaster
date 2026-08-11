@@ -128,6 +128,12 @@ async function render() {
       row.appendChild(force)
     }
     if (r.status === 'saved' && Array.isArray(r.eventIds) && r.eventIds.length) {
+      const sched = document.createElement('button'); sched.className = 'mini go'; sched.textContent = '＋ Grab schedule (more dates)'
+      sched.title = 'Highlight the printed list of dates/times on the page — each becomes its own event with this poster'
+      sched.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'plaster-schedule', logId: r.id, eventId: r.eventIds[0] })
+      })
+      row.appendChild(sched)
       const btn = document.createElement('button'); btn.className = 'mini warn'; btn.textContent = 'Erase from queue'
       btn.addEventListener('click', () => {
         btn.disabled = true; btn.textContent = 'Erasing…'

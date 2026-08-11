@@ -224,6 +224,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const base64 = bufToBase64(await out.arrayBuffer())
         if (regionMode === 'poster') {
           await stagePoster({ base64, mime: 'image/png', thumb, fromUrl: tab?.url, tabId: tab?.id })
+        } else if (regionMode === 'schedule') {
+          await sendSchedule({ base64, tab })
         } else {
           await ingest({ imageBase64: base64, mimeType: 'image/png', tab, thumb })
         }
@@ -265,6 +267,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return
   }
 
+  if (msg?.type === 'plaster-schedule') {
+    ;(async () => {
+      await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: msg.eventId } })
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['select.js'] })
+      } catch {
+        BADGE.error()
+        await updateLog(msg.logId, { reason: 'cannot select on this page' })
+      }
+      sendResponse({ ok: true })
+    })()
+    return true
+  }
+
   if (msg?.type === 'plaster-erase') {
     ;(async () => {
       const { token, endpoint } = await getSettings()
@@ -288,6 +305,42 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true
   }
 })
+
+// ── schedule capture: highlighted date list → clone the source event per date ──
+async function sendSchedule({ base64, tab }) {
+  const { token, endpoint } = await getSettings()
+  const { scheduleTarget } = await chrome.storage.session.get('scheduleTarget')
+  await chrome.storage.session.remove('scheduleTarget')
+  if (!token || !scheduleTarget?.eventId) return
+  BADGE.busy()
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-clipper-token': token, 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
+      body: JSON.stringify({ clipper_schedule: { event_id: scheduleTarget.eventId, image_base64: base64, mimeType: 'image/png' } }),
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || json.status === 'error') {
+      BADGE.error()
+      await updateLog(scheduleTarget.logId, { reason: 'schedule: ' + (json.reason || json.error || `HTTP ${res.status}`) })
+      if (tab?.id) toast(tab.id, '✗ ' + (json.reason || 'schedule read failed'), false)
+      return
+    }
+    BADGE.saved()
+    // fold the new occurrence ids into the card so Erase removes the whole run
+    const { log = [] } = await chrome.storage.local.get('log')
+    const entry = log.find(r => r.id === scheduleTarget.logId)
+    const merged = [...new Set([...(entry?.eventIds ?? []), ...(json.event_ids ?? [])])]
+    await updateLog(scheduleTarget.logId, {
+      eventIds: merged,
+      reason: `＋ ${json.added} more date${json.added === 1 ? '' : 's'} added${json.skipped ? ` (${json.skipped} skipped)` : ''}: ${(json.dates ?? []).join(', ')}`,
+    })
+    if (tab?.id) toast(tab.id, `✓ ${json.added} more date${json.added === 1 ? '' : 's'} → Review`, true)
+  } catch (e) {
+    BADGE.error()
+    if (scheduleTarget?.logId) await updateLog(scheduleTarget.logId, { reason: 'schedule failed: ' + String(e).slice(0, 80) })
+  }
+}
 
 // ── hotkeys ─────────────────────────────────────────────────────────────────
 chrome.commands.onCommand.addListener(async (command) => {
