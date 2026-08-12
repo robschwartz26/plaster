@@ -10,7 +10,11 @@
   #cheat { display: none; margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: rgba(240,236,227,0.05); border: 1px solid rgba(240,236,227,0.12); font-size: 12px; line-height: 1.7; }
   #cheat.open { display: block; }
   #cheat b { color: #c084fc; font-family: monospace; }
-  #venue { width: 100%; margin: 0 0 10px; padding: 9px 11px; border-radius: 10px; border: 1px solid rgba(240,236,227,0.2); background: rgba(240,236,227,0.06); color: #f0ece3; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
+  #venue-row { display: flex; gap: 6px; margin: 0 0 10px; }
+  #venue-lock { flex-shrink: 0; width: 38px; border-radius: 10px; border: 1px solid rgba(240,236,227,0.2); background: rgba(240,236,227,0.06); font-size: 15px; cursor: pointer; }
+  #venue-lock.locked { background: #A855F7; border-color: #A855F7; }
+  #venue-lock:disabled { opacity: 0.35; cursor: default; }
+  #venue { flex: 1; min-width: 0; margin: 0; padding: 9px 11px; border-radius: 10px; border: 1px solid rgba(240,236,227,0.2); background: rgba(240,236,227,0.06); color: #f0ece3; font: 600 13px "Space Grotesk", system-ui, sans-serif; }
   #venue.set { border-color: rgba(168,85,247,0.6); background: rgba(168,85,247,0.1); color: #c084fc; }
   button.act { display: block; width: 100%; margin-bottom: 8px; padding: 9px 12px; border-radius: 10px; background: rgba(240,236,227,0.08); color: #f0ece3; border: 1px solid rgba(240,236,227,0.18); font: 600 12.5px "Space Grotesk", system-ui, sans-serif; cursor: pointer; text-align: left; }
   .kbd { float: right; opacity: 0.7; font-weight: 600; }
@@ -63,9 +67,12 @@
     <b>⌘⇧S</b> grab the info region → ingest<br>
     <b>⌘⇧Z</b> grab the whole page → ingest
   </div>
-  <select id="venue" title="Venue for these captures — a venue named in the capture still wins">
-    <option value="">venue: auto-detect from capture</option>
-  </select>
+  <div id="venue-row">
+    <select id="venue" title="Venue for these captures — a venue named in the capture still wins (unless locked)">
+      <option value="">venue: auto-detect from capture</option>
+    </select>
+    <button id="venue-lock" title="Lock: EVERY capture files under this venue — no guessing, and the AI is told the venue for the blurb">🔓</button>
+  </div>
   <div id="staged"></div>
   <button class="act" id="poster">Stage poster (custom region) <span class="kbd">⌘⇧P</span></button>
   <div id="feed"><div class="empty">Captures show up here</div></div>

@@ -46,9 +46,20 @@ async function initVenues() {
   }
   await refreshVenueList()
   if (venueId && !sel.value) { sel.value = venueId; sel.classList.toggle('set', !!sel.value) }
+  const lock = document.getElementById('venue-lock')
+  const { venueLocked } = await chrome.storage.local.get('venueLocked')
+  const paintLock = (on) => { lock.textContent = on ? '🔒' : '🔓'; lock.classList.toggle('locked', !!on); lock.disabled = !sel.value }
+  paintLock(!!venueLocked && !!sel.value)
+  lock.addEventListener('click', async () => {
+    const on = !lock.classList.contains('locked')
+    await chrome.storage.local.set({ venueLocked: on })
+    paintLock(on)
+  })
   sel.addEventListener('change', async () => {
     await chrome.storage.local.set({ venueId: sel.value || null })
     sel.classList.toggle('set', !!sel.value)
+    if (!sel.value) { await chrome.storage.local.set({ venueLocked: false }); paintLock(false) }
+    else paintLock(lock.classList.contains('locked'))
   })
   // stay current while the panel is docked: refresh every minute + on focus,
   // so a venue approved in Staff shows up here without reopening the panel

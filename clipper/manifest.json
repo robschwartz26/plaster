@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Plaster Clipper",
-  "version": "1.7.3",
+  "version": "1.8.0",
   "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
   "permissions": [
     "tabs",

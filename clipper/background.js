@@ -124,12 +124,12 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
     return
   }
   // Snapshot + consume the stage NOW — the pipeline moves on without waiting.
-  let staged, venueId
+  let staged, venueId, venueLocked
   if (stagedOverride !== undefined) {
-    staged = stagedOverride; venueId = venueOverride ?? null
+    staged = stagedOverride; venueId = venueOverride ?? null; venueLocked = arguments[0].venueLockOverride ?? false
   } else {
-    const st = await chrome.storage.local.get(['staged', 'venueId'])
-    staged = st.staged ?? null; venueId = st.venueId ?? null
+    const st = await chrome.storage.local.get(['staged', 'venueId', 'venueLocked'])
+    staged = st.staged ?? null; venueId = st.venueId ?? null; venueLocked = !!st.venueLocked
     if (staged) await chrome.storage.local.remove('staged')
     chrome.action.setBadgeText({ text: '' })
   }
@@ -147,6 +147,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
           image_base64: imageBase64, mimeType: mimeType || 'image/png',
           ...(staged ? { poster_base64: staged.b64, poster_mime: staged.mime } : {}),
           ...(venueId ? { venue_id: venueId } : {}),
+          ...(venueId && venueLocked ? { venue_lock: true } : {}),
           ...(force ? { force: true } : {}),
           ...(allowFar ? { allow_far: true } : {}),
           ...(assumeVenue ? { assume_venue: true } : {}),
@@ -166,7 +167,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
       status: json.status, event: json.event_name, reason: json.reason,
       eventIds: json.event_ids || [], preview: json.preview ?? null,
       // duplicates + far-date confirms keep their payload for one-click replay
-      ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null }, confirmVenueName: json.confirm_venue_name ?? null } : {}),
+      ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null, venueLocked: !!venueLocked }, confirmVenueName: json.confirm_venue_name ?? null } : {}),
     })
     if (tab?.id) {
       const msg = json.status === 'saved' ? `✓ Saved to Review — ${json.event_name ?? 'event'}`
@@ -278,7 +279,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         allowFar: st === 'confirm',
         assumeVenue: st === 'confirm-venue' && msg.choice === 'yes',
         parkOk: st === 'confirm-venue' && msg.choice === 'no',
-        replaceLogId: msg.logId, stagedOverride: rp.staged ?? null, venueOverride: rp.venueId ?? null,
+        replaceLogId: msg.logId, stagedOverride: rp.staged ?? null, venueOverride: rp.venueId ?? null, venueLockOverride: !!rp.venueLocked,
       })
     })()
     return

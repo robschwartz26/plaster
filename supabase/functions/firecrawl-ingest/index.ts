@@ -1179,6 +1179,11 @@ serve(async (req) => {
       const clipperAllowFar = (body.clipper as { allow_far?: boolean }).allow_far === true
       const clipperAssumeVenue = (body.clipper as { assume_venue?: boolean }).assume_venue === true
       const clipperParkOk = (body.clipper as { park_ok?: boolean }).park_ok === true
+      // LOCKED venue: the admin decided — every capture files here, no
+      // fuzzy-matching, no confirm-venue detour, and the AI is told the venue
+      // so the blurb can use it.
+      const clipperVenueLock = (body.clipper as { venue_lock?: boolean }).venue_lock === true && !!clipperFallbackId
+      const lockedVenueName = clipperVenueLock ? (venueList.find(v => v.id === clipperFallbackId)?.name ?? '') : ''
       // Scraper runs cap the window (~90d) to keep Review sane; a CLIP is a
       // deliberate human choice — accept anything up to a year out, or up to
       // 3 years when the admin explicitly confirmed a far-future date.
@@ -1278,7 +1283,7 @@ serve(async (req) => {
         const mime = typeof c.mimeType === 'string' && /^image\//.test(c.mimeType) ? c.mimeType : 'image/png'
         const j = await askClaude([
           { type: 'image', source: { type: 'base64', media_type: mime, data: c.image_base64 } },
-          { type: 'text', text: `This screenshot shows a live-event listing (poster and/or details)${pageTitle ? ` from a page titled "${pageTitle}"` : ''}. Read the event's details from the image. ${CLIP_FIELDS}` },
+          { type: 'text', text: `${lockedVenueName ? `KNOWN FACT: this event is at "${lockedVenueName}" (the admin confirmed the venue — use it for venue_name and feel free to reference it in the description). ` : ''}This screenshot shows a live-event listing (poster and/or details)${pageTitle ? ` from a page titled "${pageTitle}"` : ''}. Read the event's details from the image. ${CLIP_FIELDS}` },
         ])
         if (!j || j.none === true) {
           return new Response(JSON.stringify({ status: 'error', reason: 'no event found in the screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
@@ -1317,7 +1322,7 @@ serve(async (req) => {
           if (text.replace(/\s+/g, ' ').trim().length < MIN_DETAIL_CHARS) {
             return new Response(JSON.stringify({ status: 'error', reason: 'page has too little readable text — try the region screenshot instead' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
           }
-          const j = await askClaude([{ type: 'text', text: `This is the visible text of a live-event page${pageTitle ? ` titled "${pageTitle}"` : ''} (${url}). Extract THE event this page is about. ${CLIP_FIELDS}\n\nPAGE TEXT:\n${text}` }])
+          const j = await askClaude([{ type: 'text', text: `${lockedVenueName ? `KNOWN FACT: this event is at "${lockedVenueName}" (admin-confirmed — use it for venue_name and feel free to reference it in the description). ` : ''}This is the visible text of a live-event page${pageTitle ? ` titled "${pageTitle}"` : ''} (${url}). Extract THE event this page is about. ${CLIP_FIELDS}\n\nPAGE TEXT:\n${text}` }])
           if (!j || j.none === true) {
             return new Response(JSON.stringify({ status: 'error', reason: 'no event found on the page — try the region screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
           }
@@ -1335,6 +1340,10 @@ serve(async (req) => {
         return new Response(JSON.stringify({ status: 'error', reason: 'clipper: html or image_base64 required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
 
+      // Locked venue: attribution is decided — blank any read name so
+      // resolution + the blurb both use the locked venue.
+      if (clipperVenueLock) for (const ev of events) ev.venue_name = ''
+
       // Pre-compose the Plaster-voice blurb so (a) the panel can PREVIEW it and
       // (b) insertEvents uses it verbatim. Resolve the venue for voice context.
       const rv0 = events[0] ? resolveVenue(events[0].venue_name ?? '', clipperFallbackId) : null
@@ -1347,7 +1356,7 @@ serve(async (req) => {
       }
       // Venue didn't resolve but the panel has a venue selected → ask the human
       // instead of parking a misread ("The 1/50") as a brand-new venue.
-      if (rv0?.orphanName && clipperFallbackId && !clipperAssumeVenue && !clipperParkOk) {
+      if (rv0?.orphanName && clipperFallbackId && !clipperAssumeVenue && !clipperParkOk && !clipperVenueLock) {
         const sel = venueList.find(v => v.id === clipperFallbackId)
         const e0c = events[0] as (RawEvent & { description?: string })
         return new Response(JSON.stringify({
