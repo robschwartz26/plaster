@@ -9,19 +9,10 @@ const PILL = {
 const openCards = new Set() // expanded log ids (survives re-renders)
 
 // ── venue picker: sets the fallback venue for captures ──────────────────────
-async function initVenues() {
+async function refreshVenueList() {
   const sel = document.getElementById('venue')
-  const { endpoint, venueId, venueCache } = await chrome.storage.local.get(['endpoint', 'venueId', 'venueCache'])
+  const { endpoint } = await chrome.storage.local.get('endpoint')
   const origin = new URL(endpoint || 'https://lhetwgdlpulgnjetuope.supabase.co/functions/v1/x').origin
-  const fill = (venues) => {
-    for (const v of venues) {
-      const o = document.createElement('option')
-      o.value = v.id; o.textContent = 'venue: ' + v.name
-      sel.appendChild(o)
-    }
-    if (venueId) { sel.value = venueId; sel.classList.toggle('set', !!sel.value) }
-  }
-  if (Array.isArray(venueCache) && venueCache.length) fill(venueCache)
   try {
     const res = await fetch(origin + '/rest/v1/venues?select=id,name&order=name.asc&limit=500', {
       headers: { apikey: ANON_KEY, Authorization: 'Bearer ' + ANON_KEY },
@@ -31,14 +22,38 @@ async function initVenues() {
       await chrome.storage.local.set({ venueCache: venues })
       const keep = sel.value
       while (sel.options.length > 1) sel.remove(1)
-      fill(venues)
-      if (keep) sel.value = keep
+      for (const v of venues) {
+        const o = document.createElement('option')
+        o.value = v.id; o.textContent = 'venue: ' + v.name
+        sel.appendChild(o)
+      }
+      if (keep) { sel.value = keep; sel.classList.toggle('set', !!sel.value) }
     }
-  } catch { /* offline — cached list stands */ }
+  } catch { /* offline — current list stands */ }
+}
+
+async function initVenues() {
+  const sel = document.getElementById('venue')
+  const { venueId, venueCache } = await chrome.storage.local.get(['venueId', 'venueCache'])
+  // instant paint from cache, then live refresh
+  if (Array.isArray(venueCache) && venueCache.length) {
+    for (const v of venueCache) {
+      const o = document.createElement('option')
+      o.value = v.id; o.textContent = 'venue: ' + v.name
+      sel.appendChild(o)
+    }
+    if (venueId) { sel.value = venueId; sel.classList.toggle('set', !!sel.value) }
+  }
+  await refreshVenueList()
+  if (venueId && !sel.value) { sel.value = venueId; sel.classList.toggle('set', !!sel.value) }
   sel.addEventListener('change', async () => {
     await chrome.storage.local.set({ venueId: sel.value || null })
     sel.classList.toggle('set', !!sel.value)
   })
+  // stay current while the panel is docked: refresh every minute + on focus,
+  // so a venue approved in Staff shows up here without reopening the panel
+  setInterval(refreshVenueList, 60_000)
+  window.addEventListener('focus', refreshVenueList)
 }
 
 // ── staged poster slot ──────────────────────────────────────────────────────
