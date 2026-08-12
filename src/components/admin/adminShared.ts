@@ -21,6 +21,7 @@ export const NEIGHBORHOODS = [
   'Troutdale', 'Gresham', 'Beaverton', 'Hillsboro', 'Milwaukie',
   'Lake Oswego', 'Oregon City', 'Happy Valley', 'Vancouver WA',
   'Forest Grove', // McMenamins Grand Lodge
+  'Tualatin',
   'Bend', // not metro — but Hayden Homes Amphitheater headliners are worth the drive
 ]
 
