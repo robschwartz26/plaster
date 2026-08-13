@@ -1,4 +1,5 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import QRCode from 'qrcode'
 import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
@@ -87,6 +88,15 @@ function InviteByNumber() {
 
 export function FindFriends({ onDone }: Props) {
   const [screen, setScreen] = useState<ScreenState>('consent')
+  const [qrUrl, setQrUrl] = useState<string | null>(null)
+
+  // QR → App Store listing. Generated locally (no network; CSP-safe), themed
+  // to Plaster's palette.
+  useEffect(() => {
+    QRCode.toDataURL(APP_STORE_URL, { width: 360, margin: 1, color: { dark: '#0c0b0b', light: '#f0ece3' } })
+      .then(setQrUrl)
+      .catch(() => setQrUrl(null))
+  }, [])
   const [matched, setMatched] = useState<MatchedUser[]>([])
   const [unmatched, setUnmatched] = useState<DeviceContact[]>([])
   const [contactNames, setContactNames] = useState<Map<string, string>>(new Map())
@@ -205,27 +215,36 @@ export function FindFriends({ onDone }: Props) {
     ? unmatched.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
     : unmatched
 
-  // ── Consent (Apple 5.1.2 — informed consent BEFORE any data leaves) ──────
-  // Plain-English disclosure of exactly what is sent and why. The iOS Contacts
-  // prompt fires only after the user explicitly agrees; Skip touches nothing.
+  // ── Consent (Apple 5.1.2 — informed opt-in BEFORE any data leaves) ──────
+  // Two doors: search your contacts (explicit tap = consent; the one-liner
+  // below the button discloses that anonymous codes are sent + discarded), or
+  // just hand a friend the QR — straight to the App Store, zero data involved.
   if (screen === 'consent') {
     return (
       <div style={containerStyle}>
-        <div style={centeredStyle}>
-          <h2 style={headingStyle}>Find your friends on Plaster</h2>
-          <p style={{ ...bodyStyle, textAlign: 'left' }}>
-            Here's exactly how it works:
-          </p>
-          <ul style={{ ...bodyStyle, textAlign: 'left', margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <li><strong style={{ color: 'var(--fg)' }}>Your contacts never leave your phone.</strong> Names, photos, and your address book stay on your device.</li>
-            <li>To check for matches, we send only <strong style={{ color: 'var(--fg)' }}>anonymous one-way codes</strong> (cryptographic hashes) of your contacts' phone numbers and email addresses to our server.</li>
-            <li>The codes are compared against Plaster members and <strong style={{ color: 'var(--fg)' }}>immediately discarded</strong> — we never store them.</li>
-            <li>No one is contacted or invited unless <strong style={{ color: 'var(--fg)' }}>you</strong> choose to.</li>
-          </ul>
-          <button onClick={() => runMatching()} style={{ ...primaryBtn, marginTop: 16 }}>
-            I agree — find my friends
+        <div style={{ ...centeredStyle, gap: 10 }}>
+          <h2 style={headingStyle}>Find your friends</h2>
+          <button onClick={() => runMatching()} style={{ ...primaryBtn, marginTop: 4 }}>
+            Search contacts
           </button>
-          <button onClick={onDone} style={skipBtn}>Skip — don't use my contacts</button>
+          <p style={{ ...bodyStyle, fontSize: 12, maxWidth: 300 }}>
+            We never save or sell your contacts. Matching uses anonymous encrypted
+            codes of numbers &amp; emails — checked once, instantly deleted.
+          </p>
+
+          <div style={{ width: '100%', maxWidth: 300, height: 1, background: 'var(--fg-15)', margin: '14px 0' }} />
+
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>
+            Or hand them Plaster
+          </p>
+          <p style={{ ...bodyStyle, fontSize: 12, margin: 0 }}>
+            Have your friends scan this — it takes them to the App&nbsp;Store.
+          </p>
+          {qrUrl && (
+            <img src={qrUrl} alt="App Store QR code" style={{ width: 180, height: 180, borderRadius: 12, marginTop: 4 }} />
+          )}
+
+          <button onClick={onDone} style={{ ...skipBtn, marginTop: 10 }}>Skip for now</button>
         </div>
       </div>
     )
