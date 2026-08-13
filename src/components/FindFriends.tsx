@@ -24,9 +24,31 @@ interface MatchedUser {
   matched_email_hash: string | null
 }
 
-// Stable key for a contact: name + first phone/email (used for selection Set)
+// Stable key for a contact: name + first phone/email (used for selection Set
+// AND as the React list key — so it must be unique, see dedupeContacts)
 function contactKey(c: DeviceContact): string {
   return `${c.name}|${c.phones[0] ?? c.emails[0] ?? ''}`
+}
+
+// iOS returns the same contact once per account container (iCloud, Gmail, …).
+// Identical name+number twice means duplicate React keys, which corrupts list
+// rendering — stale rows survive filtering and checkbox toggles never repaint.
+// Merge duplicates (unioning phones/emails/hashes so matching still sees
+// everything); the Map guarantees every surviving contactKey is unique.
+function dedupeContacts(list: DeviceContact[]): DeviceContact[] {
+  const byKey = new Map<string, DeviceContact>()
+  for (const c of list) {
+    const k = contactKey(c)
+    const prev = byKey.get(k)
+    if (prev) {
+      prev.phones = [...new Set([...prev.phones, ...c.phones])]
+      prev.emails = [...new Set([...prev.emails, ...c.emails])]
+      prev.hashes = [...new Set([...prev.hashes, ...c.hashes])]
+    } else {
+      byKey.set(k, { ...c })
+    }
+  }
+  return [...byKey.values()]
 }
 
 // Resolve `p`, but never wait longer than `ms` — fall back to `fallback`.
@@ -40,10 +62,16 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
 
 // DEV-only mock contacts (localhost web, where Capacitor Contacts doesn't
 // exist) — lets search/select/invite be exercised in a desktop browser.
+// Deliberately includes duplicate entries (same contact from two account
+// containers) — real iPhones return these, and they must merge cleanly.
 const DEV_MOCK_CONTACTS: DeviceContact[] = [
   { name: 'Ada Lovelace', phones: ['+15035550101'], emails: [], hashes: [] },
+  { name: 'Ada Lovelace', phones: ['+15035550101'], emails: ['ada@example.com'], hashes: [] },
   { name: 'Bruce Wayne', phones: ['+15035550102'], emails: [], hashes: [] },
   { name: 'Carmen Sandiego', phones: [], emails: ['carmen@example.com'], hashes: [] },
+  { name: 'David Bowie', phones: ['+15035550107'], emails: [], hashes: [] },
+  { name: 'David Byrne', phones: ['+15035550108'], emails: [], hashes: [] },
+  { name: 'David Byrne', phones: ['+15035550108'], emails: [], hashes: [] },
   { name: 'Dolly Parton', phones: ['+15035550104'], emails: [], hashes: [] },
   { name: 'Elliott Smith', phones: ['+15035550105'], emails: ['elliott@example.com'], hashes: [] },
   { name: 'Mississippi Studios', phones: ['+15035550106'], emails: [], hashes: [] },
@@ -135,7 +163,7 @@ export function FindFriends({ onDone }: Props) {
       if (!Capacitor.isNativePlatform()) {
         const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         setMatched([])
-        setUnmatched(isDev ? DEV_MOCK_CONTACTS : [])
+        setUnmatched(isDev ? dedupeContacts(DEV_MOCK_CONTACTS) : [])
         setScreen('results')
         return
       }
@@ -148,8 +176,9 @@ export function FindFriends({ onDone }: Props) {
         return
       }
 
-      const contacts = await withTimeout(readDeviceContacts(), 15000, [] as DeviceContact[])
-      console.log('[FindFriends] read', contacts.length, 'contacts')
+      const rawContacts = await withTimeout(readDeviceContacts(), 15000, [] as DeviceContact[])
+      const contacts = dedupeContacts(rawContacts)
+      console.log('[FindFriends] read', rawContacts.length, 'contacts,', contacts.length, 'after dedupe')
 
       // hash → contact name map
       const nameMap = new Map<string, string>()
