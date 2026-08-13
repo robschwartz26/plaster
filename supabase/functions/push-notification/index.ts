@@ -113,6 +113,16 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     })
 
+    // Master push switch: user turned device pushes off → row stays in-app only
+    const { data: pref } = await admin
+      .from('user_notification_prefs')
+      .select('push_enabled')
+      .eq('user_id', record.recipient_id)
+      .maybeSingle()
+    if (pref && pref.push_enabled === false) {
+      return new Response(JSON.stringify({ skipped: 'push disabled by user' }), { status: 200 })
+    }
+
     // Fetch iOS device tokens for the recipient
     const { data: tokens, error: tokenError } = await admin
       .from('device_tokens')
