@@ -37,7 +37,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ])
 }
 
-const INVITE_TEXT = "Join me on Plaster — Portland's music & events app: https://plasterthewall.com"
+// Live on the App Store as of Aug 2026 — invites point straight at the listing.
+const APP_STORE_URL = 'https://apps.apple.com/us/app/plaster-the-wall/id6771572698'
+const INVITE_TEXT = `Join me on Plaster — Portland's music & events app: ${APP_STORE_URL}`
 
 // Manual invite: type a number → opens Messages with the invite prefilled.
 // Works without contacts permission (it's just an sms: deep link — we never
@@ -190,7 +192,7 @@ export function FindFriends({ onDone }: Props) {
       await Share.share({
         title: 'Join me on Plaster',
         text: "Follow me on Plaster — Portland's music & events app:",
-        url: 'https://plasterthewall.com',
+        url: APP_STORE_URL,
       })
       console.log('[FindFriends] share sheet opened for', selected.size, 'selected contacts')
       setSelected(new Set())
