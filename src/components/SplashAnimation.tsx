@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// Bundled pool — always present, always instant. Remote additions join them.
+// Bundled fallback — always present, always instant. Used until the remote
+// pool has synced at least once, or whenever it can't be read.
 const SPLASH_IMAGES = [
   '/newsplash-1.png',
   '/newsplash-2.png',
@@ -12,18 +13,19 @@ const SPLASH_IMAGES = [
 ]
 
 // ── Remote splash pool ───────────────────────────────────────────────────────
-// Drop new splash art into the public `posters` bucket under `splash/` (via
-// the Supabase dashboard) and it joins the rotation on users' NEXT launch —
-// no app build, no review, ever. The pool is cached in localStorage so the
-// splash pick stays synchronous/instant; the refresh + image preload happen
-// in the background after the app is already up.
-const POOL_KEY = 'splash-pool-v1'
+// The rotation is curated in Admin → Tools → Splash rotation. The
+// splash_images table is the source of truth: only rows marked Live are
+// readable here (RLS hides the rest), and that includes the bundled six —
+// admins can hide/reveal any image without a build. The pool is cached in
+// localStorage so the splash pick stays synchronous/instant; the refresh +
+// image preload happen in the background after the app is already up.
+const POOL_KEY = 'splash-pool-v2'
 
 function currentPool(): string[] {
   try {
     const cached = JSON.parse(localStorage.getItem(POOL_KEY) ?? '[]')
-    if (Array.isArray(cached) && cached.every(x => typeof x === 'string')) {
-      return [...SPLASH_IMAGES, ...cached]
+    if (Array.isArray(cached) && cached.length > 0 && cached.every(x => typeof x === 'string')) {
+      return cached
     }
   } catch { /* corrupted cache — fall through */ }
   return SPLASH_IMAGES
@@ -31,14 +33,17 @@ function currentPool(): string[] {
 
 async function refreshPoolInBackground() {
   try {
-    const { data } = await supabase.storage.from('posters').list('splash', { limit: 50 })
-    const urls = (data ?? [])
-      .filter(f => /\.(png|jpe?g|webp)$/i.test(f.name))
-      .map(f => supabase.storage.from('posters').getPublicUrl(`splash/${f.name}`).data.publicUrl)
+    // .eq('active') is belt-and-suspenders: RLS already hides inactive rows
+    // from everyone but admins, and an admin's own device shouldn't preview
+    // unreleased art either.
+    const { data, error } = await supabase
+      .from('splash_images').select('url').eq('active', true)
+    if (error) return // pool unreachable — keep whatever cache we have
+    const urls = (data ?? []).map(r => r.url)
     localStorage.setItem(POOL_KEY, JSON.stringify(urls))
-    // Warm the HTTP cache so a newly added splash is instant next launch
-    for (const u of urls) { const img = new Image(); img.src = u }
-  } catch { /* offline — bundled pool stands */ }
+    // Warm the HTTP cache so a newly released splash is instant next launch
+    for (const u of urls) { if (/^https?:/.test(u)) { const img = new Image(); img.src = u } }
+  } catch { /* offline — cached/bundled pool stands */ }
 }
 
 function randomSplash(): string {

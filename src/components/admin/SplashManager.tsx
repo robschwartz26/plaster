@@ -1,24 +1,32 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// Splash rotation manager — upload/remove the app-open art without a build.
-// Files live in the public posters bucket under splash/; every phone re-syncs
-// its splash pool in the background after launch, so additions appear in the
-// rotation within a launch or two. The six bundled images always remain as
-// the instant/offline floor and can't be removed from here.
+// Splash rotation manager — the splash_images table is the source of truth.
+// Every image (including the six bundled originals) has a Live/Hidden switch;
+// only Live rows ever reach users' rotation (RLS enforces it — hidden rows
+// are invisible to non-admin reads). New uploads land Hidden so releases are
+// deliberate. Bundled originals can be hidden but never deleted; deleting an
+// upload also removes its storage file.
 
-interface SplashFile { name: string; url: string }
+interface SplashRow {
+  id: string
+  url: string
+  is_bundled: boolean
+  active: boolean
+}
 
 export function SplashManager() {
-  const [files, setFiles] = useState<SplashFile[]>([])
+  const [rows, setRows] = useState<SplashRow[]>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
-    const { data } = await supabase.storage.from('posters').list('splash', { limit: 100 })
-    setFiles((data ?? [])
-      .filter(f => /\.(png|jpe?g|webp)$/i.test(f.name))
-      .map(f => ({ name: f.name, url: supabase.storage.from('posters').getPublicUrl(`splash/${f.name}`).data.publicUrl })))
+    const { data } = await supabase
+      .from('splash_images')
+      .select('id, url, is_bundled, active')
+      .order('is_bundled', { ascending: false })
+      .order('created_at', { ascending: true })
+    setRows(data ?? [])
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -29,10 +37,15 @@ export function SplashManager() {
     try {
       for (const f of Array.from(fileList)) {
         if (!f.type.startsWith('image/')) continue
-        const ext = (f.name.split('.').pop() || 'png').toLowerCase()
-        const path = `splash/${Date.now()}-${f.name.replace(/[^a-z0-9.]+/gi, '-').slice(0, 50) || `splash.${ext}`}`
-        const { error } = await supabase.storage.from('posters').upload(path, f, { contentType: f.type, upsert: false })
-        if (error) throw error
+        const safeName = f.name.replace(/[^a-z0-9.]+/gi, '-').slice(0, 50) || 'splash.png'
+        const path = `splash/${Date.now()}-${safeName}`
+        const { error: upErr } = await supabase.storage.from('posters')
+          .upload(path, f, { contentType: f.type, upsert: false })
+        if (upErr) throw upErr
+        const url = supabase.storage.from('posters').getPublicUrl(path).data.publicUrl
+        const { error: insErr } = await supabase.from('splash_images')
+          .insert({ url, is_bundled: false, active: false })
+        if (insErr) throw insErr
       }
       await load()
     } catch (e) {
@@ -40,19 +53,32 @@ export function SplashManager() {
     } finally { setBusy(false) }
   }
 
-  async function remove(name: string) {
+  async function toggle(row: SplashRow) {
+    setRows(rs => rs.map(r => r.id === row.id ? { ...r, active: !r.active } : r)) // optimistic
+    const { error } = await supabase.from('splash_images')
+      .update({ active: !row.active }).eq('id', row.id)
+    if (error) { setErr(error.message); await load() }
+  }
+
+  async function remove(row: SplashRow) {
+    if (row.is_bundled) return
     setBusy(true); setErr('')
-    const { error } = await supabase.storage.from('posters').remove([`splash/${name}`])
+    const storagePath = row.url.split('/object/public/posters/')[1]
+    if (storagePath) await supabase.storage.from('posters').remove([decodeURIComponent(storagePath)])
+    const { error } = await supabase.from('splash_images').delete().eq('id', row.id)
     if (error) setErr(error.message)
     await load()
     setBusy(false)
   }
 
+  const liveCount = rows.filter(r => r.active).length
+
   return (
     <div style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
       <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--fg-55)', lineHeight: 1.5 }}>
-        Art added here joins the app-open rotation on everyone's next launch — no build, no review.
-        The six original splashes are built in and always remain.
+        Only <strong>Live</strong> images appear in the app-open rotation — changes reach everyone on
+        their next launch, no build needed. New uploads start <strong>Hidden</strong>; release them when
+        you're ready. Originals can be hidden but not deleted.
       </p>
 
       <label style={{
@@ -60,34 +86,61 @@ export function SplashManager() {
         border: '2px dashed var(--fg-25)', cursor: busy ? 'wait' : 'pointer',
         color: 'var(--fg-55)', fontSize: 13, fontWeight: 600, marginBottom: 14,
       }}>
-        {busy ? 'Working…' : '+ Add splash images (tall, full-bleed)'}
+        {busy ? 'Working…' : '+ Add splash images (start hidden · tall, full-bleed)'}
         <input type="file" accept="image/*" multiple style={{ display: 'none' }}
           onChange={e => { upload(e.target.files); e.target.value = '' }} disabled={busy} />
       </label>
 
       {err && <p style={{ margin: '0 0 10px', fontSize: 12, color: '#e05555' }}>{err}</p>}
 
-      {files.length === 0 ? (
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--fg-40)' }}>No added splashes yet — rotation is the built-in six.</p>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-          {files.map(f => (
-            <div key={f.name} style={{ position: 'relative', aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden', background: 'var(--fg-08)' }}>
-              <img src={f.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-              <button
-                onClick={() => remove(f.name)}
-                disabled={busy}
-                title="Remove from rotation"
+      <p style={{ margin: '0 0 10px', fontSize: 11.5, color: 'var(--fg-40)' }}>
+        {liveCount} live · {rows.length - liveCount} hidden
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        {rows.map(r => (
+          <div key={r.id} style={{
+            position: 'relative', aspectRatio: '9/16', borderRadius: 8, overflow: 'hidden',
+            background: 'var(--fg-08)',
+            outline: r.active ? '2px solid #A855F7' : '2px solid transparent', outlineOffset: -2,
+          }}>
+            <img src={r.url} alt="" loading="lazy" style={{
+              width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+              opacity: r.active ? 1 : 0.35, filter: r.active ? 'none' : 'grayscale(60%)',
+              transition: 'opacity 200ms ease, filter 200ms ease',
+            }} />
+
+            {r.is_bundled && (
+              <span style={{
+                position: 'absolute', top: 4, left: 4, padding: '2px 6px', borderRadius: 4,
+                background: 'rgba(0,0,0,0.6)', color: 'rgba(240,236,227,0.85)',
+                fontFamily: '"Barlow Condensed", sans-serif', fontSize: 10, fontWeight: 700,
+                letterSpacing: 0.5, textTransform: 'uppercase',
+              }}>Original</span>
+            )}
+
+            {!r.is_bundled && (
+              <button onClick={() => remove(r)} disabled={busy} title="Delete forever"
                 style={{
                   position: 'absolute', top: 4, right: 4, width: 22, height: 22,
                   borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.65)',
                   color: '#fff', fontSize: 12, lineHeight: 1, cursor: 'pointer',
-                }}
-              >✕</button>
-            </div>
-          ))}
-        </div>
-      )}
+                }}>✕</button>
+            )}
+
+            <button onClick={() => toggle(r)}
+              style={{
+                position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
+                padding: '4px 12px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                background: r.active ? '#A855F7' : 'rgba(0,0,0,0.65)',
+                color: '#fff', fontFamily: '"Barlow Condensed", sans-serif',
+                fontSize: 12, fontWeight: 700, letterSpacing: 0.6, textTransform: 'uppercase',
+              }}>
+              {r.active ? 'Live' : 'Hidden'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

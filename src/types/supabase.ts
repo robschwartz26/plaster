@@ -1326,6 +1326,30 @@ export type Database = {
         }
         Relationships: []
       }
+      splash_images: {
+        Row: {
+          id: string
+          url: string
+          is_bundled: boolean
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          url: string
+          is_bundled?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          url?: string
+          is_bundled?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       user_notification_prefs: {
         Row: {
           user_id: string
