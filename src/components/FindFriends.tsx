@@ -24,9 +24,9 @@ interface MatchedUser {
   matched_email_hash: string | null
 }
 
-// Stable key for a contact: name + first phone (used for selection Set)
+// Stable key for a contact: name + first phone/email (used for selection Set)
 function contactKey(c: DeviceContact): string {
-  return `${c.name}|${c.phones[0] ?? ''}`
+  return `${c.name}|${c.phones[0] ?? c.emails[0] ?? ''}`
 }
 
 // Resolve `p`, but never wait longer than `ms` — fall back to `fallback`.
@@ -174,9 +174,10 @@ export function FindFriends({ onDone }: Props) {
         }
       }
 
-      // Invite list: contacts with phones, excluding already-matched ones
+      // Invite list: everyone not already on Plaster — email-only contacts
+      // included (the invite goes out via the share sheet, not SMS, so a
+      // phone number isn't required to be findable/invitable)
       const inviteContacts = contacts
-        .filter(c => c.phones.length > 0)
         .filter(c => !matchedKeys.has(contactKey(c)))
 
       setMatched(matchedUsers)
@@ -211,9 +212,19 @@ export function FindFriends({ onDone }: Props) {
     }
   }
 
-  const filteredUnmatched = search.trim()
-    ? unmatched.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+  // Search covers BOTH sections — a friend who's already on Plaster must be
+  // findable by contact name or @username, not silently unfilterable.
+  const q = search.trim().toLowerCase()
+  const filteredUnmatched = q
+    ? unmatched.filter(c => c.name.toLowerCase().includes(q))
     : unmatched
+  const filteredMatched = q
+    ? matched.filter(u => {
+        const matchHash = u.matched_phone_hash ?? u.matched_email_hash ?? ''
+        const contactName = contactNames.get(matchHash) ?? ''
+        return u.username.toLowerCase().includes(q) || contactName.toLowerCase().includes(q)
+      })
+    : matched
 
   // ── Consent (Apple 5.1.2 — informed opt-in BEFORE any data leaves) ──────
   // Two doors: search your contacts (explicit tap = consent; the one-liner
@@ -307,14 +318,41 @@ export function FindFriends({ onDone }: Props) {
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
 
+        {/* Sticky search — filters BOTH sections below */}
+        <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2, padding: '8px 16px 6px' }}>
+          <input
+            type="search"
+            inputMode="search"
+            placeholder="Search contacts"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--fg-15)',
+              background: 'var(--fg-08)',
+              color: 'var(--fg)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 14,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
         {/* On Plaster */}
-        <div style={sectionHeaderStyle}>On Plaster ({matched.length})</div>
+        <div style={sectionHeaderStyle}>On Plaster ({filteredMatched.length})</div>
         {matched.length === 0 ? (
           <p style={{ margin: 0, padding: '10px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', lineHeight: 1.5 }}>
             No one from your contacts is on Plaster yet — invite friends below to get started.
           </p>
+        ) : filteredMatched.length === 0 ? (
+          <p style={{ margin: 0, padding: '10px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
+            No one on Plaster matches "{search}"
+          </p>
         ) : (
-          matched.map(u => {
+          filteredMatched.map(u => {
             const matchHash = u.matched_phone_hash ?? u.matched_email_hash ?? ''
             const contactName = contactNames.get(matchHash) ?? null
             return (
@@ -340,33 +378,10 @@ export function FindFriends({ onDone }: Props) {
         <div style={{ height: 1, background: 'var(--fg-08)', margin: '4px 0' }} />
 
         {/* Invite section */}
-        <div style={sectionHeaderStyle}>Invite to Plaster ({unmatched.length})</div>
+        <div style={sectionHeaderStyle}>Invite to Plaster ({filteredUnmatched.length})</div>
 
         {/* Manual invite — works even with no matching contacts */}
         <InviteByNumber />
-
-        {/* Sticky search */}
-        <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2, padding: '8px 16px 6px' }}>
-          <input
-            type="search"
-            inputMode="search"
-            placeholder="Search contacts"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 10,
-              border: '1px solid var(--fg-15)',
-              background: 'var(--fg-08)',
-              color: 'var(--fg)',
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 14,
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
 
         {filteredUnmatched.length === 0 && unmatched.length > 0 && (
           <p style={{ margin: 0, padding: '10px 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
@@ -411,9 +426,9 @@ export function FindFriends({ onDone }: Props) {
                 <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.name}
                 </div>
-                {c.phones[0] && (
+                {(c.phones[0] ?? c.emails[0]) && (
                   <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', marginTop: 1 }}>
-                    {c.phones[0]}
+                    {c.phones[0] ?? c.emails[0]}
                   </div>
                 )}
               </div>

@@ -93,7 +93,7 @@ export async function ensureContactsPermission(): Promise<'granted' | 'denied' |
 export async function readDeviceContacts(): Promise<DeviceContact[]> {
   try {
     const { contacts: raw } = await Contacts.getContacts({
-      projection: { name: true, phones: true, emails: true },
+      projection: { name: true, phones: true, emails: true, organization: true },
     })
 
     const results: DeviceContact[] = []
@@ -110,6 +110,7 @@ export async function readDeviceContacts(): Promise<DeviceContact[]> {
 
       const name = c.name?.display
         || c.name?.given
+        || c.organization?.company
         || phones[0]
         || emails[0]
         || 'Unknown'
