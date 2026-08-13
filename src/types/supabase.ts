@@ -1326,6 +1326,48 @@ export type Database = {
         }
         Relationships: []
       }
+      user_notification_prefs: {
+        Row: {
+          user_id: string
+          messages: boolean
+          replies: boolean
+          follows: boolean
+          likes: boolean
+          slaps: boolean
+          new_shows: boolean
+          reminders: boolean
+          community: boolean
+          push_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          messages?: boolean
+          replies?: boolean
+          follows?: boolean
+          likes?: boolean
+          slaps?: boolean
+          new_shows?: boolean
+          reminders?: boolean
+          community?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          messages?: boolean
+          replies?: boolean
+          follows?: boolean
+          likes?: boolean
+          slaps?: boolean
+          new_shows?: boolean
+          reminders?: boolean
+          community?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       venue_claims: {
         Row: {
           id: string
