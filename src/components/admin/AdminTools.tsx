@@ -9,6 +9,7 @@ import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { UploadHistory } from '@/components/UploadHistory'
+import { SplashManager } from '@/components/admin/SplashManager'
 import {
   findDuplicateVenueGroups,
   findDuplicateEventGroups,
@@ -109,6 +110,10 @@ export function AdminTools() {
 
       <Section title="Upload history" collapsible defaultCollapsed>
         <UploadHistory />
+      </Section>
+
+      <Section title="Splash rotation" collapsible defaultCollapsed>
+        <SplashManager />
       </Section>
 
       <section style={{ borderTop: '1px solid var(--fg-08)', paddingTop: 32, marginTop: 32 }}>
