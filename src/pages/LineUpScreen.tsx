@@ -383,16 +383,22 @@ export default function LineUpScreen() {
       viewerHasLiked: false,
     }))
 
+    // The feed now emits fresh-drop 'venue_show' items itself (migration 101,
+    // capped 2/venue) — drop weekend picks that duplicate an event already in
+    // the feed so nothing shows twice.
+    const feedEventIds = new Set(adapted.filter(x => x.kind === 'venue_show').map(x => x.event?.id))
+    const dedupedShows = showItems.filter(x => !feedEventIds.has(x.event?.id))
+
     // Weave venue shows into the activity feed at ~1 per 4 items
     const woven: FeedItem[] = []
     let showIdx = 0
     adapted.forEach((item, i) => {
       woven.push(item)
-      if ((i + 1) % 4 === 0 && showIdx < showItems.length) {
-        woven.push(showItems[showIdx++])
+      if ((i + 1) % 4 === 0 && showIdx < dedupedShows.length) {
+        woven.push(dedupedShows[showIdx++])
       }
     })
-    while (showIdx < showItems.length) woven.push(showItems[showIdx++])
+    while (showIdx < dedupedShows.length) woven.push(dedupedShows[showIdx++])
 
     setFeed(woven)
     setFeedState('ready')
