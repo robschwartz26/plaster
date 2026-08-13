@@ -38,6 +38,17 @@ function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
   ])
 }
 
+// DEV-only mock contacts (localhost web, where Capacitor Contacts doesn't
+// exist) — lets search/select/invite be exercised in a desktop browser.
+const DEV_MOCK_CONTACTS: DeviceContact[] = [
+  { name: 'Ada Lovelace', phones: ['+15035550101'], emails: [], hashes: [] },
+  { name: 'Bruce Wayne', phones: ['+15035550102'], emails: [], hashes: [] },
+  { name: 'Carmen Sandiego', phones: [], emails: ['carmen@example.com'], hashes: [] },
+  { name: 'Dolly Parton', phones: ['+15035550104'], emails: [], hashes: [] },
+  { name: 'Elliott Smith', phones: ['+15035550105'], emails: ['elliott@example.com'], hashes: [] },
+  { name: 'Mississippi Studios', phones: ['+15035550106'], emails: [], hashes: [] },
+]
+
 // Live on the App Store as of Aug 2026 — invites point straight at the listing.
 const APP_STORE_URL = 'https://apps.apple.com/us/app/plaster-the-wall/id6771572698'
 const INVITE_TEXT = `Join me on Plaster — Portland's music & events app: ${APP_STORE_URL}`
@@ -118,10 +129,13 @@ export function FindFriends({ onDone }: Props) {
 
       // Contacts only exist on the native app. On web/localhost the Capacitor
       // plugin has no implementation and its calls can hang forever — so short-
-      // circuit to the (empty) results screen instead of spinning.
+      // circuit to the results screen instead of spinning. On localhost the
+      // results screen fills with DEV mock contacts so search/select/invite
+      // are testable in a desktop browser (standing DEV-path rule).
       if (!Capacitor.isNativePlatform()) {
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
         setMatched([])
-        setUnmatched([])
+        setUnmatched(isDev ? DEV_MOCK_CONTACTS : [])
         setScreen('results')
         return
       }
