@@ -10,6 +10,7 @@ import { PreferencesPanel } from './PreferencesPanel'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
 import { todayLocalDate } from '@/lib/dates'
+import { useWallPrefs } from '@/lib/wallPrefs'
 import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
@@ -49,10 +50,14 @@ export function Wall() {
 
   const [isAdminMode, setIsAdminMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const wallPrefs = useWallPrefs()
 
   const visibleEvents = useMemo(
-    () => events.filter(e => matchesFilter(e, activeFilter, likedIds.has(e.id)) && matchesSearch(e, searchQuery)),
-    [events, activeFilter, likedIds, searchQuery],
+    () => events.filter(e =>
+      !(e.category && wallPrefs.hiddenCats.includes(e.category)) &&
+      matchesFilter(e, activeFilter, likedIds.has(e.id)) &&
+      matchesSearch(e, searchQuery)),
+    [events, activeFilter, likedIds, searchQuery, wallPrefs.hiddenCats],
   )
   const [searchOpen, setSearchOpen] = useState(false)
   const [communityOpen, setCommunityOpen] = useState(false)
@@ -164,6 +169,14 @@ export function Wall() {
     setActiveFilter('All')
     setSearchQuery('')
   }, [openEventId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // If the active filter chip gets hidden in Settings, fall back to All —
+  // otherwise the wall would sit on an empty, unreachable filter.
+  useEffect(() => {
+    if (activeFilter !== 'All' && activeFilter !== '♥' && wallPrefs.hiddenCats.includes(activeFilter)) {
+      setActiveFilter('All')
+    }
+  }, [wallPrefs.hiddenCats]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLike(eventId: string) {
     // Guest mode: hearts look live but gate on tap (Apple 5.1.1(v))
@@ -312,6 +325,8 @@ export function Wall() {
         activePosterCategory={activePosterCategory ?? undefined}
         neighborhood={profile?.home_neighborhood ?? null}
         onOpenNeighborhood={(profile?.home_neighborhood && profile?.home_sextant) ? () => setCommunityOpen(true) : undefined}
+        hiddenCats={wallPrefs.hiddenCats}
+        large={wallPrefs.chipSize === 'large'}
       />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
@@ -342,6 +357,7 @@ export function Wall() {
         onActiveCategoryChange={setActivePosterCategory}
         onVenueTap={handleVenueTap}
         isAdminMode={isAdminMode}
+        maxCols={wallPrefs.maxCols}
         openEventId={openEventId}
         onOpenEventHandled={() => navigate(location.pathname, { replace: true, state: null })}
         onEventSaved={(eventId, newPosterUrl) => {

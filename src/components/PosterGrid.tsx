@@ -46,14 +46,21 @@ interface Props {
   onOpenEventHandled?: () => void
   enableDesktopNav?: boolean
   onNearEnd?: () => void
+  maxCols?: number // user pref: default AND ceiling for zoom-out (3-5)
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd }: Props) {
-  const [cols, setCols] = useState(5)
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd, maxCols = 5 }: Props) {
+  const [cols, setCols] = useState(maxCols)
+  // Ref so the []-dep touch/wheel handlers always clamp to the current pref
+  const maxColsRef = useRef(maxCols)
+  useEffect(() => {
+    maxColsRef.current = maxCols
+    setCols(c => Math.min(c, maxCols)) // pref lowered mid-session → pull in
+  }, [maxCols])
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
   useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
@@ -180,7 +187,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
       // ratio > 1: pinching in (more cols). ratio < 1: spreading (fewer cols / peek)
       const ratio = p.startDist / dist
-      const newCols = clamp(Math.round(p.startCols * ratio), 1, 5)
+      const newCols = clamp(Math.round(p.startCols * ratio), 1, maxColsRef.current)
 
       if (newCols !== p.startCols) {
         // Col change — cancel peek zoom and drop the stale img ref
@@ -230,7 +237,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, 5))
+      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current))
       reportTourAction('pinch')
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -386,7 +393,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   // step state can't drift from the app's view (e.g. after a pinch-to-1-col).
   useEffect(() => {
     const onCmd = (e: Event) => {
-      if ((e as CustomEvent).detail?.cmd === 'reset-grid') setCols(5)
+      if ((e as CustomEvent).detail?.cmd === 'reset-grid') setCols(maxColsRef.current)
     }
     window.addEventListener('plaster-tour-cmd', onCmd)
     return () => window.removeEventListener('plaster-tour-cmd', onCmd)

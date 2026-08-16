@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { BottomSheet } from './BottomSheet'
 import { PrivacyPanel } from './PrivacyPanel'
 import { NotificationsPanel } from './NotificationsPanel'
+import { WallPrefsPanel } from './WallPrefsPanel'
 import { FindFriends } from './FindFriends'
 import { useInteractiveTour } from './tour/InteractiveTour'
 import { useTheme } from '@/hooks/useTheme'
@@ -24,6 +25,7 @@ export function SettingsPanel({ open, onClose }: Props) {
   const [savingPrivacy, setSavingPrivacy] = useState(false)
   const [privacyOpen, setPrivacyOpen] = useState(false)
   const [notifsOpen, setNotifsOpen] = useState(false)
+  const [wallPrefsOpen, setWallPrefsOpen] = useState(false)
   const [findFriendsOpen, setFindFriendsOpen] = useState(false)
   const { start: startTour } = useInteractiveTour()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -171,6 +173,43 @@ export function SettingsPanel({ open, onClose }: Props) {
             fontSize: 12, color: 'var(--fg-55)',
           }}>
             Choose what's worth pinging you
+          </p>
+        </div>
+        <span style={{
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 16, color: 'var(--fg-40)',
+        }}>›</span>
+      </button>
+
+      <button
+        onClick={() => setWallPrefsOpen(true)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 0',
+          background: 'none',
+          border: 'none',
+          borderBottom: '1px solid var(--fg-08)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <div>
+          <p style={{
+            margin: 0,
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 14, fontWeight: 600, color: 'var(--fg)',
+          }}>
+            Personalize the wall
+          </p>
+          <p style={{
+            margin: '2px 0 0',
+            fontFamily: '"Space Grotesk", sans-serif',
+            fontSize: 12, color: 'var(--fg-55)',
+          }}>
+            Wall size, chip size, and your kinds of nights
           </p>
         </div>
         <span style={{
@@ -352,6 +391,7 @@ export function SettingsPanel({ open, onClose }: Props) {
     </BottomSheet>
     <PrivacyPanel open={privacyOpen} onClose={() => setPrivacyOpen(false)} />
     <NotificationsPanel open={notifsOpen} onClose={() => setNotifsOpen(false)} />
+    <WallPrefsPanel open={wallPrefsOpen} onClose={() => setWallPrefsOpen(false)} />
     {/* Find friends & invite — reuses the onboarding FindFriends flow, which
         carries its own 5.1.2 consent screen before any contacts access. */}
     {findFriendsOpen && (
