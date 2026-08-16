@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BottomSheet } from '@/components/BottomSheet'
 import { CATEGORIES } from '@/lib/categories'
-import { loadWallPrefs, saveWallPrefs, type WallPrefs } from '@/lib/wallPrefs'
+import { loadWallPrefs, saveWallPrefs, WALL_PREFS_EVENT, type WallPrefs } from '@/lib/wallPrefs'
 
 // Settings → Personalize the wall. Three device-level knobs: which kinds of
 // events even appear, chip legibility, and how far the grid zooms out.
@@ -16,8 +16,18 @@ const hint: React.CSSProperties = {
   fontSize: 11.5, color: 'var(--fg-55)', lineHeight: 1.4,
 }
 
-export function WallPrefsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+// The controls alone — shared by the Settings sheet and the wall's own
+// preferences (sliders) sheet, so changes are visible live behind either.
+export function WallPrefsControls() {
   const [prefs, setPrefs] = useState<WallPrefs>(loadWallPrefs)
+
+  // Two entry points (Settings sheet + wall preferences sheet) can both be
+  // mounted — track the shared change event so neither shows stale state.
+  useEffect(() => {
+    const onChange = () => setPrefs(loadWallPrefs())
+    window.addEventListener(WALL_PREFS_EVENT, onChange)
+    return () => window.removeEventListener(WALL_PREFS_EVENT, onChange)
+  }, [])
 
   function update(next: WallPrefs) {
     setPrefs(next)
@@ -33,7 +43,6 @@ export function WallPrefsPanel({ open, onClose }: { open: boolean; onClose: () =
   }
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Personalize the wall">
       <div style={{ padding: '0 4px 8px' }}>
         <p style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'var(--fg-55)', lineHeight: 1.5 }}>
           Make the wall yours. These live on this device and apply instantly.
@@ -116,6 +125,13 @@ export function WallPrefsPanel({ open, onClose }: { open: boolean; onClose: () =
           </p>
         )}
       </div>
+  )
+}
+
+export function WallPrefsPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title="Personalize the wall">
+      <WallPrefsControls />
     </BottomSheet>
   )
 }

@@ -18,7 +18,8 @@ export const DEFAULT_WALL_PREFS: WallPrefs = {
 }
 
 const KEY = 'wall-prefs-v1'
-const EVENT = 'plaster-wall-prefs'
+export const WALL_PREFS_EVENT = 'plaster-wall-prefs'
+const EVENT = WALL_PREFS_EVENT
 
 export function loadWallPrefs(): WallPrefs {
   try {
