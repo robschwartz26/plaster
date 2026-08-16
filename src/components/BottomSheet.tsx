@@ -5,9 +5,11 @@ interface Props {
   onClose: () => void
   title: string
   children: ReactNode
+  height?: string          // fixed sheet height (e.g. '50vh') instead of content-sized up to 85vh
+  backdropOpacity?: number // 0-1 backdrop dim; default 0.4 (use ~0.1 when the content behind should stay watchable)
 }
 
-export function BottomSheet({ open, onClose, title, children }: Props) {
+export function BottomSheet({ open, onClose, title, children, height, backdropOpacity = 0.4 }: Props) {
   // Keep children mounted during the slide-out animation, then unmount.
   // This prevents closed-sheet inputs from firing autoFocus on mount.
   const [renderChildren, setRenderChildren] = useState(open)
@@ -36,7 +38,7 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.4)',
+          background: `rgba(0,0,0,${backdropOpacity})`,
           zIndex: 99,
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
@@ -51,7 +53,8 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight: '85vh',
+          height: height,
+          maxHeight: height ?? '85vh',
           background: 'var(--bg)',
           borderRadius: '16px 16px 0 0',
           zIndex: 100,
