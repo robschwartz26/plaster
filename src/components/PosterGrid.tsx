@@ -371,7 +371,12 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   useEffect(() => {
     if (!openEventId || walledItems.length === 0) return
     const wi = eventIdToWalledIdx.get(openEventId)
-    if (wi === undefined) return
+    if (wi === undefined) {
+      // Target isn't on the wall (e.g. its show already ended and aged off) —
+      // clear the deep-link instead of leaving stale nav state behind.
+      onOpenEventHandled?.()
+      return
+    }
     pendingScrollIdxRef.current = wi
     setCols(1)
     onOpenEventHandled?.()

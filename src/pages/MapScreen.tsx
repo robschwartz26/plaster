@@ -562,8 +562,12 @@ export function MapScreen() {
 
   // ── Load events for selected day ──────────────────────────────────────────
   useEffect(() => {
-    const fromISO = selectedDate + 'T00:00:00'
-    const toISO = addDays(selectedDate, 1) + 'T08:00:00'
+    // Window is LOCAL midnight → next-day 8am local (late shows straddle
+    // midnight). Sent as UTC instants — a bare 'T00:00:00' string compares in
+    // the DB's timezone (UTC), which shifted the whole day 7h early and put
+    // yesterday's evening shows at the top of "tonight".
+    const fromISO = new Date(selectedDate + 'T00:00:00').toISOString()
+    const toISO = new Date(addDays(selectedDate, 1) + 'T08:00:00').toISOString()
     supabase.from('events')
       .select('id, title, starts_at, poster_url, category, venue_id')
       .eq('status', 'published')
