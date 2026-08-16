@@ -15,7 +15,7 @@ function formatDateTime(iso: string, showTimes?: string[] | null): string {
   tomorrow.setDate(tomorrow.getDate() + 1)
   const isToday = d.toDateString() === today.toDateString()
   const isTomorrow = d.toDateString() === tomorrow.toDateString()
-  const dayLabel = isToday ? 'Tonight' : isTomorrow ? 'Tomorrow'
+  const dayLabel = isToday ? (d.getHours() < 17 ? 'Today' : 'Tonight') : isTomorrow ? 'Tomorrow'
     : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   const fmtTime = (s: string) => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   if (showTimes && showTimes.length >= 2) {

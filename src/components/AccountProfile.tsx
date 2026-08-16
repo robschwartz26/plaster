@@ -517,7 +517,7 @@ function formatEventDate(iso: string): string {
   const today = new Date()
   const diffDays = Math.round((d.getTime() - today.getTime()) / 86400000)
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (diffDays <= 0) return `Tonight · ${time}`
+  if (diffDays <= 0) return `${d.getHours() < 17 ? 'Today' : 'Tonight'} · ${time}`
   if (diffDays === 1) return `Tomorrow · ${time}`
   return `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`
 }
