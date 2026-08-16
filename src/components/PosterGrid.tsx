@@ -59,7 +59,9 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const maxColsRef = useRef(maxCols)
   useEffect(() => {
     maxColsRef.current = maxCols
-    setCols(c => Math.min(c, maxCols)) // pref lowered mid-session → pull in
+    // Snap to the newly chosen size (not just clamp) — tapping "5 across"
+    // with the prefs sheet open should visibly reflow the wall behind it.
+    setCols(maxCols)
   }, [maxCols])
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
