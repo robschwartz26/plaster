@@ -994,9 +994,14 @@ serve(async (req) => {
       const clipMax = nowMs + 365 * 24 * 60 * 60 * 1000
       const srcTime = new Date(src.starts_at)
       const srcHHMM = `${String(srcTime.getUTCHours()).padStart(2, '0')}:${String(srcTime.getUTCMinutes()).padStart(2, '0')}`
-      let added = 0, skippedN = 0
+      let added = 0, skippedN = 0, updatedSrc = 0
       const newIds: string[] = []
       const addedDates: string[] = []
+
+      // Resolve every occurrence to an instant, then GROUP BY Portland date —
+      // "2pm & 7:30pm" on one date becomes ONE row with show_times (a single
+      // poster listing both times), never two rows / never a dropped time.
+      const byDate = new Map<string, Set<string>>()
       for (const oc of occurrences.slice(0, 40)) {
         const d = typeof oc.date === 'string' ? oc.date.trim() : ''
         if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue
@@ -1015,19 +1020,38 @@ serve(async (req) => {
           if (backStart && backStart.getTime() >= nowMs) start = backStart
         }
         if (start.getTime() < nowMs || start.getTime() > clipMax) { skippedN++; continue }
-        const key = `${portlandDate(start)}|${normalizeName(src.title)}`
-        if (idx.has(key)) { skippedN++; continue }
+        const pd = portlandDate(start)
+        if (!byDate.has(pd)) byDate.set(pd, new Set())
+        byDate.get(pd)!.add(start.toISOString())
+      }
+
+      const srcOwnDate = portlandDate(srcTime)
+      for (const [pd, timeSet] of byDate) {
+        const times = [...timeSet].sort()
+        const key = `${pd}|${normalizeName(src.title)}`
+        if (idx.has(key)) {
+          // The schedule revealed extra times for the source event's OWN day —
+          // fold them into it instead of silently dropping them.
+          if (pd === srcOwnDate && times.length >= 2) {
+            const { error: updErr } = await supabaseService.from('events')
+              .update({ starts_at: times[0], show_times: times }).eq('id', srcId)
+            if (!updErr) { updatedSrc++; continue }
+          }
+          skippedN++
+          continue
+        }
         const { data: ins2, error: insErr2 } = await supabaseService.from('events').insert({
           venue_id: src.venue_id, title: src.title, category: src.category,
-          poster_url: src.poster_url, starts_at: start.toISOString(),
+          poster_url: src.poster_url, starts_at: times[0],
+          show_times: times.length >= 2 ? times : null,
           description: src.description, neighborhood: src.neighborhood, address: src.address,
           view_count: 0, like_count: 0, status: 'pending', sold_out: false,
           created_by: src.created_by ?? authedUser.id, source_url: src.source_url,
           ai_confidence: src.ai_confidence ?? 90, artist_name: src.artist_name,
         }).select('id')
-        if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(d); idx.add(key) }
+        if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(pd); idx.add(key) }
       }
-      return new Response(JSON.stringify({ status: added > 0 ? 'saved' : 'duplicate', added, skipped: skippedN, event_ids: newIds, dates: addedDates }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      return new Response(JSON.stringify({ status: (added > 0 || updatedSrc > 0) ? 'saved' : 'duplicate', added, updated: updatedSrc, skipped: skippedN, event_ids: newIds, dates: addedDates }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     const clipperUrl = (body.clipper && typeof body.clipper === 'object' && typeof (body.clipper as { url?: string }).url === 'string') ? ((body.clipper as { url: string }).url).trim() : ''
@@ -1098,8 +1122,29 @@ serve(async (req) => {
       const parkedVenues = new Set<string>()
       const errors: string[] = []
       const insertedIds: string[] = []
+
+      // Same-day repeat showings (a movie's 2pm + 7:30pm) collapse into ONE
+      // row carrying show_times — the wall renders a single poster listing
+      // every time. Without this, the dedupe below silently dropped all but
+      // the first same-day time.
+      const byShowing = new Map<string, RawEvent & { description?: string; show_times?: string[] | null }>()
+      let badRows = 0
       for (const ev of rows.slice(0, MAX_EVENTS)) {
-        if (!ev?.title || !ev?.starts_at) { failed++; continue }
+        if (!ev?.title || !ev?.starts_at) { badRows++; continue }
+        const gkey = `${normalizeName(ev.venue_name ?? '')}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
+        const prev = byShowing.get(gkey)
+        if (!prev) {
+          byShowing.set(gkey, { ...ev })
+        } else {
+          const times = [...new Set([...(prev.show_times ?? [prev.starts_at]), ev.starts_at])].sort()
+          prev.starts_at = times[0]
+          prev.show_times = times.length >= 2 ? times : null
+          if (!prev.poster_image_url && ev.poster_image_url) prev.poster_image_url = ev.poster_image_url
+        }
+      }
+      failed += badRows
+
+      for (const ev of byShowing.values()) {
         const rv = resolveVenue(ev.venue_name ?? '', fallbackId)
         const category = typeof ev.category === 'string' && CATEGORIES.includes(ev.category) ? ev.category : 'Live Music'
         // Prefer the blurb composed at extract time; only compose here if missing.
@@ -1156,6 +1201,7 @@ serve(async (req) => {
           source_url: ev.ticket_url || url,
           ai_confidence: 90,
           artist_name: ev.artist_name?.trim() || null,
+          show_times: ev.show_times ?? null,
         }).select('id')
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
         else { inserted++; index.add(key); if (insData?.[0]?.id) insertedIds.push(insData[0].id as string) }
