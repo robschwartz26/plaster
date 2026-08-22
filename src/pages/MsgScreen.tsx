@@ -438,22 +438,15 @@ export function MsgScreen() {
       membersByConvId[m.conversation_id].push(m.user_id)
     }
 
-    // 5. Last message per conversation
-    const lastMsgResults = await Promise.all(
-      convIds.map(cid =>
-        supabase
-          .from('messages')
-          .select('body, sender_id, created_at, media_type')
-          .eq('conversation_id', cid)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      )
-    )
-
+    // 5. Last message per conversation — ONE call (latest_messages RPC) instead
+    //    of a limit-1 query per conversation (was N round-trips per tab mount).
     type LastMsgRow = { body: string | null; sender_id: string; created_at: string; media_type: string | null }
+    const { data: latest } = await supabase.rpc('latest_messages', { p_conv_ids: convIds })
     const lastMsgMap: Record<string, LastMsgRow | null> = {}
-    convIds.forEach((cid, i) => { lastMsgMap[cid] = (lastMsgResults[i].data as LastMsgRow | null) ?? null })
+    for (const cid of convIds) lastMsgMap[cid] = null
+    for (const r of (latest ?? []) as (LastMsgRow & { conversation_id: string })[]) {
+      lastMsgMap[r.conversation_id] = { body: r.body, sender_id: r.sender_id, created_at: r.created_at, media_type: r.media_type }
+    }
 
     const membershipMap: Record<string, string> = {}
     for (const m of (memberships as { conversation_id: string; last_read_at: string }[])) {
