@@ -121,9 +121,18 @@ export function BottomNav() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, () => { fetchCount() })
       .subscribe()
 
+    // Realtime delivery is already RLS-scoped to the user's conversations, but
+    // postgres_changes can't filter on membership — so skip the user's OWN sends
+    // (can't raise their unread count) and debounce, collapsing a burst of
+    // incoming messages into a single count RPC instead of one per message.
+    let msgDebounce: ReturnType<typeof setTimeout> | null = null
     const msgChannel = supabase
       .channel(`unread-messages-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchCount() })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        if ((payload.new as { sender_id?: string })?.sender_id === user.id) return
+        if (msgDebounce) clearTimeout(msgDebounce)
+        msgDebounce = setTimeout(() => fetchCount(), 800)
+      })
       .subscribe()
 
     const memberChannel = supabase
@@ -138,6 +147,7 @@ export function BottomNav() {
 
     return () => {
       cancelled = true
+      if (msgDebounce) clearTimeout(msgDebounce)
       supabase.removeChannel(notifChannel)
       supabase.removeChannel(msgChannel)
       supabase.removeChannel(memberChannel)

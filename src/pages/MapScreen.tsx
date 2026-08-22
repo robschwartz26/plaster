@@ -478,12 +478,20 @@ export function MapScreen() {
   const circleDataRef = useRef<object>(EMPTY_FC)
   const fogDataRef = useRef<object>(EMPTY_FC)
 
-  const circleGeoJSON = radiusMi < 99.5
-    ? circle([centerLng, centerLat], radiusMi, { steps: 64, units: 'miles' })
-    : null
-  const fogGeoJSON = circleGeoJSON
-    ? (() => { try { const d = difference(featureCollection([WORLD_POLYGON as any, circleGeoJSON])); return d ? { type: 'FeatureCollection' as const, features: [d] } : null } catch { return null } })()
-    : null
+  // Memoized on the inputs that actually change the shapes — without this the
+  // 64-step circle + world-polygon difference recomputed and both GeoJSON
+  // sources re-serialized on EVERY render, including every onMove pan frame at
+  // sub-100mi radius (visible jank on older iPhones).
+  const circleGeoJSON = useMemo(
+    () => radiusMi < 99.5 ? circle([centerLng, centerLat], radiusMi, { steps: 64, units: 'miles' }) : null,
+    [centerLng, centerLat, radiusMi],
+  )
+  const fogGeoJSON = useMemo(
+    () => circleGeoJSON
+      ? (() => { try { const d = difference(featureCollection([WORLD_POLYGON as any, circleGeoJSON])); return d ? { type: 'FeatureCollection' as const, features: [d] } : null } catch { return null } })()
+      : null,
+    [circleGeoJSON],
+  )
   circleDataRef.current = circleGeoJSON ?? EMPTY_FC
   fogDataRef.current = fogGeoJSON ?? EMPTY_FC
 
