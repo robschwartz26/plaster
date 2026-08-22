@@ -20,6 +20,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.1/mod.ts'
+import { requireServiceRole } from '../_shared/webhookAuth.ts'
 
 const APNS_PROD    = 'https://api.push.apple.com'
 const APNS_SANDBOX = 'https://api.development.push.apple.com'
@@ -90,6 +91,8 @@ function buildPushBody(notif: NotificationRow, senderUsername: string | null): {
 }
 
 serve(async (req) => {
+  const denied = requireServiceRole(req)
+  if (denied) return denied
   try {
     const payload = await req.json()
     const record: NotificationRow = payload.record

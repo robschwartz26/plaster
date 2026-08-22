@@ -40,6 +40,15 @@ serve(async (req) => {
   try { body = await req.json() } catch { return json({ error: 'Bad request' }, 400) }
   if (!body.image?.base64) return json({ error: 'An image is required.' }, 400)
 
+  // Only real raster images may be stored in the public bucket — a caller
+  // could otherwise pass mimeType 'text/html'/'image/svg+xml' with scripted
+  // bytes and get active content hosted on our storage domain. Whitelist the
+  // content-type AND cap the decoded size (base64 inflates ~1.33×).
+  const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const mime = typeof body.image.mimeType === 'string' ? body.image.mimeType : 'image/jpeg'
+  if (!ALLOWED_MIME.includes(mime)) return json({ error: 'Unsupported image type.' }, 400)
+  if (body.image.base64.length > 20 * 1024 * 1024) return json({ error: 'Image too large.' }, 413)
+
   const postType = POST_TYPES.includes(body.post_type ?? '') ? body.post_type! : 'personal'
 
   // ── AI moderation (fail safe to pending) ──────────────────
@@ -69,7 +78,7 @@ Return ONLY a JSON object, no markdown:
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: body.image.mimeType || 'image/jpeg', data: body.image.base64 } },
+            { type: 'image', source: { type: 'base64', media_type: mime, data: body.image.base64 } },
             { type: 'text', text: prompt },
           ],
         }],
@@ -94,8 +103,9 @@ Return ONLY a JSON object, no markdown:
   let imageUrl: string | null = null
   try {
     const bin = Uint8Array.from(atob(body.image.base64), c => c.charCodeAt(0))
-    const path = `community/${crypto.randomUUID()}.jpg`
-    const { error: upErr } = await supa.storage.from('posters').upload(path, bin, { contentType: body.image.mimeType || 'image/jpeg', upsert: false })
+    const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : mime === 'image/gif' ? 'gif' : 'jpg'
+    const path = `community/${crypto.randomUUID()}.${ext}`
+    const { error: upErr } = await supa.storage.from('posters').upload(path, bin, { contentType: mime, upsert: false })
     if (upErr) throw upErr
     imageUrl = supa.storage.from('posters').getPublicUrl(path).data.publicUrl
   } catch (e) {
