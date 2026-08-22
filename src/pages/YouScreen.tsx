@@ -252,12 +252,17 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
       setAttendedTotal(count ?? rows.length)
       return
     }
-    const { data } = await supabase.from('attendees')
-      .select('event_id, events(id, title, poster_url, starts_at, category)')
-      .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24)
+    // Grid shows up to 24, but the "attended" stat must be the true total —
+    // count separately rather than using the capped list length.
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from('attendees')
+        .select('event_id, events(id, title, poster_url, starts_at, category)')
+        .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24),
+      supabase.from('attendees').select('*', { count: 'exact', head: true }).eq('user_id', targetUserId),
+    ])
     const rows = (data as AttendedEvent[] | null) ?? []
     setAttended(rows)
-    setAttendedTotal(rows.length)
+    setAttendedTotal(count ?? rows.length)
   }
 
   async function fetchCounts() {

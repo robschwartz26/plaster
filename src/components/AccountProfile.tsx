@@ -72,6 +72,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
   const [venue,               setVenue]               = useState<DbVenue | null>(null)
   const [events,              setEvents]              = useState<VenueEvent[]>([])
   const [attendedEvents,      setAttendedEvents]      = useState<AttendedEvent[]>([])
+  const [attendedTotal,       setAttendedTotal]       = useState(0)
   const [followerCount,       setFollowerCount]       = useState(0)
   const [followingCount,      setFollowingCount]      = useState(0)
   const [profileFollowsViewer, setProfileFollowsViewer] = useState(false)
@@ -160,6 +161,10 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           if (user?.id && !isSelfProfile && allResults[3]) {
             setProfileFollowsViewer(((allResults[3] as any).count ?? 0) > 0)
           }
+          // True attended total (grid is capped at 24)
+          supabase.from('attendees').select('*', { count: 'exact', head: true })
+            .eq('user_id', resolvedId)
+            .then(({ count }) => setAttendedTotal(count ?? 0))
         } else if (isVenue) {
           setVenue((allResults[2] as any)?.data as DbVenue ?? null)
           setEvents(((allResults[3] as any)?.data as VenueEvent[] | null) ?? [])
@@ -262,7 +267,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           {([
             { label: 'followers', count: followerCount, tab: 'followers' as const },
             { label: 'following', count: followingCount, tab: 'following' as const },
-            { label: 'attended',  count: attendedList.length, tab: null },
+            { label: 'attended',  count: Math.max(attendedTotal, attendedList.length), tab: null },
           ] as const).map(({ label, count, tab }) => {
             const tappable = !!tab && canSeeFollowList
             return (
@@ -514,8 +519,11 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
 
 function formatEventDate(iso: string): string {
   const d = new Date(iso)
-  const today = new Date()
-  const diffDays = Math.round((d.getTime() - today.getTime()) / 86400000)
+  const now = new Date()
+  // Calendar-day difference, not elapsed hours — Math.round(hours/24) labeled
+  // tonight's 8pm show "Tomorrow" when viewed in the morning.
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+  const diffDays = Math.round((startOfDay(d).getTime() - startOfDay(now).getTime()) / 86400000)
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   if (diffDays <= 0) return `${d.getHours() < 17 ? 'Today' : 'Tonight'} · ${time}`
   if (diffDays === 1) return `Tomorrow · ${time}`

@@ -309,7 +309,13 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     if (user) fetchPosts()
 
     if (user) {
-      supabase.from('post_likes').select('post_id').eq('user_id', user.id)
+      // Scope to THIS event's posts via an inner join — previously this pulled
+      // the user's entire lifetime post-like history on every card activation
+      // (unbounded growth). We only need likes for the posts shown here.
+      supabase.from('post_likes')
+        .select('post_id, event_wall_posts!inner(event_id)')
+        .eq('user_id', user.id)
+        .eq('event_wall_posts.event_id', event.id)
         .then(({ data }) => {
           setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id)))
         })
@@ -1036,6 +1042,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       <img
         src={event.poster_url}
         alt={event.title}
+        // lazy/async: in 1-col the grid mounts a card for EVERY loaded event, so
+        // without this the whole page's full-res posters (two imgs each: panel +
+        // loop clone) fetch at once — ERR_INSUFFICIENT_RESOURCES / iOS memory
+        // blowout. The browser now only loads posters near the viewport.
+        loading="lazy"
+        decoding="async"
         style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%',

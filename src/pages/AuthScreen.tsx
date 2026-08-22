@@ -45,6 +45,10 @@ export function AuthScreen() {
   }, [])
 
   function startCooldown() {
+    // Clear any prior interval first — otherwise a second start (e.g. after
+    // "use a different email") stacks a second timer, running the countdown at
+    // 2× and leaking the orphaned one for the life of the screen.
+    if (cooldownRef.current) clearInterval(cooldownRef.current)
     setResendCooldown(RESEND_COOLDOWN)
     cooldownRef.current = setInterval(() => {
       setResendCooldown((n) => {

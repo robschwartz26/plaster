@@ -77,10 +77,14 @@ export function Wall() {
     if (openCommunity && profile?.home_neighborhood && profile?.home_sextant) setCommunityOpen(true)
   }, [openCommunity, profile?.home_neighborhood, profile?.home_sextant])
 
-  // Windowed infinite loading: cursor = last loaded row's starts_at; pages append.
-  const cursorRef = useRef<string | null>(null)
+  // Windowed infinite loading: compound keyset cursor (starts_at, id) so pages
+  // append. A plain starts_at cursor with .gt skipped every event sharing the
+  // boundary timestamp — many shows sit at exactly 20:00:00 the same night.
+  const cursorRef = useRef<{ ts: string; id: string } | null>(null)
   const hasMoreRef = useRef(true)
   const isLoadingMoreRef = useRef(false)
+  // In-flight like toggles, to reject concurrent double-taps per event.
+  const likeInFlightRef = useRef<Set<string>>(new Set())
 
   const fetchEvents = useCallback(async () => {
     // Show events from up to 6 hours ago so late-night shows
@@ -93,11 +97,13 @@ export function Wall() {
       .eq('status', 'published') // RLS hides pending from the public, but admins/creators see their own — filter explicitly
       .gte('starts_at', cutoff)
       .order('starts_at', { ascending: true })
+      .order('id', { ascending: true })
       .limit(WALL_PAGE)
 
     const batch = data ?? []
     setEvents(batch.map(dbEventToWallEvent))
-    cursorRef.current = batch.length ? batch[batch.length - 1].starts_at : null
+    const last = batch[batch.length - 1]
+    cursorRef.current = last ? { ts: last.starts_at, id: last.id } : null
     hasMoreRef.current = batch.length === WALL_PAGE
 
     try {
@@ -112,12 +118,16 @@ export function Wall() {
     if (isLoadingMoreRef.current || !hasMoreRef.current || cursorRef.current == null) return
     isLoadingMoreRef.current = true
     try {
+      const { ts, id } = cursorRef.current
       const { data } = await supabase
         .from('events')
         .select(EVENT_SELECT)
         .eq('status', 'published')
-        .gt('starts_at', cursorRef.current)
+        // (starts_at > ts) OR (starts_at = ts AND id > id) — quoted values so the
+        // timestamp's '+' and ':' don't get mangled inside the or() filter.
+        .or(`starts_at.gt."${ts}",and(starts_at.eq."${ts}",id.gt."${id}")`)
         .order('starts_at', { ascending: true })
+        .order('id', { ascending: true })
         .limit(WALL_PAGE)
 
       const batch = data ?? []
@@ -128,7 +138,8 @@ export function Wall() {
           const fresh = mapped.filter(e => !seen.has(e.id))
           return fresh.length ? [...prev, ...fresh] : prev
         })
-        cursorRef.current = batch[batch.length - 1].starts_at
+        const last = batch[batch.length - 1]
+        cursorRef.current = { ts: last.starts_at, id: last.id }
       }
       hasMoreRef.current = batch.length === WALL_PAGE
     } finally {
@@ -178,26 +189,52 @@ export function Wall() {
     }
   }, [wallPrefs.hiddenCats]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Keep loading while an active filter leaves too few matches to fill the
+  // screen — otherwise the list is too short to scroll, onNearEnd never fires,
+  // and matching events beyond page 1 are unreachable (the wall would claim the
+  // city has 2 film shows). Re-runs as `events` grows; loadMore self-stops when
+  // the DB is exhausted (hasMoreRef=false).
+  useEffect(() => {
+    if (visibleEvents.length < 24 && hasMoreRef.current && !isLoadingMoreRef.current) {
+      loadMore()
+    }
+  }, [visibleEvents.length, activeFilter, searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function handleLike(eventId: string) {
     // Guest mode: hearts look live but gate on tap (Apple 5.1.1(v))
     if (!requireAuth('♥ Sign up to save shows you love')) return
     if (!user) return
-    if (likedIds.has(eventId)) {
-      // Unlike
-      await supabase.from('event_likes').delete().eq('event_id', eventId).eq('user_id', user.id)
-      await supabase.rpc('add_like_count', { p_event_id: eventId, delta: -1 })
-      setLikedIds((prev) => { const next = new Set(prev); next.delete(eventId); return next })
-      setEvents((prev) =>
-        prev.map((e) => e.id === eventId ? { ...e, like_count: Math.max(0, e.like_count - 1) } : e)
-      )
-    } else {
-      // Like
-      await supabase.from('event_likes').insert({ event_id: eventId, user_id: user.id })
-      await supabase.rpc('add_like_count', { p_event_id: eventId, delta: 1 })
-      setLikedIds((prev) => new Set([...prev, eventId]))
-      setEvents((prev) =>
-        prev.map((e) => e.id === eventId ? { ...e, like_count: e.like_count + 1 } : e)
-      )
+    // Guard concurrent toggles of the same event — a rapid double-tap otherwise
+    // fires two writes that both read stale `likedIds` and both commit the
+    // counter RPC, permanently drifting like_count.
+    if (likeInFlightRef.current.has(eventId)) return
+    likeInFlightRef.current.add(eventId)
+
+    const wasLiked = likedIds.has(eventId)
+    // Optimistic UI
+    setLikedIds((prev) => { const next = new Set(prev); wasLiked ? next.delete(eventId) : next.add(eventId); return next })
+    setEvents((prev) => prev.map((e) => e.id === eventId
+      ? { ...e, like_count: wasLiked ? Math.max(0, e.like_count - 1) : e.like_count + 1 } : e))
+
+    try {
+      if (wasLiked) {
+        // Only decrement if a row was actually removed (idempotent under retries)
+        const { data: del } = await supabase.from('event_likes')
+          .delete().eq('event_id', eventId).eq('user_id', user.id).select('event_id')
+        if (del && del.length > 0) await supabase.rpc('add_like_count', { p_event_id: eventId, delta: -1 })
+      } else {
+        // Only increment if the insert actually created a row (PK conflict = no-op)
+        const { data: ins, error } = await supabase.from('event_likes')
+          .insert({ event_id: eventId, user_id: user.id }).select('event_id')
+        if (!error && ins && ins.length > 0) await supabase.rpc('add_like_count', { p_event_id: eventId, delta: 1 })
+      }
+    } catch {
+      // Roll back optimistic UI on hard failure
+      setLikedIds((prev) => { const next = new Set(prev); wasLiked ? next.add(eventId) : next.delete(eventId); return next })
+      setEvents((prev) => prev.map((e) => e.id === eventId
+        ? { ...e, like_count: wasLiked ? e.like_count + 1 : Math.max(0, e.like_count - 1) } : e))
+    } finally {
+      likeInFlightRef.current.delete(eventId)
     }
   }
 

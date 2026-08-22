@@ -89,7 +89,14 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <SplashAnimation />
-        <AppRoutes />
+        {/* Top-level boundary catches anything above the per-route boundaries —
+            including lazy-chunk load failures after a redeploy (stale client
+            requests a hashed chunk that no longer exists) and errors in
+            AuthScreen/Admin/Onboarding, which have no boundary of their own.
+            Without this, those throw to the root and white-screen the app. */}
+        <ErrorBoundary>
+          <AppRoutes />
+        </ErrorBoundary>
       </AuthProvider>
     </BrowserRouter>
   )
