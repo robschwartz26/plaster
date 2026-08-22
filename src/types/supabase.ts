@@ -1833,6 +1833,16 @@ export type Database = {
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       scrub_my_account_data: { Args: never; Returns: boolean }
+      latest_messages: {
+        Args: { p_conv_ids: string[] }
+        Returns: {
+          conversation_id: string
+          body: string | null
+          sender_id: string
+          created_at: string
+          media_type: string | null
+        }[]
+      }
       search_my_messages: {
         Args: { p_query: string }
         Returns: {
