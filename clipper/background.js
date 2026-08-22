@@ -29,10 +29,15 @@ async function getSettings() {
 }
 
 // ── badge ───────────────────────────────────────────────────────────────────
+// Single shared clear-timer: with pipelined captures, per-call timers used to
+// wipe each other's badges — a stale 'busy' timer could clear a later DUP/ERR
+// signal after a few hundred ms, so Rob would miss it and assume a save.
+let badgeClearTimer = null
 function badge(text, color) {
   chrome.action.setBadgeBackgroundColor({ color })
   chrome.action.setBadgeText({ text })
-  setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000)
+  if (badgeClearTimer) clearTimeout(badgeClearTimer)
+  badgeClearTimer = setTimeout(() => chrome.action.setBadgeText({ text: '' }), 5000)
 }
 const BADGE = {
   busy: () => badge('…', '#666666'),
@@ -156,9 +161,13 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
       }),
     })
     const json = await res.json().catch(() => ({}))
+    // Retry context — kept on ANY non-success (errors included) so a failed
+    // ingest doesn't throw away the staged poster + info capture and force a
+    // redo from scratch.
+    const retryPayload = { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null, venueLocked: !!venueLocked }
     if (!res.ok) {
       BADGE.error()
-      await updateLog(logId, { status: 'error', reason: json.error || json.reason || `HTTP ${res.status}` })
+      await updateLog(logId, { status: 'error', reason: json.error || json.reason || `HTTP ${res.status}`, retryPayload })
       if (tab?.id) toast(tab.id, '✗ Plaster: ' + (json.reason || json.error || 'failed'), false)
       return
     }
@@ -167,7 +176,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
       status: json.status, event: json.event_name, reason: json.reason,
       eventIds: json.event_ids || [], preview: json.preview ?? null,
       // duplicates + far-date confirms keep their payload for one-click replay
-      ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload: { imageBase64, mimeType, url: tab?.url, title: tab?.title, staged: staged ?? null, venueId: venueId ?? null, venueLocked: !!venueLocked }, confirmVenueName: json.confirm_venue_name ?? null } : {}),
+      ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload, confirmVenueName: json.confirm_venue_name ?? null } : {}),
     })
     if (tab?.id) {
       const msg = json.status === 'saved' ? `✓ Saved to Review — ${json.event_name ?? 'event'}`

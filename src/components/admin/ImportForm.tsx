@@ -37,6 +37,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   }, [])
 
   const [phase, setPhase] = useState<ImportPhase>('idle')
+  const submittingRef = useRef(false) // guards against double-submit → duplicate inserts
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [extracted, setExtracted] = useState<ExtractedEvent | null>(null)
@@ -420,6 +421,21 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   }
 
   const handleSubmit = async () => {
+    // Synchronous guard: the duplicate-check below awaits a network round-trip
+    // during which the submit button is still live — a double-click otherwise
+    // runs two full submits (both pass the dup check, both insert; ×12 with a
+    // recurring series). The ref is set before any await and cleared on every
+    // exit path.
+    if (submittingRef.current) return
+    submittingRef.current = true
+    try {
+      await runSubmit()
+    } finally {
+      submittingRef.current = false
+    }
+  }
+
+  const runSubmit = async () => {
     if ((!imageFiles[0] && !reuseExistingPoster) || !form.title || !form.date) return
     if (staffMode && !form.venue_id) { setErrorMsg('Please select a venue before submitting.'); setPhase('error'); return }
 

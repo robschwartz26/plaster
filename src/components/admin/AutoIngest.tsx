@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { CATEGORY_GRADIENTS, type CategoryName } from '@/lib/categories'
 
@@ -82,7 +82,12 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
   const [afterDate, setAfterDate] = useState('')  // only ingest events on/after this date
   const [backfill, setBackfill] = useState('')     // artist-name backfill status
 
+  const backfillRunningRef = useRef(false)
   async function runBackfill() {
+    // A second click while the loop runs starts a parallel backfill over the
+    // same rows — double AI spend. Guard it.
+    if (backfillRunningRef.current) return
+    backfillRunningRef.current = true
     setBackfill('Backfilling…')
     try {
       let total = 0, remaining = 1, guard = 0
@@ -95,6 +100,7 @@ export function AutoIngest({ community = false }: { community?: boolean } = {}) 
       }
       setBackfill(`Done — ${total} artist names filled`)
     } catch (e) { setBackfill(e instanceof Error ? e.message : String(e)) }
+    finally { backfillRunningRef.current = false }
   }
 
   // Vite DEV flag, not a hostname test — capacitor://localhost would match on device.

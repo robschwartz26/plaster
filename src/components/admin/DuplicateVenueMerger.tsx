@@ -8,6 +8,7 @@ export function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venu
   const [eventCounts, setEventCounts] = useState<Record<string, number>>({})
   const [merging, setMerging] = useState<number | null>(null)
   const [mergeSuccess, setMergeSuccess] = useState<Record<number, string>>({})
+  const [mergeError, setMergeError] = useState<Record<number, string>>({})
 
   const activeCount = groups.filter((_, i) => !mergeSuccess[i]).length
   if (!groups.length || !activeCount) return null
@@ -33,6 +34,7 @@ export function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venu
     const primary = group.find(v => v.id === primaryId)!
     const duplicateIds = group.filter(v => v.id !== primaryId).map(v => v.id)
     setMerging(groupIdx)
+    setMergeError(prev => { const n = { ...prev }; delete n[groupIdx]; return n })
     try {
       const { count } = await supabaseAdmin.from('events').select('*', { count: 'exact', head: true }).in('venue_id', duplicateIds)
       const evtCount = count ?? 0
@@ -49,6 +51,9 @@ export function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venu
       onMergeComplete()
     } catch (e) {
       console.error('Merge failed:', e)
+      // Surface it — a delete can fail on FK references (superlatives, venue
+      // accounts/claims) AFTER events were repointed, leaving a half-merged DB.
+      setMergeError(prev => ({ ...prev, [groupIdx]: e instanceof Error ? e.message : 'Merge failed — see console.' }))
     } finally { setMerging(null) }
   }
 
@@ -105,6 +110,11 @@ export function DuplicateVenueMerger({ groups, onMergeComplete }: { groups: Venu
                     >
                       {merging === groupIdx ? 'Merging…' : `Merge & Delete ${group.length - 1} duplicate${group.length - 1 !== 1 ? 's' : ''}`}
                     </button>
+                  )}
+                  {mergeError[groupIdx] && (
+                    <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#ef4444', margin: '8px 0 0' }}>
+                      ✕ {mergeError[groupIdx]}
+                    </p>
                   )}
                 </div>
               )}
