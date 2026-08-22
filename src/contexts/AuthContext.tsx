@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from 'react'
 import { type Session, type User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
@@ -45,18 +45,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function fetchProfile(userId: string) {
-    const { data } = await supabase
+  // The profile currently loaded (or in-flight). Lets us skip the clear+refetch
+  // on TOKEN_REFRESHED / foreground-resume events where the user is unchanged —
+  // those fire ~hourly and previously nulled `profile` app-wide, wiping the
+  // LINE UP feed to "Loading…", clearing in-progress edits, and flickering admin UI.
+  const loadedProfileIdRef = useRef<string | null>(null)
+
+  const fetchProfile = useCallback(async (userId: string) => {
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', userId)
       .single()
+    if (error) {
+      // Distinguish "no row yet" (PGRST116) from a real fetch failure. A real
+      // failure must NOT null an already-loaded profile (that would blank
+      // profile-gated UI on a flaky network); one retry, then leave prior state.
+      if (error.code === 'PGRST116') { setProfile(null); loadedProfileIdRef.current = userId }
+      else {
+        const { data: retry } = await supabase.from('profiles').select('*').eq('id', userId).single()
+        if (retry) { setProfile(retry); loadedProfileIdRef.current = userId }
+      }
+      return
+    }
     setProfile(data ?? null)
-  }
+    loadedProfileIdRef.current = userId
+  }, [])
 
-  async function refreshProfile() {
-    if (user) await fetchProfile(user.id)
-  }
+  const refreshProfile = useCallback(async () => {
+    const id = loadedProfileIdRef.current
+    if (id) await fetchProfile(id)
+  }, [fetchProfile])
 
   useEffect(() => {
     // Load initial session
@@ -73,19 +92,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen to auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        // Clear stale profile immediately so AuthRoute waits for the fresh fetch
-        // instead of seeing user=set, profile=null and routing to onboarding.
-        setProfile(null)
-        fetchProfile(session.user.id)
+      const newId = session?.user?.id ?? null
+      if (newId) {
+        // Only churn when the actual user changed. TOKEN_REFRESHED / resume
+        // events keep the same id → update the session object but leave user,
+        // profile, and every downstream subscription/feed untouched.
+        if (newId !== loadedProfileIdRef.current) {
+          setUser(session!.user)
+          setProfile(null)
+          fetchProfile(newId)
+        }
       } else {
+        setUser(null)
         setProfile(null)
+        loadedProfileIdRef.current = null
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [fetchProfile])
 
   async function signUp(email: string, password: string) {
     const { error } = await supabase.auth.signUp({ email, password })
@@ -129,8 +154,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAdmin = profile?.is_admin === true
   const canIngest = (profile?.is_admin || profile?.is_ingester) === true
 
+  // Memoize so the context value identity only changes when real state does —
+  // otherwise every AuthProvider render pushes a new object to every consumer.
+  // The auth action functions are stable module-level closures over `supabase`.
+  const value = useMemo<AuthContextValue>(() => ({
+    user, session, profile, isAdmin, canIngest, loading,
+    signUp, signIn, signOut, refreshProfile,
+    verifySignupOtp, sendPasswordReset, verifyPasswordResetOtp, updatePassword,
+  }), [user, session, profile, isAdmin, canIngest, loading, refreshProfile])
+
   return (
-    <AuthContext.Provider value={{ user, session, profile, isAdmin, canIngest, loading, signUp, signIn, signOut, refreshProfile, verifySignupOtp, sendPasswordReset, verifyPasswordResetOtp, updatePassword }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

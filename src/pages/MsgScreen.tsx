@@ -253,6 +253,7 @@ export function MsgScreen() {
   const messagesInnerRef     = useRef<HTMLDivElement>(null)
   const myConvIdsRef    = useRef<Set<string>>(new Set())
   const openConvIdRef   = useRef<string | null>(openConvId)
+  const nearBottomRef   = useRef(true) // is the reader within 200px of newest? (updated on scroll)
 
   // New chat state
   const [newChatOpen,       setNewChatOpen]       = useState(false)
@@ -502,16 +503,25 @@ export function MsgScreen() {
   // ── Open conversation ────────────────────────────────────────────────────
   const openConversation = useCallback(async (convId: string) => {
     setOpenConvId(convId)
+    openConvIdRef.current = convId // set synchronously so the stale-fetch guard below is reliable
     setMsgLoading(true)
     setMessages([])
 
+    // Load the most recent window, not the entire history — a months-old group
+    // chat is thousands of rows. Fetch newest-first with a cap, then reverse to
+    // chronological. (Older messages remain reachable via search.)
     const { data } = await supabase
       .from('messages')
       .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
       .eq('conversation_id', convId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(100)
 
-    setMessages((data ?? []) as Message[])
+    // Stale-fetch guard: if the user opened a different thread while this was in
+    // flight, discard — otherwise thread A's messages land in thread B's panel.
+    if (openConvIdRef.current !== convId) return
+
+    setMessages(((data ?? []) as Message[]).slice().reverse())
     setMsgLoading(false)
     await markConversationRead(convId)
 
@@ -544,12 +554,17 @@ export function MsgScreen() {
     setTimeout(() => setHighlightedMessageId(null), 1800)
   }
 
-  // If routed with a specific conversation, open it once inbox loads
+  // If routed with a specific conversation, open it ONCE. Keyed on routeConvId
+  // only — previously `convLoading` was a dep, so every loadInbox() (new chat,
+  // add-people, group edit) re-toggled it and yanked the user back to the
+  // routed thread.
+  const handledRouteConvRef = useRef<string | null>(null)
   useEffect(() => {
-    if (routeConvId && !convLoading) {
+    if (routeConvId && routeConvId !== handledRouteConvRef.current) {
+      handledRouteConvRef.current = routeConvId
       openConversation(routeConvId)
     }
-  }, [routeConvId, convLoading, openConversation])
+  }, [routeConvId, openConversation])
 
   // ── Reset initial-scroll flag when conversation changes ──────────────────
   useEffect(() => {
@@ -577,6 +592,13 @@ export function MsgScreen() {
 
     const isInitialScroll = !initialScrollDoneRef.current
 
+    // For an incoming message (not the initial open), only pull the view down
+    // if the reader is near the bottom OR it's their own just-sent message —
+    // otherwise someone scrolled up reading history gets yanked to the newest.
+    const lastMsg = messages[messages.length - 1]
+    const ownSend = lastMsg?.sender_id === user?.id
+    if (!isInitialScroll && !ownSend && !nearBottomRef.current) return
+
     // Double rAF: first to commit DOM, second to commit layout. iOS WebKit
     // sometimes reports stale scrollHeight inside a single rAF after a
     // setMessages/setMsgLoading batch. Two frames guarantees layout has
@@ -594,7 +616,7 @@ export function MsgScreen() {
         initialScrollDoneRef.current = true
       })
     })
-  }, [messages.length, openConvId, msgLoading])
+  }, [messages.length, openConvId, msgLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-scroll when images/GIFs load and expand content ───────────────────
   // ResizeObserver on the inner message wrapper fires whenever content height
@@ -633,16 +655,29 @@ export function MsgScreen() {
           })
           setConversations(prev =>
             prev.map(c => c.id === openConvId
-              ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
+              ? { ...c, unread: false, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
               : c
             )
           )
+          // The thread is open and on-screen → keep it read as messages arrive,
+          // so the badge doesn't count what the user is actively reading.
+          if (msg.sender_id !== user?.id) markConversationRead(openConvId)
+        }
+      )
+      .on(
+        // Reflect peer soft-deletes live (deleted_at set via UPDATE) — otherwise
+        // a message the other person removes stays visible until reopen.
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${openConvId}` },
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m))
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [openConvId])
+  }, [openConvId, user?.id])
 
   // ── Realtime: inbox unread badge ─────────────────────────────────────────
   useEffect(() => {
@@ -655,8 +690,12 @@ export function MsgScreen() {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           const msg = payload.new as Message & { conversation_id: string }
-          if (!myConvIdsRef.current.has(msg.conversation_id)) return
           if (msg.sender_id === user.id) return
+          // A message in a conversation we don't know about yet — a first-ever
+          // DM from someone new, or a dismissed thread the DB just restored.
+          // Reload the inbox so it appears (previously these were dropped and
+          // the inbox silently disagreed with the badge until remount).
+          if (!myConvIdsRef.current.has(msg.conversation_id)) { loadInbox(); return }
           if (msg.conversation_id === openConvIdRef.current) return
           setConversations(prev => {
             const updated = prev.map(c => c.id === msg.conversation_id
@@ -682,7 +721,7 @@ export function MsgScreen() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user?.id])
+  }, [user?.id, loadInbox])
 
   // ── Debounced message search ─────────────────────────────────────────────
   useEffect(() => {
@@ -749,15 +788,30 @@ export function MsgScreen() {
       } : {}),
     }
 
-    const { error } = await supabase.from('messages').insert(insertRow)
+    const { data: inserted, error } = await supabase
+      .from('messages')
+      .insert(insertRow)
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
+      .single()
 
-    if (!error) {
-      if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', openConvId)
+    if (error || !inserted) {
+      // Restore the composer so the message isn't silently lost — the realtime
+      // echo can't be relied on (websocket is often dead for seconds after iOS
+      // resume, which previously led users to re-send and create duplicates).
+      setMessageText(body)
+      if (gif) { setPendingGif(gif); setPendingGifQuery(gifQuery) }
+      setComposerError("Couldn't send — check your connection and try again.")
+      setSending(false)
+      return
     }
+
+    // Append optimistically (dedup by id — the realtime INSERT echo is a no-op).
+    setMessages(prev => prev.some(m => m.id === inserted.id) ? prev : [...prev, inserted as Message])
+    if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
+    await supabase
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', openConvId)
 
     setSending(false)
   }
@@ -1425,7 +1479,14 @@ export function MsgScreen() {
               )}
 
               {/* Messages */}
-              <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div
+                ref={messagesContainerRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200
+                }}
+                style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}
+              >
                 <div ref={messagesInnerRef} style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
                 {msgLoading && (
                   <p style={{ textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: '24px 0' }}>
