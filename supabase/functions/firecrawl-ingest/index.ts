@@ -43,10 +43,17 @@ const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
 const CATEGORIES = ['Live Music','Dance','Comedy','Drag','Jazz','Trivia','Karaoke','Theater','Burlesque','Classical','Film','Festivals','Markets','Art','Literary','Spoken','Other']
 
 // ── time helpers (America/Los_Angeles) ───────────────────────────────────────
-// Month heuristic for PT offset — exact DST boundary is irrelevant at event-time.
+// Exact PT offset for a given date via Intl (handles DST boundaries precisely).
+// The old month heuristic was wrong for ~3 weeks/year around the March/Nov
+// switches, storing starts_at an hour off — which could flip a late show's
+// portland_date (also the dedupe key) and double-insert it.
 function portlandOffset(dateStr: string): string {
-  const month = parseInt(dateStr.split('-')[1], 10)
-  return month >= 3 && month <= 10 ? '-07:00' : '-08:00'
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`) // midday → unambiguous re: the 2am transition
+  const tzName = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'shortOffset' })
+    .formatToParts(noonUtc).find(p => p.type === 'timeZoneName')?.value ?? 'GMT-8'
+  const m = tzName.match(/GMT([+-]?\d{1,2})/)
+  const hrs = m ? parseInt(m[1], 10) : -8
+  return `${hrs < 0 ? '-' : '+'}${String(Math.abs(hrs)).padStart(2, '0')}:00`
 }
 function ptTimestamp(date: string, time: string | null): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
@@ -176,6 +183,7 @@ async function composeDescription(f: DescFacts): Promise<string | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: REWRITE_MODEL, max_tokens: 220, messages: [{ role: 'user', content: prompt }] }),
+      signal: AbortSignal.timeout(30000), // a hung connection here strands a half-inserted batch
     })
     if (!res.ok) return null
     const data = await res.json()
@@ -194,6 +202,7 @@ async function extractArtistName(title: string, KEY: string): Promise<string> {
       headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: REWRITE_MODEL, max_tokens: 40, messages: [{ role: 'user', content:
         `Extract the clean headliner/act name from this event title — a band, musician, comedian, or performer. Return ONLY the name: no tour name, no "presented by", no support acts, no all-caps styling (e.g. "Pigeons Playing Ping Pong", not "PIGEONS PLAYING PING PONG - FALL TOUR 2026"). If the title is NOT a single act (a festival, market, trivia night, or generic event), respond with only the word NONE.\n\nTitle: ${title}` }] }),
+      signal: AbortSignal.timeout(15000),
     })
     if (!res.ok) return ''
     const data = await res.json()
@@ -889,6 +898,7 @@ serve(async (req) => {
             { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Today is ${portlandToday()} (America/Los_Angeles). Read the details in the image and respond with ONLY a JSON object (no preamble, no code fences) of this exact shape: {"blurb": string|null, "title": string|null, "date": string|null, "time": string|null}. blurb: a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice, using ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown; null if no real event details are readable. title: the event's actual title/headliner as shown in the image, ONLY if clearly visible — null otherwise. date: the event date as YYYY-MM-DD, ONLY if clearly visible; if the year is not shown, use the next occurrence of that date on or after today — null if no date is visible. time: the START time as 24-hour HH:MM, ONLY if clearly visible (prefer the show/start time over doors; if only doors is shown, use doors) — null otherwise.` },
           ] }],
         }),
+        signal: AbortSignal.timeout(45000),
       })
       if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
       const data = await res.json()

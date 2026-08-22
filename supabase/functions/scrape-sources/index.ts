@@ -169,11 +169,16 @@ function ensureScheme(u: string): string {
   return /^https?:\/\//i.test(t) ? t : `https://${t}`
 }
 
-// Portland is UTC-7 mid-March..early-Nov, else UTC-8 (month heuristic, same as
-// scripts/ingest.js — exact DST boundary doesn't matter at event-time precision).
+// Exact PT offset for a given date via Intl (handles DST boundaries precisely);
+// the old month heuristic was an hour off for ~3 weeks/year near the switches,
+// which could flip a late show's stored date and dedupe key.
 function portlandOffset(dateStr: string): string {
-  const month = parseInt(dateStr.split('-')[1], 10)
-  return month >= 3 && month <= 10 ? '-07:00' : '-08:00'
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`)
+  const tzName = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'shortOffset' })
+    .formatToParts(noonUtc).find(p => p.type === 'timeZoneName')?.value ?? 'GMT-8'
+  const m = tzName.match(/GMT([+-]?\d{1,2})/)
+  const hrs = m ? parseInt(m[1], 10) : -8
+  return `${hrs < 0 ? '-' : '+'}${String(Math.abs(hrs)).padStart(2, '0')}:00`
 }
 
 // Combine extracted date (+ optional time) AS America/Los_Angeles — never a naive

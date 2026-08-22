@@ -138,6 +138,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
           ],
         }],
       }),
+      signal: AbortSignal.timeout(90000), // main vision extraction — generous but bounded
     })
 
     if (!anthropicRes.ok) {
@@ -236,6 +237,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
 }`,
               }],
             }),
+            signal: AbortSignal.timeout(30000),
           })
           if (aiRes.ok) {
             const aiData = await aiRes.json()
