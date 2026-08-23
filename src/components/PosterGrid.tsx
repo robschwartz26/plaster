@@ -617,8 +617,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           position: 'absolute',
           bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) - 28px)',
           right: 16,
-          width: 44,
-          height: 44,
+          width: 36,
+          height: 36,
           borderRadius: '50%',
           border: '1px solid var(--fg-15)',
           background: 'var(--bg)',
@@ -629,13 +629,13 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
           cursor: 'pointer',
           zIndex: 20,
-          opacity: showBackToTop ? 1 : 0,
+          opacity: showBackToTop ? 0.8 : 0,
           transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
           pointerEvents: showBackToTop ? 'auto' : 'none',
           transition: 'opacity 200ms ease, transform 200ms ease',
         }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 19V5M5 12l7-7 7 7" />
         </svg>
       </button>
