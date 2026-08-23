@@ -260,12 +260,16 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const allEventsRef = useRef(allEvents)
   const eventDayMapRef = useRef(eventDayMap)
   const daysRef = useRef(days)
+  const eventIdToIdxRef = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     walledItemsRef.current = walledItems
     walledIdxToEventIdxRef.current = walledIdxToEventIdx
     allEventsRef.current = allEvents
     eventDayMapRef.current = eventDayMap
     daysRef.current = days
+    const m = new Map<string, number>()
+    allEvents.forEach((e, i) => m.set(e.id, i))
+    eventIdToIdxRef.current = m
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
 
   // ── Compute active day from current scroll position ───────────────
@@ -378,6 +382,50 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 1-col active-poster tracking via IntersectionObserver ─────────
+  // The scroll handler above drives responsiveness during active scrolling,
+  // but iOS WebKit throttles/drops `scroll` events under `scroll-snap-type:
+  // y mandatory`, which used to leave the date indicator frozen on the poster
+  // it last saw. This observer doesn't depend on scroll events at all: a
+  // zero-height band at the vertical center reports exactly the one poster
+  // occupying the viewport whenever it settles — native, no polling, no strain.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || cols !== 1) return
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const centered = entries.find(e => e.isIntersecting)
+        if (!centered) return
+        const el = centered.target as HTMLElement
+
+        const dateId = el.getAttribute('data-date-id')
+        if (dateId) {
+          setAtDatePoster({ month: parseInt(dateId.split('-')[1], 10) })
+          if (dateId !== activeDayRef.current) { setActiveDay(dateId); onDayChange(dateId) }
+          return
+        }
+
+        const posterId = el.getAttribute('data-poster-id')
+        if (!posterId) return
+        const idx = eventIdToIdxRef.current.get(posterId)
+        if (idx == null) return
+        setActiveEventIdx(idx)
+        setAtDatePoster(null)
+        const ev = allEventsRef.current[idx]
+        const day = ev ? (eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]) : null
+        if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+      },
+      // Zero-height band at the vertical center → the poster under the center
+      // line is the single intersecting target.
+      { root: container, rootMargin: '-50% 0px -50% 0px', threshold: 0 },
+    )
+
+    container.querySelectorAll('[data-poster-id],[data-date-id]').forEach(el => io.observe(el))
+    return () => io.disconnect()
+    // Re-observe when the mode flips or the item set grows (pagination appends).
+  }, [cols, walledItems.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
@@ -516,7 +564,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           walledItems.map((item) => {
             if (item.type === 'date-poster') {
               return (
-                <div key={`d-${item.date}`} style={{ height: '100%', flexShrink: 0, scrollSnapAlign: 'start' }}>
+                <div key={`d-${item.date}`} data-date-id={item.date} style={{ height: '100%', flexShrink: 0, scrollSnapAlign: 'start' }}>
                   <DatePoster date={item.date} />
                 </div>
               )

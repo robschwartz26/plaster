@@ -675,6 +675,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       <div
         ref={cardRef}
         data-tour="onecol"
+        data-poster-id={event.id}
         style={{
           height: '100%',
           background: 'var(--bg)',
