@@ -278,9 +278,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       const entry = log.find(r => r.id === msg.logId)
       const rp = entry?.retryPayload
       if (!rp) return
+      // Guard double-fire: a panel re-render (another capture finishing) can
+      // recreate an enabled button while this entry still exists. Consume the
+      // retryPayload synchronously so a second click finds nothing to replay.
+      const st = entry.status
+      await updateLog(msg.logId, { status: 'reading', retryPayload: null })
       // replay with the ORIGINAL context (staged poster + venue at capture time);
       // duplicate → force · far-date → allow_far · venue-confirm → yes/no answer
-      const st = entry.status
       await ingest({
         imageBase64: rp.imageBase64, mimeType: rp.mimeType,
         tab: { url: rp.url, title: rp.title }, thumb: entry.thumb,

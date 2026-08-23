@@ -167,7 +167,11 @@ For the "crop" field: express poster art bounds as fractions of the total image 
       if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
         try {
           const params = new URLSearchParams()
-          params.set('name', `ilike.%${parsed.venue_name}%`)
+          // Escape PostgREST ilike metacharacters in the model-extracted name —
+          // a stray %/_/,/( could widen or 400 the pattern (or attach the wrong
+          // venue via an over-broad match).
+          const safeName = String(parsed.venue_name).replace(/[%_,()\\*]/g, ' ').trim()
+          params.set('name', `ilike.%${safeName}%`)
           params.set('select', 'id,name,address,location_lat,location_lng,website,instagram,hours')
           params.set('limit', '1')
           const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/venues?${params}`, {
