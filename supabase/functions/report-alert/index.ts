@@ -20,6 +20,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
+import { requireServiceRole } from '../_shared/webhookAuth.ts'
 
 const ALERT_EMAIL = 'plasterpdx@gmail.com'
 const FROM_EMAIL = 'Plaster Alerts <noreply@plasterthewall.com>'
@@ -41,6 +42,8 @@ const KIND_LABELS: Record<string, string> = {
 }
 
 serve(async (req) => {
+  const denied = requireServiceRole(req)
+  if (denied) return denied
   try {
     const payload = await req.json()
     const record = payload.record

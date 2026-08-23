@@ -150,11 +150,13 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
               const d = formatDateBlocks(activeDay, today)
               return (
                 <>
+                  {/* Future days stay quieter than today, but must remain
+                      readable — grey-on-grey failed that. */}
                   <span
                     style={{
                       ...BLOCK_BASE,
                       background: d.isFuture ? 'var(--fg-18)' : 'var(--fg)',
-                      color:      d.isFuture ? 'var(--fg-40)' : 'var(--bg)',
+                      color:      d.isFuture ? 'var(--fg-80)' : 'var(--bg)',
                     }}
                   >
                     {d.label}
@@ -163,8 +165,8 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                   <span
                     style={{
                       ...BLOCK_BASE,
-                      border: `1px solid ${d.isFuture ? 'var(--fg-15)' : 'var(--fg-40)'}`,
-                      color:  d.isFuture ? 'var(--fg-30)' : 'var(--fg-80)',
+                      border: `1px solid ${d.isFuture ? 'var(--fg-25)' : 'var(--fg-40)'}`,
+                      color:  d.isFuture ? 'var(--fg-55)' : 'var(--fg-80)',
                     }}
                   >
                     {d.shortDay}
@@ -173,7 +175,7 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                   <span
                     style={{
                       ...BLOCK_BASE,
-                      color: d.isFuture ? 'var(--fg-18)' : 'var(--fg-65)',
+                      color: d.isFuture ? 'var(--fg-40)' : 'var(--fg-65)',
                     }}
                   >
                     {d.dateLabel}

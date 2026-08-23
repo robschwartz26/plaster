@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "Plaster Clipper",
+  "version": "1.9.0",
+  "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
+  "permissions": [
+    "tabs",
+    "scripting",
+    "contextMenus",
+    "storage",
+    "sidePanel",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Plaster Clipper \u2014 open panel"
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "region-grab": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
+      },
+      "description": "Region grab \u2192 Plaster (drag a box, like \u2318\u21e74)"
+    },
+    "window-grab": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Z",
+        "mac": "Command+Shift+Z"
+      },
+      "description": "Grab the whole visible page \u2192 Plaster"
+    },
+    "poster-grab": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+P",
+        "mac": "Command+Shift+P"
+      },
+      "description": "Stage a POSTER region (then grab the info with the region grab)"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "stage-click.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const EXTRACT_MODEL = Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6'
 
-const CATEGORY_FIELD = `"Live Music or Dance or Comedy or Drag or Jazz or Trivia or Karaoke or Theater or Burlesque or Classical or Film or Art or Literary or Spoken or Other. Pick the single best category based on the event's primary format. Prefer Live Music for bands and singer-songwriters playing instruments. Prefer Dance for DJ nights and themed dance parties. Prefer Jazz when jazz is the explicit featured genre. Prefer Classical for orchestras, chamber music, or opera. Prefer Comedy for stand-up or sketch. Prefer Theater for plays and musicals. Prefer Drag for drag-focused shows. Prefer Burlesque for burlesque shows specifically. Prefer Karaoke for karaoke nights. Prefer Trivia for pub quiz events. Prefer Film for screenings. Prefer Art for gallery/exhibition events. Prefer Literary for book clubs, book signings, and events centered on books as objects rather than performance. Prefer Spoken for live podcasts, author talks, storytelling shows, spoken word, and other events where the primary format is people speaking rather than singing or playing music. Only use Other if nothing fits."`
+const CATEGORY_FIELD = `"Live Music or Dance or Comedy or Drag or Jazz or Trivia or Karaoke or Theater or Burlesque or Classical or Film or Festivals or Markets or Art or Literary or Spoken or Other. Pick the single best category based on the event's primary format. Prefer Live Music for bands and singer-songwriters playing instruments. Prefer Dance for DJ nights and themed dance parties. Prefer Jazz when jazz is the explicit featured genre. Prefer Classical for orchestras, chamber music, or opera. Prefer Comedy for stand-up or sketch. Prefer Theater for plays and musicals. Prefer Drag for drag-focused shows. Prefer Burlesque for burlesque shows specifically. Prefer Karaoke for karaoke nights. Prefer Trivia for pub quiz events. Prefer Film for screenings. Prefer Festivals for street festivals, block parties, outdoor fairs, and multi-day or multi-act community festivals — even when music is on the lineup, if the event is the festival itself rather than a single show. Prefer Markets for farmers markets, flea markets, night markets, craft fairs, and vendor/maker pop-up markets where browsing and buying from vendors is the point. Prefer Art for gallery/exhibition events. Prefer Literary for book clubs, book signings, and events centered on books as objects rather than performance. Prefer Spoken for live podcasts, author talks, storytelling shows, spoken word, and other events where the primary format is people speaking rather than singing or playing music. Only use Other if nothing fits."`
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -138,6 +138,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
           ],
         }],
       }),
+      signal: AbortSignal.timeout(90000), // main vision extraction — generous but bounded
     })
 
     if (!anthropicRes.ok) {
@@ -166,7 +167,11 @@ For the "crop" field: express poster art bounds as fractions of the total image 
       if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
         try {
           const params = new URLSearchParams()
-          params.set('name', `ilike.%${parsed.venue_name}%`)
+          // Escape PostgREST ilike metacharacters in the model-extracted name —
+          // a stray %/_/,/( could widen or 400 the pattern (or attach the wrong
+          // venue via an over-broad match).
+          const safeName = String(parsed.venue_name).replace(/[%_,()\\*]/g, ' ').trim()
+          params.set('name', `ilike.%${safeName}%`)
           params.set('select', 'id,name,address,location_lat,location_lng,website,instagram,hours')
           params.set('limit', '1')
           const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/venues?${params}`, {
@@ -236,6 +241,7 @@ For the "crop" field: express poster art bounds as fractions of the total image 
 }`,
               }],
             }),
+            signal: AbortSignal.timeout(30000),
           })
           if (aiRes.ok) {
             const aiData = await aiRes.json()

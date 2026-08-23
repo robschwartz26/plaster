@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { type WallEvent } from '@/types/event'
 import { supabase } from '@/lib/supabase'
@@ -11,6 +12,9 @@ import { GifMessage } from '@/components/GifMessage'
 import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
+import { useGuestGate } from '@/components/GuestGate'
+import { fetchArtistTags, type ArtistTag } from '@/lib/venueClaims'
 import { SoldOutChip } from '@/components/SoldOutChip'
 import { SlapSheet } from '@/components/SlapSheet'
 import { SlapHand } from '@/components/SlapHand'
@@ -114,7 +118,8 @@ function formatDateTime(iso: string, showTimes?: string[] | null): string {
   tomorrow.setDate(tomorrow.getDate() + 1)
   const isToday = d.toDateString() === today.toDateString()
   const isTomorrow = d.toDateString() === tomorrow.toDateString()
-  const dayLabel = isToday ? 'Tonight' : isTomorrow ? 'Tomorrow'
+  // Daytime events (before 5pm) say "Today" — "Tonight at 9 AM" reads wrong
+  const dayLabel = isToday ? (d.getHours() < 17 ? 'Today' : 'Tonight') : isTomorrow ? 'Tomorrow'
     : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   const fmtTime = (s: string) => new Date(s).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
   if (showTimes && showTimes.length >= 2) {
@@ -180,6 +185,18 @@ const TAN60 = Math.tan(Math.PI / 3)
 
 export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName }: Props) {
   const { user, isAdmin } = useAuth()
+  const { requireAuth } = useGuestGate()
+  const navigate = useNavigate()
+
+  // Approved artist tags ("@lowdownbrass") for the info panel — public via
+  // SECURITY DEFINER RPC so guests see them too. Loaded once per active card.
+  const [artistTags, setArtistTags] = useState<ArtistTag[]>([])
+  useEffect(() => {
+    if (!isActive || cols !== 1) return
+    let cancelled = false
+    fetchArtistTags(event.id).then(tags => { if (!cancelled) setArtistTags(tags) })
+    return () => { cancelled = true }
+  }, [isActive, cols, event.id])
   const matches = matchesFilter(event, activeFilter, isLiked)
   const matchesQuery = matchesSearch(event, searchQuery)
   const dimmed = (activeFilter !== 'All' && !matches) || (searchQuery.trim() !== '' && !matchesQuery)
@@ -253,6 +270,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   const [posts, setPosts] = useState<WallPost[]>([])
   const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set())
   const [newPostText, setNewPostText] = useState('')
+  const [postError, setPostError] = useState<string | null>(null)
   const [postLoading, setPostLoading] = useState(false)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
   const [replyContext, setReplyContext] = useState<string | null>(null)
@@ -286,10 +304,18 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
         .then(({ data }) => setIsAttending(!!data))
     }
 
-    fetchPosts()
+    // Guests get a sign-up teaser instead of the post wall (and RLS locks
+    // event_wall_posts to signed-in users anyway) — skip the fetch entirely.
+    if (user) fetchPosts()
 
     if (user) {
-      supabase.from('post_likes').select('post_id').eq('user_id', user.id)
+      // Scope to THIS event's posts via an inner join — previously this pulled
+      // the user's entire lifetime post-like history on every card activation
+      // (unbounded growth). We only need likes for the posts shown here.
+      supabase.from('post_likes')
+        .select('post_id, event_wall_posts!inner(event_id)')
+        .eq('user_id', user.id)
+        .eq('event_wall_posts.event_id', event.id)
         .then(({ data }) => {
           setLikedPostIds(new Set((data ?? []).map((r: { post_id: string }) => r.post_id)))
         })
@@ -528,6 +554,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
 
   function registerView() {
     if (cols !== 1) return
+    // register_event_view is granted to authenticated only — skip for guests
+    // (their call would just error; guest views intentionally don't count).
+    if (!user) return
     supabase.rpc('register_event_view', { p_event_id: event.id })
       .then(({ error }) => { if (error) console.warn('view tracking failed', error) })
   }
@@ -585,6 +614,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── Submit post ────────────────────────────────────────────────────────
   async function submitPost() {
     if (!user || (!newPostText.trim() && !pendingGif) || postLoading) return
+    // Objectionable-content gate (Apple 1.2)
+    const postVerdict = moderateText(newPostText.trim())
+    if (!postVerdict.ok) { setPostError(moderationMessage(postVerdict, 'post')); return }
+    setPostError(null)
     setPostLoading(true)
     const gif = pendingGif
     const gifQuery = pendingGifQuery
@@ -617,6 +650,10 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   // ── Submit reply ──────────────────────────────────────────────────────
   async function submitReply(parentId: string) {
     if (!user || !replyText.trim() || postLoading) return
+    // Objectionable-content gate (Apple 1.2)
+    const replyVerdict = moderateText(replyText.trim())
+    if (!replyVerdict.ok) { setPostError(moderationMessage(replyVerdict, 'reply')); return }
+    setPostError(null)
     setPostLoading(true)
     const { error } = await supabase.from('event_wall_posts').insert({
       event_id: event.id, user_id: user.id, body: replyText.trim(), parent_id: parentId,
@@ -721,7 +758,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               </button>
             )}
             {/* Artist media rail — fallback when no claimed track; music/comedy only */}
-            {panelIdx === 0 && !showTrack && <ArtistRail event={event} summon={railSummon} />}
+            {panelIdx === 0 && !showTrack && <ArtistRail event={event} summon={railSummon} tourAnchor={isActive} />}
           </div>
 
           {/* Panel 2: Info */}
@@ -1005,6 +1042,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       <img
         src={event.poster_url}
         alt={event.title}
+        // lazy/async: in 1-col the grid mounts a card for EVERY loaded event, so
+        // without this the whole page's full-res posters (two imgs each: panel +
+        // loop clone) fetch at once — ERR_INSUFFICIENT_RESOURCES / iOS memory
+        // blowout. The browser now only loads posters near the viewport.
+        loading="lazy"
+        decoding="async"
         style={{
           position: 'absolute', inset: 0,
           width: '100%', height: '100%',
@@ -1066,6 +1109,32 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 </p>
               )}
 
+              {/* Approved artist tags — the band ON Plaster. Tap → their artist
+                  page (guests get the sign-up gate; profiles are members-only). */}
+              {artistTags.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '-8px 0 20px' }}>
+                  {artistTags.filter(t => t.username).map(t => (
+                    <button
+                      key={t.artist_id}
+                      onClick={() => {
+                        if (!requireAuth(`Sign up to see @${t.username} and follow artists you love`)) return
+                        navigate(`/profile/${t.username}`)
+                      }}
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        padding: '3px 10px', borderRadius: 20,
+                        background: event.color2 + '33', border: `1px solid ${event.color2}55`,
+                        fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700,
+                        color: event.color2, cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontSize: 9, lineHeight: 1 }}>◆</span>
+                      @{t.username}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div style={{ height: 1, background: 'var(--fg-08)', margin: '0 0 16px' }} />
 
               {attendeeCount > 0 && (
@@ -1079,23 +1148,19 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 </div>
               )}
 
-              {user ? (
-                <button data-tour="rsvp" onClick={() => { if (isIntercepted('rsvp') && isAttending) { reportTourAction('rsvp'); return } toggleAttend() }} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
-                  {isAttending ? "I'm Going ✓" : "I'll Be There"}
-                </button>
-              ) : (
-                <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)', textAlign: 'center' }}>sign in to say you're going</p>
-              )}
+              {/* Guest mode: RSVP + slap stay full-color and inviting — the gate
+                  happens on the tap, not on the look (Apple 5.1.1(v)). */}
+              <button data-tour="rsvp" onClick={() => { if (!requireAuth("Sign up to say you're going — your shows stack up in your LINE UP")) return; if (isIntercepted('rsvp') && isAttending) { reportTourAction('rsvp'); return } toggleAttend() }} disabled={attendLoading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: isAttending ? '1.5px solid var(--fg-25)' : 'none', background: isAttending ? 'transparent' : event.color2, color: isAttending ? 'var(--fg-65)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: attendLoading ? 'default' : 'pointer', opacity: attendLoading ? 0.6 : 1 }}>
+                {isAttending ? "I'm Going ✓" : "I'll Be There"}
+              </button>
 
-              {user && (
-                <button
-                  data-tour="slap"
-                  onClick={() => { if (isIntercepted('slap')) { reportTourAction('slap'); return } setSlapOpen(true) }}
-                  style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                >
-                  <SlapHand size={18} /> Slap your friends
-                </button>
-              )}
+              <button
+                data-tour="slap"
+                onClick={() => { if (!requireAuth('Sign up to slap this show to your friends')) return; if (isIntercepted('slap')) { reportTourAction('slap'); return } setSlapOpen(true) }}
+                style={{ width: '100%', marginTop: 10, padding: '12px 0', borderRadius: 10, border: 'none', background: '#2a2622', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                <SlapHand size={18} /> Slap your friends
+              </button>
 
               {user && (() => {
                 const reportLabel = reportCount >= 15
@@ -1183,6 +1248,31 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
             <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Wall</span>
           </div>
           <div style={{ flex: 1 }} />
+        </>
+      )
+    }
+    // Guest mode: the post wall is the one visibly locked panel — the social
+    // life of the event is the teaser. Everything else stays browsable.
+    if (!user) {
+      return (
+        <>
+          <div style={{ flexShrink: 0, paddingTop: 'max(14px, env(safe-area-inset-top))', padding: '14px 16px 12px', borderBottom: '1px solid var(--fg-08)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>Wall</span>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 32px', gap: 10, textAlign: 'center' }}>
+            <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, color: 'var(--fg)', lineHeight: 1.2 }}>
+              The wall behind this show
+            </p>
+            <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', lineHeight: 1.5 }}>
+              Notes, hype, and who's going live here.
+            </p>
+            <button
+              onClick={() => requireAuth('Sign up to get on the wall')}
+              style={{ padding: '12px 28px', borderRadius: 12, border: 'none', background: '#A855F7', color: '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Sign up free
+            </button>
+          </div>
         </>
       )
     }
@@ -1355,7 +1445,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                 >GIF</button>
                 <MentionInput
                   value={newPostText}
-                  onChange={setNewPostText}
+                  onChange={(v: string) => { setNewPostText(v); if (postError) setPostError(null) }}
                   onSubmit={submitPost}
                   placeholder="leave a note on the wall…"
                   maxLength={280}
@@ -1366,6 +1456,9 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
                   </svg>
                 </button>
               </div>
+              {postError && (
+                <p style={{ margin: '6px 2px 0', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{postError}</p>
+              )}
               {/* GIF picker for wall posts */}
               <GifPicker
                 open={gifPickerOpen}

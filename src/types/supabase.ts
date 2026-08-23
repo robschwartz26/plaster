@@ -1326,6 +1326,127 @@ export type Database = {
         }
         Relationships: []
       }
+      splash_images: {
+        Row: {
+          id: string
+          url: string
+          is_bundled: boolean
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          url: string
+          is_bundled?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          url?: string
+          is_bundled?: boolean
+          active?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_notification_prefs: {
+        Row: {
+          user_id: string
+          messages: boolean
+          replies: boolean
+          follows: boolean
+          likes: boolean
+          slaps: boolean
+          new_shows: boolean
+          reminders: boolean
+          community: boolean
+          push_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          messages?: boolean
+          replies?: boolean
+          follows?: boolean
+          likes?: boolean
+          slaps?: boolean
+          new_shows?: boolean
+          reminders?: boolean
+          community?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          messages?: boolean
+          replies?: boolean
+          follows?: boolean
+          likes?: boolean
+          slaps?: boolean
+          new_shows?: boolean
+          reminders?: boolean
+          community?: boolean
+          push_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      venue_claims: {
+        Row: {
+          id: string
+          note: string | null
+          profile_id: string
+          requested_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          venue_id: string
+        }
+        Insert: {
+          id?: string
+          note?: string | null
+          profile_id: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          venue_id: string
+        }
+        Update: {
+          id?: string
+          note?: string | null
+          profile_id?: string
+          requested_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          venue_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "venue_claims_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_claims_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_claims_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       venue_sources: {
         Row: {
           default_category: string
@@ -1452,6 +1573,22 @@ export type Database = {
       accept_follow_request: {
         Args: { follower_user_id: string }
         Returns: undefined
+      }
+      admin_approve_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
+      admin_reject_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
+      event_artist_tags: {
+        Args: { p_event_id: string }
+        Returns: {
+          artist_id: string
+          username: string
+          avatar_diamond_url: string
+        }[]
       }
       activity_feed: {
         Args: {
@@ -1696,6 +1833,16 @@ export type Database = {
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       scrub_my_account_data: { Args: never; Returns: boolean }
+      latest_messages: {
+        Args: { p_conv_ids: string[] }
+        Returns: {
+          conversation_id: string
+          body: string | null
+          sender_id: string
+          created_at: string
+          media_type: string | null
+        }[]
+      }
       search_my_messages: {
         Args: { p_query: string }
         Returns: {

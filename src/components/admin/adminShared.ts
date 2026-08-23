@@ -14,6 +14,15 @@ export const NEIGHBORHOODS = [
   'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',
   'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
   'Division', 'Burnside',
+  // Metro cities outside Portland proper — venues live there too (Edgefield,
+  // Reser, the amphitheater…) and an honest city tag beats shoehorning into a
+  // Portland sextant. NOTE: distinct from the onboarding home-neighborhood
+  // picker (lib/neighborhoods.ts), which stays Portland-only by design.
+  'Troutdale', 'Gresham', 'Beaverton', 'Hillsboro', 'Milwaukie',
+  'Lake Oswego', 'Oregon City', 'Happy Valley', 'Vancouver WA',
+  'Forest Grove', // McMenamins Grand Lodge
+  'Tualatin',
+  'Bend', // not metro — but Hayden Homes Amphitheater headliners are worth the drive
 ]
 
 // ── Shared input styles ──────────────────────────────────────
@@ -343,6 +352,35 @@ export async function extractScheduleFromImage({ base64, mimeType }: { base64: s
   if (!response.ok) await throwExtractionError(response)
   const data = await response.json()
   return data.occurrences ?? []
+}
+
+// Resolve a drop event to an image File. Accepts a local file OR an image
+// dragged straight off a webpage (html/uri/plain URL) — web drags carry no
+// File, so the URL is fetched server-side (fetch-image edge fn) to dodge CORS.
+export async function fileFromDrop(e: React.DragEvent): Promise<File | null> {
+  // READ dataTransfer SYNCHRONOUSLY first — it's only valid during the event
+  const local = Array.from(e.dataTransfer.files).find(f => f.type.startsWith('image/'))
+  const html  = e.dataTransfer.getData('text/html')
+  const uri   = e.dataTransfer.getData('text/uri-list')
+  const plain = e.dataTransfer.getData('text/plain')
+  if (local) return local
+  const fromHtml = html.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1]
+  const url = uri || fromHtml || plain
+  if (!url || !/^https?:\/\//i.test(url)) return null
+  const { data: { session } } = await supabaseAdmin.auth.getSession()
+  const token = session?.access_token
+  const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ url }),
+  })
+  if (!res.ok) throw new Error('fetch-image failed')
+  const { base64, mimeType } = await res.json()
+  const bin = atob(base64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg')
+  return new File([bytes], `dropped-${Date.now()}.${ext}`, { type: mimeType })
 }
 
 // ── Text utilities ───────────────────────────────────────────

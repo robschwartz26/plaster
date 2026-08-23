@@ -1,16 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import QRCode from 'qrcode'
+import { Capacitor } from '@capacitor/core'
 import { Share } from '@capacitor/share'
 import { supabase } from '@/lib/supabase'
 import { Diamond } from '@/components/Diamond'
 import { FollowButton } from '@/components/FollowButton'
-import { ensureContactsPermission, readDeviceContacts, type DeviceContact } from '@/lib/contactHash'
+import { ensureContactsPermission, readDeviceContacts, normalizePhone, type DeviceContact } from '@/lib/contactHash'
 import { openAppSettings } from '@/lib/pickImage'
 
 interface Props {
   onDone: () => void
 }
 
-type ScreenState = 'softening' | 'loading' | 'results' | 'denied' | 'error'
+type ScreenState = 'consent' | 'loading' | 'results' | 'denied' | 'error'
 
 interface MatchedUser {
   id: string
@@ -22,44 +24,161 @@ interface MatchedUser {
   matched_email_hash: string | null
 }
 
-// Stable key for a contact: name + first phone (used for selection Set)
+// Stable key for a contact: name + first phone/email (used for selection Set
+// AND as the React list key — so it must be unique, see dedupeContacts)
 function contactKey(c: DeviceContact): string {
-  return `${c.name}|${c.phones[0] ?? ''}`
+  return `${c.name}|${c.phones[0] ?? c.emails[0] ?? ''}`
+}
+
+// iOS returns the same contact once per account container (iCloud, Gmail, …).
+// Identical name+number twice means duplicate React keys, which corrupts list
+// rendering — stale rows survive filtering and checkbox toggles never repaint.
+// Merge duplicates (unioning phones/emails/hashes so matching still sees
+// everything); the Map guarantees every surviving contactKey is unique.
+function dedupeContacts(list: DeviceContact[]): DeviceContact[] {
+  const byKey = new Map<string, DeviceContact>()
+  for (const c of list) {
+    const k = contactKey(c)
+    const prev = byKey.get(k)
+    if (prev) {
+      prev.phones = [...new Set([...prev.phones, ...c.phones])]
+      prev.emails = [...new Set([...prev.emails, ...c.emails])]
+      prev.hashes = [...new Set([...prev.hashes, ...c.hashes])]
+    } else {
+      byKey.set(k, { ...c })
+    }
+  }
+  return [...byKey.values()]
+}
+
+// Resolve `p`, but never wait longer than `ms` — fall back to `fallback`.
+// Guards against a native plugin call that never settles.
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms)),
+  ])
+}
+
+// DEV-only mock contacts (localhost web, where Capacitor Contacts doesn't
+// exist) — lets search/select/invite be exercised in a desktop browser.
+// Deliberately includes duplicate entries (same contact from two account
+// containers) — real iPhones return these, and they must merge cleanly.
+const DEV_MOCK_CONTACTS: DeviceContact[] = [
+  { name: 'Ada Lovelace', phones: ['+15035550101'], emails: [], hashes: [] },
+  { name: 'Ada Lovelace', phones: ['+15035550101'], emails: ['ada@example.com'], hashes: [] },
+  { name: 'Bruce Wayne', phones: ['+15035550102'], emails: [], hashes: [] },
+  { name: 'Carmen Sandiego', phones: [], emails: ['carmen@example.com'], hashes: [] },
+  { name: 'David Bowie', phones: ['+15035550107'], emails: [], hashes: [] },
+  { name: 'David Byrne', phones: ['+15035550108'], emails: [], hashes: [] },
+  { name: 'David Byrne', phones: ['+15035550108'], emails: [], hashes: [] },
+  { name: 'Dolly Parton', phones: ['+15035550104'], emails: [], hashes: [] },
+  { name: 'Elliott Smith', phones: ['+15035550105'], emails: ['elliott@example.com'], hashes: [] },
+  { name: 'Mississippi Studios', phones: ['+15035550106'], emails: [], hashes: [] },
+]
+
+// Live on the App Store as of Aug 2026 — invites point straight at the listing.
+const APP_STORE_URL = 'https://apps.apple.com/us/app/plaster-the-wall/id6771572698'
+const INVITE_TEXT = `Join me on Plaster — Portland's music & events app: ${APP_STORE_URL}`
+
+// Manual invite: type a number → opens Messages with the invite prefilled.
+// Works without contacts permission (it's just an sms: deep link — we never
+// see or store the number). Shown on the results + denied screens.
+function InviteByNumber() {
+  const [num, setNum] = useState('')
+  const normalized = normalizePhone(num)
+  function send() {
+    if (!normalized) return
+    const sep = Capacitor.getPlatform() === 'android' ? '?' : '&'
+    window.open(`sms:${normalized}${sep}body=${encodeURIComponent(INVITE_TEXT)}`, '_self')
+    setNum('')
+  }
+  return (
+    <div style={{ display: 'flex', gap: 8, padding: '4px 16px 10px' }}>
+      <input
+        type="tel"
+        inputMode="tel"
+        placeholder="Or text a number an invite…"
+        value={num}
+        onChange={e => setNum(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') send() }}
+        style={{
+          flex: 1, padding: '10px 14px', borderRadius: 10,
+          border: '1px solid var(--fg-15)', background: 'var(--fg-08)',
+          color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 14, outline: 'none', boxSizing: 'border-box', minWidth: 0,
+        }}
+      />
+      <button
+        onClick={send}
+        disabled={!normalized}
+        style={{
+          flexShrink: 0, padding: '0 16px', borderRadius: 10, border: 'none',
+          background: normalized ? '#A855F7' : 'var(--fg-15)', color: '#fff',
+          fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 700,
+          cursor: normalized ? 'pointer' : 'default',
+        }}
+      >
+        Invite
+      </button>
+    </div>
+  )
 }
 
 export function FindFriends({ onDone }: Props) {
-  const [screen, setScreen] = useState<ScreenState>('softening')
+  const [screen, setScreen] = useState<ScreenState>('consent')
+  const [qrUrl, setQrUrl] = useState<string | null>(null)
+
+  // QR → App Store listing. Generated locally (no network; CSP-safe), themed
+  // to Plaster's palette.
+  useEffect(() => {
+    QRCode.toDataURL(APP_STORE_URL, { width: 360, margin: 1, color: { dark: '#0c0b0b', light: '#f0ece3' } })
+      .then(setQrUrl)
+      .catch(() => setQrUrl(null))
+  }, [])
   const [matched, setMatched] = useState<MatchedUser[]>([])
   const [unmatched, setUnmatched] = useState<DeviceContact[]>([])
   const [contactNames, setContactNames] = useState<Map<string, string>>(new Map())
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
-  const hasRun = useRef(false)
 
   // Build a map from key → DeviceContact for sendBulkInvite
   const contactById = useRef<Map<string, DeviceContact>>(new Map())
 
-  useEffect(() => {
-    if (hasRun.current) return
-    hasRun.current = true
-
-    // Brief softener before triggering the permission prompt
-    const timer = setTimeout(() => runMatching(), 700)
-    return () => clearTimeout(timer)
-  }, [])
+  // Apple 5.1.2 (informed consent): matching does NOT auto-run. The 'consent'
+  // screen explains exactly what leaves the device (one-way hashes only) and
+  // what happens server-side, and the user must explicitly tap "Find my
+  // friends" before the iOS Contacts prompt ever fires. Declining skips the
+  // feature entirely — no permission prompt, no data sent.
 
   async function runMatching() {
     try {
       setScreen('loading')
 
-      const perm = await ensureContactsPermission()
+      // Contacts only exist on the native app. On web/localhost the Capacitor
+      // plugin has no implementation and its calls can hang forever — so short-
+      // circuit to the results screen instead of spinning. On localhost the
+      // results screen fills with DEV mock contacts so search/select/invite
+      // are testable in a desktop browser (standing DEV-path rule).
+      if (!Capacitor.isNativePlatform()) {
+        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        setMatched([])
+        setUnmatched(isDev ? dedupeContacts(DEV_MOCK_CONTACTS) : [])
+        setScreen('results')
+        return
+      }
+
+      // Time-box the native calls so a stalled permission/read can never trap
+      // the user on the spinner. Falls through to denied/empty on timeout.
+      const perm = await withTimeout(ensureContactsPermission(), 12000, 'denied' as const)
       if (perm === 'denied') {
         setScreen('denied')
         return
       }
 
-      const contacts = await readDeviceContacts()
-      console.log('[FindFriends] read', contacts.length, 'contacts')
+      const rawContacts = await withTimeout(readDeviceContacts(), 15000, [] as DeviceContact[])
+      const contacts = dedupeContacts(rawContacts)
+      console.log('[FindFriends] read', rawContacts.length, 'contacts,', contacts.length, 'after dedupe')
 
       // hash → contact name map
       const nameMap = new Map<string, string>()
@@ -98,9 +217,10 @@ export function FindFriends({ onDone }: Props) {
         }
       }
 
-      // Invite list: contacts with phones, excluding already-matched ones
+      // Invite list: everyone not already on Plaster — email-only contacts
+      // included (the invite goes out via the share sheet, not SMS, so a
+      // phone number isn't required to be findable/invitable)
       const inviteContacts = contacts
-        .filter(c => c.phones.length > 0)
         .filter(c => !matchedKeys.has(contactKey(c)))
 
       setMatched(matchedUsers)
@@ -126,7 +246,7 @@ export function FindFriends({ onDone }: Props) {
       await Share.share({
         title: 'Join me on Plaster',
         text: "Follow me on Plaster — Portland's music & events app:",
-        url: 'https://plasterthewall.com',
+        url: APP_STORE_URL,
       })
       console.log('[FindFriends] share sheet opened for', selected.size, 'selected contacts')
       setSelected(new Set())
@@ -135,24 +255,57 @@ export function FindFriends({ onDone }: Props) {
     }
   }
 
-  const filteredUnmatched = search.trim()
-    ? unmatched.filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+  // Search covers BOTH sections — a friend who's already on Plaster must be
+  // findable by contact name or @username, not silently unfilterable.
+  const q = search.trim().toLowerCase()
+  const filteredUnmatched = q
+    ? unmatched.filter(c => c.name.toLowerCase().includes(q))
     : unmatched
+  const filteredMatched = q
+    ? matched.filter(u => {
+        const matchHash = u.matched_phone_hash ?? u.matched_email_hash ?? ''
+        const contactName = contactNames.get(matchHash) ?? ''
+        return u.username.toLowerCase().includes(q) || contactName.toLowerCase().includes(q)
+      })
+    : matched
 
-  // ── Softening ─────────────────────────────────────────────────────────────
-  if (screen === 'softening') {
+  // ── Consent (Apple 5.1.2 — informed opt-in BEFORE any data leaves) ──────
+  // Two doors: search your contacts (explicit tap = consent; the one-liner
+  // below the button discloses that anonymous codes are sent + discarded), or
+  // just hand a friend the QR — straight to the App Store, zero data involved.
+  if (screen === 'consent') {
     return (
       <div style={containerStyle}>
-        <div style={centeredStyle}>
-          <h2 style={headingStyle}>Finding your friends on Plaster</h2>
-          <p style={bodyStyle}>Checking your contacts…</p>
-          <Spinner />
+        <div style={{ ...centeredStyle, gap: 10 }}>
+          <h2 style={headingStyle}>Find your friends</h2>
+          <button onClick={() => runMatching()} style={{ ...primaryBtn, marginTop: 4 }}>
+            Search contacts
+          </button>
+          <p style={{ ...bodyStyle, fontSize: 12, maxWidth: 300 }}>
+            We never save or sell your contacts. Matching uses anonymous encrypted
+            codes of numbers &amp; emails — checked once, instantly deleted.
+          </p>
+
+          <div style={{ width: '100%', maxWidth: 300, height: 1, background: 'var(--fg-15)', margin: '14px 0' }} />
+
+          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 15, color: 'var(--fg)' }}>
+            Or hand them Plaster
+          </p>
+          <p style={{ ...bodyStyle, fontSize: 12, margin: 0 }}>
+            Have your friends scan this — it takes them to the App&nbsp;Store.
+          </p>
+          {qrUrl && (
+            <img src={qrUrl} alt="App Store QR code" style={{ width: 180, height: 180, borderRadius: 12, marginTop: 4 }} />
+          )}
+
+          <button onClick={onDone} style={{ ...skipBtn, marginTop: 10 }}>Skip for now</button>
         </div>
       </div>
     )
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading ──────────────────────────────────────────────────────────────
+  // Always offer a way out — the user must never be trapped on the spinner.
   if (screen === 'loading') {
     return (
       <div style={containerStyle}>
@@ -160,6 +313,7 @@ export function FindFriends({ onDone }: Props) {
           <h2 style={headingStyle}>Finding your friends on Plaster</h2>
           <p style={bodyStyle}>Matching contacts…</p>
           <Spinner />
+          <button onClick={onDone} style={{ ...skipBtn, marginTop: 16 }}>Skip for now</button>
         </div>
       </div>
     )
@@ -171,8 +325,9 @@ export function FindFriends({ onDone }: Props) {
       <div style={containerStyle}>
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Contacts access is off</h2>
-          <p style={bodyStyle}>Enable contacts access for Plaster in Settings, or skip for now.</p>
+          <p style={bodyStyle}>Enable contacts access for Plaster in Settings, or invite someone directly by number.</p>
           <button onClick={() => openAppSettings()} style={primaryBtn}>Open Settings</button>
+          <div style={{ width: '100%' }}><InviteByNumber /></div>
           <button onClick={onDone} style={skipBtn}>Skip</button>
         </div>
       </div>
@@ -186,7 +341,7 @@ export function FindFriends({ onDone }: Props) {
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Something went wrong</h2>
           <p style={bodyStyle}>We couldn't read your contacts. You can try again or skip.</p>
-          <button onClick={() => { hasRun.current = false; runMatching() }} style={primaryBtn}>Try again</button>
+          <button onClick={() => runMatching()} style={primaryBtn}>Try again</button>
           <button onClick={onDone} style={skipBtn}>Skip</button>
         </div>
       </div>
@@ -206,14 +361,41 @@ export function FindFriends({ onDone }: Props) {
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: 'auto', overscrollBehavior: 'contain' }}>
 
+        {/* Sticky search — filters BOTH sections below */}
+        <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2, padding: '8px 16px 6px' }}>
+          <input
+            type="search"
+            inputMode="search"
+            placeholder="Search contacts"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: '1px solid var(--fg-15)',
+              background: 'var(--fg-08)',
+              color: 'var(--fg)',
+              fontFamily: '"Space Grotesk", sans-serif',
+              fontSize: 14,
+              outline: 'none',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
         {/* On Plaster */}
-        <div style={sectionHeaderStyle}>On Plaster ({matched.length})</div>
+        <div style={sectionHeaderStyle}>On Plaster ({filteredMatched.length})</div>
         {matched.length === 0 ? (
           <p style={{ margin: 0, padding: '10px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)', lineHeight: 1.5 }}>
             No one from your contacts is on Plaster yet — invite friends below to get started.
           </p>
+        ) : filteredMatched.length === 0 ? (
+          <p style={{ margin: 0, padding: '10px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
+            No one on Plaster matches "{search}"
+          </p>
         ) : (
-          matched.map(u => {
+          filteredMatched.map(u => {
             const matchHash = u.matched_phone_hash ?? u.matched_email_hash ?? ''
             const contactName = contactNames.get(matchHash) ?? null
             return (
@@ -239,30 +421,10 @@ export function FindFriends({ onDone }: Props) {
         <div style={{ height: 1, background: 'var(--fg-08)', margin: '4px 0' }} />
 
         {/* Invite section */}
-        <div style={sectionHeaderStyle}>Invite to Plaster ({unmatched.length})</div>
+        <div style={sectionHeaderStyle}>Invite to Plaster ({filteredUnmatched.length})</div>
 
-        {/* Sticky search */}
-        <div style={{ position: 'sticky', top: 0, background: 'var(--bg)', zIndex: 2, padding: '8px 16px 6px' }}>
-          <input
-            type="search"
-            inputMode="search"
-            placeholder="Search contacts"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 14px',
-              borderRadius: 10,
-              border: '1px solid var(--fg-15)',
-              background: 'var(--fg-08)',
-              color: 'var(--fg)',
-              fontFamily: '"Space Grotesk", sans-serif',
-              fontSize: 14,
-              outline: 'none',
-              boxSizing: 'border-box',
-            }}
-          />
-        </div>
+        {/* Manual invite — works even with no matching contacts */}
+        <InviteByNumber />
 
         {filteredUnmatched.length === 0 && unmatched.length > 0 && (
           <p style={{ margin: 0, padding: '10px 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>
@@ -307,9 +469,9 @@ export function FindFriends({ onDone }: Props) {
                 <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {c.name}
                 </div>
-                {c.phones[0] && (
+                {(c.phones[0] ?? c.emails[0]) && (
                   <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', marginTop: 1 }}>
-                    {c.phones[0]}
+                    {c.phones[0] ?? c.emails[0]}
                   </div>
                 )}
               </div>

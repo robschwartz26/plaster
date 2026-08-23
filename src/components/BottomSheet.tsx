@@ -1,16 +1,40 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState, useRef, useCallback } from 'react'
 
 interface Props {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
+  height?: string          // fixed sheet height (e.g. '50vh') instead of content-sized up to 85vh
+  backdropOpacity?: number // 0-1 backdrop dim; default 0.4 (use ~0.1 when the content behind should stay watchable)
 }
 
-export function BottomSheet({ open, onClose, title, children }: Props) {
+export function BottomSheet({ open, onClose, title, children, height, backdropOpacity = 0.4 }: Props) {
   // Keep children mounted during the slide-out animation, then unmount.
   // This prevents closed-sheet inputs from firing autoFocus on mount.
   const [renderChildren, setRenderChildren] = useState(open)
+
+  // Always-visible scroll thumb — iOS hides native scrollbars until you
+  // scroll, so overflowing sheets got no "there's more below" hint at all.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [thumb, setThumb] = useState<{ h: number; t: number } | null>(null)
+  const updateThumb = useCallback(() => {
+    const el = scrollRef.current
+    if (!el || el.scrollHeight <= el.clientHeight + 4) { setThumb(null); return }
+    const h = Math.max(36, (el.clientHeight * el.clientHeight) / el.scrollHeight)
+    const t = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * (el.clientHeight - h)
+    setThumb({ h, t })
+  }, [])
+  useEffect(() => {
+    if (!renderChildren) { setThumb(null); return }
+    const el = scrollRef.current
+    if (!el) return
+    updateThumb()
+    const ro = new ResizeObserver(updateThumb)
+    ro.observe(el)
+    if (el.firstElementChild) ro.observe(el.firstElementChild)
+    return () => ro.disconnect()
+  }, [renderChildren, updateThumb])
 
   useEffect(() => {
     if (open) {
@@ -36,7 +60,7 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0,0,0,0.4)',
+          background: `rgba(0,0,0,${backdropOpacity})`,
           zIndex: 99,
           opacity: open ? 1 : 0,
           pointerEvents: open ? 'auto' : 'none',
@@ -51,7 +75,8 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
           left: 0,
           right: 0,
           bottom: 0,
-          maxHeight: '85vh',
+          height: height,
+          maxHeight: height ?? '85vh',
           background: 'var(--bg)',
           borderRadius: '16px 16px 0 0',
           zIndex: 100,
@@ -103,8 +128,17 @@ export function BottomSheet({ open, onClose, title, children }: Props) {
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px 16px' }}>
-          {renderChildren ? children : null}
+        <div style={{ flex: 1, position: 'relative', minHeight: 0 }}>
+          <div ref={scrollRef} onScroll={updateThumb} style={{ height: '100%', overflowY: 'auto', padding: '12px 16px 16px' }}>
+            {renderChildren ? children : null}
+          </div>
+          {thumb && (
+            <div style={{
+              position: 'absolute', right: 3, top: thumb.t,
+              width: 3, height: thumb.h, borderRadius: 2,
+              background: 'var(--fg-25)', pointerEvents: 'none',
+            }} />
+          )}
         </div>
       </div>
     </>

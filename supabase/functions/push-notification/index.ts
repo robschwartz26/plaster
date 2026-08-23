@@ -23,6 +23,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
 import { create, getNumericDate } from 'https://deno.land/x/djwt@v3.0.1/mod.ts'
+import { requireServiceRole } from '../_shared/webhookAuth.ts'
 
 const APNS_PROD    = 'https://api.push.apple.com'
 const APNS_SANDBOX = 'https://api.development.push.apple.com'
@@ -149,6 +150,8 @@ function buildPushBody(notif: NotificationRow, senderUsername: string | null): {
 }
 
 serve(async (req) => {
+  const denied = requireServiceRole(req)
+  if (denied) return denied
   try {
     const payload = await req.json()
     const record: NotificationRow = payload.record
@@ -171,6 +174,16 @@ serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     })
+
+    // Master push switch: user turned device pushes off → row stays in-app only
+    const { data: pref } = await admin
+      .from('user_notification_prefs')
+      .select('push_enabled')
+      .eq('user_id', record.recipient_id)
+      .maybeSingle()
+    if (pref && pref.push_enabled === false) {
+      return new Response(JSON.stringify({ skipped: 'push disabled by user' }), { status: 200 })
+    }
 
     // Fetch ALL device tokens for the recipient (iOS + Android); we branch by
     // platform below.

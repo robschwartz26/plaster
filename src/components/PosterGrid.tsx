@@ -46,14 +46,28 @@ interface Props {
   onOpenEventHandled?: () => void
   enableDesktopNav?: boolean
   onNearEnd?: () => void
+  maxCols?: number // user pref: default AND ceiling for zoom-out (3-5)
 }
 
 function clamp(v: number, min: number, max: number) {
   return Math.min(max, Math.max(min, v))
 }
 
-export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd }: Props) {
-  const [cols, setCols] = useState(5)
+export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd, maxCols = 5 }: Props) {
+  const [cols, setCols] = useState(maxCols)
+  // Back-to-top affordance: appears in multi-col once scrolled a few screens down.
+  const [showBackToTop, setShowBackToTop] = useState(false)
+  const showBackToTopRef = useRef(false)
+  // Tour freezes vertical scroll during anchored single-poster steps.
+  const [scrollLocked, setScrollLocked] = useState(false)
+  // Ref so the []-dep touch/wheel handlers always clamp to the current pref
+  const maxColsRef = useRef(maxCols)
+  useEffect(() => {
+    maxColsRef.current = maxCols
+    // Snap to the newly chosen size (not just clamp) — tapping "5 across"
+    // with the prefs sheet open should visibly reflow the wall behind it.
+    setCols(maxCols)
+  }, [maxCols])
   const [activeDay, setActiveDay] = useState<string>(today)
   const activeDayRef = useRef(activeDay)
   useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
@@ -180,7 +194,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       const dist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY)
       // ratio > 1: pinching in (more cols). ratio < 1: spreading (fewer cols / peek)
       const ratio = p.startDist / dist
-      const newCols = clamp(Math.round(p.startCols * ratio), 1, 5)
+      const newCols = clamp(Math.round(p.startCols * ratio), 1, maxColsRef.current)
 
       if (newCols !== p.startCols) {
         // Col change — cancel peek zoom and drop the stale img ref
@@ -230,7 +244,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, 5))
+      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current))
       reportTourAction('pinch')
     }
     el.addEventListener('wheel', onWheel, { passive: false })
@@ -317,6 +331,14 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
 
     computeActiveDay()
 
+    // Back-to-top: show in multi-col after scrolling ~2.5 screens down. Guarded
+    // by a ref so we only setState on the transition, not every scroll tick.
+    const wantBackToTop = colsRef.current !== 1 && container.scrollTop > container.clientHeight * 2.5
+    if (wantBackToTop !== showBackToTopRef.current) {
+      showBackToTopRef.current = wantBackToTop
+      setShowBackToTop(wantBackToTop)
+    }
+
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
@@ -371,17 +393,27 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   useEffect(() => {
     if (!openEventId || walledItems.length === 0) return
     const wi = eventIdToWalledIdx.get(openEventId)
-    if (wi === undefined) return
+    if (wi === undefined) {
+      // Target isn't on the wall (e.g. its show already ended and aged off) —
+      // clear the deep-link instead of leaving stale nav state behind.
+      onOpenEventHandled?.()
+      return
+    }
     pendingScrollIdxRef.current = wi
     setCols(1)
     onOpenEventHandled?.()
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Interactive tour: let the tour force the wall back to the multi-column grid so its
-  // step state can't drift from the app's view (e.g. after a pinch-to-1-col).
+  // step state can't drift from the app's view (e.g. after a pinch-to-1-col), and
+  // freeze vertical scroll during anchored single-poster steps so the user can't
+  // scroll off the poster the step is highlighting.
   useEffect(() => {
     const onCmd = (e: Event) => {
-      if ((e as CustomEvent).detail?.cmd === 'reset-grid') setCols(5)
+      const cmd = (e as CustomEvent).detail?.cmd
+      if (cmd === 'reset-grid') setCols(maxColsRef.current)
+      else if (cmd === 'lock-scroll') setScrollLocked(true)
+      else if (cmd === 'unlock-scroll') setScrollLocked(false)
     }
     window.addEventListener('plaster-tour-cmd', onCmd)
     return () => window.removeEventListener('plaster-tour-cmd', onCmd)
@@ -393,6 +425,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
       setRestingPanel(0) // zoom-out resets panel persistence to poster
+    } else if (showBackToTopRef.current) {
+      // Entering 1-col (vertical poster nav) — back-to-top doesn't apply there.
+      showBackToTopRef.current = false
+      setShowBackToTop(false)
     }
   }, [cols])
 
@@ -462,8 +498,11 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       {/* Scroll container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto scroll-momentum"
+        className="flex-1 scroll-momentum"
         style={{
+          // Tour lock: freeze vertical scroll (horizontal panel swipes, handled
+          // by PosterCard's own touch handlers, keep working).
+          overflowY: scrollLocked ? 'hidden' : 'auto',
           overscrollBehavior: 'none',
           // 1-col: snap poster-by-poster. 2-5 col: free scroll.
           scrollSnapType: cols === 1 ? 'y mandatory' : 'none',
@@ -533,6 +572,39 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           </div>
         )}
       </div>
+
+      {/* Back to top — floats above the wall once scrolled a few screens down */}
+      <button
+        aria-label="Back to top"
+        onClick={() => {
+          containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        style={{
+          position: 'absolute',
+          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)',
+          right: 16,
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          border: '1px solid var(--fg-15)',
+          background: 'var(--bg)',
+          color: 'var(--fg)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          cursor: 'pointer',
+          zIndex: 20,
+          opacity: showBackToTop ? 1 : 0,
+          transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
+          pointerEvents: showBackToTop ? 'auto' : 'none',
+          transition: 'opacity 200ms ease, transform 200ms ease',
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      </button>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
+import { extractEventFromImage, friendlyExtractionError, fileFromDrop } from '@/components/admin/adminShared'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -34,18 +35,58 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   const [saved, setSaved] = useState(false)
   const [err, setErr] = useState('')
   const [infoBusy, setInfoBusy] = useState(false)
+  const [extractBusy, setExtractBusy] = useState(false)
   const [infoDrag, setInfoDrag] = useState(false)
   const [infoErr, setInfoErr] = useState('')
 
-  function takeFile(f: File | undefined) {
+  // Accepts local files AND images dragged straight off a webpage (like the
+  // Single ingester) — web drags carry a URL, not a File, and were silently
+  // ignored before. fileFromDrop resolves both.
+  async function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragging(false)
+    setExtractBusy(true) // covers the URL fetch for web drags
+    try {
+      const f = await fileFromDrop(e)
+      if (!f) { setErr('That drop had no image — try dragging the image itself, or save it and drop the file.'); return }
+      await takeFile(f)
+    } catch {
+      setErr("Couldn't fetch that image from the page — save it locally and drop the file.")
+    } finally { setExtractBusy(false) }
+  }
+
+  // Dropping a poster stages it for upload AND runs the same AI extraction as
+  // the Single ingester, filling title/date/time/category (and description if
+  // empty) from the poster. Everything stays editable; nothing hits the DB
+  // until Save. Extraction failure never blocks the upload itself.
+  async function takeFile(f: File | undefined) {
     if (!f || !f.type.startsWith('image/')) return
     setPosterFile(f)
     setPosterPreview(URL.createObjectURL(f))
     setSaved(false)
+    setExtractBusy(true); setErr('')
+    try {
+      const blob = await resizeForExtraction(f)
+      const base64 = await blobToBase64(blob)
+      const ex = await extractEventFromImage({ base64, mimeType: 'image/jpeg' })
+      if (ex.title?.trim()) setTitle(ex.title.trim())
+      if (ex.category) setCategory(ex.category)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(ex.date ?? '')) {
+        const time = /^\d{2}:\d{2}/.test(ex.time ?? '') ? ex.time.slice(0, 5) : startsAt.slice(11, 16) || '20:00'
+        setStartsAt(`${ex.date}T${time}`)
+      }
+      // Poster blurb only fills an EMPTY description — never stomps a scraped
+      // or hand-edited one (the screenshot drop zone below is for rewriting).
+      if (!description.trim() && ex.description?.trim()) setDescription(ex.description.trim())
+      if (ex.sold_out) setSoldOut(true)
+    } catch (e) {
+      setErr(`Poster staged, but AI read failed: ${friendlyExtractionError(e)}`)
+    } finally { setExtractBusy(false) }
   }
 
   // Drop a screenshot of the event info → Claude Vision writes a Plaster-voice blurb
-  // (grounded in what's visible) → fills the description field for you to tweak.
+  // AND corrects title / date / time when they're clearly visible in the image
+  // (grounded only — the server returns null for anything it can't actually read).
   async function describeFromScreenshot(f: File | undefined) {
     if (!f || !f.type.startsWith('image/')) return
     setInfoBusy(true); setInfoErr('')
@@ -62,9 +103,20 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error((json as { error?: string }).error || `failed: ${res.status}`)
-      const blurb = ((json as { blurb?: string }).blurb ?? '').trim()
-      if (!blurb || blurb.toUpperCase() === 'NONE') throw new Error("Couldn't read event details from that image — try a clearer screenshot.")
-      setDescription(blurb); setSaved(false)
+      const { blurb, title: exTitle, date: exDate, time: exTime } =
+        json as { blurb?: string | null; title?: string | null; date?: string | null; time?: string | null }
+      if (!blurb && !exTitle && !exDate && !exTime) {
+        throw new Error("Couldn't read event details from that image — try a clearer screenshot.")
+      }
+      if (blurb) setDescription(blurb.trim())
+      if (exTitle) setTitle(exTitle)
+      if (exDate) {
+        // New date + (extracted time, else keep the field's current time-of-day)
+        setStartsAt(`${exDate}T${exTime ?? startsAt.slice(11, 16) ?? '20:00'}`)
+      } else if (exTime) {
+        setStartsAt(`${startsAt.slice(0, 10)}T${exTime}`)
+      }
+      setSaved(false)
     } catch (e) {
       setInfoErr(e instanceof Error ? e.message : String(e))
     } finally { setInfoBusy(false) }
@@ -118,15 +170,15 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         <div
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
-          onDrop={e => { e.preventDefault(); setDragging(false); takeFile(e.dataTransfer.files?.[0]) }}
+          onDrop={handleDrop}
           onClick={() => document.getElementById(`review-poster-${row.id}`)?.click()}
           style={{ position: 'relative', paddingBottom: '150%', borderRadius: 8, overflow: 'hidden', cursor: 'pointer', background: 'var(--fg-08)', border: dragging ? '2px dashed #A855F7' : '1px solid var(--fg-15)' }}
         >
           {(posterPreview ?? posterUrl)
             ? <img src={posterPreview ?? posterUrl!} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-30)', fontSize: 11 }}>no poster</div>}
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '4px 6px', background: 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, textAlign: 'center', letterSpacing: '0.04em' }}>
-            {dragging ? 'drop to replace' : 'drop / click to replace'}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '4px 6px', background: extractBusy ? 'rgba(168,85,247,0.8)' : 'rgba(0,0,0,0.55)', color: '#fff', fontSize: 9, textAlign: 'center', letterSpacing: '0.04em' }}>
+            {extractBusy ? 'AI reading poster…' : dragging ? 'drop to replace' : 'drop / click to replace'}
           </div>
         </div>
         <input id={`review-poster-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => takeFile(e.target.files?.[0] ?? undefined)} />
@@ -173,7 +225,7 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
             onClick={() => document.getElementById(`info-shot-${row.id}`)?.click()}
             style={{ marginTop: 6, padding: '9px 11px', borderRadius: 7, cursor: infoBusy ? 'wait' : 'pointer', textAlign: 'center', fontSize: 11.5, lineHeight: 1.4, color: infoBusy ? 'var(--fg-40)' : 'var(--fg-55)', border: infoDrag ? '1.5px dashed #A855F7' : '1.5px dashed var(--fg-18)', background: infoDrag ? 'rgba(168,85,247,0.06)' : 'transparent' }}
           >
-            {infoBusy ? 'Reading screenshot…' : <>📄 Drop a <strong>screenshot of the event info</strong> → AI writes the blurb</>}
+            {infoBusy ? 'Reading screenshot…' : <>📄 Drop a <strong>screenshot of the event info</strong> → AI fills blurb + title/date/time</>}
           </div>
           <input id={`info-shot-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => describeFromScreenshot(e.target.files?.[0] ?? undefined)} />
           {infoErr && <span style={{ fontSize: 11, color: '#e05555' }}>{infoErr}</span>}

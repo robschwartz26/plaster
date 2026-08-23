@@ -15,7 +15,7 @@
  * plasterpdx@gmail.com on insert (handled in Phase 3).
  */
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import { headerIconBtn } from '@/components/PlasterHeader'
 import { useUserBlocks } from '@/hooks/useUserBlocks'
@@ -40,6 +40,15 @@ interface Props {
    * suitable for action rows.
    */
   variant?: 'header' | 'inline'
+  /**
+   * Controlled mode: when true, the action sheet opens without its own
+   * trigger being tapped (e.g. opened from a message context menu). Pair
+   * with hideTrigger + onControlledClose so the parent owns visibility.
+   */
+  controlledOpen?: boolean
+  onControlledClose?: () => void
+  /** Hide the built-in trigger button (parent drives open state). */
+  hideTrigger?: boolean
 }
 
 type ScreenState =
@@ -58,6 +67,9 @@ export function UserActionsMenu({
   targetUsername,
   onActionComplete,
   variant = 'header',
+  controlledOpen = false,
+  onControlledClose,
+  hideTrigger = false,
 }: Props) {
   const [screen, setScreen] = useState<ScreenState>({ kind: 'closed' })
   const [reportNotes, setReportNotes] = useState('')
@@ -68,10 +80,16 @@ export function UserActionsMenu({
   const blocked = isBlocked(targetUserId)
   const muted = isMuted(targetUserId)
 
+  // Controlled open: parent flips controlledOpen → jump straight to the menu.
+  useEffect(() => {
+    if (controlledOpen) setScreen({ kind: 'menu' })
+  }, [controlledOpen])
+
   function close() {
     setScreen({ kind: 'closed' })
     setReportNotes('')
     setSubmitting(false)
+    onControlledClose?.()
   }
 
   async function handleBlock() {
@@ -149,7 +167,7 @@ export function UserActionsMenu({
 
   return (
     <>
-      {triggerButton}
+      {!hideTrigger && triggerButton}
 
       {screen.kind !== 'closed' && (
         <div

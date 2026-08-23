@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { reportTourAction } from '@/lib/tourBus'
+import { subscribeFollowChanges } from '@/lib/followStatusBus'
 
 export type FollowStatus = 'none' | 'pending_outgoing' | 'pending_incoming' | 'following' | 'mutual' | 'self'
 
@@ -25,11 +26,9 @@ export function FollowButton({ targetUserId, size = 'large' }: { targetUserId: s
   useEffect(() => {
     if (!user) return
     refreshStatus()
-    const channel = supabase
-      .channel(`follow-status-${user.id}-${targetUserId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => refreshStatus())
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    // One shared follows subscription for all buttons (see followStatusBus) —
+    // was one channel per button (40+ on the Find Friends screen).
+    return subscribeFollowChanges(user.id, refreshStatus)
   }, [user, targetUserId, refreshStatus])
 
   if (!user || status === 'self' || status === null) return null

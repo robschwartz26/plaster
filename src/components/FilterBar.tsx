@@ -14,13 +14,15 @@ interface Props {
   activePosterCategory?: string
   neighborhood?: string | null
   onOpenNeighborhood?: () => void
+  hiddenCats?: string[] // user-hidden categories (Settings → Personalize the wall)
+  large?: boolean       // bigger chips for legibility
 }
 
 // Carousel items: the genres, plus the neighborhood chip appended at the end of
 // each copy (so it scrolls + infinite-loops like an ordinary chip).
 type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' }
 
-export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood }: Props) {
+export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood, hiddenCats = [], large = false }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
@@ -35,8 +37,9 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
   const DRAG_THRESHOLD     = 5
 
   const showNbhd = !!(neighborhood && onOpenNeighborhood)
+  const visibleCats = CATS.filter(c => !hiddenCats.includes(c))
   const baseItems: ChipItem[] = [
-    ...CATS.map((c): ChipItem => ({ kind: 'cat', cat: c })),
+    ...visibleCats.map((c): ChipItem => ({ kind: 'cat', cat: c })),
     ...(showNbhd ? [{ kind: 'nbhd' } as ChipItem] : []),
   ]
   const copyLen = baseItems.length
@@ -59,10 +62,14 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
     setAnimating(false)
     setOffset(-copyWidth)
     requestAnimationFrame(() => setAnimating(true))
-  }, [copyLen])
+  }, [copyLen, large])
+
+  // Ref so the []-dep snap callback always sees the current (unhidden) list
+  const visibleCatsRef = useRef(visibleCats)
+  visibleCatsRef.current = visibleCats
 
   const snapToCategory = useCallback((cat: string) => {
-    const catIdx = CATS.indexOf(cat as Cat)
+    const catIdx = visibleCatsRef.current.indexOf(cat as Cat)
     if (catIdx === -1) return
 
     requestAnimationFrame(() => {
@@ -166,9 +173,9 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
   }
 
   const chipStyle = (highlighted: boolean, isHeart?: boolean): React.CSSProperties => ({
-    fontSize: isHeart ? 12 : 9,
+    fontSize: isHeart ? (large ? 14 : 12) : (large ? 11.5 : 9),
     letterSpacing: isHeart ? 0 : '0.02em',
-    padding: '3px 8px',
+    padding: large ? '5px 11px' : '3px 8px',
     borderRadius: 4,
     border: `1px solid ${highlighted ? 'var(--fg-55)' : 'var(--fg-15)'}`,
     background: highlighted ? 'var(--fg-08)' : 'transparent',

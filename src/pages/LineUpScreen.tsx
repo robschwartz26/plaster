@@ -291,9 +291,11 @@ export default function LineUpScreen() {
   }
 
   // ── Real feed fetch ──────────────────────────────────────────────────────
-  const fetchFeed = useCallback(async () => {
+  const fetchFeed = useCallback(async (opts?: { silent?: boolean }) => {
     if (!user) return
-    setFeedState('loading')
+    // Realtime-triggered refetches are silent — keep the current feed on screen
+    // rather than flashing "Loading…" (these fire on strangers' activity too).
+    if (!opts?.silent) setFeedState('loading')
 
     const [{ data, error }, { data: showsData }] = await Promise.all([
       supabase.rpc('activity_feed', { page_size: 50 }),
@@ -383,16 +385,22 @@ export default function LineUpScreen() {
       viewerHasLiked: false,
     }))
 
+    // The feed now emits fresh-drop 'venue_show' items itself (migration 101,
+    // capped 2/venue) — drop weekend picks that duplicate an event already in
+    // the feed so nothing shows twice.
+    const feedEventIds = new Set(adapted.filter(x => x.kind === 'venue_show').map(x => x.event?.id))
+    const dedupedShows = showItems.filter(x => !feedEventIds.has(x.event?.id))
+
     // Weave venue shows into the activity feed at ~1 per 4 items
     const woven: FeedItem[] = []
     let showIdx = 0
     adapted.forEach((item, i) => {
       woven.push(item)
-      if ((i + 1) % 4 === 0 && showIdx < showItems.length) {
-        woven.push(showItems[showIdx++])
+      if ((i + 1) % 4 === 0 && showIdx < dedupedShows.length) {
+        woven.push(dedupedShows[showIdx++])
       }
     })
-    while (showIdx < showItems.length) woven.push(showItems[showIdx++])
+    while (showIdx < dedupedShows.length) woven.push(dedupedShows[showIdx++])
 
     setFeed(woven)
     setFeedState('ready')
@@ -402,24 +410,32 @@ export default function LineUpScreen() {
     if (!user) return
     fetchFeed()
 
-    // Realtime: refetch when source tables change. Four channels because postgres_changes
-    // doesn't support OR filters, and we care about all four source tables.
+    // Realtime: the source tables change on ANY user's activity city-wide, so a
+    // busy night could fire many refetches per second per viewer. Coalesce all
+    // four tables' events into ONE debounced, silent refetch (keeps the current
+    // feed visible; ~2.5s window collapses a burst into a single fetch).
+    let debounce: ReturnType<typeof setTimeout> | null = null
+    const scheduleRefetch = () => {
+      if (debounce) clearTimeout(debounce)
+      debounce = setTimeout(() => fetchFeed({ silent: true }), 2500)
+    }
     const channels = [
       supabase.channel(`lineup-feed-attendees-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendees' }, () => fetchFeed())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendees' }, scheduleRefetch)
         .subscribe(),
       supabase.channel(`lineup-feed-wall-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_wall_posts' }, () => fetchFeed())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_wall_posts' }, scheduleRefetch)
         .subscribe(),
       supabase.channel(`lineup-feed-likes-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_likes' }, () => fetchFeed())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'event_likes' }, scheduleRefetch)
         .subscribe(),
       supabase.channel(`lineup-feed-follows-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, () => fetchFeed())
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'follows' }, scheduleRefetch)
         .subscribe(),
     ]
 
     return () => {
+      if (debounce) clearTimeout(debounce)
       channels.forEach(ch => supabase.removeChannel(ch))
     }
   }, [user, fetchFeed])
@@ -428,9 +444,15 @@ export default function LineUpScreen() {
   useEffect(() => {
     if (!user) return
     const now = new Date().toISOString()
-    supabase.from('attendees').select('event_id, events(id, title, starts_at, poster_url, sold_out, venues(name))').eq('user_id', user.id)
+    // Filter to UPCOMING server-side (!inner join + gte on the event's start) —
+    // previously this pulled the user's entire lifetime RSVP history every mount
+    // and filtered client-side, growing unboundedly with usage.
+    supabase.from('attendees')
+      .select('event_id, events!inner(id, title, starts_at, poster_url, sold_out, venues(name))')
+      .eq('user_id', user.id)
+      .gte('events.starts_at', now)
       .then(({ data }) => {
-        const items: LineupItem[] = ((data ?? []) as any[]).filter(r => r.events?.starts_at >= now)
+        const items: LineupItem[] = ((data ?? []) as any[])
           .map(r => { const ev = r.events as any; return { id: r.event_id, title: ev.title ?? 'Event', venue: ev.venues?.name ?? '', starts_at: ev.starts_at, poster_url: ev.poster_url ?? null, color: '#2e1065', sold_out: ev.sold_out ?? false } })
           .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
         setLineup(items)

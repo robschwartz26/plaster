@@ -45,6 +45,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: 'Hayden Island', sextant: 'N' },
   { name: 'Humboldt', sextant: 'N' },
   { name: 'Kenton', sextant: 'N' },
+  { name: 'Mississippi', sextant: 'N' }, // N Mississippi Ave corridor (Boise) — district, not an official assoc
   { name: 'Overlook', sextant: 'N' },
   { name: 'Piedmont', sextant: 'N' },
   { name: 'Portsmouth', sextant: 'N' },
@@ -53,6 +54,7 @@ export const NEIGHBORHOODS: Neighborhood[] = [
 
   // ── NE — Northeast (23) ──
   { name: 'Alameda', sextant: 'NE' },
+  { name: 'Alberta', sextant: 'NE' }, // district corridor (Alberta Arts), not an official assoc — but people identify with it
   { name: 'Argay Terrace', sextant: 'NE' },
   { name: 'Beaumont-Wilshire', sextant: 'NE' },
   { name: 'Concordia', sextant: 'NE' },
@@ -88,14 +90,17 @@ export const NEIGHBORHOODS: Neighborhood[] = [
 
   // ── SE — Southeast (28) ──
   { name: 'Ardenwald-Johnson Creek', sextant: 'SE' },
+  { name: 'Belmont', sextant: 'SE' }, // SE Belmont corridor (Sunnyside) — district, not an official assoc
   { name: 'Brentwood-Darlington', sextant: 'SE' },
   { name: 'Brooklyn', sextant: 'SE' },
   { name: 'Buckman', sextant: 'SE' },
   { name: 'Centennial', sextant: 'SE' },
   { name: 'Creston-Kenilworth', sextant: 'SE' },
+  { name: 'Division', sextant: 'SE' }, // SE Division corridor (Richmond) — district, not an official assoc
   { name: 'Eastmoreland', sextant: 'SE' },
   { name: 'Foster-Powell', sextant: 'SE' },
   { name: 'Glenfair', sextant: 'SE' },
+  { name: 'Hawthorne', sextant: 'SE' }, // SE Hawthorne corridor (Sunnyside/Richmond) — district, not an official assoc
   { name: 'Hazelwood', sextant: 'SE' },
   { name: 'Hosford-Abernethy', sextant: 'SE' },
   { name: 'Kerns', sextant: 'SE' },
@@ -142,8 +147,68 @@ export const NEIGHBORHOODS: Neighborhood[] = [
   { name: 'South Portland', sextant: 'S' },
 ]
 
+// ── Suburbs & surrounding towns ──────────────────────────────────────────────
+// People signing up from around the metro answer with these, so they're
+// first-class picker choices. Each maps to the NEAREST Portland sextant for
+// community-wall scoping (home_sextant is DB-constrained to the six values,
+// and a suburb-only wall would start empty anyway) — a Beaverton user's chip
+// says "Beaverton" and their community wall is Southwest Portland's.
+export const SUBURBS: Neighborhood[] = [
+  // West side — Washington County (→ SW, or NW for the Hwy 26 north side)
+  { name: 'Aloha', sextant: 'SW' },
+  { name: 'Beaverton', sextant: 'SW' },
+  { name: 'Bethany', sextant: 'NW' },
+  { name: 'Cedar Hills', sextant: 'SW' },
+  { name: 'Cedar Mill', sextant: 'NW' },
+  { name: 'Cornelius', sextant: 'SW' },
+  { name: 'Durham', sextant: 'SW' },
+  { name: 'Forest Grove', sextant: 'SW' },
+  { name: 'Garden Home', sextant: 'SW' },
+  { name: 'Hillsboro', sextant: 'SW' },
+  { name: 'King City', sextant: 'SW' },
+  { name: 'North Plains', sextant: 'NW' },
+  { name: 'Raleigh Hills', sextant: 'SW' },
+  { name: 'Rock Creek', sextant: 'NW' },
+  { name: 'Sherwood', sextant: 'SW' },
+  { name: 'Tigard', sextant: 'SW' },
+  { name: 'Tualatin', sextant: 'SW' },
+  { name: 'West Slope', sextant: 'SW' },
+  { name: 'Wilsonville', sextant: 'SW' },
+
+  // South — Clackamas County (→ SE mostly; LO/West Linn hug the SW riverbank)
+  { name: 'Boring', sextant: 'SE' },
+  { name: 'Canby', sextant: 'SE' },
+  { name: 'Clackamas', sextant: 'SE' },
+  { name: 'Damascus', sextant: 'SE' },
+  { name: 'Estacada', sextant: 'SE' },
+  { name: 'Gladstone', sextant: 'SE' },
+  { name: 'Happy Valley', sextant: 'SE' },
+  { name: 'Lake Oswego', sextant: 'SW' },
+  { name: 'Milwaukie', sextant: 'SE' },
+  { name: 'Oak Grove', sextant: 'SE' },
+  { name: 'Oregon City', sextant: 'SE' },
+  { name: 'Sandy', sextant: 'SE' },
+  { name: 'West Linn', sextant: 'SW' },
+
+  // East — Gresham corridor (→ SE)
+  { name: 'Fairview', sextant: 'SE' },
+  { name: 'Gresham', sextant: 'SE' },
+  { name: 'Troutdale', sextant: 'SE' },
+  { name: 'Wood Village', sextant: 'SE' },
+
+  // North — across the river + Hwy 30 (→ N / NW)
+  { name: 'Camas, WA', sextant: 'N' },
+  { name: 'Scappoose', sextant: 'NW' },
+  { name: 'St. Helens', sextant: 'NW' },
+  { name: 'Vancouver, WA', sextant: 'N' },
+  { name: 'Washougal, WA', sextant: 'N' },
+]
+
+// City + suburbs — the full pickable set.
+export const ALL_AREAS: Neighborhood[] = [...NEIGHBORHOODS, ...SUBURBS]
+
 // Flat name list — for any existing code that just needs the names.
-export const NEIGHBORHOOD_NAMES: string[] = NEIGHBORHOODS.map(n => n.name)
+export const NEIGHBORHOOD_NAMES: string[] = ALL_AREAS.map(n => n.name)
 
 // User-friendly aliases → official NA name. "Alberta" is a commercial-district
 // nickname for the Concordia corridor; Nob Hill/Slabtown are the Northwest
@@ -164,9 +229,12 @@ export const NEIGHBORHOOD_ALIASES: Record<string, string> = {
   'Old Town': 'Old Town/Chinatown',
   'Chinatown': 'Old Town/Chinatown',
   'Multnomah Village': 'Multnomah',
+  'Vancouver': 'Vancouver, WA',
+  'Camas': 'Camas, WA',
+  'Washougal': 'Washougal, WA',
 }
 
-const BY_NAME: Record<string, Sextant> = Object.fromEntries(NEIGHBORHOODS.map(n => [n.name, n.sextant]))
+const BY_NAME: Record<string, Sextant> = Object.fromEntries(ALL_AREAS.map(n => [n.name, n.sextant]))
 
 // Resolve a possibly-aliased name to its official NA name.
 export function resolveNeighborhood(name: string): string {

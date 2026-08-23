@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef } f
 import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
+import { useAuth } from '@/contexts/AuthContext'
 import { HandGhost } from './HandGhost'
 import { PinchFlip } from './PinchFlip'
 import { Heart } from '@/components/Heart'
@@ -12,7 +13,7 @@ import { Heart } from '@/components/Heart'
 // real gesture/click (via tourBus) or navigates to the target screen. Resumable.
 
 export const TOUR_SEEN_KEY = 'plaster_tour_seen'
-const TOUR_STEP_KEY = 'plaster_tour_step'
+export const TOUR_STEP_KEY = 'plaster_tour_step'
 export function hasSeenTour(): boolean {
   try { return localStorage.getItem(TOUR_SEEN_KEY) === '1' } catch { return false }
 }
@@ -41,6 +42,7 @@ interface Step {
   demo?: boolean            // show-only demo: block interaction, ghost at top, advance via CTA
   intercept?: string        // action id the target control reports instead of its default
   enterCmd?: string         // command dispatched to the app when this step begins (e.g. reset the wall to grid)
+  lockScroll?: boolean      // freeze the wall's vertical scroll so the user can't drift off the anchored poster
   noDim?: boolean           // spotlight step: highlight the target (ring + ghost) but DON'T dim the rest
   ghostSize?: number        // override the gesture-hint (hand/paw) size
   cardBottom?: boolean      // force the coach card to the bottom (don't cover top-of-page content)
@@ -61,10 +63,11 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Day & night', body: <>Plaster has a day look and a night look. <strong>Pull</strong> the “plaster” logo to the right to switch.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Switch it back', body: <>Nice! <strong>Pull</strong> it again to flip back to where you started.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a poster', body: <><strong>Double-tap</strong> the highlighted poster to open it in single view.</>, advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
-  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, title: <>Show your love <Heart /></>, body: <><strong>Double-tap</strong> in single-poster view to like the event and save it to your favorites.</>, advance: { on: 'action', id: 'like' }, allowSkip: true },
-  { type: 'spotlight', target: 'onecol', ghost: 'swipe', title: 'See the details', body: <><strong>Swipe</strong> sideways to move through the poster, its details, and its wall.</>, advance: { on: 'action', id: 'swipe' }, allowSkip: true },
-  { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 110, noDim: true, cardWidth: 240, cardOverride: { top: 'max(80px, env(safe-area-inset-top))', right: 12 }, intercept: 'rsvp', title: 'The info page', body: <>The event’s info page. <strong>Tap</strong> “I’ll be there” if you wanna go — it’ll add this show to your Set List.</>, advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
-  { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, title: 'Slap your friends', body: <>Excited about a show? <strong>Slap</strong> your friends and get them to come with — it opens a group chat so you can plan ahead.</>, advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
+  { type: 'spotlight', target: 'discovery', ghost: 'tap', ghostSize: 110, noDim: true, enterCmd: 'rail-pin', lockScroll: true, title: 'Hear them first', body: <>Every poster has a <strong>discovery bar</strong> — tap Spotify or YouTube to hear how these local acts sound before you roll out.</>, advance: { on: 'cta' }, cta: 'Next', allowSkip: true },
+  { type: 'spotlight', target: 'onecol', ghost: 'doubletap', ghostSize: 210, enterCmd: 'rail-unpin', lockScroll: true, title: <>Show your love <Heart /></>, body: <><strong>Double-tap</strong> in single-poster view to like the event and save it to your favorites.</>, advance: { on: 'action', id: 'like' }, allowSkip: true },
+  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'See the details', body: <><strong>Swipe</strong> sideways to move through the poster, its details, and its wall.</>, advance: { on: 'action', id: 'swipe' }, allowSkip: true },
+  { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 110, noDim: true, cardWidth: 240, cardOverride: { top: 'max(80px, env(safe-area-inset-top))', right: 12 }, intercept: 'rsvp', lockScroll: true, title: 'The info page', body: <>The event’s info page. <strong>Tap</strong> “I’ll be there” if you wanna go — it’ll add this show to your Set List.</>, advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
+  { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, lockScroll: true, title: 'Slap your friends', body: <>Excited about a show? <strong>Slap</strong> your friends and get them to come with — it opens a group chat so you can plan ahead.</>, advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: <>Now <strong>tap</strong> Line Up.</>, arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', ghost: 'tap', ghostSize: 120, gotoRoute: '/lineup', title: 'Set List', body: <><strong>Tap</strong> SET LIST — it tracks every show you’re going to.</>, advance: { on: 'action', id: 'open-setlist' }, allowSkip: true },
   { type: 'spotlight', demo: true, gotoRoute: '/lineup', title: 'Your set list', body: 'Here’s your calendar — every show you’ve said you’ll be there for, laid out to make planning easy.', advance: { on: 'cta' }, cta: 'Next' },
@@ -119,11 +122,15 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
     if (active && !resumePrompt) { try { localStorage.setItem(TOUR_STEP_KEY, String(i)) } catch { /* ignore */ } }
   }, [i, active, resumePrompt])
 
-  // Auto-run once for a new user.
+  // Auto-run once for a new user. Signed-in only: guests browsing the public
+  // wall (guest mode, Apple 5.1.1(v)) shouldn't get a tour that teaches
+  // RSVP/slap gestures they can't perform yet — it fires right after signup
+  // instead (onboarding clears the seen-flags).
+  const { user } = useAuth()
   const autoStarted = useRef(false)
   useEffect(() => {
-    if (!autoStarted.current && !hasSeenTour()) { autoStarted.current = true; start() }
-  }, [start])
+    if (user && !autoStarted.current && !hasSeenTour()) { autoStarted.current = true; start() }
+  }, [start, user])
 
   const step = active && !resumePrompt ? STEPS[i] : null
 
@@ -137,6 +144,19 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
       try { window.dispatchEvent(new CustomEvent('plaster-tour-cmd', { detail: { cmd: step.enterCmd } })) } catch { /* ignore */ }
     }
   }, [step])
+
+  // Lock/unlock the wall's vertical scroll per step, so anchored single-poster
+  // steps can't be scrolled off their target. Always emit one or the other so
+  // leaving a locked step (or the tour ending) reliably restores scrolling.
+  useEffect(() => {
+    const cmd = step?.lockScroll ? 'lock-scroll' : 'unlock-scroll'
+    try { window.dispatchEvent(new CustomEvent('plaster-tour-cmd', { detail: { cmd } })) } catch { /* ignore */ }
+  }, [step])
+
+  // Belt-and-suspenders: if the tour unmounts mid-step, restore scrolling.
+  useEffect(() => () => {
+    try { window.dispatchEvent(new CustomEvent('plaster-tour-cmd', { detail: { cmd: 'unlock-scroll' } })) } catch { /* ignore */ }
+  }, [])
 
   // Ensure the step's required screen.
   useEffect(() => {

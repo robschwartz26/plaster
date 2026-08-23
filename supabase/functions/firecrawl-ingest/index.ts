@@ -40,13 +40,20 @@ const DRYRUN_DEADLINE_MS = 90000
 const INSERT_DEADLINE_MS = 135000
 const REWRITE_MODEL = 'claude-haiku-4-5-20251001'
 
-const CATEGORIES = ['Live Music','Dance','Comedy','Drag','Jazz','Trivia','Karaoke','Theater','Burlesque','Classical','Film','Art','Literary','Spoken','Other']
+const CATEGORIES = ['Live Music','Dance','Comedy','Drag','Jazz','Trivia','Karaoke','Theater','Burlesque','Classical','Film','Festivals','Markets','Art','Literary','Spoken','Other']
 
 // ── time helpers (America/Los_Angeles) ───────────────────────────────────────
-// Month heuristic for PT offset — exact DST boundary is irrelevant at event-time.
+// Exact PT offset for a given date via Intl (handles DST boundaries precisely).
+// The old month heuristic was wrong for ~3 weeks/year around the March/Nov
+// switches, storing starts_at an hour off — which could flip a late show's
+// portland_date (also the dedupe key) and double-insert it.
 function portlandOffset(dateStr: string): string {
-  const month = parseInt(dateStr.split('-')[1], 10)
-  return month >= 3 && month <= 10 ? '-07:00' : '-08:00'
+  const noonUtc = new Date(`${dateStr}T12:00:00Z`) // midday → unambiguous re: the 2am transition
+  const tzName = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Los_Angeles', timeZoneName: 'shortOffset' })
+    .formatToParts(noonUtc).find(p => p.type === 'timeZoneName')?.value ?? 'GMT-8'
+  const m = tzName.match(/GMT([+-]?\d{1,2})/)
+  const hrs = m ? parseInt(m[1], 10) : -8
+  return `${hrs < 0 ? '-' : '+'}${String(Math.abs(hrs)).padStart(2, '0')}:00`
 }
 function ptTimestamp(date: string, time: string | null): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
@@ -128,6 +135,8 @@ async function stripMetadataBestEffort(bytes: Uint8Array): Promise<Uint8Array | 
 // deno-lint-ignore no-explicit-any
 async function rehostImage(supabaseService: any, imageUrl: string | null, deadline: number): Promise<string | null> {
   if (!imageUrl) return null
+  // Already ours (e.g. a clipper screenshot uploaded moments ago) — keep as-is.
+  if (imageUrl.startsWith(Deno.env.get('SUPABASE_URL') ?? '\u0000')) return imageUrl
   if (Date.now() > deadline) return imageUrl
   try {
     const res = await fetch(imageUrl, {
@@ -174,6 +183,7 @@ async function composeDescription(f: DescFacts): Promise<string | null> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: REWRITE_MODEL, max_tokens: 220, messages: [{ role: 'user', content: prompt }] }),
+      signal: AbortSignal.timeout(30000), // a hung connection here strands a half-inserted batch
     })
     if (!res.ok) return null
     const data = await res.json()
@@ -192,6 +202,7 @@ async function extractArtistName(title: string, KEY: string): Promise<string> {
       headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: REWRITE_MODEL, max_tokens: 40, messages: [{ role: 'user', content:
         `Extract the clean headliner/act name from this event title — a band, musician, comedian, or performer. Return ONLY the name: no tour name, no "presented by", no support acts, no all-caps styling (e.g. "Pigeons Playing Ping Pong", not "PIGEONS PLAYING PING PONG - FALL TOUR 2026"). If the title is NOT a single act (a festival, market, trivia night, or generic event), respond with only the word NONE.\n\nTitle: ${title}` }] }),
+      signal: AbortSignal.timeout(15000),
     })
     if (!res.ok) return ''
     const data = await res.json()
@@ -319,6 +330,168 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
     })
   }
   return { events: events.slice(0, MAX_EVENTS), beyondHorizon, past }
+}
+
+// ── Fetch-first JSON-LD extractor (FREE — no Firecrawl, no LLM) ───────────────
+// Most ticketing/venue platforms (Eventbrite, TicketWeb, Squarespace, WordPress
+// event plugins…) embed schema.org Event objects as <script type="application/
+// ld+json"> in the RAW HTML — no JS rendering needed. A plain fetch + parse gets
+// everything deterministically. Returns null when the page has no Event JSON-LD
+// (or the fetch fails/bot-walls) → caller falls back to Firecrawl. When the page
+// DOES have Event JSON-LD, we trust it fully — even if all events fall outside
+// the window — because Firecrawl would only re-read the same data for money.
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
+const LD_TYPE_CATEGORY: Record<string, string> = {
+  MusicEvent: 'Live Music', ComedyEvent: 'Comedy', TheaterEvent: 'Theater',
+  DanceEvent: 'Dance', ScreeningEvent: 'Film', Festival: 'Festivals',
+  VisualArtsEvent: 'Art', LiteraryEvent: 'Literary',
+}
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: '&', nbsp: ' ', quot: '"', apos: "'", rsquo: '\u2019', lsquo: '\u2018', ldquo: '\u201c', rdquo: '\u201d',
+  hellip: '\u2026', ndash: '\u2013', mdash: '\u2014', eacute: '\u00e9', egrave: '\u00e8', agrave: '\u00e0',
+  ouml: '\u00f6', uuml: '\u00fc', ntilde: '\u00f1', ccedil: '\u00e7',
+}
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-f]+);/gi, (m, hex) => { try { return String.fromCodePoint(parseInt(hex, 16)) } catch { return m } })
+    .replace(/&#(\d+);/g, (m, dec) => { try { return String.fromCodePoint(parseInt(dec, 10)) } catch { return m } })
+    .replace(/&([a-z]+);/gi, (m, name) => NAMED_ENTITIES[name.toLowerCase()] ?? m)
+}
+function stripTags(x: string): string { return x.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() }
+// deno-lint-ignore no-explicit-any
+function ldFirst(x: any): any { return Array.isArray(x) ? x[0] : x }
+// deno-lint-ignore no-explicit-any
+function ldImageUrl(img: any, base: string): string | null {
+  const one = ldFirst(img)
+  const raw = typeof one === 'string' ? one : (one && typeof one.url === 'string' ? one.url : null)
+  if (!raw) return null
+  try { return new URL(raw, base).href } catch { return null }
+}
+async function jsonLdExtract(url: string, now: number, maxOut: number): Promise<{ events: RawEvent[]; beyondHorizon: number; past: number } | null> {
+  let html = ''
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html' }, signal: AbortSignal.timeout(20000) })
+    if (!res.ok) return null
+    html = await res.text()
+  } catch { return null }
+  if (!html || html.length > 5_000_000) return null
+  return jsonLdFromHtml(html, url, now, maxOut)
+}
+
+// Same parser, but on HTML we already hold (the clipper ships the rendered DOM).
+function jsonLdFromHtml(html: string, url: string, now: number, maxOut: number): { events: RawEvent[]; beyondHorizon: number; past: number } | null {
+
+  // Collect every ld+json block → flatten @graph/arrays → keep schema.org Events
+  // deno-lint-ignore no-explicit-any
+  const nodes: any[] = []
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(m[1].trim())
+      for (const item of Array.isArray(parsed) ? parsed : [parsed]) {
+        if (item && Array.isArray(item['@graph'])) nodes.push(...item['@graph'])
+        else if (item) nodes.push(item)
+      }
+    } catch { /* malformed block — skip */ }
+  }
+  if (nodes.length === 0) return null
+
+  // deno-lint-ignore no-explicit-any
+  const eventNodes: any[] = []
+  for (const n of nodes) {
+    const types = (Array.isArray(n?.['@type']) ? n['@type'] : [n?.['@type']]).filter((t: unknown) => typeof t === 'string') as string[]
+    if (types.some(t => /Event$/.test(t) || t === 'Festival') && !types.includes('EventSeries')) eventNodes.push(n)
+    // EventSeries → its subEvents are the real dated occurrences
+    if (types.includes('EventSeries') && Array.isArray(n?.subEvent)) eventNodes.push(...n.subEvent)
+  }
+  if (eventNodes.length === 0) return null
+
+  const events: RawEvent[] = []
+  const nodeUrls: string[] = []  // canonical url of each event's own node (parallel to events)
+  const seen = new Set<string>()
+  let beyondHorizon = 0, past = 0
+  for (const n of eventNodes) {
+    const rawTitle = typeof n?.name === 'string' ? decodeEntities(n.name).trim() : ''
+    const startRaw = typeof n?.startDate === 'string' ? n.startDate.trim() : ''
+    if (!rawTitle || !startRaw) continue
+    // startDate: full ISO w/ offset → trust it; date-or-naive-time → Portland rules
+    let start: Date | null = null
+    let timePart = ''
+    const dateOnly = startRaw.slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) continue
+    if (/[+-]\d{2}:?\d{2}$|Z$/.test(startRaw)) {
+      const d = new Date(startRaw)
+      if (!isNaN(d.getTime())) { start = d; timePart = startRaw.slice(11, 16) }
+    } else if (/T\d{2}:\d{2}/.test(startRaw)) {
+      timePart = startRaw.slice(11, 16)
+      start = ptTimestamp(dateOnly, timePart)
+    } else {
+      start = ptTimestamp(dateOnly, null)
+    }
+    if (!start) continue
+    if (start.getTime() < now) { past++; continue }
+    if (start.getTime() > maxOut) { beyondHorizon++; continue }
+    const key = `${normalizeName(rawTitle)}|${portlandDate(start)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    const { title, soldOut: titleSold } = detectSoldOut(rawTitle)
+    const types = (Array.isArray(n['@type']) ? n['@type'] : [n['@type']]).filter((t: unknown) => typeof t === 'string') as string[]
+    const category = types.map(t => LD_TYPE_CATEGORY[t]).find(Boolean) ?? 'Live Music'
+    const offers = ldFirst(n.offers)
+    const offerUrl = offers && typeof offers.url === 'string' ? offers.url : null
+    const pageEventUrl = typeof n.url === 'string' ? n.url : null
+    let ticketUrl: string | null = null
+    try { ticketUrl = offerUrl ? new URL(offerUrl, url).href : (pageEventUrl ? new URL(pageEventUrl, url).href : null) } catch { ticketUrl = null }
+    const soldOut = titleSold || (offers && typeof offers.availability === 'string' && /SoldOut/i.test(offers.availability))
+    const loc = ldFirst(n.location)
+    const venueName = loc && typeof loc.name === 'string' ? decodeEntities(loc.name).trim() : ''
+    let venueAddress = ''
+    if (loc?.address) {
+      const a = ldFirst(loc.address)
+      if (typeof a === 'string') venueAddress = a.trim()
+      else if (a && typeof a === 'object') venueAddress = [a.streetAddress, a.addressLocality].filter((x: unknown) => typeof x === 'string' && x).join(', ')
+    }
+    const perf = ldFirst(n.performer)
+    const artistName = perf && typeof perf.name === 'string' ? perf.name.trim() : ''
+
+    nodeUrls.push(pageEventUrl ? (() => { try { return new URL(pageEventUrl, url).href } catch { return '' } })() : '')
+    events.push({
+      title,
+      date: dateOnly,
+      portland_date: portlandDate(start),
+      starts_at: start.toISOString(),
+      time_display: timePart,
+      category,
+      poster_image_url: ldImageUrl(n.image, url),
+      ticket_url: ticketUrl,
+      venue_name: venueName,
+      raw_description: typeof n.description === 'string' ? decodeEntities(stripTags(n.description)).slice(0, 2000) : '',
+      raw_notes: '',
+      sold_out: !!soldOut,
+      venue_address: venueAddress,
+      venue_website: '',
+      artist_name: artistName,
+    })
+  }
+  // Page-scope filter: ticketing hubs (merctickets, etc.) embed a CITY-WIDE
+  // event graph on every page. If one parsed event's canonical URL IS the page
+  // we were asked to import, the admin meant THAT event — keep it plus its own
+  // venue's other events (useful same-venue backfill, e.g. Holocene/Crystal),
+  // and drop the cross-venue spray. Calendar pages (no node matches the page
+  // URL) keep everything.
+  const canon = (u: string) => u.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '')
+  const pageCanon = canon(url)
+  const matchIdx = nodeUrls.findIndex(u => u && canon(u) === pageCanon)
+  let out = events
+  if (matchIdx >= 0) {
+    const targetVenue = normalizeName(events[matchIdx].venue_name || '')
+    out = events.filter((e, i) => i === matchIdx || !e.venue_name || normalizeName(e.venue_name) === targetVenue)
+  }
+  // A page whose JSON-LD held real Events is authoritative even when everything
+  // fell outside the window — return counts so the caller reports honestly.
+  return { events: out.slice(0, MAX_EVENTS), beyondHorizon, past }
 }
 
 // ── Bandsintown adapter (deterministic JSON-LD, no LLM extraction) ─────────────
@@ -607,22 +780,49 @@ async function enrichFromDetailPages(events: RawEvent[], now: number, maxOut: nu
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
-  const authHeader = req.headers.get('Authorization')
-  if (!authHeader?.startsWith('Bearer ')) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-  }
   const supabaseService = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-  const { data: { user }, error: authError } = await supabaseService.auth.getUser(authHeader.replace('Bearer ', ''))
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+
+  // ── Clipper auth: dedicated bearer secret, honored ONLY for the clipper
+  // branch (enforced below). The browser extension never holds Supabase keys.
+  const clipperHeader = req.headers.get('x-clipper-token')
+  let user: { id: string } | null = null
+  let clipperAuthed = false
+  if (clipperHeader) {
+    const expect = Deno.env.get('CLIPPER_TOKEN')
+    if (!expect || clipperHeader !== expect) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: adminRow } = await supabaseService.from('profiles').select('id').eq('is_admin', true).order('created_at', { ascending: true }).limit(1).maybeSingle()
+    if (!adminRow?.id) {
+      return new Response(JSON.stringify({ error: 'no admin profile' }), { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    user = { id: adminRow.id }
+    clipperAuthed = true
+  } else {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: { user: jwtUser }, error: authError } = await supabaseService.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (authError || !jwtUser) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    const { data: profile } = await supabaseService.from('profiles').select('is_admin').eq('id', jwtUser.id).single()
+    if (!profile?.is_admin) {
+      return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+    user = jwtUser
   }
-  const { data: profile } = await supabaseService.from('profiles').select('is_admin').eq('id', user.id).single()
-  if (!profile?.is_admin) {
-    return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
-  }
+
+  const authedUser = user!  // assigned on every surviving path above
 
   try {
     const body = await req.json().catch(() => ({}))
+    // The clipper token unlocks NOTHING except the clipper branch.
+    // deno-lint-ignore no-explicit-any
+    if (clipperAuthed && !((body as any)?.clipper || (body as any)?.clipper_delete || (body as any)?.clipper_schedule)) {
+      return new Response(JSON.stringify({ error: 'clipper token only permits clipper captures' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
 
     // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
     // Handled FIRST — a relink request carries no url, so it must run before the url
@@ -664,7 +864,7 @@ serve(async (req) => {
           like_count: 0,
           status: 'pending', // → Review (passed_review defaults false)
           sold_out: o.sold_out ?? false,
-          created_by: user.id,
+          created_by: authedUser.id,
           source_url: o.event_url || o.source_url || null,
           ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
           artist_name: o.artist_name ?? null,
@@ -692,17 +892,32 @@ serve(async (req) => {
         headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
           model: REWRITE_MODEL,
-          max_tokens: 300,
+          max_tokens: 400,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: di.mimeType || 'image/jpeg', data: base64 } },
-            { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Read the details in the image and write a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice. Use ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown. If you cannot read any real event details in the image, respond with only the single word: NONE. Otherwise respond with ONLY the blurb text, no preamble, no quotes.` },
+            { type: 'text', text: `This image is a screenshot of event information${title ? ` for "${title}"` : ''}${venue ? ` at ${venue}` : ''}. Today is ${portlandToday()} (America/Los_Angeles). Read the details in the image and respond with ONLY a JSON object (no preamble, no code fences) of this exact shape: {"blurb": string|null, "title": string|null, "date": string|null, "time": string|null}. blurb: a 1–3 sentence event blurb for a Portland events app in a warm, plainspoken, slightly playful voice, using ONLY facts visible in the image (plus the title/venue given) — never invent genres, prices, times, lineups, or anything not shown; null if no real event details are readable. title: the event's actual title/headliner as shown in the image, ONLY if clearly visible — null otherwise. date: the event date as YYYY-MM-DD, ONLY if clearly visible; if the year is not shown, use the next occurrence of that date on or after today — null if no date is visible. time: the START time as 24-hour HH:MM, ONLY if clearly visible (prefer the show/start time over doors; if only doors is shown, use doors) — null otherwise.` },
           ] }],
         }),
+        signal: AbortSignal.timeout(45000),
       })
       if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
       const data = await res.json()
-      const blurb = (data.content?.[0]?.text ?? '').replace(/^["'\s]+|["'\s]+$/g, '').trim()
-      return new Response(JSON.stringify({ blurb }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      const raw = (data.content?.[0]?.text ?? '').trim()
+      // Parse the structured reply; tolerate stray text/fences around the JSON.
+      let blurb = '', exTitle: string | null = null, exDate: string | null = null, exTime: string | null = null
+      try {
+        const m = raw.match(/\{[\s\S]*\}/)
+        const j = JSON.parse(m ? m[0] : raw)
+        blurb = typeof j.blurb === 'string' ? j.blurb.trim() : ''
+        exTitle = typeof j.title === 'string' && j.title.trim() ? j.title.trim() : null
+        exDate = typeof j.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.date) ? j.date : null
+        exTime = typeof j.time === 'string' && /^\d{2}:\d{2}$/.test(j.time) ? j.time : null
+      } catch {
+        // Model fell back to plain text — treat it as the blurb (legacy behavior)
+        blurb = raw.replace(/^["'\s]+|["'\s]+$/g, '').trim()
+        if (blurb.toUpperCase() === 'NONE') blurb = ''
+      }
+      return new Response(JSON.stringify({ blurb, title: exTitle, date: exDate, time: exTime }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ BACKFILL ARTIST NAMES: one-time (batched) — derive artist_name from title ══
@@ -725,7 +940,132 @@ serve(async (req) => {
       return new Response(JSON.stringify({ processed: list.length, updated, remaining: count ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
-    const rawUrl = typeof body.url === 'string' ? body.url.trim() : ''
+    // ═══ CLIPPER ERASE: pull a just-captured event back out of the queue ═══════
+    // Token-scoped destructive op, deliberately narrow: deletes ONLY rows still
+    // status='pending' (never anything published/live on the wall).
+    if (body.clipper_delete && typeof body.clipper_delete === 'object') {
+      const cd = body.clipper_delete as { event_id?: string }
+      const id = typeof cd.event_id === 'string' ? cd.event_id : ''
+      if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('clipper_delete: event_id required')
+      const { data: del, error: delErr } = await supabaseService.from('events')
+        .delete().eq('id', id).eq('status', 'pending').select('id')
+      if (delErr) throw delErr
+      return new Response(JSON.stringify({ deleted: del?.length ?? 0 }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
+    // ═══ CLIPPER SCHEDULE: highlight a printed run of dates → clone the event ══
+    // {clipper_schedule:{event_id, image_base64, mimeType}} — Claude Vision reads
+    // the highlighted schedule; each date becomes a pending COPY of the source
+    // event (same poster/blurb/venue), deduped against existing rows.
+    if (body.clipper_schedule && typeof body.clipper_schedule === 'object') {
+      const cs = body.clipper_schedule as { event_id?: string; image_base64?: string; mimeType?: string }
+      const srcId = typeof cs.event_id === 'string' ? cs.event_id : ''
+      if (!/^[0-9a-f-]{36}$/i.test(srcId)) throw new Error('clipper_schedule: event_id required')
+      if (typeof cs.image_base64 !== 'string' || cs.image_base64.length < 100) throw new Error('clipper_schedule: image required')
+      const { data: src } = await supabaseService.from('events').select('*').eq('id', srcId).maybeSingle()
+      if (!src) return new Response(JSON.stringify({ status: 'error', reason: 'source event not found' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+
+      const KEY2 = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY2) throw new Error('ANTHROPIC_API_KEY secret not set')
+      const mime2 = typeof cs.mimeType === 'string' && /^image\//.test(cs.mimeType) ? cs.mimeType : 'image/png'
+      const schedRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KEY2, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 1000,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mime2, data: cs.image_base64 } },
+            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${src.title}". Today is ${portlandToday()}. List EVERY performance date shown, expanding shorthand: a range like "Aug 14\u201317" means EACH day in the range; weekday patterns like "Thursdays\u2013Saturdays through Oct 4" or "every Friday in September" mean each matching calendar date; a calendar grid means each marked day. If different dates show different times (e.g. "2pm & 7:30pm Sundays"), emit one occurrence per date+time. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Expand only what is actually printed — never invent dates beyond what the text implies. If no real dates are visible, respond {"occurrences":[]}.` },
+          ] }],
+          signal: undefined,
+        }),
+        signal: AbortSignal.timeout(60000),
+      })
+      if (!schedRes.ok) { const t = await schedRes.text().catch(() => ''); throw new Error(`Anthropic ${schedRes.status}: ${t.slice(0, 200)}`) }
+      const schedData = await schedRes.json()
+      const rawTxt = (schedData.content?.[0]?.text ?? '').trim()
+      let occurrences: Array<{ date?: string; time?: string | null }> = []
+      try { const m = rawTxt.match(/\{[\s\S]*\}/); occurrences = (JSON.parse(m ? m[0] : rawTxt).occurrences ?? []) } catch { occurrences = [] }
+      if (!occurrences.length) {
+        return new Response(JSON.stringify({ status: 'error', reason: 'no dates found in that selection' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // dedupe vs this venue's existing rows (any status) + the source's own date
+      const idx = new Set<string>()
+      if (src.venue_id) {
+        const { data: existing } = await supabaseService.from('events')
+          .select('title, starts_at').eq('venue_id', src.venue_id)
+          .gte('starts_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        for (const ex of (existing ?? []) as Array<{ title: string; starts_at: string }>) {
+          idx.add(`${portlandDate(new Date(ex.starts_at))}|${normalizeName(ex.title)}`)
+        }
+      }
+      const nowMs = Date.now()
+      const clipMax = nowMs + 365 * 24 * 60 * 60 * 1000
+      const srcTime = new Date(src.starts_at)
+      const srcHHMM = `${String(srcTime.getUTCHours()).padStart(2, '0')}:${String(srcTime.getUTCMinutes()).padStart(2, '0')}`
+      let added = 0, skippedN = 0, updatedSrc = 0
+      const newIds: string[] = []
+      const addedDates: string[] = []
+
+      // Resolve every occurrence to an instant, then GROUP BY Portland date —
+      // "2pm & 7:30pm" on one date becomes ONE row with show_times (a single
+      // poster listing both times), never two rows / never a dropped time.
+      const byDate = new Map<string, Set<string>>()
+      for (const oc of occurrences.slice(0, 40)) {
+        const d = typeof oc.date === 'string' ? oc.date.trim() : ''
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) continue
+        const t = typeof oc.time === 'string' && oc.time ? parseShowTime(oc.time) : null
+        let start = ptTimestamp(d, t)
+        if (!start) continue
+        if (!t) { // no time printed → reuse the source event's time of day (UTC-preserved)
+          const dd = new Date(`${d}T00:00:00Z`)
+          start = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), srcTime.getUTCHours(), srcTime.getUTCMinutes()))
+        }
+        // phantom +1-year guard: a schedule item ~a year+ out whose previous-
+        // year date is still upcoming is a model year slip — snap it back
+        if (start.getTime() - nowMs > 300 * 24 * 60 * 60 * 1000) {
+          const back = `${parseInt(d.slice(0, 4), 10) - 1}${d.slice(4)}`
+          const backStart = ptTimestamp(back, t)
+          if (backStart && backStart.getTime() >= nowMs) start = backStart
+        }
+        if (start.getTime() < nowMs || start.getTime() > clipMax) { skippedN++; continue }
+        const pd = portlandDate(start)
+        if (!byDate.has(pd)) byDate.set(pd, new Set())
+        byDate.get(pd)!.add(start.toISOString())
+      }
+
+      const srcOwnDate = portlandDate(srcTime)
+      for (const [pd, timeSet] of byDate) {
+        const times = [...timeSet].sort()
+        const key = `${pd}|${normalizeName(src.title)}`
+        if (idx.has(key)) {
+          // The schedule revealed extra times for the source event's OWN day —
+          // fold them into it instead of silently dropping them.
+          if (pd === srcOwnDate && times.length >= 2) {
+            const { error: updErr } = await supabaseService.from('events')
+              .update({ starts_at: times[0], show_times: times }).eq('id', srcId)
+            if (!updErr) { updatedSrc++; continue }
+          }
+          skippedN++
+          continue
+        }
+        const { data: ins2, error: insErr2 } = await supabaseService.from('events').insert({
+          venue_id: src.venue_id, title: src.title, category: src.category,
+          poster_url: src.poster_url, starts_at: times[0],
+          show_times: times.length >= 2 ? times : null,
+          description: src.description, neighborhood: src.neighborhood, address: src.address,
+          view_count: 0, like_count: 0, status: 'pending', sold_out: false,
+          created_by: src.created_by ?? authedUser.id, source_url: src.source_url,
+          ai_confidence: src.ai_confidence ?? 90, artist_name: src.artist_name,
+        }).select('id')
+        if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(pd); idx.add(key) }
+      }
+      return new Response(JSON.stringify({ status: (added > 0 || updatedSrc > 0) ? 'saved' : 'duplicate', added, updated: updatedSrc, skipped: skippedN, event_ids: newIds, dates: addedDates }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
+    const clipperUrl = (body.clipper && typeof body.clipper === 'object' && typeof (body.clipper as { url?: string }).url === 'string') ? ((body.clipper as { url: string }).url).trim() : ''
+    const rawUrl = typeof body.url === 'string' ? body.url.trim() : clipperUrl
     if (!rawUrl) throw new Error('Pass a url')
     const url = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`
     const now = Date.now()
@@ -763,7 +1103,7 @@ serve(async (req) => {
     // table (ANY status) at the same venue + Portland date with a matching title,
     // so re-running a fetch doesn't spam duplicate pendings. Also dedupes within
     // the batch. Returns counts + first errors.
-    async function insertEvents(rows: Array<RawEvent & { description?: string }>, fallbackId: string | null, publish: boolean) {
+    async function insertEvents(rows: Array<RawEvent & { description?: string }>, fallbackId: string | null, publish: boolean, skipDedupe = false) {
       const status = publish ? 'published' : 'pending'
       // Cap re-hosting by an absolute request deadline; any posters not re-hosted in
       // time keep their remote URL (still works, just not EXIF-stripped/re-hosted).
@@ -791,8 +1131,30 @@ serve(async (req) => {
       let inserted = 0, failed = 0, skipped = 0, parked = 0
       const parkedVenues = new Set<string>()
       const errors: string[] = []
+      const insertedIds: string[] = []
+
+      // Same-day repeat showings (a movie's 2pm + 7:30pm) collapse into ONE
+      // row carrying show_times — the wall renders a single poster listing
+      // every time. Without this, the dedupe below silently dropped all but
+      // the first same-day time.
+      const byShowing = new Map<string, RawEvent & { description?: string; show_times?: string[] | null }>()
+      let badRows = 0
       for (const ev of rows.slice(0, MAX_EVENTS)) {
-        if (!ev?.title || !ev?.starts_at) { failed++; continue }
+        if (!ev?.title || !ev?.starts_at) { badRows++; continue }
+        const gkey = `${normalizeName(ev.venue_name ?? '')}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
+        const prev = byShowing.get(gkey)
+        if (!prev) {
+          byShowing.set(gkey, { ...ev })
+        } else {
+          const times = [...new Set([...(prev.show_times ?? [prev.starts_at]), ev.starts_at])].sort()
+          prev.starts_at = times[0]
+          prev.show_times = times.length >= 2 ? times : null
+          if (!prev.poster_image_url && ev.poster_image_url) prev.poster_image_url = ev.poster_image_url
+        }
+      }
+      failed += badRows
+
+      for (const ev of byShowing.values()) {
         const rv = resolveVenue(ev.venue_name ?? '', fallbackId)
         const category = typeof ev.category === 'string' && CATEGORIES.includes(ev.category) ? ev.category : 'Live Music'
         // Prefer the blurb composed at extract time; only compose here if missing.
@@ -817,7 +1179,7 @@ serve(async (req) => {
             event_url: ev.ticket_url ?? null,
             sold_out: ev.sold_out ?? false,
             confidence: 90,
-            created_by: user.id,
+            created_by: authedUser.id,
             category,
             raw_venue_address: ev.venue_address || null,
             raw_venue_website: ev.venue_website || null,
@@ -830,9 +1192,9 @@ serve(async (req) => {
         if (!rv.id) { failed++; errors.push(`${ev.title}: no venue`); continue }
 
         const key = `${rv.id}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
-        if (index.has(key)) { skipped++; continue }
+        if (!skipDedupe && index.has(key)) { skipped++; continue }
         const posterUrl = await rehostImage(supabaseService, ev.poster_image_url ?? null, imageDeadline)
-        const { error: insErr } = await supabaseService.from('events').insert({
+        const { data: insData, error: insErr } = await supabaseService.from('events').insert({
           venue_id: rv.id,
           title: ev.title,
           category,
@@ -845,15 +1207,240 @@ serve(async (req) => {
           like_count: 0,
           status, // service role bypasses the ingest-status trigger — set explicitly
           sold_out: ev.sold_out ?? false,
-          created_by: user.id,
+          created_by: authedUser.id,
           source_url: ev.ticket_url || url,
           ai_confidence: 90,
           artist_name: ev.artist_name?.trim() || null,
-        })
+          show_times: ev.show_times ?? null,
+        }).select('id')
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
-        else { inserted++; index.add(key) }
+        else { inserted++; index.add(key); if (insData?.[0]?.id) insertedIds.push(insData[0].id as string) }
       }
-      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors }
+      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors, insertedIds }
+    }
+
+    // ═══ CLIPPER: capture from the browser extension — Rob navigates, we package ══
+    // {clipper:{url, title, html?}} → parse the RENDERED DOM he was looking at
+    //   (JSON-LD first — free; LLM on the page text as fallback).
+    // {clipper:{url, title, image_base64, mimeType}} → his ⌘⇧4 workflow: the
+    //   screenshot IS the poster; Claude Vision reads the fields off it.
+    // Everything lands in pending Review via the same insertEvents (dedupe,
+    // venue fuzzy-match, orphan parking) as every other ingest path.
+    if (body.clipper && typeof body.clipper === 'object') {
+      const c = body.clipper as { url?: string; title?: string; html?: string; image_base64?: string; mimeType?: string; poster_url?: string; poster_base64?: string; poster_mime?: string; venue_id?: string }
+      // Panel-selected venue: used as the FALLBACK — a venue named in the
+      // capture still wins (resolveVenue), but a nameless grab attributes here.
+      const clipperFallbackId = typeof c.venue_id === 'string' && /^[0-9a-f-]{36}$/i.test(c.venue_id) ? c.venue_id : null
+      const clipperForce = (body.clipper as { force?: boolean }).force === true
+      const clipperAllowFar = (body.clipper as { allow_far?: boolean }).allow_far === true
+      const clipperAssumeVenue = (body.clipper as { assume_venue?: boolean }).assume_venue === true
+      const clipperParkOk = (body.clipper as { park_ok?: boolean }).park_ok === true
+      // LOCKED venue: the admin decided — every capture files here, no
+      // fuzzy-matching, no confirm-venue detour, and the AI is told the venue
+      // so the blurb can use it.
+      const clipperVenueLock = (body.clipper as { venue_lock?: boolean }).venue_lock === true && !!clipperFallbackId
+      const lockedVenueName = clipperVenueLock ? (venueList.find(v => v.id === clipperFallbackId)?.name ?? '') : ''
+      // Scraper runs cap the window (~90d) to keep Review sane; a CLIP is a
+      // deliberate human choice — accept anything up to a year out, or up to
+      // 3 years when the admin explicitly confirmed a far-future date.
+      const clipMaxOut = Math.max(now, floor) + (clipperAllowFar ? 3 * 365 : 365) * 24 * 60 * 60 * 1000
+      const pageTitle = typeof c.title === 'string' ? c.title.slice(0, 300) : ''
+      const KEY = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY) throw new Error('ANTHROPIC_API_KEY secret not set')
+
+      const CLIP_FIELDS = `Respond with ONLY a JSON object (no fences): {"none": false, "title": string, "date": "YYYY-MM-DD", "year_printed": boolean, "time": string ("8:00 PM" style, "" if not shown), "venue_name": string, "venue_address": string, "category": string, "description": string, "sold_out": boolean}. category MUST be one of: ${CATEGORIES.join(', ')}. Today is ${portlandToday()}. year_printed: true ONLY if a 4-digit year is actually visible in the capture. If the year is not shown, set year_printed false and use any year in the date — the server derives the real year. If the printed year would place the event in the PAST, it is reused/stale artwork for a recurring event — use the next upcoming occurrence of that month and day instead. When BOTH a date inside poster artwork AND a date in the page's own listing text are visible, trust the LISTING date — reused poster art often carries a previous edition's date. description: 1–3 sentences using ONLY facts visible; plain prose. NEVER invent anything — empty string for anything not present. If no real single event is identifiable, respond {"none": true}.`
+
+      // deno-lint-ignore no-explicit-any
+      async function askClaude(content: any[]): Promise<Record<string, unknown> | null> {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
+          body: JSON.stringify({ model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 600, messages: [{ role: 'user', content }] }),
+          signal: AbortSignal.timeout(60000),
+        })
+        if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error(`Anthropic ${res.status}: ${t.slice(0, 200)}`) }
+        const data = await res.json()
+        const raw = (data.content?.[0]?.text ?? '').trim()
+        try { const m = raw.match(/\{[\s\S]*\}/); return JSON.parse(m ? m[0] : raw) } catch { return null }
+      }
+
+      function rowFromClip(j: Record<string, unknown>, posterUrl: string | null): RawEvent | { error: string } {
+        const title = typeof j.title === 'string' ? decodeEntities(j.title).trim() : ''
+        const date = typeof j.date === 'string' ? j.date.trim() : ''
+        if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'could not read a title + date' }
+        const timeStr = typeof j.time === 'string' ? j.time.trim() : ''
+        let start = ptTimestamp(date, parseShowTime(timeStr))
+        if (!start) return { error: `unusable date ${date}` }
+        let rolledDate = date
+        // NO YEAR PRINTED → never trust model year math (observed systematic
+        // +1-year slips). Derive deterministically: this year's occurrence of
+        // that month/day, or next year's if it already passed.
+        if (j.year_printed !== true) {
+          const md = date.slice(5)
+          const todayStr = portlandToday()
+          const thisYear = parseInt(todayStr.slice(0, 4), 10)
+          let candDate = `${thisYear}-${md}`
+          let cand = ptTimestamp(candDate, parseShowTime(timeStr))
+          if (cand && portlandDate(cand) < todayStr) {
+            candDate = `${thisYear + 1}-${md}`
+            cand = ptTimestamp(candDate, parseShowTime(timeStr))
+          }
+          if (cand) { rolledDate = candDate; start = cand }
+        }
+        // Reused poster art (recurring nights) often prints an old year. The
+        // clipper is a live human capture, so a past date = stale year: roll
+        // the month/day forward to the next occurrence on/after today.
+        for (let bump = 0; start.getTime() < floor && bump < 3; bump++) {
+          const y = parseInt(rolledDate.slice(0, 4), 10) + 1
+          rolledDate = `${y}${rolledDate.slice(4)}`
+          const next = ptTimestamp(rolledDate, parseShowTime(timeStr))
+          if (!next) break
+          start = next
+        }
+        if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
+        if (start.getTime() > clipMaxOut) return { error: `dated ${rolledDate} — more than a year out`, needsConfirm: true, farTitle: title, farDate: rolledDate }
+        const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
+        return {
+          title: cleanTitle, date: rolledDate, portland_date: portlandDate(start), starts_at: start.toISOString(),
+          time_display: timeStr, category: typeof j.category === 'string' && CATEGORIES.includes(j.category) ? j.category : 'Live Music',
+          poster_image_url: posterUrl, ticket_url: null,
+          venue_name: typeof j.venue_name === 'string' ? decodeEntities(j.venue_name).trim() : '',
+          raw_description: typeof j.description === 'string' ? j.description.trim() : '',
+          raw_notes: '', sold_out: titleSold || j.sold_out === true,
+          venue_address: typeof j.venue_address === 'string' ? j.venue_address.trim() : '',
+          venue_website: '', artist_name: '',
+        }
+      }
+
+      let events: RawEvent[] = []
+      let method = ''
+
+      // Staged poster (two-step clip): Rob picks the poster image FIRST, then
+      // captures the info. When present, the staged image is the event's
+      // poster and the info capture is only read for fields.
+      let stagedPosterUrl: string | null = null
+      if (typeof c.poster_base64 === 'string' && c.poster_base64.length > 100) {
+        try {
+          const pmime = typeof c.poster_mime === 'string' && /^image\//.test(c.poster_mime) ? c.poster_mime : 'image/png'
+          const bin = atob(c.poster_base64)
+          if (bin.length <= MAX_IMAGE_BYTES) {
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const path = `clipper/${crypto.randomUUID()}.${pmime === 'image/jpeg' ? 'jpg' : 'png'}`
+            const { error: upErr } = await supabaseService.storage.from('posters').upload(path, bytes, { contentType: pmime, upsert: false })
+            if (!upErr) stagedPosterUrl = supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
+          }
+        } catch { /* staged upload is best-effort */ }
+      }
+
+      if (typeof c.image_base64 === 'string' && c.image_base64.length > 100) {
+        // ── Screenshot mode (⌘⇧E region / ⌘⇧F window) ──
+        method = 'clipper-shot'
+        const mime = typeof c.mimeType === 'string' && /^image\//.test(c.mimeType) ? c.mimeType : 'image/png'
+        const j = await askClaude([
+          { type: 'image', source: { type: 'base64', media_type: mime, data: c.image_base64 } },
+          { type: 'text', text: `${lockedVenueName ? `KNOWN FACT: this event is at "${lockedVenueName}" (the admin confirmed the venue — use it for venue_name and feel free to reference it in the description). ` : ''}This screenshot shows a live-event listing (poster and/or details)${pageTitle ? ` from a page titled "${pageTitle}"` : ''}. Read the event's details from the image. ${CLIP_FIELDS}` },
+        ])
+        if (!j || j.none === true) {
+          return new Response(JSON.stringify({ status: 'error', reason: 'no event found in the screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        }
+        // Staged poster wins; otherwise the screenshot itself is the poster
+        // (the classic ⌘⇧4 workflow).
+        let posterUrl: string | null = stagedPosterUrl
+        try {
+          if (posterUrl) throw 'staged' // skip uploading the info shot as art
+          const bin = atob(c.image_base64)
+          if (bin.length <= MAX_IMAGE_BYTES) {
+            const bytes = new Uint8Array(bin.length)
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+            const path = `clipper/${crypto.randomUUID()}.${mime === 'image/jpeg' ? 'jpg' : 'png'}`
+            const { error: upErr } = await supabaseService.storage.from('posters').upload(path, bytes, { contentType: mime, upsert: false })
+            if (!upErr) posterUrl = supabaseService.storage.from('posters').getPublicUrl(path).data.publicUrl
+          }
+        } catch { /* poster upload is best-effort; the event still lands */ }
+        const row = rowFromClip(j, posterUrl)
+        if ('error' in row) {
+          const st = (row as { needsConfirm?: boolean }).needsConfirm ? 'confirm' : 'error'
+          return new Response(JSON.stringify({ status: st, reason: row.error, event_name: (row as { farTitle?: string }).farTitle ?? null }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        }
+        events = [row]
+      } else if (typeof c.html === 'string' && c.html.trim().length > 0) {
+        // ── Tab mode (⌘⇧S): the rendered DOM is the one-page-with-everything ──
+        const html = c.html.slice(0, 1_500_000)
+        const parsed = jsonLdFromHtml(html, url, floor, clipMaxOut)
+        if (parsed && parsed.events.length > 0) {
+          method = 'clipper-jsonld'
+          events = parsed.events
+          if ((stagedPosterUrl || c.poster_url) && events.length === 1) events[0].poster_image_url = stagedPosterUrl ?? c.poster_url ?? null
+        } else {
+          method = 'clipper-llm'
+          const text = decodeEntities(stripTags(html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' '))).slice(0, 15000)
+          if (text.replace(/\s+/g, ' ').trim().length < MIN_DETAIL_CHARS) {
+            return new Response(JSON.stringify({ status: 'error', reason: 'page has too little readable text — try the region screenshot instead' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
+          const j = await askClaude([{ type: 'text', text: `${lockedVenueName ? `KNOWN FACT: this event is at "${lockedVenueName}" (admin-confirmed — use it for venue_name and feel free to reference it in the description). ` : ''}This is the visible text of a live-event page${pageTitle ? ` titled "${pageTitle}"` : ''} (${url}). Extract THE event this page is about. ${CLIP_FIELDS}\n\nPAGE TEXT:\n${text}` }])
+          if (!j || j.none === true) {
+            return new Response(JSON.stringify({ status: 'error', reason: 'no event found on the page — try the region screenshot' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
+          const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+          let ogImage: string | null = null
+          try { ogImage = ogMatch ? new URL(ogMatch[1], url).href : null } catch { ogImage = null }
+          const row = rowFromClip(j, stagedPosterUrl ?? c.poster_url ?? ogImage)
+          if ('error' in row) {
+            const st = (row as { needsConfirm?: boolean }).needsConfirm ? 'confirm' : 'error'
+            return new Response(JSON.stringify({ status: st, reason: row.error, event_name: (row as { farTitle?: string }).farTitle ?? null }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+          }
+          events = [row]
+        }
+      } else {
+        return new Response(JSON.stringify({ status: 'error', reason: 'clipper: html or image_base64 required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // Locked venue: attribution is decided — blank any read name so
+      // resolution + the blurb both use the locked venue.
+      if (clipperVenueLock) for (const ev of events) ev.venue_name = ''
+
+      // Pre-compose the Plaster-voice blurb so (a) the panel can PREVIEW it and
+      // (b) insertEvents uses it verbatim. Resolve the venue for voice context.
+      const rv0 = events[0] ? resolveVenue(events[0].venue_name ?? '', clipperFallbackId) : null
+      if (events[0]) {
+        const composed = await composeDescription({
+          title: events[0].title, venueName: rv0?.name ?? events[0].venue_name ?? '', category: events[0].category,
+          timeDisplay: events[0].time_display, rawDescription: events[0].raw_description, rawNotes: events[0].raw_notes, soldOut: events[0].sold_out,
+        })
+        ;(events[0] as RawEvent & { description?: string }).description = composed
+      }
+      // Venue didn't resolve but the panel has a venue selected → ask the human
+      // instead of parking a misread ("The 1/50") as a brand-new venue.
+      if (rv0?.orphanName && clipperFallbackId && !clipperAssumeVenue && !clipperParkOk && !clipperVenueLock) {
+        const sel = venueList.find(v => v.id === clipperFallbackId)
+        const e0c = events[0] as (RawEvent & { description?: string })
+        return new Response(JSON.stringify({
+          status: 'confirm-venue',
+          reason: `capture reads venue as \u201c${rv0.orphanName}\u201d`,
+          confirm_venue_name: sel?.name ?? 'the selected venue',
+          event_name: e0c.title,
+          preview: { title: e0c.title, date: e0c.date, time: e0c.time_display || null, venue: rv0.orphanName, category: e0c.category, description: e0c.description ?? null, sold_out: e0c.sold_out },
+        }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+      // Confirmed: the picker venue is correct — drop the misread name so the
+      // fallback attributes it there.
+      if (clipperAssumeVenue && events[0]) events[0].venue_name = ''
+      const ins = await insertEvents(events, clipperFallbackId, false, clipperForce)
+      const status = (ins.inserted ?? 0) > 0 ? 'saved' : (ins.parked ?? 0) > 0 ? 'orphaned' : (ins.skipped ?? 0) > 0 ? 'duplicate' : 'error'
+      const e0 = events[0] as (RawEvent & { description?: string }) | undefined
+      return new Response(JSON.stringify({
+        status, method, count: events.length,
+        inserted: ins.inserted, skipped: ins.skipped, parked: ins.parked, failed: ins.failed,
+        event_name: e0?.title ?? null,
+        event_ids: ins.insertedIds ?? [],
+        preview: e0 ? {
+          title: e0.title, date: e0.date, time: e0.time_display || null,
+          venue: rv0?.name ?? e0.venue_name ?? null, category: e0.category,
+          description: e0.description ?? null, sold_out: e0.sold_out,
+        } : null,
+        reason: status === 'error' ? (ins.errors?.[0] ?? 'insert failed') : undefined,
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ DRY RUN: extract → (optionally) commit to pending → return for review ══
@@ -865,11 +1452,27 @@ serve(async (req) => {
       // Community mode (EverOut, or an explicit flag): city-wide source → NO dropdown
       // fallback (nothing may be misattributed), and events land with no image.
       const community = body.community === true || isEverout
-      const { events, beyondHorizon, past } = isBandsintown
-        ? await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
-        : isEverout
-        ? await extractEverout(url, floor, maxOut)        // LLM extraction, no images
-        : await firecrawlExtract(url, floor, maxOut)
+      // Fetch-first: try a FREE plain fetch + schema.org JSON-LD parse before
+      // paying for Firecrawl. Covers Eventbrite/TicketWeb/Squarespace/WordPress
+      // and most venue sites; Firecrawl remains the fallback for JS-walled pages.
+      let method = 'firecrawl'
+      let extractResult: { events: RawEvent[]; beyondHorizon: number; past: number }
+      if (isBandsintown) {
+        method = 'bandsintown'
+        extractResult = await extractBandsintown(url, floor, maxOut)   // deterministic JSON-LD parse
+      } else if (isEverout) {
+        method = 'everout'
+        extractResult = await extractEverout(url, floor, maxOut)        // LLM extraction, no images
+      } else {
+        const free = await jsonLdExtract(url, floor, maxOut).catch(() => null)
+        if (free && (free.events.length > 0 || free.beyondHorizon > 0 || free.past > 0)) {
+          method = 'jsonld-free'
+          extractResult = free
+        } else {
+          extractResult = await firecrawlExtract(url, floor, maxOut)
+        }
+      }
+      const { events, beyondHorizon, past } = extractResult
       // Community mode ignores the venue dropdown entirely — unmatched venues park.
       const fallbackId: string | null = community ? null : (typeof body.venueId === 'string' && body.venueId ? body.venueId : null)
       // Follow each event's "Get Tickets" / detail page for the real show description
@@ -895,9 +1498,9 @@ serve(async (req) => {
       // pure preview (commit:false) still returns without writing.
       if (body.commit === true) {
         const ins = await insertEvents(out, fallbackId, false)
-        return new Response(JSON.stringify({ url, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: true, ...ins, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+        return new Response(JSON.stringify({ url, method, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: true, ...ins, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
       }
-      return new Response(JSON.stringify({ url, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: false, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      return new Response(JSON.stringify({ url, method, count: out.length, beyondHorizon, past, enriched, deepFetch, committed: false, events: out }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ IMPORT: insert an explicit selection (legacy path) ════════════════════

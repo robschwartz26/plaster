@@ -44,3 +44,6 @@ plaster_dump.md
 *-code-dump.md
 *-dump.md
 scripts/plaster-dump.md
+.clipper-token
+.capgo-key
+.webhook-secret

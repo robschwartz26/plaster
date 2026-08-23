@@ -6,6 +6,7 @@ import App from './App.tsx'
 import { Capacitor } from '@capacitor/core'
 import { Keyboard } from '@capacitor/keyboard'
 import { StatusBar } from '@capacitor/status-bar'
+import { CapacitorUpdater } from '@capgo/capacitor-updater'
 
 if (Capacitor.isNativePlatform()) {
   Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => { /* silent */ })
@@ -16,6 +17,9 @@ if (Capacitor.isNativePlatform()) {
   if (Capacitor.getPlatform() === 'ios') {
     StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
   }
+  // Capgo OTA: REQUIRED — tells the updater this bundle booted successfully.
+  // Without it, every OTA update auto-rolls-back on the next launch. (Both platforms.)
+  CapacitorUpdater.notifyAppReady().catch(() => { /* web / plugin absent */ })
 }
 
 // Block native browser pinch-zoom everywhere except the poster grid,

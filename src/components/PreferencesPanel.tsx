@@ -1,4 +1,5 @@
 import { BottomSheet } from './BottomSheet'
+import { WallPrefsControls } from './WallPrefsPanel'
 
 interface Props {
   open: boolean
@@ -19,8 +20,25 @@ export function PreferencesPanel({ open, onClose, context }: Props) {
         { label: 'Map style', description: 'Light / Dark / Satellite' },
       ]
 
+  // Wall context: half-height sheet + barely-dimmed backdrop so the wall
+  // stays watchable — tap "3 across" and see the grid reflow live above.
   return (
-    <BottomSheet open={open} onClose={onClose} title="Preferences">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Preferences"
+      height={context === 'wall' ? '52vh' : undefined}
+      backdropOpacity={context === 'wall' ? 0.08 : undefined}
+    >
+      {/* Live wall personalization — same controls as Settings, applying
+          instantly so the wall behind the sheet shows the change. */}
+      {context === 'wall' && (
+        <>
+          <WallPrefsControls />
+          <div style={{ height: 1, background: 'var(--fg-15)', margin: '10px 0 16px' }} />
+        </>
+      )}
+
       <div style={{
         background: 'var(--fg-08)',
         border: '1px solid var(--fg-15)',

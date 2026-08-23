@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
+// Bundled fallback — always present, always instant. Used until the remote
+// pool has synced at least once, or whenever it can't be read.
 const SPLASH_IMAGES = [
   '/newsplash-1.png',
   '/newsplash-2.png',
@@ -9,8 +12,43 @@ const SPLASH_IMAGES = [
   '/newsplash-6.png',
 ]
 
+// ── Remote splash pool ───────────────────────────────────────────────────────
+// The rotation is curated in Admin → Tools → Splash rotation. The
+// splash_images table is the source of truth: only rows marked Live are
+// readable here (RLS hides the rest), and that includes the bundled six —
+// admins can hide/reveal any image without a build. The pool is cached in
+// localStorage so the splash pick stays synchronous/instant; the refresh +
+// image preload happen in the background after the app is already up.
+const POOL_KEY = 'splash-pool-v2'
+
+function currentPool(): string[] {
+  try {
+    const cached = JSON.parse(localStorage.getItem(POOL_KEY) ?? '[]')
+    if (Array.isArray(cached) && cached.length > 0 && cached.every(x => typeof x === 'string')) {
+      return cached
+    }
+  } catch { /* corrupted cache — fall through */ }
+  return SPLASH_IMAGES
+}
+
+async function refreshPoolInBackground() {
+  try {
+    // .eq('active') is belt-and-suspenders: RLS already hides inactive rows
+    // from everyone but admins, and an admin's own device shouldn't preview
+    // unreleased art either.
+    const { data, error } = await supabase
+      .from('splash_images').select('url').eq('active', true)
+    if (error) return // pool unreachable — keep whatever cache we have
+    const urls = (data ?? []).map(r => r.url)
+    localStorage.setItem(POOL_KEY, JSON.stringify(urls))
+    // Warm the HTTP cache so a newly released splash is instant next launch
+    for (const u of urls) { if (/^https?:/.test(u)) { const img = new Image(); img.src = u } }
+  } catch { /* offline — cached/bundled pool stands */ }
+}
+
 function randomSplash(): string {
-  return SPLASH_IMAGES[Math.floor(Math.random() * SPLASH_IMAGES.length)]
+  const pool = currentPool()
+  return pool[Math.floor(Math.random() * pool.length)]
 }
 
 const FADE_IN_MS  = 600
@@ -42,10 +80,14 @@ export function SplashAnimation() {
       FADE_IN_MS + HOLD_MS + FADE_OUT_MS,
     )
 
+    // Sync the remote pool for next launch (never blocks this one)
+    const t3 = setTimeout(refreshPoolInBackground, FADE_IN_MS + HOLD_MS + FADE_OUT_MS + 1500)
+
     return () => {
       cancelAnimationFrame(raf)
       clearTimeout(t1)
       clearTimeout(t2)
+      clearTimeout(t3)
     }
   }, [])
 

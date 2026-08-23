@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { PencilLine, Plus } from 'lucide-react'
+import { PencilLine, Plus, MoreHorizontal } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { PlasterHeader, headerIconBtn } from '@/components/PlasterHeader'
@@ -18,6 +18,8 @@ import { reportGifShare, type SelectedGif } from '@/lib/klipy'
 import { getKlipyId } from '@/lib/klipyId'
 import { SwipeableConversationRow } from '@/components/SwipeableConversationRow'
 import { ReportContentSheet } from '@/components/ReportContentSheet'
+import { UserActionsMenu } from '@/components/UserActionsMenu'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { posterThumb } from '@/lib/posterThumb'
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -242,12 +244,16 @@ export function MsgScreen() {
   const [messages,         setMessages]         = useState<Message[]>([])
   const [msgLoading,       setMsgLoading]       = useState(false)
   const [messageText,      setMessageText]      = useState('')
+  const [composerError,    setComposerError]    = useState<string | null>(null)
+  const [memberActionsOpen, setMemberActionsOpen] = useState(false)
+  const [actionUser, setActionUser] = useState<{ id: string; username: string | null } | null>(null)
   const [sending,          setSending]          = useState(false)
   const messagesEndRef       = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesInnerRef     = useRef<HTMLDivElement>(null)
   const myConvIdsRef    = useRef<Set<string>>(new Set())
   const openConvIdRef   = useRef<string | null>(openConvId)
+  const nearBottomRef   = useRef(true) // is the reader within 200px of newest? (updated on scroll)
 
   // New chat state
   const [newChatOpen,       setNewChatOpen]       = useState(false)
@@ -432,22 +438,15 @@ export function MsgScreen() {
       membersByConvId[m.conversation_id].push(m.user_id)
     }
 
-    // 5. Last message per conversation
-    const lastMsgResults = await Promise.all(
-      convIds.map(cid =>
-        supabase
-          .from('messages')
-          .select('body, sender_id, created_at, media_type')
-          .eq('conversation_id', cid)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      )
-    )
-
+    // 5. Last message per conversation — ONE call (latest_messages RPC) instead
+    //    of a limit-1 query per conversation (was N round-trips per tab mount).
     type LastMsgRow = { body: string | null; sender_id: string; created_at: string; media_type: string | null }
+    const { data: latest } = await supabase.rpc('latest_messages', { p_conv_ids: convIds })
     const lastMsgMap: Record<string, LastMsgRow | null> = {}
-    convIds.forEach((cid, i) => { lastMsgMap[cid] = (lastMsgResults[i].data as LastMsgRow | null) ?? null })
+    for (const cid of convIds) lastMsgMap[cid] = null
+    for (const r of (latest ?? []) as (LastMsgRow & { conversation_id: string })[]) {
+      lastMsgMap[r.conversation_id] = { body: r.body, sender_id: r.sender_id, created_at: r.created_at, media_type: r.media_type }
+    }
 
     const membershipMap: Record<string, string> = {}
     for (const m of (memberships as { conversation_id: string; last_read_at: string }[])) {
@@ -497,16 +496,25 @@ export function MsgScreen() {
   // ── Open conversation ────────────────────────────────────────────────────
   const openConversation = useCallback(async (convId: string) => {
     setOpenConvId(convId)
+    openConvIdRef.current = convId // set synchronously so the stale-fetch guard below is reliable
     setMsgLoading(true)
     setMessages([])
 
+    // Load the most recent window, not the entire history — a months-old group
+    // chat is thousands of rows. Fetch newest-first with a cap, then reverse to
+    // chronological. (Older messages remain reachable via search.)
     const { data } = await supabase
       .from('messages')
       .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
       .eq('conversation_id', convId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(100)
 
-    setMessages((data ?? []) as Message[])
+    // Stale-fetch guard: if the user opened a different thread while this was in
+    // flight, discard — otherwise thread A's messages land in thread B's panel.
+    if (openConvIdRef.current !== convId) return
+
+    setMessages(((data ?? []) as Message[]).slice().reverse())
     setMsgLoading(false)
     await markConversationRead(convId)
 
@@ -539,12 +547,17 @@ export function MsgScreen() {
     setTimeout(() => setHighlightedMessageId(null), 1800)
   }
 
-  // If routed with a specific conversation, open it once inbox loads
+  // If routed with a specific conversation, open it ONCE. Keyed on routeConvId
+  // only — previously `convLoading` was a dep, so every loadInbox() (new chat,
+  // add-people, group edit) re-toggled it and yanked the user back to the
+  // routed thread.
+  const handledRouteConvRef = useRef<string | null>(null)
   useEffect(() => {
-    if (routeConvId && !convLoading) {
+    if (routeConvId && routeConvId !== handledRouteConvRef.current) {
+      handledRouteConvRef.current = routeConvId
       openConversation(routeConvId)
     }
-  }, [routeConvId, convLoading, openConversation])
+  }, [routeConvId, openConversation])
 
   // ── Reset initial-scroll flag when conversation changes ──────────────────
   useEffect(() => {
@@ -572,6 +585,13 @@ export function MsgScreen() {
 
     const isInitialScroll = !initialScrollDoneRef.current
 
+    // For an incoming message (not the initial open), only pull the view down
+    // if the reader is near the bottom OR it's their own just-sent message —
+    // otherwise someone scrolled up reading history gets yanked to the newest.
+    const lastMsg = messages[messages.length - 1]
+    const ownSend = lastMsg?.sender_id === user?.id
+    if (!isInitialScroll && !ownSend && !nearBottomRef.current) return
+
     // Double rAF: first to commit DOM, second to commit layout. iOS WebKit
     // sometimes reports stale scrollHeight inside a single rAF after a
     // setMessages/setMsgLoading batch. Two frames guarantees layout has
@@ -589,7 +609,7 @@ export function MsgScreen() {
         initialScrollDoneRef.current = true
       })
     })
-  }, [messages.length, openConvId, msgLoading])
+  }, [messages.length, openConvId, msgLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-scroll when images/GIFs load and expand content ───────────────────
   // ResizeObserver on the inner message wrapper fires whenever content height
@@ -628,16 +648,29 @@ export function MsgScreen() {
           })
           setConversations(prev =>
             prev.map(c => c.id === openConvId
-              ? { ...c, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
+              ? { ...c, unread: false, lastMessage: { body: msg.body, sender_id: msg.sender_id, created_at: msg.created_at, media_type: msg.media_type }, lastMessageAt: msg.created_at }
               : c
             )
           )
+          // The thread is open and on-screen → keep it read as messages arrive,
+          // so the badge doesn't count what the user is actively reading.
+          if (msg.sender_id !== user?.id) markConversationRead(openConvId)
+        }
+      )
+      .on(
+        // Reflect peer soft-deletes live (deleted_at set via UPDATE) — otherwise
+        // a message the other person removes stays visible until reopen.
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${openConvId}` },
+        (payload) => {
+          const msg = payload.new as Message
+          setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, ...msg } : m))
         }
       )
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [openConvId])
+  }, [openConvId, user?.id])
 
   // ── Realtime: inbox unread badge ─────────────────────────────────────────
   useEffect(() => {
@@ -650,8 +683,12 @@ export function MsgScreen() {
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
           const msg = payload.new as Message & { conversation_id: string }
-          if (!myConvIdsRef.current.has(msg.conversation_id)) return
           if (msg.sender_id === user.id) return
+          // A message in a conversation we don't know about yet — a first-ever
+          // DM from someone new, or a dismissed thread the DB just restored.
+          // Reload the inbox so it appears (previously these were dropped and
+          // the inbox silently disagreed with the badge until remount).
+          if (!myConvIdsRef.current.has(msg.conversation_id)) { loadInbox(); return }
           if (msg.conversation_id === openConvIdRef.current) return
           setConversations(prev => {
             const updated = prev.map(c => c.id === msg.conversation_id
@@ -677,7 +714,7 @@ export function MsgScreen() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [user?.id])
+  }, [user?.id, loadInbox])
 
   // ── Debounced message search ─────────────────────────────────────────────
   useEffect(() => {
@@ -717,6 +754,12 @@ export function MsgScreen() {
   async function sendMessage() {
     const body = messageText.trim()
     if ((!body && !pendingGif) || !openConvId || !user || sending) return
+    // Objectionable-content gate (Apple 1.2) — block before anything is sent.
+    if (body) {
+      const verdict = moderateText(body)
+      if (!verdict.ok) { setComposerError(moderationMessage(verdict, 'message')); return }
+    }
+    setComposerError(null)
     setMessageText('')
     const gif = pendingGif
     const gifQuery = pendingGifQuery
@@ -738,15 +781,30 @@ export function MsgScreen() {
       } : {}),
     }
 
-    const { error } = await supabase.from('messages').insert(insertRow)
+    const { data: inserted, error } = await supabase
+      .from('messages')
+      .insert(insertRow)
+      .select('id, sender_id, body, created_at, media_url, media_type, media_width, media_height, message_type, event_id, deleted_at')
+      .single()
 
-    if (!error) {
-      if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', openConvId)
+    if (error || !inserted) {
+      // Restore the composer so the message isn't silently lost — the realtime
+      // echo can't be relied on (websocket is often dead for seconds after iOS
+      // resume, which previously led users to re-send and create duplicates).
+      setMessageText(body)
+      if (gif) { setPendingGif(gif); setPendingGifQuery(gifQuery) }
+      setComposerError("Couldn't send — check your connection and try again.")
+      setSending(false)
+      return
     }
+
+    // Append optimistically (dedup by id — the realtime INSERT echo is a no-op).
+    setMessages(prev => prev.some(m => m.id === inserted.id) ? prev : [...prev, inserted as Message])
+    if (gif) reportGifShare(gif.sourceId, getKlipyId(), gifQuery)
+    await supabase
+      .from('conversations')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', openConvId)
 
     setSending(false)
   }
@@ -1354,13 +1412,40 @@ export function MsgScreen() {
                   )
                 })()}
 
+                {/* Block / report — reachable from inside the conversation (Apple 1.2) */}
+                {openConv && (() => {
+                  const d = getConversationDisplay(openConv)
+                  if (!d.isGroup && d.primaryUser) {
+                    return (
+                      <div style={{ flexShrink: 0, marginLeft: 'auto' }}>
+                        <UserActionsMenu
+                          targetUserId={d.primaryUser.id}
+                          targetUsername={d.primaryUser.username}
+                          onActionComplete={closeConv}
+                        />
+                      </div>
+                    )
+                  }
+                  if (d.isGroup && openConv.members.length > 0) {
+                    return (
+                      <button
+                        onClick={() => setMemberActionsOpen(true)}
+                        style={{ ...headerIconBtn(), flexShrink: 0, marginLeft: 'auto' }}
+                        aria-label="Member safety actions"
+                      >
+                        <MoreHorizontal size={16} />
+                      </button>
+                    )
+                  }
+                  return null
+                })()}
+
                 {/* Add people button */}
                 <button
                   onClick={() => setAddPeopleOpen(true)}
                   style={{
                     ...headerIconBtn(),
                     flexShrink: 0,
-                    marginLeft: 'auto',
                   }}
                   aria-label="Add people"
                 >
@@ -1387,7 +1472,14 @@ export function MsgScreen() {
               )}
 
               {/* Messages */}
-              <div ref={messagesContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div
+                ref={messagesContainerRef}
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200
+                }}
+                style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}
+              >
                 <div ref={messagesInnerRef} style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
                 {msgLoading && (
                   <p style={{ textAlign: 'center', fontFamily: 'Space Grotesk, sans-serif', fontSize: 13, color: 'var(--fg-30)', margin: '24px 0' }}>
@@ -1449,6 +1541,13 @@ export function MsgScreen() {
                       onTouchStart={e => startLongPress(e, msg)}
                       onTouchEnd={cancelLongPress}
                       onTouchMove={cancelLongPress}
+                      onContextMenu={e => e.preventDefault()}
+                      style={{
+                        // Stop iOS's native text-selection / copy-paste callout from
+                        // hijacking the long-press so our Report/Block menu opens cleanly.
+                        WebkitUserSelect: 'none', userSelect: 'none',
+                        WebkitTouchCallout: 'none',
+                      }}
                     >
                       {showTimestampBefore(msg, prev) && (
                         <p style={{
@@ -1554,6 +1653,13 @@ export function MsgScreen() {
                 </div>
               )}
 
+              {/* Objectionable-content rejection (Apple 1.2) */}
+              {composerError && (
+                <div style={{ flexShrink: 0, padding: '8px 16px 0' }}>
+                  <p style={{ margin: 0, color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{composerError}</p>
+                </div>
+              )}
+
               {/* Input bar */}
               <div style={{
                 flexShrink: 0, borderTop: '1px solid var(--fg-08)',
@@ -1581,7 +1687,7 @@ export function MsgScreen() {
                   type="text"
                   placeholder="Message…"
                   value={messageText}
-                  onChange={e => setMessageText(e.target.value)}
+                  onChange={e => { setMessageText(e.target.value); if (composerError) setComposerError(null) }}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
                   style={{
                     flex: 1, padding: '10px 14px', borderRadius: 20,
@@ -1740,6 +1846,23 @@ export function MsgScreen() {
               zIndex: 201,
             }}
           >
+            {(() => {
+              const body = messages.find(m => m.id === msgContextMenu.id)?.body
+              if (!body) return null
+              return (
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(body); setMsgContextMenu(null) }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', borderBottom: '1px solid var(--fg-08)',
+                    cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Copy
+                </button>
+              )
+            })()}
             {msgContextMenu.senderId === user?.id ? (
               <button
                 onClick={() => { setDeleteConfirmMsgId(msgContextMenu.id); setMsgContextMenu(null) }}
@@ -1753,18 +1876,97 @@ export function MsgScreen() {
                 Delete message
               </button>
             ) : (
+              <>
+                <button
+                  onClick={() => { setReportingMessage({ id: msgContextMenu.id, senderId: msgContextMenu.senderId }); setMsgContextMenu(null) }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Report message
+                </button>
+                <button
+                  onClick={() => {
+                    const sid = msgContextMenu.senderId
+                    const uname = openConv?.members.find(m => m.id === sid)?.username ?? null
+                    setActionUser({ id: sid, username: uname })
+                    setMsgContextMenu(null)
+                  }}
+                  style={{
+                    display: 'block', width: '100%', padding: '14px 20px',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    borderTop: '1px solid var(--fg-08)',
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
+                    color: '#ef4444', fontWeight: 600, textAlign: 'left',
+                  }}
+                >
+                  Block or report user
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Controlled block/report for a specific user (from message menu or group list) ── */}
+      {actionUser && (
+        <UserActionsMenu
+          key={actionUser.id}
+          targetUserId={actionUser.id}
+          targetUsername={actionUser.username}
+          hideTrigger
+          controlledOpen
+          onControlledClose={() => setActionUser(null)}
+          onActionComplete={() => {
+            // If we just blocked the sole other person in a 1-on-1, leave the thread.
+            if (openConv && !getConversationDisplay(openConv).isGroup) closeConv()
+          }}
+        />
+      )}
+
+      {/* ── Group: pick a member to block/report (Apple 1.2) ── */}
+      {memberActionsOpen && openConv && (
+        <div
+          onClick={() => setMemberActionsOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'flex-end' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              width: '100%', background: 'var(--bg)',
+              borderTop: '1px solid var(--fg-15)', borderRadius: '16px 16px 0 0',
+              padding: '24px 20px calc(24px + env(safe-area-inset-bottom))',
+              display: 'flex', flexDirection: 'column', gap: 8, maxHeight: '85vh', overflowY: 'auto',
+            }}
+          >
+            <p style={{ margin: '0 0 4px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 15, fontWeight: 700, color: 'var(--fg)' }}>
+              Block or report a member
+            </p>
+            {openConv.members.map(m => (
               <button
-                onClick={() => { setReportingMessage({ id: msgContextMenu.id, senderId: msgContextMenu.senderId }); setMsgContextMenu(null) }}
+                key={m.id}
+                onClick={() => { setActionUser({ id: m.id, username: m.username }); setMemberActionsOpen(false) }}
                 style={{
-                  display: 'block', width: '100%', padding: '14px 20px',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  fontFamily: '"Space Grotesk", sans-serif', fontSize: 14,
-                  color: 'var(--fg)', fontWeight: 600, textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '12px 14px', borderRadius: 10, border: '1px solid var(--fg-15)',
+                  background: 'transparent', cursor: 'pointer', textAlign: 'left',
                 }}
               >
-                Report message
+                <Diamond diamondUrl={m.avatar_diamond_url} fallbackUrl={m.avatar_url} size={28} />
+                <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>
+                  @{m.username ?? 'user'}
+                </span>
               </button>
-            )}
+            ))}
+            <button
+              onClick={() => setMemberActionsOpen(false)}
+              style={{ padding: 13, borderRadius: 10, border: '1px solid var(--fg-15)', background: 'none', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, cursor: 'pointer', marginTop: 4 }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

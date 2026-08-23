@@ -32,6 +32,31 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback
+      // A failed lazy-chunk import (stale client after a redeploy) can't be
+      // recovered by re-rendering — the bytes are gone from the server. Detect
+      // it and make "reload" the primary action (a full reload fetches fresh
+      // index.html pointing at the current chunk hashes).
+      const msg = this.state.error?.message ?? ''
+      const isChunkError = /dynamically imported module|Loading chunk|Importing a module script failed|Failed to fetch/i.test(msg)
+      if (isChunkError) {
+        return (
+          <div style={{
+            minHeight: '100dvh', display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', padding: 24,
+            textAlign: 'center', fontFamily: '"Space Grotesk", sans-serif',
+            color: 'var(--fg)', background: 'var(--bg)',
+          }}>
+            <div style={{ fontFamily: '"Playfair Display", serif', fontSize: 32, fontWeight: 900, marginBottom: 8 }}>plaster</div>
+            <p style={{ margin: '8px 0', fontSize: 15, maxWidth: 320 }}>A new version is available.</p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ marginTop: 16, padding: '10px 20px', border: 'none', borderRadius: 4, background: 'var(--fg)', color: 'var(--bg)', fontFamily: 'inherit', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Reload
+            </button>
+          </div>
+        )
+      }
       return (
         <div style={{
           minHeight: '100dvh',

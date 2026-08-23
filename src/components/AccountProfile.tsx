@@ -9,6 +9,7 @@ import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowButton } from '@/components/FollowButton'
 import { NotifyBell } from '@/components/NotifyBell'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { FounderBadge } from '@/components/FounderBadge'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { createOrGetConversation } from '@/lib/messaging'
 
@@ -24,6 +25,7 @@ interface AccountData {
   banner_focal_y: number
   avatar_diamond_url: string | null
   music_embed_url: string | null
+  is_official: boolean | null
 }
 
 interface VenueEvent {
@@ -70,6 +72,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
   const [venue,               setVenue]               = useState<DbVenue | null>(null)
   const [events,              setEvents]              = useState<VenueEvent[]>([])
   const [attendedEvents,      setAttendedEvents]      = useState<AttendedEvent[]>([])
+  const [attendedTotal,       setAttendedTotal]       = useState(0)
   const [followerCount,       setFollowerCount]       = useState(0)
   const [followingCount,      setFollowingCount]      = useState(0)
   const [profileFollowsViewer, setProfileFollowsViewer] = useState(false)
@@ -84,7 +87,12 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     if (accountProfileIdProp) { setResolvedId(accountProfileIdProp); return }
     if (!venueIdProp) return
     supabase.from('profiles').select('id').eq('venue_id', venueIdProp).eq('account_type', 'venue').maybeSingle()
-      .then(({ data }) => { if (data?.id) setResolvedId(data.id) })
+      .then(({ data }) => {
+        if (data?.id) setResolvedId(data.id)
+        // No account resolved (venue has no account, or viewer is a guest and
+        // RLS hides profiles) → land on "Not found" instead of spinning forever.
+        else setLoading(false)
+      })
   }, [accountProfileIdProp, venueIdProp])
 
   // Step 2: load profile + type-specific data
@@ -92,7 +100,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
     if (!resolvedId) return
     setLoading(true)
     supabase.from('profiles')
-      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url, music_embed_url')
+      .select('id, username, bio, account_type, venue_id, banner_url, banner_focal_y, avatar_diamond_url, music_embed_url, is_official')
       .eq('id', resolvedId)
       .single()
       .then(async ({ data: prof }) => {
@@ -130,7 +138,8 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         } else if (isVenue) {
           // 2: venue data
           queries.push(supabase.from('venues').select('*').eq('id', p.venue_id!).single())
-          // 3: upcoming events
+          // 3: upcoming events — full calendar (busy rooms carry 40–50+ upcoming;
+          // a low cap silently hid shows and lied on the 'upcoming' stat)
           queries.push(
             supabase.from('events')
               .select('id, title, starts_at, poster_url, category')
@@ -138,7 +147,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
               .eq('venue_id', p.venue_id!)
               .gte('starts_at', new Date().toISOString())
               .order('starts_at', { ascending: true })
-              .limit(20)
+              .limit(200)
           )
         }
 
@@ -152,6 +161,10 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           if (user?.id && !isSelfProfile && allResults[3]) {
             setProfileFollowsViewer(((allResults[3] as any).count ?? 0) > 0)
           }
+          // True attended total (grid is capped at 24)
+          supabase.from('attendees').select('*', { count: 'exact', head: true })
+            .eq('user_id', resolvedId)
+            .then(({ count }) => setAttendedTotal(count ?? 0))
         } else if (isVenue) {
           setVenue((allResults[2] as any)?.data as DbVenue ?? null)
           setEvents(((allResults[3] as any)?.data as VenueEvent[] | null) ?? [])
@@ -254,7 +267,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           {([
             { label: 'followers', count: followerCount, tab: 'followers' as const },
             { label: 'following', count: followingCount, tab: 'following' as const },
-            { label: 'attended',  count: attendedList.length, tab: null },
+            { label: 'attended',  count: Math.max(attendedTotal, attendedList.length), tab: null },
           ] as const).map(({ label, count, tab }) => {
             const tappable = !!tab && canSeeFollowList
             return (
@@ -376,6 +389,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
         <h1 style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 20, fontWeight: 800, color: 'var(--fg)', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <span>{displayName}</span>
           <AccountTypeBadge accountType={account.account_type} size="md" />
+          {account.is_official && <FounderBadge size="md" />}
         </h1>
         {subtitle && (
           <p style={{ margin: '3px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-40)' }}>
@@ -505,10 +519,13 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
 
 function formatEventDate(iso: string): string {
   const d = new Date(iso)
-  const today = new Date()
-  const diffDays = Math.round((d.getTime() - today.getTime()) / 86400000)
+  const now = new Date()
+  // Calendar-day difference, not elapsed hours — Math.round(hours/24) labeled
+  // tonight's 8pm show "Tomorrow" when viewed in the morning.
+  const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate())
+  const diffDays = Math.round((startOfDay(d).getTime() - startOfDay(now).getTime()) / 86400000)
   const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })
-  if (diffDays <= 0) return `Tonight · ${time}`
+  if (diffDays <= 0) return `${d.getHours() < 17 ? 'Today' : 'Tonight'} · ${time}`
   if (diffDays === 1) return `Tomorrow · ${time}`
   return `${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`
 }

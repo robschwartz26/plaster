@@ -13,16 +13,18 @@ import { Contacts } from '@capacitor-community/contacts'
 export function normalizePhone(raw: string): string | null {
   const digits = raw.replace(/\D/g, '')
 
+  // Explicit country code wins — check FIRST. Otherwise a 10-digit foreign
+  // number (e.g. Denmark "+45 12 34 56 78") would be mis-tagged +1 and never
+  // match its correctly-stored hash.
+  if (raw.trim().startsWith('+') && digits.length >= 7 && digits.length <= 15) {
+    return `+${digits}`
+  }
   if (digits.length === 10) {
-    // Bare 10-digit US number — assume +1
+    // Bare 10-digit number, no country code — assume US (+1)
     return `+1${digits}`
   }
   if (digits.length === 11 && digits.startsWith('1')) {
     // 11-digit with leading country code 1
-    return `+${digits}`
-  }
-  if (raw.trim().startsWith('+') && digits.length >= 7 && digits.length <= 15) {
-    // Already E.164-looking (international)
     return `+${digits}`
   }
   return null
@@ -93,7 +95,7 @@ export async function ensureContactsPermission(): Promise<'granted' | 'denied' |
 export async function readDeviceContacts(): Promise<DeviceContact[]> {
   try {
     const { contacts: raw } = await Contacts.getContacts({
-      projection: { name: true, phones: true, emails: true },
+      projection: { name: true, phones: true, emails: true, organization: true },
     })
 
     const results: DeviceContact[] = []
@@ -110,6 +112,7 @@ export async function readDeviceContacts(): Promise<DeviceContact[]> {
 
       const name = c.name?.display
         || c.name?.given
+        || c.organization?.company
         || phones[0]
         || emails[0]
         || 'Unknown'

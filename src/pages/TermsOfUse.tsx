@@ -9,10 +9,13 @@
  * mechanism for users to acknowledge agreement before using.
  */
 
+import { useNavigate } from 'react-router-dom'
+
 const EFFECTIVE_DATE = 'July 2, 2026'
 const CONTACT_EMAIL = 'support@plasterthewall.com'
 
 export function TermsOfUse() {
+  const navigate = useNavigate()
   return (
     <div style={{
       minHeight: '100vh',
@@ -25,6 +28,14 @@ export function TermsOfUse() {
       fontSize: 14,
       lineHeight: 1.6,
     }}>
+      <button
+        onClick={() => navigate(-1)}
+        style={{
+          background: 'none', border: 'none', padding: '0 0 20px', cursor: 'pointer',
+          color: 'var(--fg-55)', fontFamily: '"Barlow Condensed", sans-serif',
+          fontWeight: 700, fontSize: 14, letterSpacing: '0.1em',
+        }}
+      >← BACK</button>
       <h1 style={{
         fontFamily: '"Playfair Display", serif',
         fontWeight: 900,

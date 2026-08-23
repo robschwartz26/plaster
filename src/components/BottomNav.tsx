@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
+import { useGuestGate } from '@/components/GuestGate'
 
 const NAV_ITEMS = [
   {
@@ -61,10 +62,35 @@ const NAV_ITEMS = [
   },
 ]
 
+// Guest mode (Apple 5.1.1(v)): guests see the full-width nav — LINE UP and
+// MSG stay visible (the shape of the product advertises itself) but tapping
+// them opens the sign-up gate with a pitch for that feature. YOU becomes a
+// purple SIGN UP affordance. Wall stays center. Signed-in users: unchanged.
+const GUEST_GATE_COPY: Record<string, string> = {
+  '/lineup': "Sign up to see what Portland's going to — your friends, your venues, your queue",
+  '/msg': 'Sign up to message friends and plan your nights out',
+}
+const GUEST_NAV_ITEMS = [
+  ...NAV_ITEMS.filter(i => i.path !== '/you'),
+  {
+    label: 'Sign Up',
+    path: '/auth',
+    center: false,
+    icon: (size: number) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <circle cx="9" cy="8" r="4" />
+        <path d="M2 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+        <path d="M19 8v6M16 11h6" />
+      </svg>
+    ),
+  },
+]
+
 export function BottomNav() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { requireAuth } = useGuestGate()
   const [unreadCount, setUnreadCount] = useState(0)
   const [pendingConnects, setPendingConnects] = useState(0)
 
@@ -95,9 +121,18 @@ export function BottomNav() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, () => { fetchCount() })
       .subscribe()
 
+    // Realtime delivery is already RLS-scoped to the user's conversations, but
+    // postgres_changes can't filter on membership — so skip the user's OWN sends
+    // (can't raise their unread count) and debounce, collapsing a burst of
+    // incoming messages into a single count RPC instead of one per message.
+    let msgDebounce: ReturnType<typeof setTimeout> | null = null
     const msgChannel = supabase
       .channel(`unread-messages-${user.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => { fetchCount() })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+        if ((payload.new as { sender_id?: string })?.sender_id === user.id) return
+        if (msgDebounce) clearTimeout(msgDebounce)
+        msgDebounce = setTimeout(() => fetchCount(), 800)
+      })
       .subscribe()
 
     const memberChannel = supabase
@@ -112,6 +147,7 @@ export function BottomNav() {
 
     return () => {
       cancelled = true
+      if (msgDebounce) clearTimeout(msgDebounce)
       supabase.removeChannel(notifChannel)
       supabase.removeChannel(msgChannel)
       supabase.removeChannel(memberChannel)
@@ -129,7 +165,8 @@ export function BottomNav() {
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      {NAV_ITEMS.map(({ label, path, center, icon }) => {
+      {(user ? NAV_ITEMS : GUEST_NAV_ITEMS).map(({ label, path, center, icon }) => {
+        const isSignUp = path === '/auth'
         const active = path === '/'
           ? location.pathname === '/'
           : location.pathname.startsWith(path)
@@ -142,15 +179,20 @@ export function BottomNav() {
           <button
             key={path}
             data-tour={`nav-${path}`}
-            onClick={() => navigate(path)}
+            onClick={() => {
+              if (isSignUp) { navigate('/auth', { state: { tab: 'signup' } }); return }
+              // Guest taps on the social tabs open the gate instead of navigating
+              if (!user && GUEST_GATE_COPY[path]) { requireAuth(GUEST_GATE_COPY[path]); return }
+              navigate(path)
+            }}
             className="flex flex-col items-center gap-1"
             style={{
-              color: 'var(--fg)',
+              color: isSignUp ? '#A855F7' : 'var(--fg)',
               minWidth: center ? 56 : 44,
             }}
           >
             <div style={{ position: 'relative', display: 'inline-flex' }}>
-              <div style={{ opacity: active ? 1 : 0.3, display: 'inline-flex' }}>
+              <div style={{ opacity: isSignUp || active ? 1 : 0.3, display: 'inline-flex' }}>
                 {icon(iconSize)}
               </div>
               {badgeCount > 0 && (
@@ -179,7 +221,7 @@ export function BottomNav() {
             </div>
             <span
               className="font-body font-medium uppercase"
-              style={{ fontSize: 9, letterSpacing: '0.08em', opacity: active ? 1 : 0.3 }}
+              style={{ fontSize: 9, letterSpacing: '0.08em', opacity: isSignUp || active ? 1 : 0.3 }}
             >
               {label}
             </span>

@@ -22,6 +22,8 @@ const RAIL_CONFIG: Record<string, Disc[]> = {
   'Spoken':     ['google'],
   'Trivia':     ['google'],
   'Karaoke':    ['google'],
+  'Festivals':  ['google'],  // festival name → google lands on the fest site/lineup
+  'Markets':    ['google'],  // market name → hours/vendors/site
   'Other':      ['google'],
 }
 export function hasRail(category: string | null | undefined): boolean {
@@ -80,23 +82,39 @@ const ICON: Record<Disc, React.ReactNode> = {
 }
 
 // ring: optional 1.5px ink outline for near-beige posters (default off — dialed later).
-export function ArtistRail({ event, summon, ring = false }: { event: WallEvent; summon: number; ring?: boolean }) {
+// tourAnchor: only the active 1-col card sets it, so the tour's discovery-bar
+// step targets the ON-SCREEN rail (not the first of many mounted instances).
+export function ArtistRail({ event, summon, ring = false, tourAnchor = false }: { event: WallEvent; summon: number; ring?: boolean; tourAnchor?: boolean }) {
   const [visible, setVisible] = useState(true)
+  const [pinned, setPinned] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
+    if (pinned) return
     setVisible(true)
     if (timer.current) clearTimeout(timer.current)
     timer.current = setTimeout(() => setVisible(false), 6000)
     return () => { if (timer.current) clearTimeout(timer.current) }
-  }, [summon])
+  }, [summon, pinned])
+
+  // Tour: keep the rail up (cancel the 6s auto-hide) while the discovery step
+  // is on screen, then resume normal behavior when it moves on.
+  useEffect(() => {
+    const onCmd = (e: Event) => {
+      const cmd = (e as CustomEvent).detail?.cmd
+      if (cmd === 'rail-pin') { if (timer.current) clearTimeout(timer.current); setVisible(true); setPinned(true) }
+      else if (cmd === 'rail-unpin') setPinned(false)
+    }
+    window.addEventListener('plaster-tour-cmd', onCmd)
+    return () => window.removeEventListener('plaster-tour-cmd', onCmd)
+  }, [])
 
   const discs = RAIL_CONFIG[event.category] ?? []
   const q = cleanArtist(event)
   if (discs.length === 0 || !q) return null
 
   return (
-    <div data-artist-rail style={{
+    <div data-artist-rail {...(tourAnchor ? { 'data-tour': 'discovery' } : {})} style={{
       position: 'absolute', right: 8, bottom: 'calc(env(safe-area-inset-bottom) + 44px)',
       display: 'flex', flexDirection: 'column', gap: 10, zIndex: 8,
       pointerEvents: 'none', opacity: visible ? 1 : 0, transition: 'opacity 1.2s ease',

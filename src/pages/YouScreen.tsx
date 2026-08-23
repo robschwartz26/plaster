@@ -12,8 +12,11 @@ import { AvatarUploader, type AvatarUploaderRef } from '@/components/AvatarUploa
 import { AvatarFullscreen } from '@/components/AvatarFullscreen'
 import { FollowListPanel } from '@/components/FollowListPanel'
 import { SocialDiamondRow } from '@/components/SocialDiamondRow'
+import { FindFriends } from '@/components/FindFriends'
 import { createOrGetConversation } from '@/lib/messaging'
 import { AccountTypeBadge } from '@/components/AccountTypeBadge'
+import { FounderBadge } from '@/components/FounderBadge'
+import { moderateText, moderationMessage } from '@/lib/contentFilter'
 import { NeighborhoodPicker } from '@/components/NeighborhoodPicker'
 import { MusicEmbed } from '@/components/MusicEmbed'
 import { parseMusicEmbed, isValidMusicUrl, isBandcampPageUrl } from '@/lib/musicEmbed'
@@ -64,6 +67,7 @@ type DisplayProfile = {
   banner_url: string | null
   banner_focal_y: number
   home_neighborhood: string | null
+  is_official: boolean | null
 }
 
 // ── Main component ─────────────────────────────────────────────────────────
@@ -107,10 +111,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
         banner_url: (selfProfile as unknown as { banner_url?: string | null }).banner_url ?? null,
         banner_focal_y: (selfProfile as unknown as { banner_focal_y?: number }).banner_focal_y ?? 0.5,
         home_neighborhood: selfProfile.home_neighborhood ?? null,
+        is_official: (selfProfile as unknown as { is_official?: boolean }).is_official ?? null,
       })
       return
     }
-    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood')
+    supabase.from('profiles').select('username, bio, avatar_url, avatar_diamond_url, is_public, account_type, banner_url, banner_focal_y, home_neighborhood, is_official')
       .eq('id', targetUserId).single()
       .then(({ data }) => { if (data) setDisplayProfile(data as DisplayProfile) })
   }, [targetUserId, isSelf, selfProfile, user?.email])
@@ -118,6 +123,8 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
   // Profile edit state (self only)
   const [editing,  setEditing]  = useState(false)
   const [bio,      setBio]      = useState(selfProfile?.bio ?? '')
+  const [bioError, setBioError] = useState<string | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [isPublic, setIsPublic] = useState(selfProfile?.is_public ?? true)
   const [busy,     setBusy]     = useState(false)
   const [pendingBannerBlob,   setPendingBannerBlob]   = useState<Blob | null>(null)
@@ -166,6 +173,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   // Data state
   const [attended, setAttended] = useState<AttendedEvent[]>([])
+  const [attendedTotal, setAttendedTotal] = useState(0)
   const [counts,   setCounts]   = useState<FollowCounts>({ followers: 0, following: 0 })
 
   // Avatar state (self only)
@@ -191,7 +199,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
     if (!targetUserId) return
     fetchAttended()
     fetchCounts()
-  }, [targetUserId])
+  }, [targetUserId, displayProfile?.is_official])
 
   useEffect(() => {
     if (!user?.id || !isSelf) { setPendingAccountType(null); return }
@@ -228,10 +236,33 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   async function fetchAttended() {
     if (!targetUserId) return
-    const { data } = await supabase.from('attendees')
-      .select('event_id, events(id, title, poster_url, starts_at, category)')
-      .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24)
-    setAttended((data as AttendedEvent[] | null) ?? [])
+    // Official/founder accounts (PlasterBob) are "the watcher on the wall" — the
+    // persona has been to everything. Rather than mass-inserting real RSVP rows
+    // (which would flood every follower's feed and inflate event counts), their
+    // attended grid is a live view of every published event. No DB writes.
+    if (displayProfile?.is_official) {
+      const [{ data }, { count }] = await Promise.all([
+        supabase.from('events')
+          .select('id, title, poster_url, starts_at, category')
+          .eq('status', 'published').order('starts_at', { ascending: false }).limit(24),
+        supabase.from('events').select('*', { count: 'exact', head: true }).eq('status', 'published'),
+      ])
+      const rows = (data as AttendedEvent['events'][] | null) ?? []
+      setAttended(rows.map(ev => ({ event_id: ev.id, events: ev })))
+      setAttendedTotal(count ?? rows.length)
+      return
+    }
+    // Grid shows up to 24, but the "attended" stat must be the true total —
+    // count separately rather than using the capped list length.
+    const [{ data }, { count }] = await Promise.all([
+      supabase.from('attendees')
+        .select('event_id, events(id, title, poster_url, starts_at, category)')
+        .eq('user_id', targetUserId).order('created_at', { ascending: false }).limit(24),
+      supabase.from('attendees').select('*', { count: 'exact', head: true }).eq('user_id', targetUserId),
+    ])
+    const rows = (data as AttendedEvent[] | null) ?? []
+    setAttended(rows)
+    setAttendedTotal(count ?? rows.length)
   }
 
   async function fetchCounts() {
@@ -247,6 +278,10 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
 
   async function saveProfile() {
     if (!user) return
+    // Objectionable-content gate (Apple 1.2)
+    const bioVerdict = moderateText(bio)
+    if (!bioVerdict.ok) { setBioError(moderationMessage(bioVerdict, 'bio')); return }
+    setBioError(null)
     setBusy(true)
 
     // Guard: never persist an invalid music link (empty clears it). A Bandcamp page
@@ -420,11 +455,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
-                {displayProfile.home_neighborhood && (
+                {displayProfile.is_official ? (
+                  <FounderBadge size="md" />
+                ) : displayProfile.home_neighborhood ? (
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
                     {displayProfile.home_neighborhood}
                   </span>
-                )}
+                ) : null}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -435,7 +472,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                 {[
                   { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
                   { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
-                  { label: 'attended',  count: attended.length,  tab: null },
+                  { label: 'attended',  count: attendedTotal,  tab: null },
                 ].map(({ label, count, tab }) => (
                   <div
                     key={label}
@@ -480,11 +517,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
               <p style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.2, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                 <span>@{displayProfile.username}</span>
                 <AccountTypeBadge accountType={displayProfile.account_type} size="md" />
-                {displayProfile.home_neighborhood && (
+                {displayProfile.is_official ? (
+                  <FounderBadge size="md" />
+                ) : displayProfile.home_neighborhood ? (
                   <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.3)', padding: '2px 9px', borderRadius: 20 }}>
                     {displayProfile.home_neighborhood}
                   </span>
-                )}
+                ) : null}
               </p>
               {displayProfile.bio && !editing && (
                 <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', lineHeight: 1.4 }}>
@@ -495,7 +534,7 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
                 {[
                   { label: 'followers', count: counts.followers, tab: isSelf ? 'followers' as const : null },
                   { label: 'following', count: counts.following, tab: isSelf ? 'following' as const : null },
-                  { label: 'attended',  count: attended.length,  tab: null },
+                  { label: 'attended',  count: attendedTotal,  tab: null },
                 ].map(({ label, count, tab }) => (
                   <div
                     key={label}
@@ -566,9 +605,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           )}
         </div>
 
-        {/* Social diamond row — who this user follows + pending requests (self only) */}
+        {/* Social diamond row — who this user follows + pending requests. On
+            self view the row ends with a dashed + diamond that opens the
+            Find Friends / invite flow (its own 5.1.2 consent screen inside). */}
         <div data-tour="following-row">
-          <SocialDiamondRow targetUserId={targetUserId} />
+          <SocialDiamondRow targetUserId={targetUserId} onInvite={isSelf ? () => setInviteOpen(true) : undefined} />
         </div>
 
         {/* Editing panel (self only) */}
@@ -576,8 +617,11 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           <AnimatePresence>
             {editing && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ overflow: 'hidden', marginBottom: 20 }}>
-                <textarea placeholder="Bio (optional)" value={bio} onChange={e => setBio(e.target.value)} rows={3}
-                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: '1.5px solid var(--fg-18)', background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: 10 }} />
+                <textarea placeholder="Bio (optional)" value={bio} onChange={e => { setBio(e.target.value); if (bioError) setBioError(null) }} rows={3}
+                  style={{ width: '100%', padding: '12px 14px', borderRadius: 12, border: `1.5px solid ${bioError ? 'var(--sold-out)' : 'var(--fg-18)'}`, background: 'var(--fg-08)', color: 'var(--fg)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: bioError ? 4 : 10 }} />
+                {bioError && (
+                  <p style={{ margin: '0 0 10px', color: 'var(--sold-out)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, lineHeight: 1.4 }}>{bioError}</p>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                   <span style={{ fontSize: 14, color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif' }}>Public profile</span>
                   <div onClick={() => setIsPublic(!isPublic)} style={{ width: 44, height: 26, borderRadius: 13, background: isPublic ? 'var(--fg)' : 'var(--fg-25)', cursor: 'pointer', position: 'relative', transition: 'background 200ms ease' }}>
@@ -740,6 +784,13 @@ export function YouScreen({ userId: propUserId }: { userId?: string } = {}) {
           open={followListOpen}
           onClose={() => setFollowListOpen(false)}
         />
+      )}
+
+      {/* Find friends & invite — opened from the + diamond in the social row */}
+      {isSelf && inviteOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 320, background: 'var(--bg)', paddingTop: 'env(safe-area-inset-top)' }}>
+          <FindFriends onDone={() => setInviteOpen(false)} />
+        </div>
       )}
 
       {/* Own avatar fullscreen */}
