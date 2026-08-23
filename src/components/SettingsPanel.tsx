@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void
 }
 
-const APP_VERSION = '1.0.2'
+const APP_VERSION = '1.0.3'
 
 export function SettingsPanel({ open, onClose }: Props) {
   const navigate = useNavigate()
