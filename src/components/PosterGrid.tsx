@@ -615,7 +615,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }}
         style={{
           position: 'absolute',
-          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)',
+          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) - 28px)',
           right: 16,
           width: 44,
           height: 44,
