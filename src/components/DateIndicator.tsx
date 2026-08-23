@@ -31,12 +31,17 @@ function formatDateBlocks(dateStr: string, today: string) {
   else if (diffDays === 1) label = 'Tomorrow'
   else label = date.toLocaleDateString('en-US', { weekday: 'long' })
 
+  // On Tonight/Tomorrow the label differs from the weekday, so the abbreviated
+  // day block adds info. On any other day the label already IS the weekday, so
+  // the "THU" block just repeats "THURSDAY" — drop it then.
+  const labelIsWeekday = diffDays !== 0 && diffDays !== 1
+
   const shortDay = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
   const dateLabel = date
     .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     .toUpperCase()
 
-  return { label, shortDay, dateLabel, isFuture: diffDays > 0 }
+  return { label, shortDay, dateLabel, isFuture: diffDays > 0, labelIsWeekday }
 }
 
 function formatTime(iso: string) {
@@ -162,15 +167,19 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                     {d.label}
                   </span>
 
-                  <span
-                    style={{
-                      ...BLOCK_BASE,
-                      border: `1px solid ${d.isFuture ? 'var(--fg-25)' : 'var(--fg-40)'}`,
-                      color:  d.isFuture ? 'var(--fg-55)' : 'var(--fg-80)',
-                    }}
-                  >
-                    {d.shortDay}
-                  </span>
+                  {/* Skip the abbreviated day block when the label is already the
+                      weekday (future days) — otherwise "THURSDAY · THU" repeats. */}
+                  {!d.labelIsWeekday && (
+                    <span
+                      style={{
+                        ...BLOCK_BASE,
+                        border: `1px solid ${d.isFuture ? 'var(--fg-25)' : 'var(--fg-40)'}`,
+                        color:  d.isFuture ? 'var(--fg-55)' : 'var(--fg-80)',
+                      }}
+                    >
+                      {d.shortDay}
+                    </span>
+                  )}
 
                   <span
                     style={{
