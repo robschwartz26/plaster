@@ -55,6 +55,9 @@ function clamp(v: number, min: number, max: number) {
 
 export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd, maxCols = 5 }: Props) {
   const [cols, setCols] = useState(maxCols)
+  // Back-to-top affordance: appears in multi-col once scrolled a few screens down.
+  const [showBackToTop, setShowBackToTop] = useState(false)
+  const showBackToTopRef = useRef(false)
   // Ref so the []-dep touch/wheel handlers always clamp to the current pref
   const maxColsRef = useRef(maxCols)
   useEffect(() => {
@@ -326,6 +329,14 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
 
     computeActiveDay()
 
+    // Back-to-top: show in multi-col after scrolling ~2.5 screens down. Guarded
+    // by a ref so we only setState on the transition, not every scroll tick.
+    const wantBackToTop = colsRef.current !== 1 && container.scrollTop > container.clientHeight * 2.5
+    if (wantBackToTop !== showBackToTopRef.current) {
+      showBackToTopRef.current = wantBackToTop
+      setShowBackToTop(wantBackToTop)
+    }
+
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
     // Clears on every scroll event and re-sets, so it only fires once motion stops.
     if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
@@ -407,6 +418,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
       setRestingPanel(0) // zoom-out resets panel persistence to poster
+    } else if (showBackToTopRef.current) {
+      // Entering 1-col (vertical poster nav) — back-to-top doesn't apply there.
+      showBackToTopRef.current = false
+      setShowBackToTop(false)
     }
   }, [cols])
 
@@ -547,6 +562,39 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           </div>
         )}
       </div>
+
+      {/* Back to top — floats above the wall once scrolled a few screens down */}
+      <button
+        aria-label="Back to top"
+        onClick={() => {
+          containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+        style={{
+          position: 'absolute',
+          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)',
+          right: 16,
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          border: '1px solid var(--fg-15)',
+          background: 'var(--bg)',
+          color: 'var(--fg)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          cursor: 'pointer',
+          zIndex: 20,
+          opacity: showBackToTop ? 1 : 0,
+          transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
+          pointerEvents: showBackToTop ? 'auto' : 'none',
+          transition: 'opacity 200ms ease, transform 200ms ease',
+        }}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+      </button>
     </div>
   )
 }

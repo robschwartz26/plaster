@@ -758,7 +758,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               </button>
             )}
             {/* Artist media rail — fallback when no claimed track; music/comedy only */}
-            {panelIdx === 0 && !showTrack && <ArtistRail event={event} summon={railSummon} />}
+            {panelIdx === 0 && !showTrack && <ArtistRail event={event} summon={railSummon} tourAnchor={isActive} />}
           </div>
 
           {/* Panel 2: Info */}
