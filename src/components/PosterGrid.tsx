@@ -650,10 +650,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }}
       >
         <svg width="34" height="34" viewBox="0 0 24 24">
-          {/* Triangle frame */}
-          <path d="M12 2.5 L22 20.5 L2 20.5 Z" fill="var(--bg)" stroke="var(--fg-15)" strokeWidth="1.2" strokeLinejoin="round" />
-          {/* Up arrow inside */}
-          <path d="M12 18 V11 M8.5 14.5 L12 11 L15.5 14.5" fill="none" stroke="var(--fg)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Upward triangle */}
+          <path d="M12 4 L21 19.5 L3 19.5 Z" fill="var(--fg)" stroke="var(--fg)" strokeWidth="1.4" strokeLinejoin="round" />
         </svg>
       </button>
     </div>
