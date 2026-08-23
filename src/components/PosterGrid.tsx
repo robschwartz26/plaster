@@ -58,6 +58,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   // Back-to-top affordance: appears in multi-col once scrolled a few screens down.
   const [showBackToTop, setShowBackToTop] = useState(false)
   const showBackToTopRef = useRef(false)
+  // Tour freezes vertical scroll during anchored single-poster steps.
+  const [scrollLocked, setScrollLocked] = useState(false)
   // Ref so the []-dep touch/wheel handlers always clamp to the current pref
   const maxColsRef = useRef(maxCols)
   useEffect(() => {
@@ -403,10 +405,15 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   }, [openEventId, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Interactive tour: let the tour force the wall back to the multi-column grid so its
-  // step state can't drift from the app's view (e.g. after a pinch-to-1-col).
+  // step state can't drift from the app's view (e.g. after a pinch-to-1-col), and
+  // freeze vertical scroll during anchored single-poster steps so the user can't
+  // scroll off the poster the step is highlighting.
   useEffect(() => {
     const onCmd = (e: Event) => {
-      if ((e as CustomEvent).detail?.cmd === 'reset-grid') setCols(maxColsRef.current)
+      const cmd = (e as CustomEvent).detail?.cmd
+      if (cmd === 'reset-grid') setCols(maxColsRef.current)
+      else if (cmd === 'lock-scroll') setScrollLocked(true)
+      else if (cmd === 'unlock-scroll') setScrollLocked(false)
     }
     window.addEventListener('plaster-tour-cmd', onCmd)
     return () => window.removeEventListener('plaster-tour-cmd', onCmd)
@@ -491,8 +498,11 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       {/* Scroll container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto scroll-momentum"
+        className="flex-1 scroll-momentum"
         style={{
+          // Tour lock: freeze vertical scroll (horizontal panel swipes, handled
+          // by PosterCard's own touch handlers, keep working).
+          overflowY: scrollLocked ? 'hidden' : 'auto',
           overscrollBehavior: 'none',
           // 1-col: snap poster-by-poster. 2-5 col: free scroll.
           scrollSnapType: cols === 1 ? 'y mandatory' : 'none',
