@@ -279,39 +279,34 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
-    const { scrollTop, clientHeight, clientWidth } = container
     const cols = colsRef.current
+    // 1-col active day + poster are owned by the IntersectionObserver (center-line
+    // tracking). Computing from scrollTop here lags a half-screen behind the
+    // observer and briefly reverts to the previous poster mid-scroll — the flash.
+    if (cols === 1) return
 
-    if (cols === 1) {
-      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      const eventIdx = walledIdxToEventIdxRef.current[wi] ?? 0
-      const ev = allEventsRef.current[eventIdx]
-      if (!ev) return
-      const day = eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]
-      if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
-    } else {
-      const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
-      const rowHeight = cellWidth * 1.5 + GAP
-      const totalRows = Math.ceil(walledItems.length / cols)
-      const dominantRow = clamp(
-        Math.floor((scrollTop + rowHeight / 2) / rowHeight),
-        0,
-        totalRows - 1,
-      )
+    const { scrollTop, clientWidth } = container
+    const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
+    const rowHeight = cellWidth * 1.5 + GAP
+    const totalRows = Math.ceil(walledItems.length / cols)
+    const dominantRow = clamp(
+      Math.floor((scrollTop + rowHeight / 2) / rowHeight),
+      0,
+      totalRows - 1,
+    )
 
-      const rowStart = dominantRow * cols
-      const rowEnd = Math.min(rowStart + cols, walledItems.length)
-      const rowItems = walledItems.slice(rowStart, rowEnd)
+    const rowStart = dominantRow * cols
+    const rowEnd = Math.min(rowStart + cols, walledItems.length)
+    const rowItems = walledItems.slice(rowStart, rowEnd)
 
-      const eventDays = rowItems
-        .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
-        .map(item => eventDayMapRef.current.get(item.event.id))
-        .filter((d): d is string => !!d)
+    const eventDays = rowItems
+      .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
+      .map(item => eventDayMapRef.current.get(item.event.id))
+      .filter((d): d is string => !!d)
 
-      if (eventDays.length === 0) return
-      const latestDay = [...eventDays].sort().at(-1)!
-      if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
-    }
+    if (eventDays.length === 0) return
+    const latestDay = [...eventDays].sort().at(-1)!
+    if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
@@ -321,17 +316,8 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
-    if (colsRef.current === 1) {
-      const { scrollTop, clientHeight } = container
-      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      setActiveEventIdx(walledIdxToEventIdxRef.current[wi] ?? 0)
-      const topItem = walledItems[wi]
-      if (topItem?.type === 'date-poster') {
-        setAtDatePoster({ month: parseInt(topItem.date.split('-')[1], 10) })
-      } else {
-        setAtDatePoster(null)
-      }
-    }
+    // 1-col active poster + date-poster state are set by the IntersectionObserver,
+    // not here — the scroll-position math lags the observer and causes a flash.
 
     computeActiveDay()
 
