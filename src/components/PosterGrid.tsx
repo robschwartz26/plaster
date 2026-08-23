@@ -422,8 +422,21 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
 
     container.querySelectorAll('[data-poster-id],[data-date-id]').forEach(el => io.observe(el))
     return () => io.disconnect()
-    // Re-observe when the mode flips or the item set grows (pagination appends).
-  }, [cols, walledItems.length]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Re-observe whenever the poster set changes — filter swap, refetch, or
+    // pagination append. Depending on the array (not just its length) catches
+    // same-length filter swaps that would otherwise leave the observer watching
+    // stale/unmounted nodes and strand the active poster.
+  }, [cols, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net: if the filtered set shrinks below the current index (e.g. a
+  // filter applied while in 1-col), clamp so the date bar never falls back to
+  // stale date-mode because allEvents[activeEventIdx] went undefined. The
+  // observer then re-fires on the reset scroll and lands on the real poster.
+  useEffect(() => {
+    if (allEvents.length > 0 && activeEventIdx >= allEvents.length) {
+      setActiveEventIdx(allEvents.length - 1)
+    }
+  }, [allEvents.length, activeEventIdx])
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
