@@ -47,3 +47,6 @@ scripts/plaster-dump.md
 .clipper-token
 .capgo-key
 .webhook-secret
+android/app/google-services.json
+.fcm-sa.json
+*firebase-adminsdk*.json
