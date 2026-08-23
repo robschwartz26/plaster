@@ -337,7 +337,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       backToTopStillnessRef.current = setTimeout(() => {
         showBackToTopRef.current = true
         setShowBackToTop(true)
-      }, 3000)
+      }, 5000)
     }
 
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
@@ -643,15 +643,15 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.4))',
           cursor: 'pointer',
           zIndex: 20,
-          opacity: showBackToTop ? 0.8 : 0,
+          opacity: showBackToTop ? 0.45 : 0,
           transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
           pointerEvents: showBackToTop ? 'auto' : 'none',
           transition: 'opacity 200ms ease, transform 200ms ease',
         }}
       >
         <svg width="34" height="34" viewBox="0 0 24 24">
-          {/* Upward triangle */}
-          <path d="M12 4 L21 19.5 L3 19.5 Z" fill="var(--fg)" stroke="var(--fg)" strokeWidth="1.4" strokeLinejoin="round" />
+          {/* Upward triangle — always the light color (#f0ece3) in both themes */}
+          <path d="M12 4 L21 19.5 L3 19.5 Z" fill="#f0ece3" stroke="#f0ece3" strokeWidth="1.4" strokeLinejoin="round" />
         </svg>
       </button>
     </div>
