@@ -644,9 +644,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           cursor: 'pointer',
           zIndex: 20,
           opacity: showBackToTop ? 0.45 : 0,
-          transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
           pointerEvents: showBackToTop ? 'auto' : 'none',
-          transition: 'opacity 200ms ease, transform 200ms ease',
+          // Pure fade, no vertical motion. Slow, gentle fade-in so it's barely
+          // perceptible; quicker fade-out so it clears promptly on scroll.
+          transition: showBackToTop ? 'opacity 1100ms ease-in' : 'opacity 250ms ease',
         }}
       >
         <svg width="34" height="34" viewBox="0 0 24 24">
