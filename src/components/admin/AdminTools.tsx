@@ -7,6 +7,7 @@ import { AdminReports } from '@/components/admin/AdminReports'
 import { AdminVARequests } from '@/components/admin/AdminVARequests'
 import { AdminVenueAccounts } from '@/components/admin/AdminVenueAccounts'
 import { DuplicateVenueMerger } from '@/components/admin/DuplicateVenueMerger'
+import { VenueRename } from '@/components/admin/VenueRename'
 import { DuplicateEventMerger } from '@/components/admin/DuplicateEventMerger'
 import { UploadHistory } from '@/components/UploadHistory'
 import { SplashManager } from '@/components/admin/SplashManager'
@@ -102,6 +103,10 @@ export function AdminTools() {
         badge={pendingVACount > 0 ? `${pendingVACount} pending` : undefined}
       >
         <AdminVARequests onCountChange={setPendingVACount} />
+      </Section>
+
+      <Section title="Rename a venue" collapsible defaultCollapsed>
+        <VenueRename venues={venues} onRenamed={fetchVenues} />
       </Section>
 
       <Section title="Venue Accounts" collapsible defaultCollapsed>
