@@ -53,3 +53,4 @@ android/app/google-services.json
 android/app/upload-keystore.jks
 android/keystore.properties
 .android-keystore-pw
+play-store-assets/
