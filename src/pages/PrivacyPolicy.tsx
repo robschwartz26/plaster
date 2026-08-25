@@ -198,6 +198,15 @@ export function PrivacyPolicy() {
           <strong>Anthropic</strong> — used on our servers to help process public
           event posters. No personal user data is sent for this.
         </li>
+        <li>
+          <strong>Capgo</strong> — delivers over-the-air updates to the Plaster
+          app so we can ship fixes and improvements without a full app-store
+          release. When the app checks for an update it sends only technical
+          information needed to serve the right version — the app version, your
+          device's operating-system version and platform, and a random
+          identifier that is not linked to your Plaster account. No personal
+          information or contact data is sent.
+        </li>
       </ul>
 
       <h3 style={h3}>Other Plaster users</h3>
