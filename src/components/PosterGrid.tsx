@@ -348,7 +348,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       backToTopStillnessRef.current = setTimeout(() => {
         showBackToTopRef.current = true
         setShowBackToTop(true)
-      }, 5000)
+      }, 3000)
     }
 
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
