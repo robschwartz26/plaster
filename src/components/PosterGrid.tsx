@@ -277,15 +277,50 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     eventIdToIdxRef.current = m
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
 
-  // ── Active day ────────────────────────────────────────────────────
-  // The active day is now driven entirely by IntersectionObservers in BOTH
-  // modes (1-col: center-line poster; multi-col: top-of-viewport row) — see the
-  // two observer effects below. That means it no longer depends on scroll events
-  // firing, which is what used to freeze the date bar: iOS WebKit throttles/drops
-  // scroll events during momentum, so the scroll-position math here would stop
-  // running and the bar stuck on a stale day. Kept as a no-op so the existing
-  // scroll/scrollend call sites stay harmless.
-  const computeActiveDay = useCallback(() => {}, [])
+  // ── Active state from scroll position (day + 1-col poster + zoom anchor) ──
+  // The single source of truth for everything derived from scroll position. It
+  // reads container.scrollTop directly, so it's correct whenever it runs. It is
+  // driven by a requestAnimationFrame loop (see below) rather than scroll events
+  // because iOS WebKit throttles/drops scroll events — and IntersectionObserver
+  // callbacks — during momentum, but never rAF. Empty deps; reads only refs.
+  const computeActiveDay = useCallback(() => {
+    const container = containerRef.current
+    const walledItems = walledItemsRef.current
+    if (!container || walledItems.length === 0) return
+    const cols = colsRef.current
+    const { scrollTop, clientHeight, clientWidth } = container
+
+    if (cols === 1) {
+      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
+      anchorWalledIdxRef.current = wi
+      const item = walledItems[wi]
+      if (item?.type === 'date-poster') {
+        setAtDatePoster({ month: parseInt(item.date.split('-')[1], 10) })
+        if (item.date !== activeDayRef.current) { setActiveDay(item.date); onDayChange(item.date) }
+      } else {
+        setAtDatePoster(null)
+        const eidx = walledIdxToEventIdxRef.current[wi] ?? 0
+        setActiveEventIdx(eidx)
+        const ev = allEventsRef.current[eidx]
+        const day = ev ? (eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]) : null
+        if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+      }
+      return
+    }
+
+    // Multi-col: the day of the row at the top of the viewport.
+    const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
+    const rowHeight = cellWidth * 1.5 + GAP
+    const totalRows = Math.ceil(walledItems.length / cols)
+    const topRow = clamp(Math.floor(scrollTop / rowHeight), 0, totalRows - 1)
+    anchorWalledIdxRef.current = clamp(topRow * cols, 0, walledItems.length - 1)
+    const rowItems = walledItems.slice(topRow * cols, topRow * cols + cols)
+    const day = rowItems
+      .filter((it): it is Extract<WallItem, { type: 'poster' }> => it.type === 'poster')
+      .map(it => eventDayMapRef.current.get(it.event.id))
+      .find((d): d is string => !!d)
+    if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
   // Empty deps — stable forever. Reads layout data from refs.
@@ -294,26 +329,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
-    // 1-col active poster + date-poster state are set by the IntersectionObserver,
-    // not here — the scroll-position math lags the observer and causes a flash.
-
+    // Active day, 1-col poster, and the zoom anchor are all computed in
+    // computeActiveDay (driven by the rAF loop below, which is reliable during
+    // iOS momentum). This scroll-event call is just a bonus fast-path.
     computeActiveDay()
-
-    // Remember the walled item at the top of the viewport so a cols change (zoom)
-    // can re-anchor to the same content. Without this, the raw pixel scrollTop
-    // carries over — and coming out of 1-col (each poster a full screen tall) that
-    // offset drops you far down the multi-col wall.
-    {
-      const c = colsRef.current
-      const { scrollTop: sT, clientHeight: cH, clientWidth: cW } = container
-      if (c === 1) {
-        anchorWalledIdxRef.current = clamp(Math.floor(sT / cH), 0, walledItems.length - 1)
-      } else {
-        const cellWidth = (cW - GAP * (c - 1)) / c
-        const rowHeight = cellWidth * 1.5 + GAP
-        anchorWalledIdxRef.current = clamp(Math.floor(sT / rowHeight) * c, 0, walledItems.length - 1)
-      }
-    }
 
     // Back-to-top: only offer it in multi-col once scrolled ~2.5 screens down.
     // While scrolling it stays hidden; it fades in after 3s of stillness and
@@ -373,92 +392,42 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── 1-col active-poster tracking via IntersectionObserver ─────────
-  // The scroll handler above drives responsiveness during active scrolling,
-  // but iOS WebKit throttles/drops `scroll` events under `scroll-snap-type:
-  // y mandatory`, which used to leave the date indicator frozen on the poster
-  // it last saw. This observer doesn't depend on scroll events at all: a
-  // zero-height band at the vertical center reports exactly the one poster
-  // occupying the viewport whenever it settles — native, no polling, no strain.
+  // ── rAF-driven scroll tracking (the reliable-on-iOS mechanism) ────
+  // iOS WebKit throttles/drops BOTH scroll events and IntersectionObserver
+  // callbacks during momentum scrolling — that is what froze the date bar and
+  // fed a stale scroll position into the zoom re-anchor. requestAnimationFrame
+  // is NOT throttled during momentum, so we poll scrollTop each frame while
+  // scrolling and recompute everything (computeActiveDay). The loop starts on
+  // any interaction and stops itself once scrolling settles, so it's idle-cheap.
   useEffect(() => {
     const container = containerRef.current
-    if (!container || cols !== 1) return
+    if (!container) return
+    let raf = 0, lastTop = -1, still = 0, running = false
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        const centered = entries.find(e => e.isIntersecting)
-        if (!centered) return
-        const el = centered.target as HTMLElement
-
-        const dateId = el.getAttribute('data-date-id')
-        if (dateId) {
-          setAtDatePoster({ month: parseInt(dateId.split('-')[1], 10) })
-          if (dateId !== activeDayRef.current) { setActiveDay(dateId); onDayChange(dateId) }
-          return
-        }
-
-        const posterId = el.getAttribute('data-poster-id')
-        if (!posterId) return
-        const idx = eventIdToIdxRef.current.get(posterId)
-        if (idx == null) return
-        setActiveEventIdx(idx)
-        setAtDatePoster(null)
-        const ev = allEventsRef.current[idx]
-        const day = ev ? (eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]) : null
-        if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
-      },
-      // Zero-height band at the vertical center → the poster under the center
-      // line is the single intersecting target.
-      { root: container, rootMargin: '-50% 0px -50% 0px', threshold: 0 },
-    )
-
-    container.querySelectorAll('[data-poster-id],[data-date-id]').forEach(el => io.observe(el))
-    return () => io.disconnect()
-    // Re-observe whenever the poster set changes — filter swap, refetch, or
-    // pagination append. Depending on the array (not just its length) catches
-    // same-length filter swaps that would otherwise leave the observer watching
-    // stale/unmounted nodes and strand the active poster.
-  }, [cols, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Multi-col active-day tracking via IntersectionObserver ────────
-  // Same idea as the 1-col observer, for the date bar in 2-5 col. Poster cards
-  // carry data-day; a top-of-viewport band reports which cards are at the top,
-  // and the topmost one's day is the active day. Native + event-driven, so — the
-  // whole point — it does NOT depend on scroll events firing. This replaces the
-  // old scrollTop math (computeActiveDay), which froze whenever iOS throttled
-  // scroll events mid-momentum, leaving the date bar stuck on a stale day.
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container || cols === 1) return
-
-    const intersecting = new Set<Element>()
-    const pick = () => {
-      let topEl: Element | null = null
-      let topY = Infinity
-      for (const el of intersecting) {
-        const y = el.getBoundingClientRect().top
-        if (y < topY) { topY = y; topEl = el }
-      }
-      const day = topEl?.getAttribute('data-day')
-      if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+    const tick = () => {
+      const top = container.scrollTop
+      if (top !== lastTop) { lastTop = top; still = 0; computeActiveDay() }
+      else if (++still > 6) { running = false; return } // ~100ms of stillness → stop
+      raf = requestAnimationFrame(tick)
+    }
+    const start = () => {
+      if (running) return
+      running = true; still = 0; lastTop = -1
+      raf = requestAnimationFrame(tick)
     }
 
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) intersecting.add(e.target)
-          else intersecting.delete(e.target)
-        }
-        pick()
-      },
-      // Band across the top ~18% of the viewport → the cards currently at the top
-      // of the wall. The topmost of those defines the day being viewed.
-      { root: container, rootMargin: '0px 0px -82% 0px', threshold: 0 },
-    )
-
-    container.querySelectorAll('[data-day]').forEach(el => io.observe(el))
-    return () => io.disconnect()
-  }, [cols, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
+    container.addEventListener('scroll', start, { passive: true })
+    container.addEventListener('touchstart', start, { passive: true })
+    container.addEventListener('touchmove', start, { passive: true })
+    container.addEventListener('wheel', start, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      container.removeEventListener('scroll', start)
+      container.removeEventListener('touchstart', start)
+      container.removeEventListener('touchmove', start)
+      container.removeEventListener('wheel', start)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Safety net: if the filtered set shrinks below the current index (e.g. a
   // filter applied while in 1-col), clamp so the date bar never falls back to
@@ -549,8 +518,9 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     if (!container) return
     requestAnimationFrame(() => {
       container.scrollTop = idx * container.clientHeight
+      computeActiveDay() // update day/poster now — no scroll event is guaranteed
     })
-  }, [cols])
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-anchor scroll when the column count changes via zoom (pinch/wheel) so the
   // poster you were looking at stays in view. Skipped when a double-tap drives the
@@ -561,10 +531,13 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const wi = clamp(anchorWalledIdxRef.current, 0, Math.max(0, walledItemsRef.current.length - 1))
     requestAnimationFrame(() => {
       const c = colsRef.current
-      if (c === 1) { container.scrollTop = wi * container.clientHeight; return }
-      const cellWidth = (container.clientWidth - GAP * (c - 1)) / c
-      const rowHeight = cellWidth * 1.5 + GAP
-      container.scrollTop = Math.floor(wi / c) * rowHeight
+      if (c === 1) { container.scrollTop = wi * container.clientHeight }
+      else {
+        const cellWidth = (container.clientWidth - GAP * (c - 1)) / c
+        const rowHeight = cellWidth * 1.5 + GAP
+        container.scrollTop = Math.floor(wi / c) * rowHeight
+      }
+      computeActiveDay() // sync the date bar to the re-anchored position immediately
     })
   }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
