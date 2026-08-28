@@ -7,7 +7,6 @@ import { PosterGrid } from './PosterGrid'
 import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
 import { PreferencesPanel } from './PreferencesPanel'
-import { GuestTourInvite } from './GuestTourInvite'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
 import { todayLocalDate } from '@/lib/dates'
@@ -418,7 +417,6 @@ export function Wall() {
 
     </div>
     <PreferencesPanel open={prefsOpen} onClose={() => setPrefsOpen(false)} context="wall" />
-    <GuestTourInvite />
     </>
   )
 }
