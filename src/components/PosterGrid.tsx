@@ -97,9 +97,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     active: boolean
     startDist: number
     startCols: number
+    reportedCols: number // last col count we emitted a tour signal for (this gesture)
     peekImg: HTMLImageElement | null
     peeking: boolean
-  }>({ active: false, startDist: 0, startCols: 2, peekImg: null, peeking: false })
+  }>({ active: false, startDist: 0, startCols: 2, reportedCols: 2, peekImg: null, peeking: false })
 
   const days = useMemo(() => uniqueDays(events), [events])
   const grouped = useMemo(() => groupByDay(events), [events])
@@ -188,7 +189,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }
       }
 
-      pinchRef.current = { active: true, startDist: dist, startCols: currentCols, peekImg, peeking: false }
+      pinchRef.current = { active: true, startDist: dist, startCols: currentCols, reportedCols: currentCols, peekImg, peeking: false }
     }
 
     const onTouchMove = (e: TouchEvent) => {
@@ -212,11 +213,18 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           p.peeking = false
         }
         setCols(newCols)
-        reportTourAction('pinch')
-        // Destination signals for tutorial steps that require a COMPLETED zoom
-        // (advancing on plain 'pinch' fires mid-gesture on any column change).
-        if (newCols === 1) reportTourAction('pinch-1col')
-        if (newCols === maxColsRef.current) reportTourAction('pinch-grid')
+        // Emit tour signals ONLY on a genuine column transition. Guarding against
+        // startCols (frozen at gesture start) instead of the last reported value
+        // meant that once a pinch reached max/min cols, every subsequent touchmove
+        // re-fired the destination signal (dozens/sec), marching the tour through
+        // multiple steps and ending it. Guard against the last reported cols.
+        if (newCols !== p.reportedCols) {
+          p.reportedCols = newCols
+          reportTourAction('pinch')
+          // Destination signals for tutorial steps that require a COMPLETED zoom.
+          if (newCols === 1) reportTourAction('pinch-1col')
+          if (newCols === maxColsRef.current) reportTourAction('pinch-grid')
+        }
       } else if (p.startCols === 1 && p.peekImg) {
         // Still at 1-col — peek zoom on the active poster
         const scale = Math.min(3, Math.max(1, dist / p.startDist))

@@ -154,12 +154,20 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
     }
   }, [mode])
 
+  // Guard: a burst of duplicate signals (e.g. a pinch firing many frames at max
+  // zoom) must never advance more than one step. Latched on advance, released
+  // once the step index actually changes (effect below).
+  const advancingRef = useRef(false)
   const doAdvance = useCallback(() => {
+    if (advancingRef.current) return
+    advancingRef.current = true
     // Belt-and-suspenders: close any sheet a step may have opened before moving on.
     try { window.dispatchEvent(new CustomEvent('plaster-tour-cleanup')) } catch { /* ignore */ }
     const len = mode === 'guest' ? GUEST_STEPS.length : STEPS.length
     setI(v => { if (v + 1 >= len) { stopComplete(); return 0 } return v + 1 })
   }, [stopComplete, mode])
+  // Release the latch once the step actually changed, so the next step can advance.
+  useEffect(() => { advancingRef.current = false }, [i, active])
 
   const actionAdvance = useCallback(() => { tourHaptic(); doAdvance() }, [doAdvance])
 
