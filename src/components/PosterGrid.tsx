@@ -277,42 +277,15 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     eventIdToIdxRef.current = m
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
 
-  // ── Compute active day from current scroll position ───────────────
-  // Empty deps — stable forever. All inputs read from refs above.
-  const computeActiveDay = useCallback(() => {
-    const container = containerRef.current
-    const walledItems = walledItemsRef.current
-    if (!container || walledItems.length === 0) return
-
-    const cols = colsRef.current
-    // 1-col active day + poster are owned by the IntersectionObserver (center-line
-    // tracking). Computing from scrollTop here lags a half-screen behind the
-    // observer and briefly reverts to the previous poster mid-scroll — the flash.
-    if (cols === 1) return
-
-    const { scrollTop, clientWidth } = container
-    const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
-    const rowHeight = cellWidth * 1.5 + GAP
-    const totalRows = Math.ceil(walledItems.length / cols)
-    const dominantRow = clamp(
-      Math.floor((scrollTop + rowHeight / 2) / rowHeight),
-      0,
-      totalRows - 1,
-    )
-
-    const rowStart = dominantRow * cols
-    const rowEnd = Math.min(rowStart + cols, walledItems.length)
-    const rowItems = walledItems.slice(rowStart, rowEnd)
-
-    const eventDays = rowItems
-      .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
-      .map(item => eventDayMapRef.current.get(item.event.id))
-      .filter((d): d is string => !!d)
-
-    if (eventDays.length === 0) return
-    const latestDay = [...eventDays].sort().at(-1)!
-    if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Active day ────────────────────────────────────────────────────
+  // The active day is now driven entirely by IntersectionObservers in BOTH
+  // modes (1-col: center-line poster; multi-col: top-of-viewport row) — see the
+  // two observer effects below. That means it no longer depends on scroll events
+  // firing, which is what used to freeze the date bar: iOS WebKit throttles/drops
+  // scroll events during momentum, so the scroll-position math here would stop
+  // running and the bar stuck on a stale day. Kept as a no-op so the existing
+  // scroll/scrollend call sites stay harmless.
+  const computeActiveDay = useCallback(() => {}, [])
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
   // Empty deps — stable forever. Reads layout data from refs.
@@ -445,6 +418,46 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     // pagination append. Depending on the array (not just its length) catches
     // same-length filter swaps that would otherwise leave the observer watching
     // stale/unmounted nodes and strand the active poster.
+  }, [cols, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Multi-col active-day tracking via IntersectionObserver ────────
+  // Same idea as the 1-col observer, for the date bar in 2-5 col. Poster cards
+  // carry data-day; a top-of-viewport band reports which cards are at the top,
+  // and the topmost one's day is the active day. Native + event-driven, so — the
+  // whole point — it does NOT depend on scroll events firing. This replaces the
+  // old scrollTop math (computeActiveDay), which froze whenever iOS throttled
+  // scroll events mid-momentum, leaving the date bar stuck on a stale day.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || cols === 1) return
+
+    const intersecting = new Set<Element>()
+    const pick = () => {
+      let topEl: Element | null = null
+      let topY = Infinity
+      for (const el of intersecting) {
+        const y = el.getBoundingClientRect().top
+        if (y < topY) { topY = y; topEl = el }
+      }
+      const day = topEl?.getAttribute('data-day')
+      if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+    }
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) intersecting.add(e.target)
+          else intersecting.delete(e.target)
+        }
+        pick()
+      },
+      // Band across the top ~18% of the viewport → the cards currently at the top
+      // of the wall. The topmost of those defines the day being viewed.
+      { root: container, rootMargin: '0px 0px -82% 0px', threshold: 0 },
+    )
+
+    container.querySelectorAll('[data-day]').forEach(el => io.observe(el))
+    return () => io.disconnect()
   }, [cols, walledItems]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Safety net: if the filtered set shrinks below the current index (e.g. a
@@ -662,6 +675,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                   onEventSaved={onEventSaved}
                   enableDesktopNav={enableDesktopNav}
                   transitionName={wi < 40 ? `p-${event.id}` : undefined}
+                  dayKey={eventDayMap.get(event.id)}
                 />
               )
             })}
