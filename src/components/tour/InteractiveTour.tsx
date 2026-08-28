@@ -92,14 +92,19 @@ const STEPS: Step[] = [
 // then a signup pitch spotlighting the SIGN UP tab. ✕ exits any time; no Skip.
 const GUEST_STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. Three quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
-  // Starts on the FULL wall. Both zoom steps advance on DESTINATION signals
+  // Starts on the FULL wall. Zoom steps advance on DESTINATION signals
   // (pinch-1col / pinch-grid) — plain 'pinch' fires on any mid-gesture column
   // change and would blow through the step before the zoom finishes.
   { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Spread</strong> two fingers — zoom in all the way until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
+  // CTA buffer between the zooms: releasing a finished zoom-in makes the fingers
+  // drift back together, which reads as zoom-out and fires pinch-grid instantly —
+  // skipping the zoom-out step. While this card is up nothing listens for pinch
+  // signals, so the release can be as messy as it likes.
+  { type: 'spotlight', demo: true, title: 'Well would ya look at that!', body: "One poster, full bleed. The art gets the whole stage on Plaster.", advance: { on: 'cta' }, cta: "Let's zoom out" },
   { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Zoom back out', body: <>Now <strong>pinch</strong> back out all the way until the full wall returns.</>, advance: { on: 'action', id: 'pinch-grid' } },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, title: 'Open a show', body: <><strong>Double-tap</strong> the highlighted poster to see the event.</>, advance: { on: 'action', id: 'open-poster' } },
-  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Get the details', body: <><strong>Swipe</strong> sideways to see the show's info — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
-  { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full hands-on tour.</>, cta: 'Done' },
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, title: 'Try a double-tap', body: <><strong>Double-tap</strong> the highlighted poster to open the show.</>, advance: { on: 'action', id: 'open-poster' } },
+  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: <><strong>Swipe</strong> sideways to see the show's details — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
+  { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
 interface Ctx { start: () => void }
