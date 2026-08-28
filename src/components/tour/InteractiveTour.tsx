@@ -17,17 +17,6 @@ export function hasSeenTour(): boolean {
   try { return localStorage.getItem(TOUR_SEEN_KEY) === '1' } catch { return false }
 }
 
-// Guest mini-tour: auto-runs on a guest's first THREE app sessions (until they
-// sign up). Counted per auto-run, once per browser session.
-const GUEST_RUNS_KEY = 'plaster_guest_tour_runs'
-const GUEST_SESSION_KEY = 'plaster_guest_tour_this_session'
-function guestRuns(): number {
-  try { return Number(localStorage.getItem(GUEST_RUNS_KEY) || '0') } catch { return 0 }
-}
-function incGuestRuns() {
-  try { localStorage.setItem(GUEST_RUNS_KEY, String(guestRuns() + 1)) } catch { /* ignore */ }
-}
-
 function tourHaptic() {
   // Dependency-free (Web Vibration API); no-op on iOS web. True iOS haptics would need
   // @capacitor/haptics (deferred follow-up).
@@ -87,24 +76,12 @@ const STEPS: Step[] = [
   { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Find your night out', body: <>That’s the tour! One last move — <strong>Pinch</strong> the wall to flow from one big poster up to a five-across grid, then go find your night out!</>, advance: { on: 'action', id: 'pinch' }, allowSkip: true },
 ]
 
-// Guest mini-tour: the three core wall gestures, each a forced task (only the
-// real gesture advances; the dim blockers keep everything else untouchable),
-// then a signup pitch spotlighting the SIGN UP tab. ✕ exits any time; no Skip.
-const GUEST_STEPS: Step[] = [
-  { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. Three quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Pinch the wall', body: <><strong>Pinch</strong> to zoom for a better view — one big poster up to the full five-across wall.</>, advance: { on: 'action', id: 'pinch' } },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', title: 'Open a show', body: <><strong>Double-tap</strong> the highlighted poster to open the show you want.</>, advance: { on: 'action', id: 'open-poster' } },
-  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Get the details', body: <><strong>Swipe</strong> sideways for the show's info — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
-  { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full hands-on tour.</>, cta: 'Done' },
-]
-
 interface Ctx { start: () => void }
 const TourCtx = createContext<Ctx>({ start: () => {} })
 export function useInteractiveTour() { return useContext(TourCtx) }
 
 export function InteractiveTourProvider({ children }: { children: React.ReactNode }) {
   const [active, setActive] = useState(false)
-  const [mode, setMode] = useState<'full' | 'guest'>('full')
   const [i, setI] = useState(0)
   const [resumePrompt, setResumePrompt] = useState(false)
   const [resumeAt, setResumeAt] = useState(0)
@@ -112,85 +89,49 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   const navigate = useNavigate()
   const location = useLocation()
 
-  const steps = mode === 'guest' ? GUEST_STEPS : STEPS
-
   const start = useCallback(() => {
     let saved = 0
     try { saved = Number(localStorage.getItem(TOUR_STEP_KEY) || '0') } catch { /* ignore */ }
-    setMode('full')
     if (saved > 0 && saved < STEPS.length) { setResumeAt(saved); setResumePrompt(true) }
     else { setI(0); setResumePrompt(false) }
     setActive(true)
   }, [])
 
-  // Guest mini-tour: short, never resumable, and never touches the full tour's
-  // seen/step flags (the full tour must still auto-run after signup).
-  const startGuest = useCallback(() => {
-    setMode('guest')
-    setI(0)
-    setResumePrompt(false)
-    setActive(true)
-  }, [])
-
   const stopComplete = useCallback(() => {
     setActive(false); setI(0)
-    if (mode === 'full') {
-      try { localStorage.setItem(TOUR_SEEN_KEY, '1'); localStorage.removeItem(TOUR_STEP_KEY) } catch { /* ignore */ }
-    }
-  }, [mode])
+    try { localStorage.setItem(TOUR_SEEN_KEY, '1'); localStorage.removeItem(TOUR_STEP_KEY) } catch { /* ignore */ }
+  }, [])
   const stopExit = useCallback(() => {
     setActive(false)
-    if (mode === 'full') {
-      try { localStorage.setItem(TOUR_SEEN_KEY, '1') } catch { /* ignore */ } // keep step for resume
-    }
-  }, [mode])
+    try { localStorage.setItem(TOUR_SEEN_KEY, '1') } catch { /* ignore */ } // keep step for resume
+  }, [])
 
   const doAdvance = useCallback(() => {
     // Belt-and-suspenders: close any sheet a step may have opened before moving on.
     try { window.dispatchEvent(new CustomEvent('plaster-tour-cleanup')) } catch { /* ignore */ }
-    const len = mode === 'guest' ? GUEST_STEPS.length : STEPS.length
-    setI(v => { if (v + 1 >= len) { stopComplete(); return 0 } return v + 1 })
-  }, [stopComplete, mode])
+    setI(v => { if (v + 1 >= STEPS.length) { stopComplete(); return 0 } return v + 1 })
+  }, [stopComplete])
 
   const actionAdvance = useCallback(() => { tourHaptic(); doAdvance() }, [doAdvance])
 
   useEffect(() => { setTourActive(active) }, [active])
 
-  // Persist progress so ✕ mid-run can be resumed. Full tour only.
+  // Persist progress so ✕ mid-run can be resumed.
   useEffect(() => {
-    if (active && !resumePrompt && mode === 'full') { try { localStorage.setItem(TOUR_STEP_KEY, String(i)) } catch { /* ignore */ } }
-  }, [i, active, resumePrompt, mode])
+    if (active && !resumePrompt) { try { localStorage.setItem(TOUR_STEP_KEY, String(i)) } catch { /* ignore */ } }
+  }, [i, active, resumePrompt])
 
   // Auto-run once for a new user. Signed-in only: guests browsing the public
   // wall (guest mode, Apple 5.1.1(v)) shouldn't get a tour that teaches
   // RSVP/slap gestures they can't perform yet — it fires right after signup
   // instead (onboarding clears the seen-flags).
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
   const autoStarted = useRef(false)
   useEffect(() => {
     if (user && !autoStarted.current && !hasSeenTour()) { autoStarted.current = true; start() }
   }, [start, user])
 
-  // Guest mini-tour auto-run: first three sessions without an account. One run
-  // per browser session (guards against AppLayout remounts burning extra runs).
-  useEffect(() => {
-    if (loading || user || active) return
-    if (guestRuns() >= 3) return
-    try { if (sessionStorage.getItem(GUEST_SESSION_KEY) === '1') return } catch { /* ignore */ }
-    const t = setTimeout(() => {
-      try { sessionStorage.setItem(GUEST_SESSION_KEY, '1') } catch { /* ignore */ }
-      incGuestRuns()
-      startGuest()
-    }, 1500)
-    return () => clearTimeout(t)
-  }, [loading, user, active, startGuest])
-
-  // Signed up mid-guest-tour (e.g. via a gate sheet) → the pitch no longer applies.
-  useEffect(() => {
-    if (active && mode === 'guest' && user) setActive(false)
-  }, [active, mode, user])
-
-  const step = active && !resumePrompt ? steps[i] : null
+  const step = active && !resumePrompt ? STEPS[i] : null
 
   // Let intercepting controls (Slap button) know when to report instead of act.
   useEffect(() => { setInterceptedAction(step?.intercept ?? null); setRevealed(false) }, [step])
@@ -236,10 +177,10 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
   }, [step, actionAdvance])
 
   const onCta = useCallback(() => {
-    const s = steps[i]
+    const s = STEPS[i]
     if (s.finish) { navigate('/'); stopComplete(); return }
     doAdvance()
-  }, [i, steps, doAdvance, stopComplete, navigate])
+  }, [i, doAdvance, stopComplete, navigate])
 
   const navPhase: 'nav' | 'arrive' = step?.type === 'nav'
     ? (location.pathname === step.to || location.pathname.startsWith(step.to + '/') ? 'arrive' : 'nav')
@@ -258,31 +199,13 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
         <TourLayer
           step={step}
           index={i}
-          total={steps.length}
+          total={STEPS.length}
           navPhase={navPhase}
           revealed={revealed}
           onCta={onCta}
           onSkip={doAdvance}
           onClose={stopExit}
         />
-      )}
-      {/* DEV: reset guest-tour run count + replay it (dev builds only, guests only) */}
-      {import.meta.env.DEV && !active && !user && (
-        <button
-          onClick={() => {
-            try { localStorage.removeItem(GUEST_RUNS_KEY); sessionStorage.removeItem(GUEST_SESSION_KEY) } catch { /* ignore */ }
-            startGuest()
-          }}
-          style={{
-            position: 'fixed', left: 10,
-            bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px)',
-            zIndex: 2999, padding: '4px 8px', borderRadius: 6,
-            border: '1px dashed var(--fg-30)', background: 'var(--bg)', color: 'var(--fg-40)',
-            fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer',
-          }}
-        >
-          DEV: guest tour
-        </button>
       )}
     </TourCtx.Provider>
   )
