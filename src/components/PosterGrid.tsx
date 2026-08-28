@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
@@ -74,6 +74,9 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const activeDayRef = useRef(activeDay)
   useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
   const [activeEventIdx, setActiveEventIdx] = useState(0)
+  // Walled index at the top of the viewport, kept current on scroll — used to
+  // re-anchor scroll when the column count changes (zoom) so the content stays put.
+  const anchorWalledIdxRef = useRef(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   // Resting 1-col panel (0=poster, 1=info, 2=wall) — STATE, not a ref, so every
@@ -323,6 +326,22 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
 
     computeActiveDay()
 
+    // Remember the walled item at the top of the viewport so a cols change (zoom)
+    // can re-anchor to the same content. Without this, the raw pixel scrollTop
+    // carries over — and coming out of 1-col (each poster a full screen tall) that
+    // offset drops you far down the multi-col wall.
+    {
+      const c = colsRef.current
+      const { scrollTop: sT, clientHeight: cH, clientWidth: cW } = container
+      if (c === 1) {
+        anchorWalledIdxRef.current = clamp(Math.floor(sT / cH), 0, walledItems.length - 1)
+      } else {
+        const cellWidth = (cW - GAP * (c - 1)) / c
+        const rowHeight = cellWidth * 1.5 + GAP
+        anchorWalledIdxRef.current = clamp(Math.floor(sT / rowHeight) * c, 0, walledItems.length - 1)
+      }
+    }
+
     // Back-to-top: only offer it in multi-col once scrolled ~2.5 screens down.
     // While scrolling it stays hidden; it fades in after 3s of stillness and
     // hides again the instant the user scrolls. The stillness timer is cleared
@@ -519,6 +538,22 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       container.scrollTop = idx * container.clientHeight
     })
   }, [cols])
+
+  // Re-anchor scroll when the column count changes via zoom (pinch/wheel) so the
+  // poster you were looking at stays in view. Skipped when a double-tap drives the
+  // transition (that path scrolls to the tapped poster via pendingScrollIdxRef).
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container || pendingScrollIdxRef.current !== null) return
+    const wi = clamp(anchorWalledIdxRef.current, 0, Math.max(0, walledItemsRef.current.length - 1))
+    requestAnimationFrame(() => {
+      const c = colsRef.current
+      if (c === 1) { container.scrollTop = wi * container.clientHeight; return }
+      const cellWidth = (container.clientWidth - GAP * (c - 1)) / c
+      const rowHeight = cellWidth * 1.5 + GAP
+      container.scrollTop = Math.floor(wi / c) * rowHeight
+    })
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // In 1-col snap mode, show the current poster's details in the date bar
   const eventInfo: EventInfo | null =
