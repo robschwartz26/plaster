@@ -481,6 +481,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onCmd = (e: Event) => {
       const cmd = (e as CustomEvent).detail?.cmd
       if (cmd === 'reset-grid') setCols(maxColsRef.current)
+      else if (cmd === 'grid-1col') setCols(1) // guest tutorial: open zoomed into one poster
       else if (cmd === 'lock-scroll') setScrollLocked(true)
       else if (cmd === 'unlock-scroll') setScrollLocked(false)
     }
