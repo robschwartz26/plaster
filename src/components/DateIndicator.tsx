@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion'
 import { useTheme } from '@/hooks/useTheme'
 
 
@@ -76,23 +75,21 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
     ? (theme === 'night' ? '#f0ece3' : '#1a1a1a')
     : (theme === 'night' ? '#f0ece3' : '#1a1a1a')
 
-  // Determine which content key to use — drives the cross-fade
-  const contentKey = eventInfo ? `ev:${eventInfo.id}` : atDatePoster ? `dp:${activeDay}` : activeDay ?? 'none'
-
+  // Rendered directly with NO animation layer. This bar previously cross-faded
+  // every change through AnimatePresence mode="wait", which must finish an exit
+  // animation before showing new content — under fast scrolling the day changes
+  // every frame, the exit gets perpetually interrupted, and the bar wedges on a
+  // stale day (the long-standing "date indicator freeze"). Rendering plainly
+  // means the bar can never disagree with state. Do not reintroduce exit-gated
+  // animation here.
   return (
     <div
       className="flex items-center gap-2 px-4"
       style={{ height: 'var(--dateindicator-height)', marginBottom: 8, background: 'var(--bg)' }}
     >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={contentKey}
+        <div
           className="flex items-center gap-1.5"
           style={eventInfo ? { width: '100%' } : undefined}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
         >
           {eventInfo ? (
             // ── Event info mode (1-col, regular poster) ──────────────
@@ -193,8 +190,7 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
               )
             })()
           ) : null}
-        </motion.div>
-      </AnimatePresence>
+        </div>
     </div>
   )
 }
