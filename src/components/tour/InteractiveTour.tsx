@@ -104,6 +104,10 @@ const GUEST_STEPS: Step[] = [
   { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Zoom back out', body: <>Now <strong>pinch</strong> back out all the way until the full wall returns.</>, advance: { on: 'action', id: 'pinch-grid' } },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, title: 'Try a double-tap', body: <><strong>Double-tap</strong> the highlighted poster to open the show.</>, advance: { on: 'action', id: 'open-poster' } },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: <><strong>Swipe</strong> sideways to see the show's details — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
+  // Beat on the info page: the swipe fires the instant you land on it, so hold
+  // here and actually talk about it. demo blocks interaction so they can't swipe
+  // off before reading; CTA moves on to the finale.
+  { type: 'spotlight', demo: true, lockScroll: true, title: "The show's page", body: "Everything about the night — date and time, the venue, a link to grab tickets, and a wall where people hype it up. Every poster opens up just like this.", advance: { on: 'cta' }, cta: 'Got it' },
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', cardOverride: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }, title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
