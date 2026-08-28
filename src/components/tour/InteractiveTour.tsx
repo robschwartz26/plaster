@@ -92,9 +92,13 @@ const STEPS: Step[] = [
 // then a signup pitch spotlighting the SIGN UP tab. ✕ exits any time; no Skip.
 const GUEST_STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. Three quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Open a show', body: <><strong>Double-tap</strong> the highlighted poster to see the event.</>, advance: { on: 'action', id: 'open-poster' } },
+  // The two zoom steps advance on DESTINATION signals (pinch-1col / pinch-grid),
+  // not on plain 'pinch' — any mid-gesture column change would fire that instantly
+  // and blow through the step before the zoom finished.
+  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Spread</strong> two fingers to zoom in — go all the way until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Zoom back out', body: <><strong>Pinch</strong> back out until the full wall returns.</>, advance: { on: 'action', id: 'pinch-grid' } },
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, title: 'Open a show', body: <><strong>Double-tap</strong> the highlighted poster to see the event.</>, advance: { on: 'action', id: 'open-poster' } },
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Get the details', body: <><strong>Swipe</strong> sideways to see the show's info — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Pinch & zoom', body: <><strong>Pinch</strong> the wall — flow from one big poster up to the full five-across grid.</>, advance: { on: 'action', id: 'pinch' } },
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full hands-on tour.</>, cta: 'Done' },
 ]
 

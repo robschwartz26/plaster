@@ -213,6 +213,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }
         setCols(newCols)
         reportTourAction('pinch')
+        // Destination signals for tutorial steps that require a COMPLETED zoom
+        // (advancing on plain 'pinch' fires mid-gesture on any column change).
+        if (newCols === 1) reportTourAction('pinch-1col')
+        if (newCols === maxColsRef.current) reportTourAction('pinch-grid')
       } else if (p.startCols === 1 && p.peekImg) {
         // Still at 1-col — peek zoom on the active poster
         const scale = Math.min(3, Math.max(1, dist / p.startDist))
@@ -249,8 +253,13 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current))
+      const next = clamp(colsRef.current + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current)
+      if (next === colsRef.current) return
+      setCols(next)
       reportTourAction('pinch')
+      // Destination signals — see the touch-pinch handler above.
+      if (next === 1) reportTourAction('pinch-1col')
+      if (next === maxColsRef.current) reportTourAction('pinch-grid')
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
