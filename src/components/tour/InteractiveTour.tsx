@@ -95,7 +95,7 @@ const GUEST_STEPS: Step[] = [
   // Starts on the FULL wall. Zoom steps advance on DESTINATION signals
   // (pinch-1col / pinch-grid) — plain 'pinch' fires on any mid-gesture column
   // change and would blow through the step before the zoom finishes.
-  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Spread</strong> two fingers — zoom in all the way until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Using two fingers</strong> — zoom in all the way until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
   // CTA buffer between the zooms: releasing a finished zoom-in makes the fingers
   // drift back together, which reads as zoom-out and fires pinch-grid instantly —
   // skipping the zoom-out step. While this card is up nothing listens for pinch
@@ -107,7 +107,7 @@ const GUEST_STEPS: Step[] = [
   // Beat on the info page: the swipe fires the instant you land on it, so hold
   // here and actually talk about it. demo blocks interaction so they can't swipe
   // off before reading; CTA moves on to the finale.
-  { type: 'spotlight', demo: true, lockScroll: true, title: "The show's page", body: "Everything about the night — date and time, the venue, a link to grab tickets, and a wall where people hype it up. Every poster opens up just like this.", advance: { on: 'cta' }, cta: 'Got it' },
+  { type: 'spotlight', demo: true, lockScroll: true, title: 'Info page!', body: "Voila! Everything you need to know about the event in one place! :)", advance: { on: 'cta' }, cta: 'Got it' },
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', cardOverride: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }, title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
