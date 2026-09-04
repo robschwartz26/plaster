@@ -77,8 +77,9 @@ const DEV_MOCK_CONTACTS: DeviceContact[] = [
   { name: 'Mississippi Studios', phones: ['+15035550106'], emails: [], hashes: [] },
 ]
 
-// Live on the App Store as of Aug 2026 — invites point straight at the listing.
+// Live on both stores as of Sep 2026 — invites/QRs point straight at the listings.
 const APP_STORE_URL = 'https://apps.apple.com/us/app/plaster-the-wall/id6771572698'
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.plaster.the.wall.app'
 const INVITE_TEXT = `Join me on Plaster — Portland's music & events app: ${APP_STORE_URL}`
 
 // Manual invite: type a number → opens Messages with the invite prefilled.
@@ -128,13 +129,15 @@ function InviteByNumber() {
 export function FindFriends({ onDone }: Props) {
   const [screen, setScreen] = useState<ScreenState>('consent')
   const [qrUrl, setQrUrl] = useState<string | null>(null)
+  const [qrUrlAndroid, setQrUrlAndroid] = useState<string | null>(null)
+  const [qrPage, setQrPage] = useState(0) // 0 = App Store, 1 = Google Play
 
-  // QR → App Store listing. Generated locally (no network; CSP-safe), themed
-  // to Plaster's palette.
+  // QRs → store listings. Generated locally (no network; CSP-safe), themed to
+  // Plaster's palette. Both platforms; the share card is a swipeable carousel.
   useEffect(() => {
-    QRCode.toDataURL(APP_STORE_URL, { width: 360, margin: 1, color: { dark: '#0c0b0b', light: '#f0ece3' } })
-      .then(setQrUrl)
-      .catch(() => setQrUrl(null))
+    const opts = { width: 360, margin: 1, color: { dark: '#0c0b0b', light: '#f0ece3' } }
+    QRCode.toDataURL(APP_STORE_URL, opts).then(setQrUrl).catch(() => setQrUrl(null))
+    QRCode.toDataURL(PLAY_STORE_URL, opts).then(setQrUrlAndroid).catch(() => setQrUrlAndroid(null))
   }, [])
   const [matched, setMatched] = useState<MatchedUser[]>([])
   const [unmatched, setUnmatched] = useState<DeviceContact[]>([])
@@ -292,10 +295,52 @@ export function FindFriends({ onDone }: Props) {
             Or hand them Plaster
           </p>
           <p style={{ ...bodyStyle, fontSize: 12, margin: 0 }}>
-            Have your friends scan this — it takes them to the App&nbsp;Store.
+            Have your friends scan this — swipe for Android.
           </p>
-          {qrUrl && (
-            <img src={qrUrl} alt="App Store QR code" style={{ width: 180, height: 180, borderRadius: 12, marginTop: 4 }} />
+          {qrUrl && qrUrlAndroid && (
+            <div style={{ width: 200, marginTop: 4 }}>
+              {/* Swipeable carousel: App Store QR, then Google Play QR. */}
+              <div
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  setQrPage(el.clientWidth ? Math.round(el.scrollLeft / el.clientWidth) : 0)
+                }}
+                style={{
+                  display: 'flex', overflowX: 'auto', scrollSnapType: 'x mandatory',
+                  scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch', borderRadius: 12,
+                }}
+              >
+                {[
+                  { url: qrUrl, label: 'App Store', alt: 'App Store QR code (iPhone)' },
+                  { url: qrUrlAndroid, label: 'Google Play', alt: 'Google Play QR code (Android)' },
+                ].map((q) => (
+                  <div
+                    key={q.label}
+                    style={{ flex: '0 0 100%', scrollSnapAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}
+                  >
+                    <img src={q.url} alt={q.alt} style={{ width: 180, height: 180, borderRadius: 12 }} />
+                    {/* Subtle Barlow Condensed store chip — signals which platform this QR is for. */}
+                    <span style={{
+                      fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 12,
+                      letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-55)',
+                      border: '1px solid var(--fg-15)', borderRadius: 4, padding: '2px 12px',
+                    }}>
+                      {q.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {/* Carousel dots */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 10 }}>
+                {[0, 1].map((i) => (
+                  <div key={i} style={{
+                    width: 6, height: 6, borderRadius: 999,
+                    background: qrPage === i ? 'var(--fg-55)' : 'var(--fg-15)',
+                    transition: 'background 0.2s ease',
+                  }} />
+                ))}
+              </div>
+            </div>
           )}
 
           <button onClick={onDone} style={{ ...skipBtn, marginTop: 10 }}>Skip for now</button>
