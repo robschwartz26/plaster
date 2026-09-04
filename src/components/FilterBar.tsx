@@ -203,7 +203,15 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
             className="font-body font-medium"
             style={chipStyle(chip === active && !activePosterCategory, chip === '♥')}
           >
-            {chip === '♥' ? '♥︎' : chip}
+            {chip === '♥' ? (
+              // Inline SVG heart, NOT the ♥ glyph: Android WebView renders ♥ as a
+              // red emoji even with the \uFE0E text selector. currentColor inherits the
+              // chip's theme color — never red, identical on iOS + Android.
+              <svg width={large ? 14 : 12} height={large ? 14 : 12} viewBox="0 0 24 22"
+                   fill="currentColor" style={{ display: 'block' }} aria-label="Favorites">
+                <path d="M12 21C12 21 2 13.5 2 7a5 5 0 0 1 10 0 5 5 0 0 1 10 0c0 6.5-10 14-10 14z" />
+              </svg>
+            ) : chip}
           </button>
         ))}
       </div>
