@@ -80,7 +80,11 @@ const DEV_MOCK_CONTACTS: DeviceContact[] = [
 // Live on both stores as of Sep 2026 — invites/QRs point straight at the listings.
 const APP_STORE_URL = 'https://apps.apple.com/us/app/plaster-the-wall/id6771572698'
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.plaster.the.wall.app'
-const INVITE_TEXT = `Join me on Plaster — Portland's music & events app: ${APP_STORE_URL}`
+// Both store links, labeled — the recipient may be on either platform, so send
+// both and let them tap the one for their phone (mirrors the QR carousel).
+const INVITE_TEXT = `Join me on Plaster — Portland's music & events app.
+iPhone: ${APP_STORE_URL}
+Android: ${PLAY_STORE_URL}`
 
 // Manual invite: type a number → opens Messages with the invite prefilled.
 // Works without contacts permission (it's just an sms: deep link — we never
@@ -246,10 +250,12 @@ export function FindFriends({ onDone }: Props) {
 
   async function sendBulkInvite() {
     try {
+      // Both store links live in the text (with labels). We omit `url` — it only
+      // holds one link, and some share targets show `url` instead of `text`,
+      // which would drop the Android link. Text-only guarantees both go through.
       await Share.share({
         title: 'Join me on Plaster',
-        text: "Follow me on Plaster — Portland's music & events app:",
-        url: APP_STORE_URL,
+        text: INVITE_TEXT,
       })
       console.log('[FindFriends] share sheet opened for', selected.size, 'selected contacts')
       setSelected(new Set())
