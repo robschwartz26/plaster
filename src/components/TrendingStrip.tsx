@@ -2,12 +2,7 @@ import React, { useState } from 'react'
 import { type WallEvent } from '@/types/event'
 import { posterThumb } from '@/lib/posterThumb'
 
-const OPEN_KEY = 'wall-trending-open'
 const CURTAIN_W = 20  // px — solid bg band width for 'curtain' edgeStyle
-
-function loadOpen(): boolean {
-  try { return localStorage.getItem(OPEN_KEY) === 'true' } catch { return false }
-}
 
 interface Props {
   events: WallEvent[]
@@ -40,15 +35,16 @@ export function computeTrendingTop(events: WallEvent[]): WallEvent[] {
 }
 
 export function TrendingStrip({ events, onOpenEvent, alwaysExpanded, edgeStyle }: Props) {
-  const [open, setOpen] = useState<boolean>(() => alwaysExpanded ? true : loadOpen())
+  // Always start CLOSED on app open (no persistence) — trending is opt-in each
+  // session. The toggle still opens/closes within the session; it just isn't
+  // remembered across app launches.
+  const [open, setOpen] = useState<boolean>(!!alwaysExpanded)
 
   const top = computeTrendingTop(events)
   if (top.length < 3) return null
 
   function toggle() {
-    const next = !open
-    setOpen(next)
-    try { localStorage.setItem(OPEN_KEY, next ? 'true' : 'false') } catch { /* noop */ }
+    setOpen(o => !o)
   }
 
   const tiles = top.map((e, i) => (
