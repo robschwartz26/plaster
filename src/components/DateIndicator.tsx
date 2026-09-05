@@ -1,5 +1,3 @@
-import { motion, AnimatePresence } from 'framer-motion'
-import { Heart } from '@/components/Heart'
 import { useTheme } from '@/hooks/useTheme'
 
 
@@ -32,12 +30,17 @@ function formatDateBlocks(dateStr: string, today: string) {
   else if (diffDays === 1) label = 'Tomorrow'
   else label = date.toLocaleDateString('en-US', { weekday: 'long' })
 
+  // On Tonight/Tomorrow the label differs from the weekday, so the abbreviated
+  // day block adds info. On any other day the label already IS the weekday, so
+  // the "THU" block just repeats "THURSDAY" — drop it then.
+  const labelIsWeekday = diffDays !== 0 && diffDays !== 1
+
   const shortDay = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
   const dateLabel = date
     .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     .toUpperCase()
 
-  return { label, shortDay, dateLabel, isFuture: diffDays > 0 }
+  return { label, shortDay, dateLabel, isFuture: diffDays > 0, labelIsWeekday }
 }
 
 function formatTime(iso: string) {
@@ -72,23 +75,21 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
     ? (theme === 'night' ? '#f0ece3' : '#1a1a1a')
     : (theme === 'night' ? '#f0ece3' : '#1a1a1a')
 
-  // Determine which content key to use — drives the cross-fade
-  const contentKey = eventInfo ? `ev:${eventInfo.id}` : atDatePoster ? `dp:${activeDay}` : activeDay ?? 'none'
-
+  // Rendered directly with NO animation layer. This bar previously cross-faded
+  // every change through AnimatePresence mode="wait", which must finish an exit
+  // animation before showing new content — under fast scrolling the day changes
+  // every frame, the exit gets perpetually interrupted, and the bar wedges on a
+  // stale day (the long-standing "date indicator freeze"). Rendering plainly
+  // means the bar can never disagree with state. Do not reintroduce exit-gated
+  // animation here.
   return (
     <div
       className="flex items-center gap-2 px-4"
       style={{ height: 'var(--dateindicator-height)', marginBottom: 8, background: 'var(--bg)' }}
     >
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={contentKey}
+        <div
           className="flex items-center gap-1.5"
           style={eventInfo ? { width: '100%' } : undefined}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.18 }}
         >
           {eventInfo ? (
             // ── Event info mode (1-col, regular poster) ──────────────
@@ -131,7 +132,8 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                   letterSpacing: '0.06em',
                 }}
               >
-                <span style={{ color: 'var(--fg-55)' }}><Heart /> {eventInfo.likeCount}</span>
+                {/* \uFE0E forces text presentation — prevents iOS from rendering ♥ as red emoji */}
+                <span style={{ color: 'var(--fg-55)' }}>{'♥\uFE0E'} {eventInfo.likeCount}</span>
                 <span style={{ color: 'var(--fg-55)', display: 'flex', alignItems: 'center', gap: 3 }}>
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
                     <path d="M1 8C1 8 3.5 3 8 3s7 5 7 5-2.5 5-7 5S1 8 1 8z" />
@@ -162,15 +164,19 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
                     {d.label}
                   </span>
 
-                  <span
-                    style={{
-                      ...BLOCK_BASE,
-                      border: `1px solid ${d.isFuture ? 'var(--fg-25)' : 'var(--fg-40)'}`,
-                      color:  d.isFuture ? 'var(--fg-55)' : 'var(--fg-80)',
-                    }}
-                  >
-                    {d.shortDay}
-                  </span>
+                  {/* Skip the abbreviated day block when the label is already the
+                      weekday (future days) — otherwise "THURSDAY · THU" repeats. */}
+                  {!d.labelIsWeekday && (
+                    <span
+                      style={{
+                        ...BLOCK_BASE,
+                        border: `1px solid ${d.isFuture ? 'var(--fg-25)' : 'var(--fg-40)'}`,
+                        color:  d.isFuture ? 'var(--fg-55)' : 'var(--fg-80)',
+                      }}
+                    >
+                      {d.shortDay}
+                    </span>
+                  )}
 
                   <span
                     style={{
@@ -184,8 +190,7 @@ export function DateIndicator({ activeDay, today, eventInfo, onVenueTap, atDateP
               )
             })()
           ) : null}
-        </motion.div>
-      </AnimatePresence>
+        </div>
     </div>
   )
 }

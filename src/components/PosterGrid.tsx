@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from 'react'
 import { type WallEvent } from '@/types/event'
 import { PosterCard } from './PosterCard'
 import { DatePoster } from './DatePoster'
@@ -55,9 +55,11 @@ function clamp(v: number, min: number, max: number) {
 
 export function PosterGrid({ events, activeFilter, searchQuery = '', today, likedIds, onDayChange, onLike, onVenueTap, isAdminMode, onEventSaved, prevUrlMap, onUndoCrop, onConfirmCrop, onActiveCategoryChange, openEventId, onOpenEventHandled, enableDesktopNav, onNearEnd, maxCols = 5 }: Props) {
   const [cols, setCols] = useState(maxCols)
-  // Back-to-top affordance: appears in multi-col once scrolled a few screens down.
+  // Back-to-top affordance: appears in multi-col after ~3s of stillness once
+  // scrolled a few screens down; hides again the moment scrolling resumes.
   const [showBackToTop, setShowBackToTop] = useState(false)
   const showBackToTopRef = useRef(false)
+  const backToTopStillnessRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Tour freezes vertical scroll during anchored single-poster steps.
   const [scrollLocked, setScrollLocked] = useState(false)
   // Ref so the []-dep touch/wheel handlers always clamp to the current pref
@@ -72,6 +74,9 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const activeDayRef = useRef(activeDay)
   useEffect(() => { activeDayRef.current = activeDay }, [activeDay])
   const [activeEventIdx, setActiveEventIdx] = useState(0)
+  // Walled index at the top of the viewport, kept current on scroll — used to
+  // re-anchor scroll when the column count changes (zoom) so the content stays put.
+  const anchorWalledIdxRef = useRef(0)
   const [atDatePoster, setAtDatePoster] = useState<{ month: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   // Resting 1-col panel (0=poster, 1=info, 2=wall) — STATE, not a ref, so every
@@ -92,9 +97,10 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     active: boolean
     startDist: number
     startCols: number
+    reportedCols: number // last col count we emitted a tour signal for (this gesture)
     peekImg: HTMLImageElement | null
     peeking: boolean
-  }>({ active: false, startDist: 0, startCols: 2, peekImg: null, peeking: false })
+  }>({ active: false, startDist: 0, startCols: 2, reportedCols: 2, peekImg: null, peeking: false })
 
   const days = useMemo(() => uniqueDays(events), [events])
   const grouped = useMemo(() => groupByDay(events), [events])
@@ -183,7 +189,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }
       }
 
-      pinchRef.current = { active: true, startDist: dist, startCols: currentCols, peekImg, peeking: false }
+      pinchRef.current = { active: true, startDist: dist, startCols: currentCols, reportedCols: currentCols, peekImg, peeking: false }
     }
 
     const onTouchMove = (e: TouchEvent) => {
@@ -207,7 +213,18 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           p.peeking = false
         }
         setCols(newCols)
-        reportTourAction('pinch')
+        // Emit tour signals ONLY on a genuine column transition. Guarding against
+        // startCols (frozen at gesture start) instead of the last reported value
+        // meant that once a pinch reached max/min cols, every subsequent touchmove
+        // re-fired the destination signal (dozens/sec), marching the tour through
+        // multiple steps and ending it. Guard against the last reported cols.
+        if (newCols !== p.reportedCols) {
+          p.reportedCols = newCols
+          reportTourAction('pinch')
+          // Destination signals for tutorial steps that require a COMPLETED zoom.
+          if (newCols === 1) reportTourAction('pinch-1col')
+          if (newCols === maxColsRef.current) reportTourAction('pinch-grid')
+        }
       } else if (p.startCols === 1 && p.peekImg) {
         // Still at 1-col — peek zoom on the active poster
         const scale = Math.min(3, Math.max(1, dist / p.startDist))
@@ -244,8 +261,13 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onWheel = (e: WheelEvent) => {
       if (!e.ctrlKey) return
       e.preventDefault()
-      setCols((c) => clamp(c + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current))
+      const next = clamp(colsRef.current + (e.deltaY > 0 ? 1 : -1), 1, maxColsRef.current)
+      if (next === colsRef.current) return
+      setCols(next)
       reportTourAction('pinch')
+      // Destination signals — see the touch-pinch handler above.
+      if (next === 1) reportTourAction('pinch-1col')
+      if (next === maxColsRef.current) reportTourAction('pinch-grid')
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -260,54 +282,61 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
   const allEventsRef = useRef(allEvents)
   const eventDayMapRef = useRef(eventDayMap)
   const daysRef = useRef(days)
+  const eventIdToIdxRef = useRef<Map<string, number>>(new Map())
   useEffect(() => {
     walledItemsRef.current = walledItems
     walledIdxToEventIdxRef.current = walledIdxToEventIdx
     allEventsRef.current = allEvents
     eventDayMapRef.current = eventDayMap
     daysRef.current = days
+    const m = new Map<string, number>()
+    allEvents.forEach((e, i) => m.set(e.id, i))
+    eventIdToIdxRef.current = m
   }, [walledItems, walledIdxToEventIdx, allEvents, eventDayMap, days])
 
-  // ── Compute active day from current scroll position ───────────────
-  // Empty deps — stable forever. All inputs read from refs above.
+  // ── Active state from scroll position (day + 1-col poster + zoom anchor) ──
+  // The single source of truth for everything derived from scroll position. It
+  // reads container.scrollTop directly, so it's correct whenever it runs. It is
+  // driven by a requestAnimationFrame loop (see below) rather than scroll events
+  // because iOS WebKit throttles/drops scroll events — and IntersectionObserver
+  // callbacks — during momentum, but never rAF. Empty deps; reads only refs.
   const computeActiveDay = useCallback(() => {
     const container = containerRef.current
     const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
-
-    const { scrollTop, clientHeight, clientWidth } = container
     const cols = colsRef.current
+    const { scrollTop, clientHeight, clientWidth } = container
 
     if (cols === 1) {
       const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      const eventIdx = walledIdxToEventIdxRef.current[wi] ?? 0
-      const ev = allEventsRef.current[eventIdx]
-      if (!ev) return
-      const day = eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]
-      if (day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
-    } else {
-      const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
-      const rowHeight = cellWidth * 1.5 + GAP
-      const totalRows = Math.ceil(walledItems.length / cols)
-      const dominantRow = clamp(
-        Math.floor((scrollTop + rowHeight / 2) / rowHeight),
-        0,
-        totalRows - 1,
-      )
-
-      const rowStart = dominantRow * cols
-      const rowEnd = Math.min(rowStart + cols, walledItems.length)
-      const rowItems = walledItems.slice(rowStart, rowEnd)
-
-      const eventDays = rowItems
-        .filter((item): item is Extract<WallItem, { type: 'poster' }> => item.type === 'poster')
-        .map(item => eventDayMapRef.current.get(item.event.id))
-        .filter((d): d is string => !!d)
-
-      if (eventDays.length === 0) return
-      const latestDay = [...eventDays].sort().at(-1)!
-      if (latestDay !== activeDayRef.current) { setActiveDay(latestDay); onDayChange(latestDay) }
+      anchorWalledIdxRef.current = wi
+      const item = walledItems[wi]
+      if (item?.type === 'date-poster') {
+        setAtDatePoster({ month: parseInt(item.date.split('-')[1], 10) })
+        if (item.date !== activeDayRef.current) { setActiveDay(item.date); onDayChange(item.date) }
+      } else {
+        setAtDatePoster(null)
+        const eidx = walledIdxToEventIdxRef.current[wi] ?? 0
+        setActiveEventIdx(eidx)
+        const ev = allEventsRef.current[eidx]
+        const day = ev ? (eventDayMapRef.current.get(ev.id) ?? daysRef.current[0]) : null
+        if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
+      }
+      return
     }
+
+    // Multi-col: the day of the row at the top of the viewport.
+    const cellWidth = (clientWidth - GAP * (cols - 1)) / cols
+    const rowHeight = cellWidth * 1.5 + GAP
+    const totalRows = Math.ceil(walledItems.length / cols)
+    const topRow = clamp(Math.floor(scrollTop / rowHeight), 0, totalRows - 1)
+    anchorWalledIdxRef.current = clamp(topRow * cols, 0, walledItems.length - 1)
+    const rowItems = walledItems.slice(topRow * cols, topRow * cols + cols)
+    const day = rowItems
+      .filter((it): it is Extract<WallItem, { type: 'poster' }> => it.type === 'poster')
+      .map(it => eventDayMapRef.current.get(it.event.id))
+      .find((d): d is string => !!d)
+    if (day && day !== activeDayRef.current) { setActiveDay(day); onDayChange(day) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Scroll → active day + 1-col-specific state ────────────────────
@@ -317,26 +346,26 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const walledItems = walledItemsRef.current
     if (!container || walledItems.length === 0) return
 
-    if (colsRef.current === 1) {
-      const { scrollTop, clientHeight } = container
-      const wi = clamp(Math.floor(scrollTop / clientHeight), 0, walledItems.length - 1)
-      setActiveEventIdx(walledIdxToEventIdxRef.current[wi] ?? 0)
-      const topItem = walledItems[wi]
-      if (topItem?.type === 'date-poster') {
-        setAtDatePoster({ month: parseInt(topItem.date.split('-')[1], 10) })
-      } else {
-        setAtDatePoster(null)
-      }
-    }
-
+    // Active day, 1-col poster, and the zoom anchor are all computed in
+    // computeActiveDay (driven by the rAF loop below, which is reliable during
+    // iOS momentum). This scroll-event call is just a bonus fast-path.
     computeActiveDay()
 
-    // Back-to-top: show in multi-col after scrolling ~2.5 screens down. Guarded
-    // by a ref so we only setState on the transition, not every scroll tick.
-    const wantBackToTop = colsRef.current !== 1 && container.scrollTop > container.clientHeight * 2.5
-    if (wantBackToTop !== showBackToTopRef.current) {
-      showBackToTopRef.current = wantBackToTop
-      setShowBackToTop(wantBackToTop)
+    // Back-to-top: only offer it in multi-col once scrolled ~2.5 screens down.
+    // While scrolling it stays hidden; it fades in after 3s of stillness and
+    // hides again the instant the user scrolls. The stillness timer is cleared
+    // and re-armed on every scroll tick, so it only fires once motion stops.
+    const eligible = colsRef.current !== 1 && container.scrollTop > container.clientHeight * 2.5
+    if (showBackToTopRef.current) {
+      showBackToTopRef.current = false
+      setShowBackToTop(false)
+    }
+    if (backToTopStillnessRef.current) clearTimeout(backToTopStillnessRef.current)
+    if (eligible) {
+      backToTopStillnessRef.current = setTimeout(() => {
+        showBackToTopRef.current = true
+        setShowBackToTop(true)
+      }, 3000)
     }
 
     // Fallback for browsers/OS versions where scrollend doesn't fire (iOS 17 and older).
@@ -376,8 +405,56 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       el.removeEventListener('scroll', handleScroll)
       el.removeEventListener('scrollend', computeActiveDay)
       if (scrollEndFallbackRef.current) clearTimeout(scrollEndFallbackRef.current)
+      if (backToTopStillnessRef.current) clearTimeout(backToTopStillnessRef.current)
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── rAF-driven scroll tracking (the reliable-on-iOS mechanism) ────
+  // iOS WebKit throttles/drops BOTH scroll events and IntersectionObserver
+  // callbacks during momentum scrolling — that is what froze the date bar and
+  // fed a stale scroll position into the zoom re-anchor. requestAnimationFrame
+  // is NOT throttled during momentum, so we poll scrollTop each frame while
+  // scrolling and recompute everything (computeActiveDay). The loop starts on
+  // any interaction and stops itself once scrolling settles, so it's idle-cheap.
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container) return
+    let raf = 0, lastTop = -1, still = 0, running = false
+
+    const tick = () => {
+      const top = container.scrollTop
+      if (top !== lastTop) { lastTop = top; still = 0; computeActiveDay() }
+      else if (++still > 6) { running = false; return } // ~100ms of stillness → stop
+      raf = requestAnimationFrame(tick)
+    }
+    const start = () => {
+      if (running) return
+      running = true; still = 0; lastTop = -1
+      raf = requestAnimationFrame(tick)
+    }
+
+    container.addEventListener('scroll', start, { passive: true })
+    container.addEventListener('touchstart', start, { passive: true })
+    container.addEventListener('touchmove', start, { passive: true })
+    container.addEventListener('wheel', start, { passive: true })
+    return () => {
+      cancelAnimationFrame(raf)
+      container.removeEventListener('scroll', start)
+      container.removeEventListener('touchstart', start)
+      container.removeEventListener('touchmove', start)
+      container.removeEventListener('wheel', start)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Safety net: if the filtered set shrinks below the current index (e.g. a
+  // filter applied while in 1-col), clamp so the date bar never falls back to
+  // stale date-mode because allEvents[activeEventIdx] went undefined. The
+  // observer then re-fires on the reset scroll and lands on the real poster.
+  useEffect(() => {
+    if (allEvents.length > 0 && activeEventIdx >= allEvents.length) {
+      setActiveEventIdx(allEvents.length - 1)
+    }
+  }, [allEvents.length, activeEventIdx])
 
   // ── Double-tap (2-5 col): zoom to 1-col centered on tapped card ───────
   const pendingScrollIdxRef = useRef<number | null>(null)
@@ -412,6 +489,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     const onCmd = (e: Event) => {
       const cmd = (e as CustomEvent).detail?.cmd
       if (cmd === 'reset-grid') setCols(maxColsRef.current)
+      else if (cmd === 'grid-1col') setCols(1) // guest tutorial: open zoomed into one poster
       else if (cmd === 'lock-scroll') setScrollLocked(true)
       else if (cmd === 'unlock-scroll') setScrollLocked(false)
     }
@@ -425,10 +503,13 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
       setAtDatePoster(null)
       setActiveEventIdx(0) // reset — only meaningful in 1-col
       setRestingPanel(0) // zoom-out resets panel persistence to poster
-    } else if (showBackToTopRef.current) {
+    } else {
       // Entering 1-col (vertical poster nav) — back-to-top doesn't apply there.
-      showBackToTopRef.current = false
-      setShowBackToTop(false)
+      if (backToTopStillnessRef.current) clearTimeout(backToTopStillnessRef.current)
+      if (showBackToTopRef.current) {
+        showBackToTopRef.current = false
+        setShowBackToTop(false)
+      }
     }
   }, [cols])
 
@@ -455,8 +536,28 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
     if (!container) return
     requestAnimationFrame(() => {
       container.scrollTop = idx * container.clientHeight
+      computeActiveDay() // update day/poster now — no scroll event is guaranteed
     })
-  }, [cols])
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-anchor scroll when the column count changes via zoom (pinch/wheel) so the
+  // poster you were looking at stays in view. Skipped when a double-tap drives the
+  // transition (that path scrolls to the tapped poster via pendingScrollIdxRef).
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (!container || pendingScrollIdxRef.current !== null) return
+    const wi = clamp(anchorWalledIdxRef.current, 0, Math.max(0, walledItemsRef.current.length - 1))
+    requestAnimationFrame(() => {
+      const c = colsRef.current
+      if (c === 1) { container.scrollTop = wi * container.clientHeight }
+      else {
+        const cellWidth = (container.clientWidth - GAP * (c - 1)) / c
+        const rowHeight = cellWidth * 1.5 + GAP
+        container.scrollTop = Math.floor(wi / c) * rowHeight
+      }
+      computeActiveDay() // sync the date bar to the re-anchored position immediately
+    })
+  }, [cols]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // In 1-col snap mode, show the current poster's details in the date bar
   const eventInfo: EventInfo | null =
@@ -516,7 +617,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
           walledItems.map((item) => {
             if (item.type === 'date-poster') {
               return (
-                <div key={`d-${item.date}`} style={{ height: '100%', flexShrink: 0, scrollSnapAlign: 'start' }}>
+                <div key={`d-${item.date}`} data-date-id={item.date} style={{ height: '100%', flexShrink: 0, scrollSnapAlign: 'start' }}>
                   <DatePoster date={item.date} />
                 </div>
               )
@@ -565,6 +666,7 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
                   onEventSaved={onEventSaved}
                   enableDesktopNav={enableDesktopNav}
                   transitionName={wi < 40 ? `p-${event.id}` : undefined}
+                  dayKey={eventDayMap.get(event.id)}
                 />
               )
             })}
@@ -581,28 +683,29 @@ export function PosterGrid({ events, activeFilter, searchQuery = '', today, like
         }}
         style={{
           position: 'absolute',
-          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 16px)',
+          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) - 28px)',
           right: 16,
-          width: 44,
-          height: 44,
-          borderRadius: '50%',
-          border: '1px solid var(--fg-15)',
-          background: 'var(--bg)',
-          color: 'var(--fg)',
+          width: 36,
+          height: 36,
+          border: 'none',
+          background: 'none',
+          padding: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+          filter: 'drop-shadow(0 3px 10px rgba(0,0,0,0.4))',
           cursor: 'pointer',
           zIndex: 20,
-          opacity: showBackToTop ? 1 : 0,
-          transform: showBackToTop ? 'translateY(0)' : 'translateY(12px)',
+          opacity: showBackToTop ? 0.45 : 0,
           pointerEvents: showBackToTop ? 'auto' : 'none',
-          transition: 'opacity 200ms ease, transform 200ms ease',
+          // Pure fade, no vertical motion. Slow, gentle fade-in so it's barely
+          // perceptible; quicker fade-out so it clears promptly on scroll.
+          transition: showBackToTop ? 'opacity 1100ms ease-in' : 'opacity 250ms ease',
         }}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 19V5M5 12l7-7 7 7" />
+        <svg width="34" height="34" viewBox="0 0 24 24">
+          {/* Upward triangle — always the light color (#f0ece3) in both themes */}
+          <path d="M12 4 L21 19.5 L3 19.5 Z" fill="#f0ece3" stroke="#f0ece3" strokeWidth="1.4" strokeLinejoin="round" />
         </svg>
       </button>
     </div>

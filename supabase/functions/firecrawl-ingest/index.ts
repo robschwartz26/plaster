@@ -835,7 +835,7 @@ serve(async (req) => {
       const rawVenueName = typeof rl.rawVenueName === 'string' ? rl.rawVenueName : ''
       const orphanIds = Array.isArray(rl.orphanIds) ? rl.orphanIds.filter((x): x is string => typeof x === 'string') : null
       if (!venueId) throw new Error('relink: venueId required')
-      const { data: venue } = await supabaseService.from('venues').select('id, name, neighborhood, address').eq('id', venueId).single()
+      const { data: venue } = await supabaseService.from('venues').select('id, name, neighborhood, address, aliases').eq('id', venueId).single()
       if (!venue) throw new Error('relink: venue not found')
       let q = supabaseService.from('ingest_orphans').select('*').eq('status', 'open')
       if (orphanIds && orphanIds.length) q = q.in('id', orphanIds)
@@ -872,6 +872,25 @@ serve(async (req) => {
         if (insErr) { failed++; errs.push(insErr.message); continue }
         await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
         relinked++
+      }
+      // Remember the clipped spelling(s) as aliases of this venue so the same
+      // name auto-matches on the next clip instead of orphaning again. Dedupe by
+      // normalized form and never store the venue's own name as an alias.
+      if (relinked > 0) {
+        const raw = new Set<string>()
+        if (rawVenueName) raw.add(rawVenueName)
+        for (const o of list) { if (typeof o.raw_venue_name === 'string' && o.raw_venue_name.trim()) raw.add(o.raw_venue_name.trim()) }
+        const venueNorm = normalizeName(venue.name)
+        const existing: string[] = Array.isArray(venue.aliases) ? venue.aliases : []
+        const seen = new Set(existing.map((a: string) => normalizeName(a)))
+        const merged = [...existing]
+        for (const r of raw) {
+          const n = normalizeName(r)
+          if (n && n !== venueNorm && !seen.has(n)) { seen.add(n); merged.push(r) }
+        }
+        if (merged.length !== existing.length) {
+          await supabaseService.from('venues').update({ aliases: merged }).eq('id', venueId)
+        }
       }
       return new Response(JSON.stringify({ relinked, failed, found: list.length, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
@@ -1080,17 +1099,25 @@ serve(async (req) => {
     const maxOut = Math.max(now, floor) + horizonDays * 24 * 60 * 60 * 1000
 
     // Venue list for per-event resolution (handles sister-venue calendars).
-    const { data: allVenues } = await supabaseService.from('venues').select('id, name, neighborhood, address')
-    const venueList = (allVenues ?? []) as Array<{ id: string; name: string; neighborhood: string | null; address: string | null }>
+    const { data: allVenues } = await supabaseService.from('venues').select('id, name, neighborhood, address, aliases')
+    type VRow = { id: string; name: string; neighborhood: string | null; address: string | null; aliases: string[] | null }
+    const venueList = (allVenues ?? []) as VRow[]
+    // Score an extracted name against a venue's canonical name AND any saved
+    // aliases (alternate spellings remembered from prior admin relinks), taking
+    // the best. This is what lets "Twilight Cafe & Bar" resolve to "Twilight
+    // Cafe" once that spelling has been linked on the New Venues screen.
+    const venueScore = (name: string, v: VRow): number =>
+      Math.max(nameSimilarity(name, v.name), ...(v.aliases ?? []).map(a => nameSimilarity(name, a)), 0)
     // Resolve an extracted venue name to one of our venues.
     //   named + matches ≥ threshold → that venue
     //   named + NO match            → NEW venue: orphanName set, id null → PARK (never fall back)
     //   NOT named                   → fall back to the dropdown venue (single-venue-page case)
     function resolveVenue(extractedName: string, fallbackId: string | null): { id: string | null; name: string | null; meta: { neighborhood: string | null; address: string | null }; orphanName: string | null } {
       if (extractedName && extractedName.trim()) {
-        const exact = venueList.find(v => normalizeName(v.name) === normalizeName(extractedName))
-        const best = exact ?? venueList.map(v => ({ v, s: nameSimilarity(extractedName, v.name) })).sort((a, b) => b.s - a.s)[0]?.v
-        const scored = exact ? 1 : (best ? nameSimilarity(extractedName, best.name) : 0)
+        const en = normalizeName(extractedName)
+        const exact = venueList.find(v => normalizeName(v.name) === en || (v.aliases ?? []).some(a => normalizeName(a) === en))
+        const best = exact ?? venueList.map(v => ({ v, s: venueScore(extractedName, v) })).sort((a, b) => b.s - a.s)[0]?.v
+        const scored = exact ? 1 : (best ? venueScore(extractedName, best) : 0)
         if (best && scored >= VENUE_MATCH_THRESHOLD) return { id: best.id, name: best.name, meta: { neighborhood: best.neighborhood, address: best.address }, orphanName: null }
         // Named on the page but unknown to us → park as a NEW venue. Do NOT misattribute.
         return { id: null, name: null, meta: { neighborhood: null, address: null }, orphanName: extractedName.trim() }

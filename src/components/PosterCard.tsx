@@ -51,6 +51,10 @@ interface Props {
   // viewTransitionName for the multi-col root, so a surviving poster glides to its
   // new slot during a filter-change View Transition. Multi-col only; undefined in 1-col.
   transitionName?: string
+  // The event's Portland-local day ("YYYY-MM-DD"), stamped on the multi-col root as
+  // data-day so PosterGrid's IntersectionObserver can read the active day from the
+  // top of the viewport without depending on scroll events.
+  dayKey?: string
 }
 
 interface EventDetail {
@@ -183,7 +187,7 @@ function HeartPill({ count, isLiked, onLike }: { count: number; isLiked: boolean
 const PANEL_PCT = [-20, -40, -60] as const
 const TAN60 = Math.tan(Math.PI / 3)
 
-export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName }: Props) {
+export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLiked, isActive, onDoubleTap, onLike, isAdminMode, onEventSaved, previousPosterUrl, onUndoCrop, onConfirmCrop, enableDesktopNav = false, restingPanel = 0, onPanelSettled, transitionName, dayKey }: Props) {
   const { user, isAdmin } = useAuth()
   const { requireAuth } = useGuestGate()
   const navigate = useNavigate()
@@ -675,6 +679,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
       <div
         ref={cardRef}
         data-tour="onecol"
+        data-poster-id={event.id}
         style={{
           height: '100%',
           background: 'var(--bg)',
@@ -931,6 +936,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
   return (
     <div
       data-tour="poster"
+      data-day={dayKey}
       onClick={handleTap}
       onDoubleClick={enableDesktopNav ? () => onDoubleTap?.(event) : undefined}
       style={{

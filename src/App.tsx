@@ -21,6 +21,7 @@ const LineUp       = lazy(() => import('./pages/LineUpScreen'))
 const MapScreen    = lazy(() => import('./pages/MapScreen').then(m => ({ default: m.MapScreen })))
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy').then(m => ({ default: m.PrivacyPolicy })))
 const TermsOfUse    = lazy(() => import('./pages/TermsOfUse').then(m => ({ default: m.TermsOfUse })))
+const DeleteAccount = lazy(() => import('./pages/DeleteAccount').then(m => ({ default: m.DeleteAccount })))
 const Staff         = lazy(() => import('./pages/StaffScreen').then(m => ({ default: m.StaffScreen })))
 
 // Redirects unauthenticated users to /auth
@@ -59,6 +60,7 @@ function AppRoutes() {
         <Route path="/staff"      element={<ProtectedRoute><Staff /></ProtectedRoute>} />
         <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/terms"      element={<TermsOfUse />} />
+        <Route path="/delete-account" element={<DeleteAccount />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         {/* App shell with persistent BottomNav.
