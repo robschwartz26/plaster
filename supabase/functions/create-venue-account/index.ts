@@ -66,8 +66,54 @@ serve(async (req) => {
 
     // ── Parse body ───────────────────────────────────────────────
     const body = await req.json().catch(() => ({}))
-    const { venue_id } = body as { venue_id?: string }
+    const { venue_id, action = 'create', silent = false, delivered_to } =
+      body as { venue_id?: string; action?: 'create' | 'regenerate' | 'mark_delivered'; silent?: boolean; delivered_to?: string }
     if (!venue_id) return jsonRes({ error: 'venue_id is required' }, 400)
+
+    // ── mark_delivered: record that credentials were handed over ──
+    if (action === 'mark_delivered') {
+      await adminClient.from('venue_account_access').upsert({
+        venue_id,
+        delivered_at: new Date().toISOString(),
+        delivered_to: delivered_to ?? null,
+      }, { onConflict: 'venue_id' })
+      return jsonRes({ ok: true, delivered: true })
+    }
+
+    // ── regenerate: mint a fresh password for hand-off, shown ONCE ──
+    // Nothing is persisted; this response is the only copy.
+    if (action === 'regenerate') {
+      const { data: acct } = await adminClient
+        .from('profiles')
+        .select('id, username')
+        .eq('venue_id', venue_id)
+        .eq('account_type', 'venue')
+        .maybeSingle()
+      if (!acct) return jsonRes({ error: 'This venue has no account yet - create one first.' }, 404)
+
+      const newPassword = randomPassword()
+      const { error: pwErr } = await adminClient.auth.admin.updateUserById(acct.id, { password: newPassword })
+      if (pwErr) {
+        console.error('[create-venue-account] password reset failed:', pwErr.message)
+        return jsonRes({ error: 'Could not reset password', details: pwErr.message }, 500)
+      }
+
+      await adminClient.from('venue_account_access').upsert({
+        venue_id,
+        profile_id:        acct.id,
+        username:          acct.username,
+        last_generated_at: new Date().toISOString(),
+        last_generated_by: user.id,
+      }, { onConflict: 'venue_id' })
+
+      return jsonRes({
+        ok: true,
+        regenerated: true,
+        username: acct.username,
+        email: `venue-${acct.username}@plasterthewall.com`,
+        password: newPassword, // shown once - never stored
+      })
+    }
 
     // ── Load venue ───────────────────────────────────────────────
     const { data: venue, error: venueErr } = await adminClient
@@ -176,12 +222,25 @@ serve(async (req) => {
       return jsonRes({ error: 'Failed to create profile', details: profileErr.message }, 500)
     }
 
+    // Track the account for hand-off (no secret stored).
+    await adminClient.from('venue_account_access').upsert({
+      venue_id:   venue.id,
+      profile_id: newUserId,
+      username,
+    }, { onConflict: 'venue_id' })
+
+    // Silent/bulk mode: the account exists but no credential leaves the server.
+    // Use action:'regenerate' at hand-off time to mint one.
+    if (silent) {
+      return jsonRes({ ok: true, profile_id: newUserId, username, silent: true })
+    }
+
     return jsonRes({
       ok:         true,
       profile_id: newUserId,
       username,
       email,
-      password, // shown once — admin must record
+      password, // shown once - never stored
     })
   } catch (err) {
     console.error('[create-venue-account] uncaught:', err)

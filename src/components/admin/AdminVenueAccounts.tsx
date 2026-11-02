@@ -52,7 +52,7 @@ export function AdminVenueAccounts() {
 
   useEffect(() => { fetchRows() }, [fetchRows])
 
-  async function createAccount(venue_id: string, venue_name: string) {
+  async function createAccount(venue_id: string) {
     setBusyId(venue_id)
     try {
       const { data, error } = await supabase.functions.invoke('create-venue-account', {
@@ -64,7 +64,8 @@ export function AdminVenueAccounts() {
         fetchRows()
         return
       }
-      setRevealed({ venue_id, venue_name, username: data.username, email: data.email, password: data.password })
+      // Silent by design: the account now exists, but no password was returned
+      // or stored. Use "Send access" when the venue actually asks for it.
       fetchRows()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -75,37 +76,66 @@ export function AdminVenueAccounts() {
     }
   }
 
+  /**
+   * Hand-off: mint a fresh password for this venue's account and reveal it ONCE.
+   * Nothing is persisted anywhere — this modal is the only copy, so it is
+   * generated at the moment a real venue asks for their page.
+   */
+  async function regenerateAccess(venue_id: string, venue_name: string) {
+    if (!confirm(`Generate login details for ${venue_name}?\n\nThis sets a new password and shows it once. If they already had one, it stops working.`)) return
+    setBusyId(venue_id)
+    try {
+      const { data, error } = await supabase.functions.invoke('create-venue-account', {
+        body: { venue_id, action: 'regenerate' },
+      })
+      if (error) throw error
+      if (data?.error) throw new Error(data.error)
+      setRevealed({ venue_id, venue_name, username: data.username, email: data.email, password: data.password })
+      fetchRows()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('[AdminVenueAccounts] regenerateAccess failed:', msg)
+      alert(`Failed: ${msg}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function createAllMissing() {
     const missing = rows.filter(r => !r.has_account)
     if (missing.length === 0) { alert('All venues already have accounts.'); return }
-    if (!confirm(`Create accounts for ${missing.length} venues? This cannot be undone.`)) return
+    if (!confirm(`Create accounts for ${missing.length} venues?\n\nNo passwords are generated or stored. Use "Send access" on a venue when they ask for their page.`)) return
 
     setBulkBusy(true)
     setBulkResults([])
-    const collected: CreatedCredentials[] = []
+    let created = 0
+    const failed: string[] = []
 
     for (let i = 0; i < missing.length; i++) {
       const r = missing[i]
       setBulkProgress(`Creating ${i + 1} of ${missing.length}: ${r.venue_name}…`)
       try {
+        // silent: the account is created but no credential is returned or stored.
         const { data, error } = await supabase.functions.invoke('create-venue-account', {
-          body: { venue_id: r.venue_id },
+          body: { venue_id: r.venue_id, silent: true },
         })
         if (error) throw error
-        if (!data.already_exists) {
-          collected.push({ venue_id: r.venue_id, venue_name: r.venue_name, username: data.username, email: data.email, password: data.password })
-        }
+        if (!data.already_exists) created++
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[AdminVenueAccounts] bulk create failed for', r.venue_name, ':', msg)
-        collected.push({ venue_id: r.venue_id, venue_name: r.venue_name, username: '(failed)', email: '', password: msg })
+        failed.push(r.venue_name)
       }
     }
 
     setBulkProgress(null)
-    setBulkResults(collected)
     setBulkBusy(false)
     fetchRows()
+    alert(
+      `Created ${created} venue account${created === 1 ? '' : 's'}.` +
+      (failed.length ? `\n\nFailed (${failed.length}): ${failed.join(', ')}` : '') +
+      `\n\nNo passwords were stored. Hit "Send access" on a venue to generate one when they ask.`
+    )
   }
 
   function copyAll() {
@@ -227,12 +257,20 @@ export function AdminVenueAccounts() {
                   >
                     Imagery
                   </button>
+                  <button
+                    onClick={() => regenerateAccess(r.venue_id, r.venue_name)}
+                    disabled={busyId === r.venue_id}
+                    style={{ ...smallBtnStyle, opacity: busyId === r.venue_id ? 0.5 : 1 }}
+                    title="Generate login details to send this venue (shown once, never stored)"
+                  >
+                    {busyId === r.venue_id ? 'Working…' : 'Send access'}
+                  </button>
                 </>
               ) : (
                 <>
                   <span style={pillStyle('#6b7280', '#1f2937')}>No account</span>
                   <button
-                    onClick={() => createAccount(r.venue_id, r.venue_name)}
+                    onClick={() => createAccount(r.venue_id)}
                     disabled={busyId === r.venue_id}
                     style={{
                       ...smallBtnStyle,
