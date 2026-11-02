@@ -10,9 +10,15 @@ import { CapacitorUpdater } from '@capgo/capacitor-updater'
 
 if (Capacitor.isNativePlatform()) {
   Keyboard.setAccessoryBarVisible({ isVisible: false }).catch(() => { /* silent */ })
-  StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
+  // iOS: @capacitor/status-bar overlays the WebView (edge-to-edge). On Android,
+  // @capacitor-community/safe-area owns edge-to-edge + inset polyfill (see
+  // MainActivity), so we must NOT drive the status-bar plugin there — it would
+  // conflict. Status-bar content color is set per-theme in useTheme.
+  if (Capacitor.getPlatform() === 'ios') {
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => { /* silent */ })
+  }
   // Capgo OTA: REQUIRED — tells the updater this bundle booted successfully.
-  // Without it, every OTA update auto-rolls-back on the next launch.
+  // Without it, every OTA update auto-rolls-back on the next launch. (Both platforms.)
   CapacitorUpdater.notifyAppReady().catch(() => { /* web / plugin absent */ })
 }
 

@@ -51,4 +51,11 @@ codebase*.md
 .clipper-token
 .capgo-key
 .webhook-secret
+android/app/google-services.json
+.fcm-sa.json
+*firebase-adminsdk*.json
+android/app/upload-keystore.jks
+android/keystore.properties
+.android-keystore-pw
+play-store-assets/
 .admin-login
