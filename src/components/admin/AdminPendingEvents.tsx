@@ -35,6 +35,34 @@ function fmtShort(iso: string) {
 }
 
 // ── Structured rejection reasons ─────────────────────────────
+// One show across many dates arrives as one events row per date, which buried the
+// Review queue under near-identical cards. Collapse them into a single card.
+// Keyed on what a person reads as "the same event" — venue + title + poster —
+// rather than recurrence_group_id, which admin_pending_events does not return
+// and which an unrelated multi-date import would not carry anyway.
+function seriesTitle(s: string): string {
+  return (s || '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
+
+function seriesKey(e: PendingEvent): string {
+  return `${e.venue_id ?? ''}|${seriesTitle(e.title)}|${e.poster_url ?? ''}`
+}
+
+// Preserves the incoming order: a series takes the position of its first date.
+function intoSeries(group: PendingEvent[]): PendingEvent[][] {
+  const byKey = new Map<string, PendingEvent[]>()
+  for (const e of group) {
+    const k = seriesKey(e)
+    const bucket = byKey.get(k)
+    if (bucket) bucket.push(e)
+    else byKey.set(k, [e])
+  }
+  for (const bucket of byKey.values()) {
+    bucket.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
+  }
+  return [...byKey.values()]
+}
+
 type RejectionReason = 'duplicate' | 'wrong_date' | 'bad_image' | 'not_an_event' | 'other'
 
 const QUICK_REASONS: { value: Exclude<RejectionReason, 'other'>; label: string }[] = [
@@ -111,6 +139,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const [stats, setStats] = useState<Stats | null>(null)
   const [rejectingId, setRejectingId] = useState<string | null>(null)
   const [rejectAllOpen, setRejectAllOpen] = useState(false)
+  const [openSeries, setOpenSeries] = useState<Set<string>>(new Set())
   const [editingId, setEditingId] = useState<string | null>(null)   // row open in the editor
   const [venues, setVenues] = useState<VenueLite[]>([])
 
@@ -193,6 +222,49 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     })
     setBusyId(null)
     if (error) console.error('[AdminPendingEvents] consolidate failed', error)
+    fetchPending()
+  }
+
+  // Whole-series versions of the row actions: approving or rejecting "the event"
+  // means all of its dates, which is how it reads on screen now.
+  async function passSeries(series: PendingEvent[]) {
+    if (!user) return
+    setBusyId(series[0].id)
+    const { error } = await supabase.from('events').update({ passed_review: true }).in('id', series.map(e => e.id))
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] pass series failed', error)
+    fetchPending()
+  }
+
+  async function rejectSeries(series: PendingEvent[], reason: RejectionReason, note: string | null) {
+    if (!user) return
+    setBusyId(series[0].id)
+    const { error } = await supabase.from('events').update({
+      status: 'rejected',
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: reason,
+      rejection_note: note,
+    }).in('id', series.map(e => e.id))
+    setBusyId(null)
+    setRejectingId(null)
+    if (error) console.error('[AdminPendingEvents] reject series failed', error)
+    fetchPending()
+  }
+
+  // Drop one date out of a series without touching the rest.
+  async function dropDate(id: string) {
+    if (!user) return
+    setBusyId(id)
+    const { error } = await supabase.from('events').update({
+      status: 'rejected',
+      reviewed_by: user.id,
+      reviewed_at: new Date().toISOString(),
+      rejection_reason: 'wrong_date',
+      rejection_note: 'removed from series in Review',
+    }).eq('id', id)
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] drop date failed', error)
     fetchPending()
   }
 
@@ -345,7 +417,11 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {group.map(e => {
+              {intoSeries(group).map(series => {
+                const e = series[0]
+                const multi = series.length > 1
+                const sKey = seriesKey(e)
+                const isOpen = openSeries.has(sKey)
                 const isBusy = busyId === e.id || isGroupBusy
                 return (
                   <div
@@ -390,8 +466,39 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                           )}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--fg-55)' }}>
-                          {e.venue_name} · {fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}
+                          {e.venue_name} · {multi
+                            ? <>{series.length} dates · {fmtShort(e.starts_at)} – {fmtShort(series[series.length - 1].starts_at)} at {fmtTime(e.starts_at)}</>
+                            : <>{fmtDate(e.starts_at)} at {fmtTime(e.starts_at)}</>}
                         </div>
+                        {multi && (
+                          <>
+                            <button
+                              onClick={() => setOpenSeries(prev => {
+                                const next = new Set(prev)
+                                next.has(sKey) ? next.delete(sKey) : next.add(sKey)
+                                return next
+                              })}
+                              style={{ background: 'none', border: 'none', padding: 0, marginTop: 3, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600, color: '#A855F7' }}
+                            >
+                              {isOpen ? '▾ Hide dates' : `▸ Show all ${series.length} dates`}
+                            </button>
+                            {isOpen && (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                                {series.map(d => (
+                                  <span key={d.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--fg-65)', background: 'var(--fg-08)', border: '1px solid var(--fg-15)', borderRadius: 4, padding: '2px 5px 2px 7px' }}>
+                                    {fmtShort(d.starts_at)}
+                                    <button
+                                      onClick={() => dropDate(d.id)}
+                                      disabled={busyId === d.id}
+                                      title="Remove just this date"
+                                      style={{ background: 'none', border: 'none', padding: 0, lineHeight: 1, cursor: busyId === d.id ? 'wait' : 'pointer', color: 'rgba(239,68,68,0.75)', fontSize: 11 }}
+                                    >✕</button>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 11, color: 'var(--fg-40)' }}>added {fmtShort(e.created_at)}</span>
                           {e.ai_confidence != null && (
@@ -421,19 +528,19 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button
-                        onClick={() => passToPending(e.id)}
+                        onClick={() => multi ? passSeries(series) : passToPending(e.id)}
                         disabled={isBusy || needsPhoto(e)}
                         title={needsPhoto(e) ? 'Add a photo first (expand ▸ Edit)' : undefined}
                         style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: 'none', background: 'var(--fg)', color: 'var(--bg)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 700, fontSize: 13, cursor: isBusy || needsPhoto(e) ? 'not-allowed' : 'pointer', opacity: isBusy || needsPhoto(e) ? 0.5 : 1 }}
                       >
-                        {busyId === e.id ? '…' : needsPhoto(e) ? 'Add photo first' : 'Pass to Pending →'}
+                        {busyId === e.id ? '…' : needsPhoto(e) ? 'Add photo first' : multi ? `Pass ${series.length} dates to Pending →` : 'Pass to Pending →'}
                       </button>
                       <button
                         onClick={() => setRejectingId(prev => prev === e.id ? null : e.id)}
                         disabled={isBusy}
                         style={{ flex: 1, padding: '8px 0', borderRadius: 7, border: '1px solid var(--fg-25)', background: rejectingId === e.id ? 'var(--fg-08)' : 'transparent', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 13, cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1 }}
                       >
-                        Reject
+                        {multi ? `Reject all ${series.length}` : 'Reject'}
                       </button>
                       {e.is_duplicate && e.duplicate_of && (
                         <button
@@ -449,7 +556,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       <ReasonPicker
                         busy={busyId === e.id}
                         onCancel={() => setRejectingId(null)}
-                        onPick={(reason, note) => reject(e.id, reason, note)}
+                        onPick={(reason, note) => multi ? rejectSeries(series, reason, note) : reject(e.id, reason, note)}
                       />
                     )}
 
@@ -461,7 +568,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       {editingId === e.id ? '▾ Hide editor' : '▸ Edit & preview info page'}
                     </button>
                     {editingId === e.id && (
-                      <ReviewRowEditor row={e} venues={venues} onSaved={fetchPending} />
+                      <ReviewRowEditor row={e} venues={venues} onSaved={fetchPending} seriesIds={series.map(d => d.id)} />
                     )}
                   </div>
                 )

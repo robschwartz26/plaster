@@ -20,7 +20,11 @@ function isoToLocalInput(iso: string): string {
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
-export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; venues: VenueLite[]; onSaved: () => void }) {
+export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row: PendingEvent; venues: VenueLite[]; onSaved: () => void; seriesIds?: string[] }) {
+  // A collapsed series shows one card for many dates. Shared fields (title,
+  // venue, category, blurb, poster, sold-out) save to every date in the series;
+  // starts_at stays per-row, or every date would collapse onto one.
+  const siblingIds = seriesIds.filter(id => id !== row.id)
   const [title, setTitle] = useState(row.title)
   const [venueId, setVenueId] = useState(row.venue_id ?? '')
   const [category, setCategory] = useState(row.category ?? 'Other')
@@ -192,6 +196,19 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         address: venue?.address ?? null,
       }).eq('id', row.id)
       if (updErr) throw updErr
+      if (siblingIds.length) {
+        const { error: sibErr } = await supabase.from('events').update({
+          title: title.trim(),
+          venue_id: venueId || null,
+          category,
+          description: description.trim() || null,
+          sold_out: soldOut,
+          poster_url: newPosterUrl,
+          neighborhood: venue?.neighborhood ?? null,
+          address: venue?.address ?? null,
+        }).in('id', siblingIds)
+        if (sibErr) throw sibErr
+      }
       setPosterUrl(newPosterUrl); setPosterFile(null)
       setSaved(true)
       onSaved()
@@ -295,8 +312,11 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={save} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : 'Save changes'}
+            {saving ? 'Saving…' : siblingIds.length ? `Save to all ${siblingIds.length + 1} dates` : 'Save changes'}
           </button>
+          {siblingIds.length > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--fg-40)' }}>date &amp; time applies to this one only</span>
+          )}
           {saved && <span style={{ fontSize: 12, color: '#4ade80' }}>Saved ✓</span>}
           {err && <span style={{ fontSize: 12, color: '#e05555' }}>{err}</span>}
         </div>
