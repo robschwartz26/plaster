@@ -824,6 +824,71 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'clipper token only permits clipper captures' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ ORPHAN SCHEDULE: dates grabbed for a venue Plaster does not know yet ══
+    // {clipper_orphan_schedule:{orphan_id, image_base64, mimeType}} — same Vision
+    // read as clipper_schedule, but the capture has no event to clone: it is
+    // parked in ingest_orphans. The dates are stashed on the orphan and expanded
+    // into one pending event each at relink. Repeatable: each grab merges into
+    // whatever is already stored, deduped by date+time.
+    if (body.clipper_orphan_schedule && typeof body.clipper_orphan_schedule === 'object') {
+      const os = body.clipper_orphan_schedule as { orphan_id?: string; image_base64?: string; mimeType?: string }
+      const oid = typeof os.orphan_id === 'string' ? os.orphan_id : ''
+      if (!/^[0-9a-f-]{36}$/i.test(oid)) throw new Error('clipper_orphan_schedule: orphan_id required')
+      if (typeof os.image_base64 !== 'string' || os.image_base64.length < 100) throw new Error('clipper_orphan_schedule: image required')
+      const { data: orph } = await supabaseService.from('ingest_orphans').select('id, title, starts_at, extra_dates, status').eq('id', oid).maybeSingle()
+      if (!orph) return new Response(JSON.stringify({ status: 'error', reason: 'orphan not found' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      if (orph.status !== 'open') return new Response(JSON.stringify({ status: 'error', reason: 'that capture has already been linked — add dates from the Review editor instead' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+
+      const KEY3 = Deno.env.get('ANTHROPIC_API_KEY')
+      if (!KEY3) throw new Error('ANTHROPIC_API_KEY secret not set')
+      const mime3 = typeof os.mimeType === 'string' && /^image\//.test(os.mimeType) ? os.mimeType : 'image/png'
+      const r3 = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': KEY3, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({
+          model: Deno.env.get('EXTRACT_MODEL') ?? 'claude-sonnet-4-6', max_tokens: 1000,
+          messages: [{ role: 'user', content: [
+            { type: 'image', source: { type: 'base64', media_type: mime3, data: os.image_base64 } },
+            { type: 'text', text: `This screenshot shows a schedule of dates (and possibly times) for the event "${orph.title}". Today is ${portlandToday()}. List EVERY performance date shown, expanding shorthand: a range like "Aug 14-17" means EACH day in the range; weekday patterns like "Thursdays-Saturdays through Oct 4" or "every Friday in September" mean each matching calendar date; a calendar grid means each marked day. If different dates show different times, emit one occurrence per date+time. Respond with ONLY JSON: {"occurrences":[{"date":"YYYY-MM-DD","time":"8:00 PM"|null}]}. If a year is missing or would be in the past, use the next upcoming occurrence. Expand only what is actually printed — never invent dates. If no real dates are visible, respond {"occurrences":[]}.` },
+          ] }],
+        }),
+        signal: AbortSignal.timeout(60000),
+      })
+      if (!r3.ok) return new Response(JSON.stringify({ status: 'error', reason: `vision ${r3.status}` }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      const j3 = await r3.json()
+      let occ3: Array<{ date?: string; time?: string | null }> = []
+      try {
+        const txt = (j3?.content?.[0]?.text ?? '').replace(/```json|```/g, '').trim()
+        occ3 = JSON.parse(txt)?.occurrences ?? []
+      } catch { occ3 = [] }
+      const incoming = occ3
+        .filter(o => typeof o?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.date))
+        .map(o => ({ date: o.date as string, time: (typeof o.time === 'string' && o.time.trim()) ? o.time.trim() : null }))
+      if (!incoming.length) {
+        return new Response(JSON.stringify({ status: 'error', reason: 'no dates found in that selection' }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+
+      // Merge with what is already stored AND with the orphan's own date, so a
+      // re-grab of an overlapping screenshot adds only what is genuinely new.
+      const held = Array.isArray(orph.extra_dates) ? orph.extra_dates as Array<{ date: string; time: string | null }> : []
+      const ownDate = portlandDate(new Date(orph.starts_at))
+      const seen = new Set<string>([...held.map(h => `${h.date}|${h.time ?? ''}`), `${ownDate}|`])
+      const merged = [...held]
+      let added = 0
+      for (const o of incoming) {
+        const k = `${o.date}|${o.time ?? ''}`
+        if (seen.has(k) || o.date === ownDate) continue
+        seen.add(k); merged.push(o); added++
+      }
+      merged.sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')))
+      const { error: updErr } = await supabaseService.from('ingest_orphans').update({ extra_dates: merged }).eq('id', oid)
+      if (updErr) return new Response(JSON.stringify({ status: 'error', reason: updErr.message }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      return new Response(JSON.stringify({
+        status: 'ok', added, skipped: incoming.length - added, total: merged.length + 1,
+        dates: merged.map(m => m.date),
+      }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     // ═══ RELINK: parked orphans → pending Review events for a (new/existing) venue ══
     // Handled FIRST — a relink request carries no url, so it must run before the url
     // check below. Self-contained (no scrape-sources): re-hosts the stored poster,
@@ -851,12 +916,16 @@ serve(async (req) => {
       for (const o of list) {
         const posterUrl = await rehostImage(supabaseService, o.image_url ?? null, imageDeadline)
         const cat = typeof o.category === 'string' && CATEGORIES.includes(o.category) ? o.category : 'Live Music'
-        const { data: ins, error: insErr } = await supabaseService.from('events').insert({
+        // Dates grabbed in the Clipper while this was still an orphan (migration
+        // 110). Each becomes its own pending event beside the original, all
+        // sharing one recurrence_group_id so they read as a single run.
+        const extra = Array.isArray(o.extra_dates) ? o.extra_dates as Array<{ date: string; time: string | null }> : []
+        const seriesId = extra.length ? crypto.randomUUID() : null
+        const baseRow = {
           venue_id: venueId,
           title: o.title,
           category: cat,
           poster_url: posterUrl,
-          starts_at: o.starts_at,
           description: o.description ?? null,
           neighborhood: venue.neighborhood,
           address: venue.address,
@@ -868,8 +937,26 @@ serve(async (req) => {
           source_url: o.event_url || o.source_url || null,
           ai_confidence: typeof o.confidence === 'number' ? o.confidence : 90,
           artist_name: o.artist_name ?? null,
-        }).select('id').single()
+          ...(seriesId ? { recurrence_group_id: seriesId } : {}),
+        }
+        const { data: ins, error: insErr } = await supabaseService.from('events')
+          .insert({ ...baseRow, starts_at: o.starts_at }).select('id').single()
         if (insErr) { failed++; errs.push(insErr.message); continue }
+        if (extra.length) {
+          // Reuse the original's time-of-day when a date carried none.
+          const basePT = o.starts_at as string
+          const rows = extra
+            .map(d => {
+              const iso = ptTimestamp(d.date, d.time ?? null)
+              return iso ? { ...baseRow, starts_at: iso.toISOString() } : null
+            })
+            .filter((r): r is typeof baseRow & { starts_at: string } => r !== null)
+            .filter(r => r.starts_at !== basePT)
+          if (rows.length) {
+            const { error: exErr } = await supabaseService.from('events').insert(rows)
+            if (exErr) errs.push(`${o.title} extra dates: ${exErr.message}`)
+          }
+        }
         await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
         relinked++
       }
@@ -1156,6 +1243,7 @@ serve(async (req) => {
         }
       }
       let inserted = 0, failed = 0, skipped = 0, parked = 0
+      const parkedIds: string[] = []
       const parkedVenues = new Set<string>()
       const errors: string[] = []
       const insertedIds: string[] = []
@@ -1196,7 +1284,7 @@ serve(async (req) => {
         if (rv.orphanName) {
           const okey = `${normalizeName(rv.orphanName)}|${portlandDate(new Date(ev.starts_at))}|${normalizeName(ev.title)}`
           if (orphanIndex.has(okey)) { skipped++; continue }
-          const { error: orphErr } = await supabaseService.from('ingest_orphans').insert({
+          const { data: orphRow, error: orphErr } = await supabaseService.from('ingest_orphans').insert({
             title: ev.title,
             starts_at: ev.starts_at,
             raw_venue_name: rv.orphanName,
@@ -1211,9 +1299,14 @@ serve(async (req) => {
             raw_venue_address: ev.venue_address || null,
             raw_venue_website: ev.venue_website || null,
             artist_name: ev.artist_name?.trim() || null,
-          })
+          }).select('id').maybeSingle()
           if (orphErr) { failed++; errors.push(`${ev.title}: ${orphErr.message}`) }
-          else { parked++; parkedVenues.add(rv.orphanName); orphanIndex.add(okey) }
+          else {
+            parked++; parkedVenues.add(rv.orphanName); orphanIndex.add(okey)
+            // The Clipper needs this to attach a schedule grab to a brand-new
+            // venue, which has no event row yet.
+            if (orphRow?.id) parkedIds.push(orphRow.id as string)
+          }
           continue
         }
         if (!rv.id) { failed++; errors.push(`${ev.title}: no venue`); continue }
@@ -1243,7 +1336,7 @@ serve(async (req) => {
         if (insErr) { failed++; errors.push(`${ev.title}: ${insErr.message}`) }
         else { inserted++; index.add(key); if (insData?.[0]?.id) insertedIds.push(insData[0].id as string) }
       }
-      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors, insertedIds }
+      return { inserted, failed, skipped, parked, parkedVenues: [...parkedVenues], errors, insertedIds, parkedIds }
     }
 
     // ═══ CLIPPER: capture from the browser extension — Rob navigates, we package ══
@@ -1461,6 +1554,7 @@ serve(async (req) => {
         inserted: ins.inserted, skipped: ins.skipped, parked: ins.parked, failed: ins.failed,
         event_name: e0?.title ?? null,
         event_ids: ins.insertedIds ?? [],
+        orphan_ids: ins.parkedIds ?? [],
         preview: e0 ? {
           title: e0.title, date: e0.date, time: e0.time_display || null,
           venue: rv0?.name ?? e0.venue_name ?? null, category: e0.category,

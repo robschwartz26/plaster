@@ -188,6 +188,19 @@ async function render() {
       })
       row.appendChild(force)
     }
+    // NEW VENUE (status 'orphaned'): the capture is parked in ingest_orphans and
+    // has no event yet, so dates go onto the ORPHAN and are expanded into one
+    // pending event each when it is relinked in /admin. Repeatable.
+    if (r.status === 'orphaned' && Array.isArray(r.orphanIds) && r.orphanIds.length) {
+      const n = r.orphanDates ?? 0
+      const os = document.createElement('button'); os.className = 'mini go'
+      os.textContent = n ? `＋ Grab more dates (${n} held)` : '＋ Grab schedule (more dates)'
+      os.title = 'Highlight the printed dates — stored with this capture and added when you approve the venue in /admin'
+      os.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'plaster-orphan-schedule', logId: r.id, orphanId: r.orphanIds[0] })
+      })
+      row.appendChild(os)
+    }
     if (r.status === 'saved' && Array.isArray(r.eventIds) && r.eventIds.length) {
       const sched = document.createElement('button'); sched.className = 'mini go'; sched.textContent = '＋ Grab schedule (more dates)'
       sched.dataset.repeatable = '1'

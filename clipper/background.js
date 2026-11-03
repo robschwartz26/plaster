@@ -186,7 +186,7 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
     ;(BADGE[json.status] || BADGE.error)()
     await updateLog(logId, {
       status: json.status, event: json.event_name, reason: json.reason,
-      eventIds: json.event_ids || [], preview: json.preview ?? null,
+      eventIds: json.event_ids || [], orphanIds: json.orphan_ids || [], preview: json.preview ?? null,
       // duplicates + far-date confirms keep their payload for one-click replay
       ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload, confirmVenueName: json.confirm_venue_name ?? null } : {}),
     })
@@ -315,6 +315,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return
   }
 
+  if (msg?.type === 'plaster-orphan-schedule') {
+    ;(async () => {
+      await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: null, orphanId: msg.orphanId } })
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+      try {
+        await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['select.js'] })
+      } catch {
+        BADGE.error()
+        await updateLog(msg.logId, { reason: 'cannot select on this page' })
+      }
+      sendResponse({ ok: true })
+    })()
+    return true
+  }
+
   if (msg?.type === 'plaster-schedule') {
     ;(async () => {
       await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: msg.eventId ?? null } })
@@ -403,6 +418,38 @@ async function sendSchedule({ base64, tab }) {
   const { scheduleTarget } = await chrome.storage.session.get('scheduleTarget')
   await chrome.storage.session.remove('scheduleTarget')
   if (!token || !scheduleTarget?.logId) return
+
+  // NEW VENUE: the capture is parked as an orphan, so the dates are stored
+  // server-side against it and expanded at relink. Posts immediately — no
+  // local queue needed, and a repeat grab merges on the server.
+  if (scheduleTarget.orphanId) {
+    BADGE.busy()
+    try {
+      const { token: tk, endpoint } = await getSettings()
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-clipper-token': tk, 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
+        body: JSON.stringify({ clipper_orphan_schedule: { orphan_id: scheduleTarget.orphanId, image_base64: base64, mimeType: 'image/png' } }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.status === 'error') {
+        BADGE.error()
+        await updateLog(scheduleTarget.logId, { reason: 'schedule: ' + (json.reason || json.error || `HTTP ${res.status}`) })
+        if (tab?.id) toast(tab.id, '✗ ' + (json.reason || 'schedule read failed'), false)
+        return
+      }
+      BADGE.saved()
+      await updateLog(scheduleTarget.logId, {
+        orphanDates: json.total ?? 0,
+        reason: `＋ ${json.added} date${json.added === 1 ? '' : 's'} stored${json.skipped ? ` (${json.skipped} already held)` : ''} — added when you approve the venue`,
+      })
+      if (tab?.id) toast(tab.id, `✓ ${json.added} more date${json.added === 1 ? '' : 's'} held for this new venue`, true)
+    } catch (e) {
+      BADGE.error()
+      await updateLog(scheduleTarget.logId, { reason: 'schedule failed: ' + String(e).slice(0, 80) })
+    }
+    return
+  }
 
   // Deferred: captured on a card whose event is not saved yet (new-venue
   // confirm). Hold it — flushPendingSchedules replays it after the save.
