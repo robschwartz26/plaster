@@ -3,6 +3,7 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
 import { expandOccurrences } from '@/lib/recurringDates'
+import { checkInDate } from '@/components/admin/adminShared'
 import {
   fileFromDrop,
   IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
@@ -79,6 +80,11 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   const [scheduleDragging, setScheduleDragging] = useState(false)
   const scheduleFileRef = useRef<HTMLInputElement>(null)
   const [scheduleShots, setScheduleShots] = useState(0)
+  // Multi-date imports are mostly FINITE runs (a musical, a tour stop) that
+  // correctly end, so they get no check-in by default. Tick this for the ones
+  // that genuinely keep going — a market, a residency — and they join the
+  // recurring check-in queue like a toggle-created series.
+  const [ongoingSeries, setOngoingSeries] = useState(false)
   const [scheduleGained, setScheduleGained] = useState(0)
   const [scheduleTotal, setScheduleTotal] = useState(0)
 
@@ -419,14 +425,14 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
           )
           if (eventError) throw eventError
           const lastDate = dates[dates.length - 1]
-          const snoozeDate = new Date(lastDate); snoozeDate.setMonth(snoozeDate.getMonth() + 3)
+          const snoozeDate = checkInDate(lastDate)
           const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
           const freqMsg = recurrenceFrequency === 'weekly' ? 'weekly' : recurrenceFrequency === 'biweekly' ? 'bi-weekly' : recurrenceFrequency === 'monthly' ? 'monthly' : 'on specific weekdays'
           if (!staffMode) {
             await supabaseAdmin.from('admin_notifications').insert({
               type: 'recurrence_check',
               title: `Check recurring event: ${form.title}`,
-              message: `${form.title} at ${venueName} was scheduled ${freqMsg} through ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
+              message: `${form.title} at ${venueName} runs ${freqMsg} and its last date on the wall is ${lastDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Extend another 3 months or mark as ended.`,
               recurrence_group_id: recurrenceGroupId,
               snoozed_until: snoozeDate.toISOString(),
             })
@@ -445,6 +451,19 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
           }))
           const { error: eventError } = await supabaseAdmin.from('events').insert(allRows)
           if (eventError) throw eventError
+          // Opted-in ongoing series get the same pre-lapse check-in the recurring
+          // toggle creates; finite runs stay silent so the queue isn't spammed.
+          if (seriesId && ongoingSeries && !staffMode) {
+            const lastOcc = new Date(occurrences[occurrences.length - 1].starts_at)
+            const venueName = venues.find(v => v.id === venue_id)?.name || 'the venue'
+            await supabaseAdmin.from('admin_notifications').insert({
+              type: 'recurrence_check',
+              title: `Check recurring event: ${form.title}`,
+              message: `${form.title} at ${venueName} has ${occurrences.length} dates on the wall, the last on ${lastOcc.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}. Still running? Add the next batch of dates or mark as ended.`,
+              recurrence_group_id: seriesId,
+              snoozed_until: checkInDate(lastOcc).toISOString(),
+            })
+          }
           setSuccessCount(allRows.length)
         } else {
           const { error: eventError } = await supabaseAdmin.from('events').insert({ ...baseRow, starts_at: startDate.toISOString() })
@@ -511,7 +530,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError(''); setScheduleShots(0); setScheduleGained(0); setScheduleTotal(0); setSourceUrl(''); setFlagNote('')
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setOngoingSeries(false); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError(''); setScheduleShots(0); setScheduleGained(0); setScheduleTotal(0); setSourceUrl(''); setFlagNote('')
   }
 
   // DEV: generate a mock test poster
@@ -1071,9 +1090,20 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
               </div>
             ))}
             {extraDates.length > 0 && (
-              <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
-                {1 + extraDates.length} dates · same poster, title, and venue for each
-              </p>
+              <>
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', margin: 0 }}>
+                  {1 + extraDates.length} dates · same poster, title, and venue for each
+                </p>
+                {/* Off by default: most multi-date imports are finite runs that
+                    genuinely end, and notifying on those would spam the queue. */}
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 7, cursor: 'pointer', marginTop: 2 }}>
+                  <input type="checkbox" checked={ongoingSeries} onChange={e => setOngoingSeries(e.target.checked)} style={{ marginTop: 2, flexShrink: 0 }} />
+                  <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-55)', lineHeight: 1.45 }}>
+                    <strong style={{ color: 'var(--fg-65)' }}>Ongoing series</strong> — remind me two weeks before the last date, so it never drops off the wall.
+                    <span style={{ color: 'var(--fg-40)' }}> Leave off for a run that genuinely ends.</span>
+                  </span>
+                </label>
+              </>
             )}
           </div>
 

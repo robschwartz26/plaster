@@ -178,6 +178,21 @@ export function fmtShortDate(d: Date): string {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 }
 
+// When the "still running?" check-in should surface for a series whose last
+// generated date is `lastDate`. It fires BEFORE the series runs out, not after:
+// the old behaviour (+3 months) meant the wall had already been dark for a full
+// quarter by the time anyone was told. Two weeks of lead time leaves a couple of
+// occurrences still on the wall to extend from. A series imported with little or
+// no runway left yields a date in the past, so it surfaces immediately — which
+// is correct, it is already urgent.
+export const CHECK_IN_LEAD_DAYS = 14
+
+export function checkInDate(lastDate: Date): Date {
+  const d = new Date(lastDate)
+  d.setDate(d.getDate() - CHECK_IN_LEAD_DAYS)
+  return d
+}
+
 export function generateOccurrenceDates(start: Date, freq: RecurrenceFrequency): Date[] {
   const dates: Date[] = []
   const end = new Date(start); end.setMonth(end.getMonth() + 3)

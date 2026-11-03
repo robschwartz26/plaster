@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
-import { generateOccurrenceDates, type AdminNotification, type RecurrenceFrequency } from '@/components/admin/adminShared'
+import { generateOccurrenceDates, checkInDate, type AdminNotification, type RecurrenceFrequency } from '@/components/admin/adminShared'
 
 export function AdminNotifications() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([])
@@ -47,8 +47,7 @@ export function AdminNotifications() {
         fill_frame: last.fill_frame, focal_x: last.focal_x, focal_y: last.focal_y,
         recurrence_group_id: n.recurrence_group_id, recurrence_frequency: freq,
       })))
-      const newSnooze = new Date(newDates[newDates.length - 1])
-      newSnooze.setMonth(newSnooze.getMonth() + 3)
+      const newSnooze = checkInDate(newDates[newDates.length - 1])
       await supabaseAdmin.from('admin_notifications').update({ snoozed_until: newSnooze.toISOString() }).eq('id', n.id)
       await fetchNotifications()
     } finally { setActioning(null) }
