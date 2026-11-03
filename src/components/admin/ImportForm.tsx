@@ -25,6 +25,25 @@ function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
 }
 
 
+type Occ = { date: string; time: string }
+
+// Union of the dates already held and the ones just read off a screenshot.
+// Same date+time = the same showing, so it collapses; a date carrying no time
+// yields to a timed entry for that day (the time is strictly better info),
+// while two different times on one day are kept as separate showings.
+function mergeOccurrences(held: Occ[], incoming: Occ[]): Occ[] {
+  const byKey = new Map<string, Occ>()
+  for (const o of [...held, ...incoming]) {
+    if (!o.date) continue
+    byKey.set(`${o.date}T${o.time || ''}`, { date: o.date, time: o.time || '' })
+  }
+  const all = [...byKey.values()]
+  const timedDays = new Set(all.filter(o => o.time).map(o => o.date))
+  return all
+    .filter(o => o.time || !timedDays.has(o.date))
+    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
+}
+
 export function ImportForm({ staffMode = false, landInReview = false, onDone }: { staffMode?: boolean; landInReview?: boolean; onDone?: () => void } = {}) {
   const [venues, setVenues] = useState<Venue[]>([])
 
@@ -59,6 +78,9 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   const [scheduleError, setScheduleError] = useState('')
   const [scheduleDragging, setScheduleDragging] = useState(false)
   const scheduleFileRef = useRef<HTMLInputElement>(null)
+  const [scheduleShots, setScheduleShots] = useState(0)
+  const [scheduleGained, setScheduleGained] = useState(0)
+  const [scheduleTotal, setScheduleTotal] = useState(0)
 
   const [userCrop, setUserCrop] = useState<CropRect | null>(null)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
@@ -80,6 +102,10 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   const [weekdayOrdinals, setWeekdayOrdinals] = useState<Set<OrdinalKey>>(new Set())
   const [weekdayDays,     setWeekdayDays]     = useState<Set<number>>(new Set())
   const [extraDates, setExtraDates] = useState<Array<{ date: string; time: string }>>([])
+  // handleScheduleSet has no deps (it is wired into several drop zones), so it
+  // reads the live values through refs rather than a stale closure.
+  const formRef = useRef(form); formRef.current = form
+  const extraDatesRef = useRef(extraDates); extraDatesRef.current = extraDates
   const [successCount, setSuccessCount] = useState(1)
   const [sourceUrl, setSourceUrl] = useState('')
   const [flagNote, setFlagNote] = useState('')
@@ -192,6 +218,11 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
     }
   }, [imageFiles, venues])
 
+  // Schedule screenshots MERGE rather than replace, so a run whose dates span
+  // several screenshots can be fed in one drop at a time. Dates already held
+  // (from the poster, a previous screenshot, or hand-entry) are kept; a date is
+  // only dropped as a duplicate when the same date+time is already present, and
+  // a timeless entry yields to a timed one for the same day.
   const handleScheduleSet = useCallback(async (file: File) => {
     fileToDataURL(file).then(setSchedulePreview)
     setScheduleLoading(true); setScheduleError('')
@@ -200,8 +231,18 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
       const valid = (occ || []).filter(o => o.date)
       if (!valid.length) { setScheduleError("Couldn't read any dates from that image.") }
       else {
-        setForm(prev => ({ ...prev, date: valid[0].date, time: valid[0].time || prev.time || '' }))
-        setExtraDates(valid.slice(1).map(o => ({ date: o.date, time: o.time || '' })))
+        const incoming = valid.map(o => ({ date: o.date, time: o.time || '' }))
+        const held = [
+          ...(formRef.current.date ? [{ date: formRef.current.date, time: formRef.current.time || '' }] : []),
+          ...extraDatesRef.current,
+        ]
+        const merged = mergeOccurrences(held, incoming)
+        const gained = merged.length - held.length
+        setForm(prev => ({ ...prev, date: merged[0].date, time: merged[0].time || prev.time || '' }))
+        setExtraDates(merged.slice(1))
+        setScheduleShots(n => n + 1)
+        setScheduleGained(n => n + Math.max(0, gained))
+        setScheduleTotal(merged.length)
       }
     } catch (e) { setScheduleError(friendlyExtractionError(e)) }
     finally { setScheduleLoading(false) }
@@ -470,7 +511,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
   const reset = () => {
     setPhase('idle'); setImageFiles([]); setImagePreviews([]); setInfoFile(null); setInfoPreview(''); setExtracted(null); setErrorMsg(''); setSuccessTitle('')
     setForm({ title: '', venue_id: '', venue_name_manual: '', date: '', time: '', address: '', description: '', category: 'Live Music' as Category, neighborhood: '', website: '', instagram: '', hours: '' })
-    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError(''); setSourceUrl(''); setFlagNote('')
+    setUserCrop(null); setShowPreviewModal(false); setDuplicateEvent(null); setFillFrame(false); setFocalX(0.5); setFocalY(0.5); setPosterNatural(null); setReuseExistingPoster(false); setNearDuplicate(null); setVenueMismatch(null); setIsRecurring(false); setRecurrenceFrequency('weekly'); setWeekdayOrdinals(new Set()); setWeekdayDays(new Set()); setExtraDates([]); setSuccessCount(1); setSoldOut(false); setSchedulePreview(''); setScheduleLoading(false); setScheduleError(''); setScheduleShots(0); setScheduleGained(0); setScheduleTotal(0); setSourceUrl(''); setFlagNote('')
   }
 
   // DEV: generate a mock test poster
@@ -560,12 +601,22 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
       {/* Show schedule drop zone */}
       <div style={{ marginTop: 10 }}>
         {schedulePreview ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+          <div
+            onDragOver={e => { e.preventDefault(); setScheduleDragging(true) }}
+            onDragLeave={() => setScheduleDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setScheduleDragging(false)
+              const f = e.dataTransfer.files[0]
+              if (f?.type.startsWith('image/')) handleScheduleSet(f)
+            }}
+            onClick={() => scheduleFileRef.current?.click()}
+            title="Drop another schedule screenshot to add more dates"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: `1px ${scheduleDragging ? 'dashed var(--fg-55)' : 'solid var(--fg-18)'}`, borderRadius: 8, background: scheduleDragging ? 'rgba(240,236,227,0.06)' : 'rgba(240,236,227,0.02)', cursor: 'pointer' }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <img src={schedulePreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
               {!scheduleLoading && (
                 <button
-                  onClick={() => { setSchedulePreview(''); setScheduleError('') }}
+                  onClick={e => { e.stopPropagation(); setSchedulePreview(''); setScheduleError(''); setScheduleShots(0); setScheduleGained(0); setScheduleTotal(0) }}
                   style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
                 >✕</button>
               )}
@@ -579,7 +630,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
               ) : scheduleError ? (
                 <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)', margin: 0 }}>{scheduleError}</p>
               ) : (
-                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Schedule parsed — dates filled in below</p>
+                <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>{scheduleTotal} date{scheduleTotal === 1 ? '' : 's'} from {scheduleShots} screenshot{scheduleShots === 1 ? '' : 's'}{scheduleShots > 1 ? ` (+${scheduleGained} new)` : ''} — drop another to add more</p>
               )}
             </div>
           </div>
@@ -774,7 +825,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
                     </div>
                     <div>
                       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Extra info image used</p>
-                      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Drop another to re-read</p>
+                      <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Drop another to add more dates</p>
                     </div>
                   </div>
                 ) : (
@@ -807,11 +858,21 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
                     <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-40)' }}>Reading schedule…</span>
                   </div>
                 ) : schedulePreview ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid var(--fg-18)', borderRadius: 8, background: 'rgba(240,236,227,0.02)' }}>
+                  <div
+            onDragOver={e => { e.preventDefault(); setScheduleDragging(true) }}
+            onDragLeave={() => setScheduleDragging(false)}
+            onDrop={e => {
+              e.preventDefault(); setScheduleDragging(false)
+              const f = e.dataTransfer.files[0]
+              if (f?.type.startsWith('image/')) handleScheduleSet(f)
+            }}
+            onClick={() => scheduleFileRef.current?.click()}
+            title="Drop another schedule screenshot to add more dates"
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: `1px ${scheduleDragging ? 'dashed var(--fg-55)' : 'solid var(--fg-18)'}`, borderRadius: 8, background: scheduleDragging ? 'rgba(240,236,227,0.06)' : 'rgba(240,236,227,0.02)', cursor: 'pointer' }}>
                     <div style={{ position: 'relative', flexShrink: 0 }}>
                       <img src={schedulePreview} style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 5, display: 'block', border: '1px solid var(--fg-18)' }} />
                       <button
-                        onClick={() => { setSchedulePreview(''); setScheduleError('') }}
+                        onClick={e => { e.stopPropagation(); setSchedulePreview(''); setScheduleError(''); setScheduleShots(0); setScheduleGained(0); setScheduleTotal(0) }}
                         style={{ position: 'absolute', top: -5, right: -5, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.72)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0, lineHeight: 1 }}
                       >✕</button>
                     </div>
@@ -819,7 +880,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
                       {scheduleError ? (
                         <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.85)', margin: 0 }}>{scheduleError}</p>
                       ) : (
-                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>Show schedule used</p>
+                        <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: 0 }}>{scheduleTotal} date{scheduleTotal === 1 ? '' : 's'} from {scheduleShots} screenshot{scheduleShots === 1 ? '' : 's'}</p>
                       )}
                       <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-30)', margin: '3px 0 0' }}>Drop another to re-read</p>
                     </div>

@@ -38,6 +38,15 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
   const [extractBusy, setExtractBusy] = useState(false)
   const [infoDrag, setInfoDrag] = useState(false)
   const [infoErr, setInfoErr] = useState('')
+  // Show-schedule drop: repeatable. Each screenshot is read for dates and the
+  // event is cloned per NEW date (server dedupes), so overlapping screenshots
+  // are safe and a long run can be fed in across several drops.
+  const [schedBusy, setSchedBusy] = useState(false)
+  const [schedDrag, setSchedDrag] = useState(false)
+  const [schedErr, setSchedErr] = useState('')
+  const [schedAdded, setSchedAdded] = useState(0)
+  const [schedSkipped, setSchedSkipped] = useState(0)
+  const [schedDrops, setSchedDrops] = useState(0)
 
   // Accepts local files AND images dragged straight off a webpage (like the
   // Single ingester) — web drags carry a URL, not a File, and were silently
@@ -120,6 +129,40 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
     } catch (e) {
       setInfoErr(e instanceof Error ? e.message : String(e))
     } finally { setInfoBusy(false) }
+  }
+
+  // Drop a screenshot of a run/tour date list → Claude Vision reads EVERY date
+  // (expanding ranges, weekday patterns and calendar grids) and clones this event
+  // once per date, deduped against the venue's existing rows. Hits the same
+  // clipper_schedule endpoint the Clipper uses; an admin JWT is accepted there.
+  async function addDatesFromSchedule(f: File | undefined) {
+    if (!f || !f.type.startsWith('image/')) return
+    setSchedBusy(true); setSchedErr('')
+    try {
+      const blob = await resizeForExtraction(f)
+      const base64 = await blobToBase64(blob)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Not signed in')
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/firecrawl-ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ clipper_schedule: { event_id: row.id, image_base64: base64, mimeType: 'image/jpeg' } }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || json.status === 'error') {
+        throw new Error(json.reason || json.error || `failed: ${res.status}`)
+      }
+      const added = Number(json.added ?? 0)
+      const skipped = Number(json.skipped ?? 0)
+      if (!added && !skipped) throw new Error("Couldn't read any dates from that image.")
+      setSchedAdded(n => n + added)
+      setSchedSkipped(n => n + skipped)
+      setSchedDrops(n => n + 1)
+      if (added) onSaved() // refresh the queue so the new dates appear
+    } catch (e) {
+      setSchedErr(e instanceof Error ? e.message : String(e))
+    } finally { setSchedBusy(false) }
   }
 
   async function save() {
@@ -229,6 +272,26 @@ export function ReviewRowEditor({ row, venues, onSaved }: { row: PendingEvent; v
           </div>
           <input id={`info-shot-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => describeFromScreenshot(e.target.files?.[0] ?? undefined)} />
           {infoErr && <span style={{ fontSize: 11, color: '#e05555' }}>{infoErr}</span>}
+
+          {/* Drop a run/tour date list → clone this event per date. Repeatable. */}
+          <div
+            onDragOver={e => { e.preventDefault(); setSchedDrag(true) }}
+            onDragLeave={() => setSchedDrag(false)}
+            onDrop={e => { e.preventDefault(); setSchedDrag(false); addDatesFromSchedule(e.dataTransfer.files?.[0]) }}
+            onClick={() => document.getElementById(`sched-shot-${row.id}`)?.click()}
+            style={{ marginTop: 6, padding: '9px 11px', borderRadius: 7, cursor: schedBusy ? 'wait' : 'pointer', textAlign: 'center', fontSize: 11.5, lineHeight: 1.4, color: schedBusy ? 'var(--fg-40)' : 'var(--fg-55)', border: schedDrag ? '1.5px dashed #A855F7' : '1.5px dashed var(--fg-18)', background: schedDrag ? 'rgba(168,85,247,0.06)' : 'transparent' }}
+          >
+            {schedBusy
+              ? 'Reading schedule…'
+              : <>🗓 Drop a <strong>show schedule</strong> → adds every date as its own listing{schedDrops > 0 && ' · drop another to add more'}</>}
+          </div>
+          <input id={`sched-shot-${row.id}`} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { addDatesFromSchedule(e.target.files?.[0] ?? undefined); e.target.value = '' }} />
+          {schedDrops > 0 && (
+            <span style={{ fontSize: 11, color: '#4ade80' }}>
+              +{schedAdded} date{schedAdded === 1 ? '' : 's'} added{schedSkipped ? ` · ${schedSkipped} already there` : ''} across {schedDrops} drop{schedDrops === 1 ? '' : 's'}
+            </span>
+          )}
+          {schedErr && <span style={{ fontSize: 11, color: '#e05555' }}>{schedErr}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={save} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>

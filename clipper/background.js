@@ -139,8 +139,20 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
     chrome.action.setBadgeText({ text: '' })
   }
   const logId = crypto.randomUUID()
-  if (replaceLogId) await removeLog(replaceLogId)
-  await logResult({ id: logId, status: 'working', reason: 'Claude is reading the capture…', url: tab?.url, thumb: staged?.thumb ?? thumb })
+  // A replayed card (venue confirm, duplicate force, far-date allow) is replaced
+  // wholesale with a fresh entry — so carry over any schedule captures queued
+  // against the old one, or they'd be dropped right before they could be used.
+  let carriedSchedules = []
+  if (replaceLogId) {
+    const { log: prevLog = [] } = await chrome.storage.local.get('log')
+    carriedSchedules = prevLog.find(r => r.id === replaceLogId)?.pendingSchedules ?? []
+    await removeLog(replaceLogId)
+  }
+  await logResult({
+    id: logId, status: 'working', reason: 'Claude is reading the capture…',
+    url: tab?.url, thumb: staged?.thumb ?? thumb,
+    ...(carriedSchedules.length ? { pendingSchedules: carriedSchedules } : {}),
+  })
   BADGE.busy()
   try {
     const res = await fetch(endpoint, {
@@ -178,6 +190,11 @@ async function ingest({ imageBase64, mimeType, tab, thumb, force = false, allowF
       // duplicates + far-date confirms keep their payload for one-click replay
       ...(json.status === 'duplicate' || json.status === 'confirm' || json.status === 'confirm-venue' ? { retryPayload, confirmVenueName: json.confirm_venue_name ?? null } : {}),
     })
+    // Any schedule captures taken while this card was awaiting a venue confirm
+    // now have an event to attach to — replay them before the toast.
+    if (json.status === 'saved' && (json.event_ids ?? []).length) {
+      await flushPendingSchedules(logId, tab)
+    }
     if (tab?.id) {
       const msg = json.status === 'saved' ? `✓ Saved to Review — ${json.event_name ?? 'event'}`
         : json.status === 'confirm' ? `Over a year out — confirm in the panel`
@@ -300,7 +317,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg?.type === 'plaster-schedule') {
     ;(async () => {
-      await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: msg.eventId } })
+      await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: msg.eventId ?? null } })
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
       try {
         await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['select.js'] })
@@ -338,22 +355,77 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 })
 
 // ── schedule capture: highlighted date list → clone the source event per date ──
-async function sendSchedule({ base64, tab }) {
+// One POST. Shared by the immediate path (event already saved) and the deferred
+// flush (captures taken on a new-venue card, replayed once the event lands).
+async function postSchedule({ eventId, base64, mime }) {
   const { token, endpoint } = await getSettings()
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-clipper-token': token, 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
+    body: JSON.stringify({ clipper_schedule: { event_id: eventId, image_base64: base64, mimeType: mime || 'image/png' } }),
+  })
+  const json = await res.json().catch(() => ({}))
+  return { ok: res.ok && json.status !== 'error', status: res.status, json }
+}
+
+// Replays every capture queued against a log entry, once that entry finally has a
+// saved event to hang dates off. Each POST dedupes server-side, so repeated and
+// overlapping screenshots only ever add what is genuinely new.
+async function flushPendingSchedules(logId, tab) {
+  const { log = [] } = await chrome.storage.local.get('log')
+  const entry = log.find(r => r.id === logId)
+  const queue = entry?.pendingSchedules ?? []
+  const srcId = entry?.eventIds?.[0]
+  if (!queue.length || !srcId) return
+  await updateLog(logId, { pendingSchedules: [] })
+  BADGE.busy()
+  let added = 0, skipped = 0, failed = 0
+  const dates = []
+  let ids = entry.eventIds ?? []
+  for (const cap of queue) {
+    const { ok, json } = await postSchedule({ eventId: srcId, base64: cap.base64, mime: cap.mime })
+    if (!ok) { failed++; continue }
+    added += json.added ?? 0
+    skipped += json.skipped ?? 0
+    dates.push(...(json.dates ?? []))
+    ids = [...new Set([...ids, ...(json.event_ids ?? [])])]
+  }
+  failed ? BADGE.error() : BADGE.saved()
+  await updateLog(logId, {
+    eventIds: ids,
+    reason: `＋ ${added} more date${added === 1 ? '' : 's'} added${skipped ? ` (${skipped} skipped)` : ''}${failed ? ` · ${failed} capture${failed === 1 ? '' : 's'} failed` : ''}${dates.length ? ': ' + dates.join(', ') : ''}`,
+  })
+  if (tab?.id) toast(tab.id, `✓ ${added} more date${added === 1 ? '' : 's'} → Review`, true)
+}
+
+async function sendSchedule({ base64, tab }) {
+  const { token } = await getSettings()
   const { scheduleTarget } = await chrome.storage.session.get('scheduleTarget')
   await chrome.storage.session.remove('scheduleTarget')
-  if (!token || !scheduleTarget?.eventId) return
+  if (!token || !scheduleTarget?.logId) return
+
+  // Deferred: captured on a card whose event is not saved yet (new-venue
+  // confirm). Hold it — flushPendingSchedules replays it after the save.
+  // Queued, not replaced, so several screenshots can be grabbed in a row.
+  if (!scheduleTarget.eventId) {
+    const { log = [] } = await chrome.storage.local.get('log')
+    const entry = log.find(r => r.id === scheduleTarget.logId)
+    const queued = [...(entry?.pendingSchedules ?? []), { base64, mime: 'image/png' }]
+    await updateLog(scheduleTarget.logId, {
+      pendingSchedules: queued,
+      reason: `${queued.length} schedule capture${queued.length === 1 ? '' : 's'} held — confirm the venue to apply`,
+    })
+    BADGE.saved()
+    if (tab?.id) toast(tab.id, `✓ Schedule held (${queued.length}) — confirm the venue to apply`, true)
+    return
+  }
+
   BADGE.busy()
   try {
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-clipper-token': token, 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
-      body: JSON.stringify({ clipper_schedule: { event_id: scheduleTarget.eventId, image_base64: base64, mimeType: 'image/png' } }),
-    })
-    const json = await res.json().catch(() => ({}))
-    if (!res.ok || json.status === 'error') {
+    const { ok, status, json } = await postSchedule({ eventId: scheduleTarget.eventId, base64, mime: 'image/png' })
+    if (!ok) {
       BADGE.error()
-      await updateLog(scheduleTarget.logId, { reason: 'schedule: ' + (json.reason || json.error || `HTTP ${res.status}`) })
+      await updateLog(scheduleTarget.logId, { reason: 'schedule: ' + (json.reason || json.error || `HTTP ${status}`) })
       if (tab?.id) toast(tab.id, '✗ ' + (json.reason || 'schedule read failed'), false)
       return
     }

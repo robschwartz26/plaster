@@ -160,6 +160,17 @@ async function render() {
         chrome.runtime.sendMessage({ type: 'plaster-force', logId: r.id, choice: 'no' })
       })
       row.appendChild(no)
+      // Grab the dates NOW, while you're still on the page showing them — the
+      // event does not exist yet, so captures are held and replayed the moment
+      // you confirm the venue. Repeatable: each grab adds to the queue.
+      const held = (r.pendingSchedules ?? []).length
+      const schedQ = document.createElement('button'); schedQ.className = 'mini go'
+      schedQ.textContent = held ? `＋ Grab another schedule (${held} held)` : '＋ Grab schedule (more dates)'
+      schedQ.title = 'Highlight the printed dates — held until you confirm the venue, then applied automatically'
+      schedQ.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ type: 'plaster-schedule', logId: r.id, eventId: null })
+      })
+      row.appendChild(schedQ)
     }
     if (r.status === 'confirm' && r.retryPayload) {
       const ok = document.createElement('button'); ok.className = 'mini go'; ok.textContent = 'Yes — save it'
@@ -179,6 +190,7 @@ async function render() {
     }
     if (r.status === 'saved' && Array.isArray(r.eventIds) && r.eventIds.length) {
       const sched = document.createElement('button'); sched.className = 'mini go'; sched.textContent = '＋ Grab schedule (more dates)'
+      sched.dataset.repeatable = '1'
       sched.title = 'Highlight the printed list of dates/times on the page — each becomes its own event with this poster'
       sched.addEventListener('click', () => {
         chrome.runtime.sendMessage({ type: 'plaster-schedule', logId: r.id, eventId: r.eventIds[0] })
