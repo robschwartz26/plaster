@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Plaster Clipper",
-  "version": "1.12.0",
+  "version": "1.13.0",
   "description": "Screen-grab event posters and info straight into Plaster's AI ingester. You navigate; it packages.",
   "permissions": [
     "tabs",
@@ -45,6 +45,13 @@
         "mac": "Command+Shift+P"
       },
       "description": "Stage a POSTER region (then grab the info with the region grab)"
+    },
+    "dates-grab": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Grab more DATES for the last capture \u2192 Plaster"
     }
   },
   "content_scripts": [

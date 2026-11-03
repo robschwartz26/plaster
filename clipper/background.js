@@ -533,12 +533,42 @@ async function sendSchedule({ base64, tab }) {
 }
 
 // ── hotkeys ─────────────────────────────────────────────────────────────────
+// The schedule buttons know which card they belong to; a hotkey does not, so
+// it aims at the newest capture that can still take dates — a saved event, or a
+// NEW VENUE capture still parked as an orphan. That is almost always the one
+// just grabbed, which is when you reach for it.
+async function startDatesGrab(tab) {
+  const { log = [] } = await chrome.storage.local.get('log')
+  const target = log.find(r =>
+    (r.status === 'saved' && Array.isArray(r.eventIds) && r.eventIds.length) ||
+    (r.status === 'orphaned' && Array.isArray(r.orphanIds) && r.orphanIds.length))
+  if (!target) {
+    BADGE.error()
+    await logResult({ status: 'error', reason: 'no capture to add dates to yet — grab an event first', url: tab?.url })
+    return
+  }
+  await chrome.storage.session.set({
+    regionMode: 'schedule',
+    scheduleTarget: target.status === 'orphaned'
+      ? { logId: target.id, eventId: null, orphanId: target.orphanIds[0] }
+      : { logId: target.id, eventId: target.eventIds[0] },
+  })
+  try {
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['select.js'] })
+    if (tab?.id) toast(tab.id, `Highlight the dates for “${target.event ?? 'the last capture'}”`, true)
+  } catch {
+    BADGE.error()
+    await updateLog(target.id, { reason: 'cannot select on this page' })
+  }
+}
+
 chrome.commands.onCommand.addListener(async (command) => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
   if (!tab) return
   if (command === 'region-grab') startRegion(tab, 'info')
   if (command === 'poster-grab') startRegion(tab, 'poster')
   if (command === 'window-grab') windowGrab(tab)
+  if (command === 'dates-grab') startDatesGrab(tab)
 })
 
 // ── stage an image by URL (dblclick / ⌥-click / right-click all land here) ──
