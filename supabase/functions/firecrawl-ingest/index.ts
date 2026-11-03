@@ -55,6 +55,36 @@ function portlandOffset(dateStr: string): string {
   const hrs = m ? parseInt(m[1], 10) : -8
   return `${hrs < 0 ? '-' : '+'}${String(Math.abs(hrs)).padStart(2, '0')}:00`
 }
+// Ticketing pages address a single occurrence of a run through a date query
+// param (crowdwork: ?date=2026-11-04T21:30:00). A cloned date inherits the
+// source event's URL verbatim, so every occurrence used to link back to the
+// FIRST one — "source ↗" on a March listing opened the November page. Re-point
+// the param at the occurrence this row is for. Only rewrites a param that is
+// already there and already looks like a date, so a URL that works some other
+// way is passed through untouched.
+const OCCURRENCE_DATE_PARAMS = ['date', 'd', 'occurrence', 'showtime']
+
+function sourceUrlForOccurrence(srcUrl: string | null | undefined, startsAt: string): string | null {
+  if (!srcUrl) return null
+  try {
+    const u = new URL(srcUrl)
+    const key = OCCURRENCE_DATE_PARAMS.find(k => {
+      const v = u.searchParams.get(k)
+      return v !== null && /^\d{4}-\d{2}-\d{2}/.test(v)
+    })
+    if (!key) return srcUrl
+    const had = u.searchParams.get(key) as string
+    // Keep the original's shape: date-only stays date-only, datetime stays datetime.
+    const pt = new Date(new Date(startsAt).toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }))
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const ymd = `${pt.getFullYear()}-${pad(pt.getMonth() + 1)}-${pad(pt.getDate())}`
+    u.searchParams.set(key, had.length > 10
+      ? `${ymd}T${pad(pt.getHours())}:${pad(pt.getMinutes())}:${pad(pt.getSeconds())}`
+      : ymd)
+    return u.toString()
+  } catch { return srcUrl }
+}
+
 function ptTimestamp(date: string, time: string | null): Date | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
   const t = time && /^\d{2}:\d{2}$/.test(time) ? time : '20:00'
@@ -820,7 +850,7 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     // The clipper token unlocks NOTHING except the clipper branch.
     // deno-lint-ignore no-explicit-any
-    if (clipperAuthed && !((body as any)?.clipper || (body as any)?.clipper_delete || (body as any)?.clipper_schedule)) {
+    if (clipperAuthed && !((body as any)?.clipper || (body as any)?.clipper_delete || (body as any)?.clipper_schedule || (body as any)?.clipper_orphan_schedule || (body as any)?.relink)) {
       return new Response(JSON.stringify({ error: 'clipper token only permits clipper captures' }), { status: 403, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
@@ -896,6 +926,8 @@ serve(async (req) => {
     // neighborhood/address, inserts as PENDING (→ Review), marks the orphan linked.
     if (body.relink && typeof body.relink === 'object') {
       const rl = body.relink as { venueId?: string; rawVenueName?: string; orphanIds?: unknown }
+      // The Clipper relinks straight from a NEW VENUE card, so the alias is
+      // learned at capture time and the same spelling never orphans again.
       const venueId = typeof rl.venueId === 'string' ? rl.venueId : ''
       const rawVenueName = typeof rl.rawVenueName === 'string' ? rl.rawVenueName : ''
       const orphanIds = Array.isArray(rl.orphanIds) ? rl.orphanIds.filter((x): x is string => typeof x === 'string') : null
@@ -913,6 +945,7 @@ serve(async (req) => {
       const imageDeadline = relinkNow + IMAGE_TOTAL_BUDGET_MS
       let relinked = 0, failed = 0
       const errs: string[] = []
+      const relinkedIds: string[] = []  // so the Clipper card keeps its follow-up actions
       for (const o of list) {
         const posterUrl = await rehostImage(supabaseService, o.image_url ?? null, imageDeadline)
         const cat = typeof o.category === 'string' && CATEGORIES.includes(o.category) ? o.category : 'Live Music'
@@ -948,7 +981,7 @@ serve(async (req) => {
           const rows = extra
             .map(d => {
               const iso = ptTimestamp(d.date, d.time ?? null)
-              return iso ? { ...baseRow, starts_at: iso.toISOString() } : null
+              return iso ? { ...baseRow, starts_at: iso.toISOString(), source_url: sourceUrlForOccurrence(baseRow.source_url, iso.toISOString()) } : null
             })
             .filter((r): r is typeof baseRow & { starts_at: string } => r !== null)
             .filter(r => r.starts_at !== basePT)
@@ -958,6 +991,7 @@ serve(async (req) => {
           }
         }
         await supabaseService.from('ingest_orphans').update({ status: 'linked', linked_venue_id: venueId, linked_event_id: ins?.id ?? null }).eq('id', o.id)
+        if (ins?.id) relinkedIds.push(ins.id as string)
         relinked++
       }
       // Remember the clipped spelling(s) as aliases of this venue so the same
@@ -979,7 +1013,7 @@ serve(async (req) => {
           await supabaseService.from('venues').update({ aliases: merged }).eq('id', venueId)
         }
       }
-      return new Response(JSON.stringify({ relinked, failed, found: list.length, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      return new Response(JSON.stringify({ relinked, failed, found: list.length, event_ids: relinkedIds, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
     // ═══ DESCRIBE IMAGE: Claude Vision reads a screenshot → Plaster-voice blurb ══
@@ -1162,7 +1196,7 @@ serve(async (req) => {
           show_times: times.length >= 2 ? times : null,
           description: src.description, neighborhood: src.neighborhood, address: src.address,
           view_count: 0, like_count: 0, status: 'pending', sold_out: false,
-          created_by: src.created_by ?? authedUser.id, source_url: src.source_url,
+          created_by: src.created_by ?? authedUser.id, source_url: sourceUrlForOccurrence(src.source_url, times[0]),
           ai_confidence: src.ai_confidence ?? 90, artist_name: src.artist_name,
         }).select('id')
         if (!insErr2 && ins2?.[0]?.id) { added++; newIds.push(ins2[0].id as string); addedDates.push(pd); idx.add(key) }

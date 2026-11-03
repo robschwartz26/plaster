@@ -7,6 +7,7 @@ const PILL = {
   'confirm-venue': 'which venue?',
 }
 const openCards = new Set() // expanded log ids (survives re-renders)
+let VENUES = [] // {id,name} — mirrors venueCache, for the NEW VENUE linker
 
 // ── venue picker: sets the fallback venue for captures ──────────────────────
 async function refreshVenueList() {
@@ -20,6 +21,7 @@ async function refreshVenueList() {
     const venues = await res.json()
     if (Array.isArray(venues) && venues.length) {
       await chrome.storage.local.set({ venueCache: venues })
+      VENUES = venues
       const keep = sel.value
       while (sel.options.length > 1) sel.remove(1)
       for (const v of venues) {
@@ -37,6 +39,7 @@ async function initVenues() {
   const { venueId, venueCache } = await chrome.storage.local.get(['venueId', 'venueCache'])
   // instant paint from cache, then live refresh
   if (Array.isArray(venueCache) && venueCache.length) {
+    VENUES = venueCache
     for (const v of venueCache) {
       const o = document.createElement('option')
       o.value = v.id; o.textContent = 'venue: ' + v.name
@@ -193,6 +196,30 @@ async function render() {
     // pending event each when it is relinked in /admin. Repeatable.
     if (r.status === 'orphaned' && Array.isArray(r.orphanIds) && r.orphanIds.length) {
       const n = r.orphanDates ?? 0
+      // Link this capture's venue spelling to a venue that already exists. The
+      // relink endpoint stores the spelling as an alias, so the next capture
+      // under the same name matches straight away instead of orphaning again.
+      const link = document.createElement('div')
+      link.style.cssText = 'display:flex;gap:6px;align-items:center;width:100%;margin:6px 0'
+      const pick = document.createElement('select')
+      pick.className = 'mini'
+      pick.style.cssText = 'flex:1;min-width:0'
+      pick.innerHTML = '<option value="">link to an existing venue…</option>'
+      for (const v of VENUES) {
+        const o = document.createElement('option'); o.value = v.id; o.textContent = v.name
+        pick.appendChild(o)
+      }
+      const go = document.createElement('button'); go.className = 'mini go'; go.textContent = 'Link'
+      go.disabled = true
+      pick.addEventListener('change', () => { go.disabled = !pick.value })
+      go.addEventListener('click', () => {
+        if (!pick.value) return
+        go.disabled = true; go.textContent = 'Linking…'
+        chrome.runtime.sendMessage({ type: 'plaster-relink', logId: r.id, orphanIds: r.orphanIds, venueId: pick.value })
+      })
+      link.appendChild(pick); link.appendChild(go)
+      row.appendChild(link)
+
       const os = document.createElement('button'); os.className = 'mini go'
       os.textContent = n ? `＋ Grab more dates (${n} held)` : '＋ Grab schedule (more dates)'
       os.title = 'Highlight the printed dates — stored with this capture and added when you approve the venue in /admin'

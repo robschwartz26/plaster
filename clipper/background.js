@@ -315,6 +315,46 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return
   }
 
+  // Link a NEW VENUE capture to a venue that already exists. The server's
+  // relink creates the pending event(s) — expanding any dates grabbed while it
+  // was still an orphan — and records the clipped spelling as an alias of that
+  // venue, so this name never orphans again.
+  if (msg?.type === 'plaster-relink') {
+    ;(async () => {
+      const { token, endpoint } = await getSettings()
+      if (!token) { await updateLog(msg.logId, { reason: 'No token set — open Options' }); return }
+      BADGE.busy()
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-clipper-token': token, 'Authorization': `Bearer ${ANON_KEY}`, 'apikey': ANON_KEY },
+          body: JSON.stringify({ relink: { venueId: msg.venueId, orphanIds: msg.orphanIds } }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok || json.status === 'error' || json.error) {
+          BADGE.error()
+          await updateLog(msg.logId, { reason: 'link failed: ' + (json.reason || json.error || `HTTP ${res.status}`) })
+          return
+        }
+        BADGE.saved()
+        const name = (await chrome.storage.local.get('venueCache')).venueCache?.find(v => v.id === msg.venueId)?.name ?? 'that venue'
+        await updateLog(msg.logId, {
+          status: 'saved',
+          eventIds: json.event_ids ?? [],
+          orphanIds: [],
+          reason: `linked to ${name} — this spelling will match automatically from now on`,
+        })
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        if (tab?.id) toast(tab.id, `✓ Linked to ${name} → Review`, true)
+      } catch (e) {
+        BADGE.error()
+        await updateLog(msg.logId, { reason: 'link failed: ' + String(e).slice(0, 80) })
+      }
+      sendResponse({ ok: true })
+    })()
+    return true
+  }
+
   if (msg?.type === 'plaster-orphan-schedule') {
     ;(async () => {
       await chrome.storage.session.set({ regionMode: 'schedule', scheduleTarget: { logId: msg.logId, eventId: null, orphanId: msg.orphanId } })
