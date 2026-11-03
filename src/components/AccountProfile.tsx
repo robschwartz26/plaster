@@ -463,10 +463,11 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
               🌐 {venue.website.replace(/^https?:\/\//, '')}
             </a>
           )}
-          {venue.instagram && (
-            <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
-              @{venue.instagram.replace(/^@/, '')}
-            </p>
+          {venue.instagram && instagramHandle(venue.instagram) && (
+            <a href={`https://instagram.com/${instagramHandle(venue.instagram)}`} target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', textDecoration: 'none' }}>
+              @{instagramHandle(venue.instagram)}
+            </a>
           )}
         </div>
       )}
@@ -515,6 +516,21 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
       {followListPortal}
     </div>
   )
+}
+
+/**
+ * Venue instagram values are stored inconsistently — '@handle', 'handle', or a
+ * full profile URL ('https://www.instagram.com/handle/'). Pull the bare handle
+ * out of any of those so the page never renders '@https://instagram.com/...'.
+ */
+function instagramHandle(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^@/, '')
+    .replace(/^https?:\/\//i, '')
+    .replace(/^(www\.)?instagram\.com\//i, '')
+    .replace(/[/?#].*$/, '')
+    .trim()
 }
 
 function formatEventDate(iso: string): string {
