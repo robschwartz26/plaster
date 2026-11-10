@@ -109,15 +109,36 @@ export function VenueBoard() {
   const fetchAll = useCallback(async () => {
     if (!user) return
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
-    const [venuesRes, eventsRes, checkoffsRes, assignmentsRes, rosterRes] = await Promise.all([
+    // PostgREST caps a response at 1000 rows and says nothing about it — the
+    // 1001st simply never arrives. The board needs EVERY upcoming event to work
+    // out each venue's coverage, and there are already more than 1000, so the
+    // furthest-out dates were silently missing: a venue booked into mid-2027
+    // looked empty. Page through until a short page comes back.
+    const PAGE = 1000
+    const allEvents: BoardEvent[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, title, starts_at, status, created_by, created_at, venue_id')
+        .gte('starts_at', cutoff)
+        .order('starts_at')
+        .order('id')
+        .range(from, from + PAGE - 1)
+      if (error) { console.error('[VenueBoard] events page failed', error); break }
+      const page = (data ?? []) as BoardEvent[]
+      allEvents.push(...page)
+      if (page.length < PAGE) break
+      if (from > 50_000) break // hard stop; the board is not a full export
+    }
+
+    const [venuesRes, checkoffsRes, assignmentsRes, rosterRes] = await Promise.all([
       supabase.from('venues').select('id, name, neighborhood, prominence').order('name'),
-      supabase.from('events').select('id, title, starts_at, status, created_by, created_at, venue_id').gte('starts_at', cutoff).order('starts_at'),
       supabase.from('staff_venue_checkoff').select('venue_id'),
       supabase.from('staff_venue_assignments').select('venue_id, worker_id'),
       supabase.rpc('staff_roster'),
     ])
     if (venuesRes.data) setVenues(venuesRes.data as BoardVenue[])
-    if (eventsRes.data) setEvents(eventsRes.data as BoardEvent[])
+    setEvents(allEvents)
     if (checkoffsRes.data) setCheckedIds(new Set(checkoffsRes.data.map(r => r.venue_id)))
     if (assignmentsRes.data) setAssignments(Object.fromEntries(assignmentsRes.data.map(r => [r.venue_id, r.worker_id])))
     if (rosterRes.data) setRoster((rosterRes.data as { id: string; username: string }[]).map(r => ({ id: r.id, username: r.username })))
