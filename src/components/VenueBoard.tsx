@@ -365,7 +365,7 @@ export function VenueBoard() {
             )}
             {/* Scrolls rather than clipping: a deeply-booked venue used to have
                 its later dates cut off with no way to reach them. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 540, overflowY: 'auto', overscrollBehavior: 'contain' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 540, overflowY: 'auto' }}>
               {venueEvents.map(e => {
                 const isOwnPending = e.status === 'pending' && e.created_by === user?.id
                 return (
