@@ -7,6 +7,7 @@ interface BoardVenue {
   id: string
   name: string
   neighborhood: string | null
+  prominence: number | null
 }
 
 interface BoardEvent {
@@ -42,6 +43,37 @@ function fmtMD(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { timeZone: 'America/Los_Angeles', month: 'numeric', day: 'numeric' })
 }
 
+// How far ahead a venue is booked, and what that looks like at a glance. The
+// board exists to find rooms that are about to go empty, so the name itself
+// carries the signal rather than a badge you have to hunt for.
+const DAY_MS = 24 * 60 * 60 * 1000
+const COVERAGE = {
+  deep:  { days: 180, color: '#4ade80', label: '6+ months booked' },   // + star
+  good:  { days: 90,  color: '#4ade80', label: '3+ months booked' },
+  thin:  { days: 30,  color: 'rgba(251,146,60,0.95)', label: 'under 3 months' },
+  empty: { days: 0,   color: '#ef4444', label: 'under a month — needs events' },
+}
+
+function coverageOf(coveredThru: string | null): { color: string; star: boolean; label: string } {
+  if (!coveredThru) return { color: COVERAGE.empty.color, star: false, label: 'no shows' }
+  const daysOut = (new Date(coveredThru).getTime() - Date.now()) / DAY_MS
+  if (daysOut >= COVERAGE.deep.days) return { color: COVERAGE.deep.color, star: true, label: COVERAGE.deep.label }
+  if (daysOut >= COVERAGE.good.days) return { color: COVERAGE.good.color, star: false, label: COVERAGE.good.label }
+  if (daysOut >= COVERAGE.thin.days) return { color: COVERAGE.thin.color, star: false, label: COVERAGE.thin.label }
+  return { color: COVERAGE.empty.color, star: false, label: COVERAGE.empty.label }
+}
+
+// Prominence buckets. Unranked is where every NEW venue starts, so it is a
+// normal state the board shows plainly rather than an error.
+const TIERS: { key: string; label: string; match: (p: number | null) => boolean }[] = [
+  { key: 'marquee',      label: 'Marquee',      match: p => p === 1 },
+  { key: 'core',         label: 'Core rooms',   match: p => p === 2 },
+  { key: 'neighborhood', label: 'Neighborhood', match: p => p === 3 },
+  { key: 'unranked',     label: 'Unranked',     match: p => p == null },
+]
+
+const SORT_KEY = 'staff-venue-board-sort'
+
 function StatusPill({ status }: { status: string }) {
   const cfg: Record<string, { color: string; bg: string; border: string; label: string }> = {
     published: { color: '#4ade80', bg: 'rgba(74,222,128,0.1)', border: 'rgba(74,222,128,0.3)', label: 'LIVE' },
@@ -66,12 +98,19 @@ export function VenueBoard() {
   const [assignments, setAssignments] = useState<Record<string, string>>({}) // venue_id -> worker_id
   const [roster, setRoster] = useState<{ id: string; username: string }[]>([])
   const [assigningVenueId, setAssigningVenueId] = useState<string | null>(null)
+  const [sortMode, setSortMode] = useState<'area' | 'prominence'>(() => {
+    try { return localStorage.getItem(SORT_KEY) === 'prominence' ? 'prominence' : 'area' } catch { return 'area' }
+  })
+  function pickSort(m: 'area' | 'prominence') {
+    setSortMode(m)
+    try { localStorage.setItem(SORT_KEY, m) } catch { /* noop */ }
+  }
 
   const fetchAll = useCallback(async () => {
     if (!user) return
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
     const [venuesRes, eventsRes, checkoffsRes, assignmentsRes, rosterRes] = await Promise.all([
-      supabase.from('venues').select('id, name, neighborhood').order('name'),
+      supabase.from('venues').select('id, name, neighborhood, prominence').order('name'),
       supabase.from('events').select('id, title, starts_at, status, created_by, created_at, venue_id').gte('starts_at', cutoff).order('starts_at'),
       supabase.from('staff_venue_checkoff').select('venue_id'),
       supabase.from('staff_venue_assignments').select('venue_id, worker_id'),
@@ -151,16 +190,27 @@ export function VenueBoard() {
   const myVenueIds = new Set(venues.filter(v => assignments[v.id] && assignments[v.id] === user?.id).map(v => v.id))
   const myVenues = venues.filter(v => myVenueIds.has(v.id)).sort((a, b) => a.name.localeCompare(b.name))
 
-  // Neighborhood grouping
-  const neighborhoodOrder = [...NEIGHBORHOODS, 'Other']
-  const byNeighborhood: Record<string, BoardVenue[]> = {}
-  for (const v of venues) {
-    if (myVenueIds.has(v.id)) continue // pinned above in "Your venues"
-    const key = v.neighborhood && NEIGHBORHOODS.includes(v.neighborhood as typeof NEIGHBORHOODS[number]) ? v.neighborhood : 'Other'
-    if (!byNeighborhood[key]) byNeighborhood[key] = []
-    byNeighborhood[key].push(v)
+  // Two ways to read the same list. By area answers "whose patch is this";
+  // by prominence answers "what hurts most if it goes empty". Empty groups are
+  // dropped either way, so Unranked only appears once a venue lands in it.
+  const boardVenues = venues.filter(v => !myVenueIds.has(v.id)) // the rest are pinned above in "Your venues"
+
+  const sections: { label: string; venues: BoardVenue[] }[] = []
+  if (sortMode === 'area') {
+    const byNeighborhood: Record<string, BoardVenue[]> = {}
+    for (const v of boardVenues) {
+      const key = v.neighborhood && NEIGHBORHOODS.includes(v.neighborhood as typeof NEIGHBORHOODS[number]) ? v.neighborhood : 'Other'
+      ;(byNeighborhood[key] ??= []).push(v)
+    }
+    for (const n of [...NEIGHBORHOODS, 'Other']) {
+      if (byNeighborhood[n]?.length) sections.push({ label: n, venues: byNeighborhood[n] })
+    }
+  } else {
+    for (const t of TIERS) {
+      const inTier = boardVenues.filter(v => t.match(v.prominence))
+      if (inTier.length) sections.push({ label: t.label, venues: inTier })
+    }
   }
-  const activeNeighborhoods = neighborhoodOrder.filter(n => byNeighborhood[n]?.length)
 
   // ── Venue row renderer (shared by "Your venues" + neighborhood groups) ──
   function renderVenueRow(venue: BoardVenue) {
@@ -179,6 +229,7 @@ export function VenueBoard() {
       ? coveredEvents.reduce((max, e) => e.starts_at > max ? e.starts_at : max, coveredEvents[0].starts_at)
       : null
 
+    const cover = coverageOf(coveredThru)
     const nextShow = venueEvents[0]
 
     const assignedWorkerId = assignments[venue.id]
@@ -210,7 +261,8 @@ export function VenueBoard() {
             onClick={() => hasShows && toggleExpand(venue.id)}
             style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, padding: '9px 8px 9px 2px', background: isExpanded ? 'rgba(240,236,227,0.04)' : 'transparent', border: 'none', cursor: hasShows ? 'pointer' : 'default', textAlign: 'left' }}
           >
-            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+            <span title={cover.label} style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: cover.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+              {cover.star && <span style={{ marginRight: 4 }}>★</span>}
               {venue.name}
               <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 500, color: 'var(--fg-30)' }}>
                 {coveredThru ? `thru ${fmtMD(coveredThru)}` : '—'}
@@ -283,9 +335,16 @@ export function VenueBoard() {
         )}
 
         {/* Show list — cascading expand */}
-        <div style={{ overflow: 'hidden', maxHeight: isExpanded ? 600 : 0, opacity: isExpanded ? 1 : 0, transition: 'max-height 0.25s ease, opacity 0.2s ease' }}>
+        <div style={{ overflow: 'hidden', maxHeight: isExpanded ? 620 : 0, opacity: isExpanded ? 1 : 0, transition: 'max-height 0.25s ease, opacity 0.2s ease' }}>
           <div style={{ borderTop: '1px solid var(--fg-08)', padding: '8px 12px 10px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {venueEvents.length > 8 && (
+              <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', marginBottom: 6 }}>
+                {venueEvents.length} upcoming · scroll for the rest
+              </div>
+            )}
+            {/* Scrolls rather than clipping: a deeply-booked venue used to have
+                its later dates cut off with no way to reach them. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 540, overflowY: 'auto', overscrollBehavior: 'contain' }}>
               {venueEvents.map(e => {
                 const isOwnPending = e.status === 'pending' && e.created_by === user?.id
                 return (
@@ -314,9 +373,35 @@ export function VenueBoard() {
 
   return (
     <div>
-      <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: 'var(--fg)', margin: '0 0 14px 0' }}>
-        Venue board
-      </h3>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 8px 0' }}>
+        <h3 style={{ fontFamily: '"Playfair Display", serif', fontSize: 18, fontWeight: 700, color: 'var(--fg)', margin: 0 }}>
+          Venue board
+        </h3>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {([['area', 'By area'], ['prominence', 'By prominence']] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => pickSort(mode)}
+              style={{
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
+                padding: '3px 9px', borderRadius: 5, cursor: 'pointer',
+                border: sortMode === mode ? '1px solid rgba(168,85,247,0.45)' : '1px solid var(--fg-15)',
+                background: sortMode === mode ? 'rgba(168,85,247,0.1)' : 'transparent',
+                color: sortMode === mode ? '#A855F7' : 'var(--fg-40)',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {/* What the name colours mean — otherwise they are just decoration. */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, color: 'var(--fg-30)', margin: '0 0 12px 0' }}>
+        <span><span style={{ color: COVERAGE.deep.color }}>★ name</span> 6 mo+</span>
+        <span><span style={{ color: COVERAGE.good.color }}>name</span> 3 mo+</span>
+        <span><span style={{ color: COVERAGE.thin.color }}>name</span> 1–3 mo</span>
+        <span><span style={{ color: COVERAGE.empty.color }}>name</span> under a month</span>
+      </div>
 
       {/* Coverage gauge */}
       <div style={{ marginBottom: 24 }}>
@@ -347,8 +432,9 @@ export function VenueBoard() {
 
       {/* Neighborhood groups */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {activeNeighborhoods.map(neighborhoodName => {
-          const group = byNeighborhood[neighborhoodName]
+        {sections.map(section => {
+          const neighborhoodName = section.label
+          const group = section.venues
           const isNeighborhoodCollapsed = collapsedNeighborhoods.has(neighborhoodName)
           const sorted = [
             ...group.filter(v => !checkedIds.has(v.id)).sort((a, b) => a.name.localeCompare(b.name)),

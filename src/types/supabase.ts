@@ -533,6 +533,7 @@ export type Database = {
         Row: {
           address: string | null
           ai_confidence: number | null
+          artist_name: string | null
           category: string | null
           created_at: string
           created_by: string | null
@@ -548,9 +549,8 @@ export type Database = {
           location_lat: number | null
           location_lng: number | null
           neighborhood: string | null
-          poster_offset_x: number | null
-          artist_name: string | null
           passed_review: boolean
+          poster_offset_x: number | null
           poster_offset_y: number | null
           poster_url: string | null
           recurrence_frequency: string | null
@@ -574,6 +574,7 @@ export type Database = {
         Insert: {
           address?: string | null
           ai_confidence?: number | null
+          artist_name?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -589,6 +590,7 @@ export type Database = {
           location_lat?: number | null
           location_lng?: number | null
           neighborhood?: string | null
+          passed_review?: boolean
           poster_offset_x?: number | null
           poster_offset_y?: number | null
           poster_url?: string | null
@@ -603,8 +605,6 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
-          artist_name?: string | null
-          passed_review?: boolean
           starts_at: string
           status?: string
           title: string
@@ -615,6 +615,7 @@ export type Database = {
         Update: {
           address?: string | null
           ai_confidence?: number | null
+          artist_name?: string | null
           category?: string | null
           created_at?: string
           created_by?: string | null
@@ -630,6 +631,7 @@ export type Database = {
           location_lat?: number | null
           location_lng?: number | null
           neighborhood?: string | null
+          passed_review?: boolean
           poster_offset_x?: number | null
           poster_offset_y?: number | null
           poster_url?: string | null
@@ -644,8 +646,6 @@ export type Database = {
           sold_out?: boolean
           sold_out_report_count?: number
           source_url?: string | null
-          artist_name?: string | null
-          passed_review?: boolean
           starts_at?: string
           status?: string
           title?: string
@@ -721,64 +721,67 @@ export type Database = {
       }
       ingest_orphans: {
         Row: {
+          artist_name: string | null
+          category: string | null
           confidence: number | null
           created_at: string | null
           created_by: string | null
           description: string | null
           event_url: string | null
+          extra_dates: Json
           id: string
           image_url: string | null
           linked_event_id: string | null
           linked_venue_id: string | null
+          raw_venue_address: string | null
           raw_venue_name: string | null
+          raw_venue_website: string | null
           sold_out: boolean | null
           source_url: string | null
-          artist_name: string | null
-          category: string | null
-          raw_venue_address: string | null
-          raw_venue_website: string | null
           starts_at: string
           status: string
           title: string
         }
         Insert: {
+          artist_name?: string | null
+          category?: string | null
           confidence?: number | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           event_url?: string | null
+          extra_dates?: Json
           id?: string
           image_url?: string | null
           linked_event_id?: string | null
           linked_venue_id?: string | null
+          raw_venue_address?: string | null
           raw_venue_name?: string | null
+          raw_venue_website?: string | null
           sold_out?: boolean | null
           source_url?: string | null
-          category?: string | null
-          raw_venue_address?: string | null
-          artist_name?: string | null
-          raw_venue_website?: string | null
           starts_at: string
           status?: string
           title: string
         }
         Update: {
+          artist_name?: string | null
+          category?: string | null
           confidence?: number | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           event_url?: string | null
+          extra_dates?: Json
           id?: string
           image_url?: string | null
           linked_event_id?: string | null
           linked_venue_id?: string | null
+          raw_venue_address?: string | null
           raw_venue_name?: string | null
+          raw_venue_website?: string | null
           sold_out?: boolean | null
           source_url?: string | null
-          category?: string | null
-          raw_venue_address?: string | null
-          artist_name?: string | null
-          raw_venue_website?: string | null
           starts_at?: string
           status?: string
           title?: string
@@ -1022,6 +1025,7 @@ export type Database = {
           phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
+          username_ci?: string | null
           venue_id?: string | null
         }
         Update: {
@@ -1048,6 +1052,7 @@ export type Database = {
           phone_hash?: string | null
           show_social_publicly?: boolean
           username?: string | null
+          username_ci?: string | null
           venue_id?: string | null
         }
         Relationships: [
@@ -1121,6 +1126,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      splash_images: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          is_bundled: boolean
+          url: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          is_bundled?: boolean
+          url: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          is_bundled?: boolean
+          url?: string
+        }
+        Relationships: []
       }
       staff_chat_messages: {
         Row: {
@@ -1326,71 +1355,105 @@ export type Database = {
         }
         Relationships: []
       }
-      splash_images: {
+      user_notification_prefs: {
         Row: {
-          id: string
-          url: string
-          is_bundled: boolean
-          active: boolean
-          created_at: string
+          community: boolean
+          follows: boolean
+          likes: boolean
+          messages: boolean
+          new_shows: boolean
+          push_enabled: boolean
+          reminders: boolean
+          replies: boolean
+          slaps: boolean
+          updated_at: string
+          user_id: string
         }
         Insert: {
-          id?: string
-          url: string
-          is_bundled?: boolean
-          active?: boolean
-          created_at?: string
+          community?: boolean
+          follows?: boolean
+          likes?: boolean
+          messages?: boolean
+          new_shows?: boolean
+          push_enabled?: boolean
+          reminders?: boolean
+          replies?: boolean
+          slaps?: boolean
+          updated_at?: string
+          user_id: string
         }
         Update: {
-          id?: string
-          url?: string
-          is_bundled?: boolean
-          active?: boolean
-          created_at?: string
+          community?: boolean
+          follows?: boolean
+          likes?: boolean
+          messages?: boolean
+          new_shows?: boolean
+          push_enabled?: boolean
+          reminders?: boolean
+          replies?: boolean
+          slaps?: boolean
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
-      user_notification_prefs: {
+      venue_account_access: {
         Row: {
-          user_id: string
-          messages: boolean
-          replies: boolean
-          follows: boolean
-          likes: boolean
-          slaps: boolean
-          new_shows: boolean
-          reminders: boolean
-          community: boolean
-          push_enabled: boolean
-          updated_at: string
+          created_at: string
+          delivered_at: string | null
+          delivered_to: string | null
+          last_generated_at: string | null
+          last_generated_by: string | null
+          note: string | null
+          profile_id: string | null
+          username: string | null
+          venue_id: string
         }
         Insert: {
-          user_id: string
-          messages?: boolean
-          replies?: boolean
-          follows?: boolean
-          likes?: boolean
-          slaps?: boolean
-          new_shows?: boolean
-          reminders?: boolean
-          community?: boolean
-          push_enabled?: boolean
-          updated_at?: string
+          created_at?: string
+          delivered_at?: string | null
+          delivered_to?: string | null
+          last_generated_at?: string | null
+          last_generated_by?: string | null
+          note?: string | null
+          profile_id?: string | null
+          username?: string | null
+          venue_id: string
         }
         Update: {
-          user_id?: string
-          messages?: boolean
-          replies?: boolean
-          follows?: boolean
-          likes?: boolean
-          slaps?: boolean
-          new_shows?: boolean
-          reminders?: boolean
-          community?: boolean
-          push_enabled?: boolean
-          updated_at?: string
+          created_at?: string
+          delivered_at?: string | null
+          delivered_to?: string | null
+          last_generated_at?: string | null
+          last_generated_by?: string | null
+          note?: string | null
+          profile_id?: string | null
+          username?: string | null
+          venue_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "venue_account_access_last_generated_by_fkey"
+            columns: ["last_generated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_account_access_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_account_access_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: true
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       venue_claims: {
         Row: {
@@ -1432,17 +1495,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "venue_claims_venue_id_fkey"
-            columns: ["venue_id"]
-            isOneToOne: false
-            referencedRelation: "venues"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "venue_claims_reviewed_by_fkey"
             columns: ["reviewed_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "venue_claims_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
             referencedColumns: ["id"]
           },
         ]
@@ -1494,6 +1557,7 @@ export type Database = {
       venues: {
         Row: {
           address: string | null
+          aliases: string[]
           avatar_diamond_url: string | null
           avatar_url: string | null
           banner_url: string | null
@@ -1511,10 +1575,12 @@ export type Database = {
           location_lng: number | null
           name: string
           neighborhood: string | null
+          prominence: number | null
           website: string | null
         }
         Insert: {
           address?: string | null
+          aliases?: string[]
           avatar_diamond_url?: string | null
           avatar_url?: string | null
           banner_url?: string | null
@@ -1532,10 +1598,12 @@ export type Database = {
           location_lng?: number | null
           name: string
           neighborhood?: string | null
+          prominence?: number | null
           website?: string | null
         }
         Update: {
           address?: string | null
+          aliases?: string[]
           avatar_diamond_url?: string | null
           avatar_url?: string | null
           banner_url?: string | null
@@ -1553,6 +1621,7 @@ export type Database = {
           location_lng?: number | null
           name?: string
           neighborhood?: string | null
+          prominence?: number | null
           website?: string | null
         }
         Relationships: [
@@ -1573,22 +1642,6 @@ export type Database = {
       accept_follow_request: {
         Args: { follower_user_id: string }
         Returns: undefined
-      }
-      admin_approve_venue_claim: {
-        Args: { p_claim_id: string }
-        Returns: undefined
-      }
-      admin_reject_venue_claim: {
-        Args: { p_claim_id: string }
-        Returns: undefined
-      }
-      event_artist_tags: {
-        Args: { p_event_id: string }
-        Returns: {
-          artist_id: string
-          username: string
-          avatar_diamond_url: string
-        }[]
       }
       activity_feed: {
         Args: {
@@ -1636,6 +1689,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      admin_approve_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
       admin_decline_va_request: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -1678,6 +1735,10 @@ export type Database = {
           venue_name: string
         }[]
       }
+      admin_reject_venue_claim: {
+        Args: { p_claim_id: string }
+        Returns: undefined
+      }
       admin_resolve_report: {
         Args: {
           p_action: string
@@ -1716,6 +1777,14 @@ export type Database = {
         Args: { p_conversation_id: string }
         Returns: undefined
       }
+      event_artist_tags: {
+        Args: { p_event_id: string }
+        Returns: {
+          artist_id: string
+          avatar_diamond_url: string
+          username: string
+        }[]
+      }
       follow_status: { Args: { other_user_id: string }; Returns: string }
       get_my_conversation_members: {
         Args: never
@@ -1740,6 +1809,16 @@ export type Database = {
       is_muted_by: {
         Args: { target_id: string; viewer_id: string }
         Returns: boolean
+      }
+      latest_messages: {
+        Args: { p_conv_ids: string[] }
+        Returns: {
+          body: string
+          conversation_id: string
+          created_at: string
+          media_type: string
+          sender_id: string
+        }[]
       }
       like_activity: {
         Args: { in_activity_type: string; in_source_id: string }
@@ -1813,6 +1892,10 @@ export type Database = {
           venue_name: string
         }[]
       }
+      notification_allowed: {
+        Args: { p_kind: string; p_recipient: string }
+        Returns: boolean
+      }
       pending_follow_request_count: { Args: never; Returns: number }
       pending_follow_requests: {
         Args: never
@@ -1833,16 +1916,6 @@ export type Database = {
       register_event_view: { Args: { p_event_id: string }; Returns: undefined }
       report_sold_out: { Args: { p_event_id: string }; Returns: number }
       scrub_my_account_data: { Args: never; Returns: boolean }
-      latest_messages: {
-        Args: { p_conv_ids: string[] }
-        Returns: {
-          conversation_id: string
-          body: string | null
-          sender_id: string
-          created_at: string
-          media_type: string | null
-        }[]
-      }
       search_my_messages: {
         Args: { p_query: string }
         Returns: {
@@ -1942,12 +2015,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1971,11 +2044,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1996,11 +2069,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2021,11 +2094,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2038,11 +2111,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
