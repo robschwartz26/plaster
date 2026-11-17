@@ -186,6 +186,7 @@ export function UploadHistory() {
       created_by: (d.created_by as string) ?? '', uploader: null, created_at: (d.created_at as string) ?? '',
       is_duplicate: false, duplicate_of: null, source_url: (d.source_url as string | null) ?? null,
       ai_confidence: (d.ai_confidence as number | null) ?? null, flag_note: null, passed_review: false,
+      is_holiday: (d.is_holiday as boolean | null) ?? false,
     })
   }
 
