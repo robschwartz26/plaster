@@ -7,6 +7,13 @@ type Cat = typeof CATS[number]
 const SAFE = 1
 const GAP = 6
 
+// Holiday chip palettes — alternating per letter. Festive = the wall still has
+// its holiday events; icy = they're hidden. Same font and size as every other
+// chip; only the colors carry the season.
+const HOLIDAY_LABEL = 'Holiday'.split('')
+const FESTIVE: [string, string] = ['#2fa84f', '#e0403a']   // fir green / ribbon red
+const ICY: [string, string]     = ['#eaf7ff', '#7dd3fc']   // snow white / frost blue
+
 interface Props {
   active: string
   onChange: (chip: string) => void
@@ -15,13 +22,19 @@ interface Props {
   onOpenNeighborhood?: () => void
   hiddenCats?: string[] // user-hidden categories (Settings → Personalize the wall)
   large?: boolean       // bigger chips for legibility
+  // Holiday chip — only mounted while the wall actually has holiday events, so
+  // it shows up with the season and leaves with it. Not a category filter: it
+  // hides the holiday pile so December doesn't bury everything else.
+  showHoliday?: boolean
+  holidayOn?: boolean          // true = holiday events are showing (festive)
+  onToggleHoliday?: () => void
 }
 
 // Carousel items: the genres, plus the neighborhood chip appended at the end of
 // each copy (so it scrolls + infinite-loops like an ordinary chip).
-type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' }
+type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' } | { kind: 'holiday' }
 
-export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood, hiddenCats = [], large = false }: Props) {
+export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood, hiddenCats = [], large = false, showHoliday = false, holidayOn = true, onToggleHoliday }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
@@ -37,7 +50,11 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
 
   const showNbhd = !!(neighborhood && onOpenNeighborhood)
   const visibleCats = CATS.filter(c => !hiddenCats.includes(c))
+  // Holiday leads each copy so it's on screen when the wall opens; the genres
+  // follow, which is what snapToCategory's index math has to account for.
+  const lead = showHoliday ? 1 : 0
   const baseItems: ChipItem[] = [
+    ...(showHoliday ? [{ kind: 'holiday' } as ChipItem] : []),
     ...visibleCats.map((c): ChipItem => ({ kind: 'cat', cat: c })),
     ...(showNbhd ? [{ kind: 'nbhd' } as ChipItem] : []),
   ]
@@ -61,11 +78,13 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
     setAnimating(false)
     setOffset(-copyWidth)
     requestAnimationFrame(() => setAnimating(true))
-  }, [copyLen, large])
+  }, [copyLen, large, holidayOn])
 
   // Ref so the []-dep snap callback always sees the current (unhidden) list
   const visibleCatsRef = useRef(visibleCats)
   visibleCatsRef.current = visibleCats
+  const leadRef = useRef(lead)
+  leadRef.current = lead
 
   const snapToCategory = useCallback((cat: string) => {
     const catIdx = visibleCatsRef.current.indexOf(cat as Cat)
@@ -82,8 +101,8 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
         positions.push(positions[i - 1] + chipEls[i - 1].offsetWidth + GAP)
       }
 
-      // Target index = middle copy of the active chip (genres lead each copy)
-      const targetI  = copyLenRef.current + catIdx
+      // Target index = middle copy of the active chip (any lead chips first)
+      const targetI  = copyLenRef.current + leadRef.current + catIdx
       const chipW    = chipEls[targetI].offsetWidth
       const saW      = sa.offsetWidth
       const RIGHT_MARGIN = 16
@@ -257,6 +276,40 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
                 >
                   <span style={{ width: 6, height: 6, background: 'var(--fg-40)', transform: 'rotate(45deg)', display: 'inline-block', flexShrink: 0 }} />
                   {neighborhood}
+                </button>
+              )
+            }
+            // Festive when holiday events are showing: letters alternating green
+            // and red. Tapped off, it goes cold — icy blue and white with a
+            // frost glow — and the holiday pile leaves the wall.
+            if (item.kind === 'holiday') {
+              const pal = holidayOn ? FESTIVE : ICY
+              return (
+                <button
+                  key={`holiday-${i}`}
+                  ref={el => { chipElsRef.current[i] = el }}
+                  onClick={() => { if (!draggedRef.current) onToggleHoliday?.() }}
+                  className="font-body font-medium"
+                  aria-pressed={!holidayOn}
+                  aria-label={holidayOn ? 'Hide holiday events' : 'Show holiday events'}
+                  style={{
+                    ...chipStyle(false),
+                    border: `1px solid ${holidayOn ? 'rgba(47,168,79,0.55)' : 'rgba(125,211,252,0.6)'}`,
+                    background: holidayOn ? 'rgba(47,168,79,0.07)' : 'rgba(186,230,253,0.12)',
+                    color: 'inherit',
+                    transition: 'background 0.35s ease, border-color 0.35s ease',
+                  }}
+                >
+                  {HOLIDAY_LABEL.map((ch, n) => (
+                    <span
+                      key={n}
+                      style={{
+                        color: pal[n % 2],
+                        textShadow: holidayOn ? 'none' : '0 0 6px rgba(125,211,252,0.65)',
+                        transition: 'color 0.35s ease, text-shadow 0.35s ease',
+                      }}
+                    >{ch}</span>
+                  ))}
                 </button>
               )
             }

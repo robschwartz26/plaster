@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Search, SlidersHorizontal } from 'lucide-react'
 import { FilterBar } from './FilterBar'
+import { isHolidayEvent } from '@/lib/holiday'
 import { PosterGrid } from './PosterGrid'
 import { TrendingStrip } from './TrendingStrip'
 import { PlasterHeader, headerIconBtn } from './PlasterHeader'
@@ -10,7 +11,7 @@ import { PreferencesPanel } from './PreferencesPanel'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
 import { todayLocalDate } from '@/lib/dates'
-import { useWallPrefs } from '@/lib/wallPrefs'
+import { useWallPrefs, saveWallPrefs } from '@/lib/wallPrefs'
 import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
@@ -52,12 +53,16 @@ export function Wall() {
   const [searchQuery, setSearchQuery] = useState('')
   const wallPrefs = useWallPrefs()
 
+  // The holiday chip only exists while there is something for it to hide — it
+  // arrives with the season and leaves with it, no calendar logic in the UI.
+  const hasHoliday = useMemo(() => events.some(isHolidayEvent), [events])
   const visibleEvents = useMemo(
     () => events.filter(e =>
       !(e.category && wallPrefs.hiddenCats.includes(e.category)) &&
+      !(wallPrefs.hideHoliday && isHolidayEvent(e)) &&
       matchesFilter(e, activeFilter, likedIds.has(e.id)) &&
       matchesSearch(e, searchQuery)),
-    [events, activeFilter, likedIds, searchQuery, wallPrefs.hiddenCats],
+    [events, activeFilter, likedIds, searchQuery, wallPrefs.hiddenCats, wallPrefs.hideHoliday],
   )
   const [searchOpen, setSearchOpen] = useState(false)
   const [communityOpen, setCommunityOpen] = useState(false)
@@ -364,6 +369,10 @@ export function Wall() {
         onOpenNeighborhood={(profile?.home_neighborhood && profile?.home_sextant) ? () => setCommunityOpen(true) : undefined}
         hiddenCats={wallPrefs.hiddenCats}
         large={wallPrefs.chipSize === 'large'}
+        showHoliday={hasHoliday}
+        holidayOn={!wallPrefs.hideHoliday}
+        onToggleHoliday={() => withWallTransition(() =>
+          saveWallPrefs({ ...wallPrefs, hideHoliday: !wallPrefs.hideHoliday }))}
       />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
