@@ -544,6 +544,7 @@ export type Database = {
           focal_x: number | null
           focal_y: number | null
           id: string
+          is_holiday: boolean
           is_recurring: boolean
           like_count: number
           location_lat: number | null
@@ -585,6 +586,7 @@ export type Database = {
           focal_x?: number | null
           focal_y?: number | null
           id?: string
+          is_holiday?: boolean
           is_recurring?: boolean
           like_count?: number
           location_lat?: number | null
@@ -626,6 +628,7 @@ export type Database = {
           focal_x?: number | null
           focal_y?: number | null
           id?: string
+          is_holiday?: boolean
           is_recurring?: boolean
           like_count?: number
           location_lat?: number | null
@@ -1724,6 +1727,7 @@ export type Database = {
           flag_note: string
           id: string
           is_duplicate: boolean
+          is_holiday: boolean
           passed_review: boolean
           poster_url: string
           sold_out: boolean
@@ -1796,6 +1800,10 @@ export type Database = {
         }[]
       }
       get_unread_count: { Args: never; Returns: number }
+      holiday_by_title: {
+        Args: { p_starts_at: string; p_title: string }
+        Returns: boolean
+      }
       is_admin: { Args: { user_id: string }; Returns: boolean }
       is_blocked_either_way: {
         Args: { target_id: string; viewer_id: string }

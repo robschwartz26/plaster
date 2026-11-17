@@ -52,8 +52,23 @@ function inHolidaySeason(startsAt: string | null | undefined): boolean {
 // The chip's filter value. Deliberately not in CATEGORIES — it cuts across them.
 export const HOLIDAY_FILTER = 'Holiday'
 
-export function isHolidayEvent(e: { title?: string | null; starts_at?: string | null }): boolean {
-  const t = (e.title ?? '').trim()
+// The stored flag is authoritative — it is seeded from this same title rule on
+// insert (migration 112) and then owned by whoever reviews the event, so an
+// admin un-marking something in Review has to stick. The title rule is only a
+// fallback for rows that don't carry the column (preview objects, mock data).
+export function isHolidayEvent(e: {
+  title?: string | null
+  starts_at?: string | null
+  is_holiday?: boolean | null
+}): boolean {
+  if (typeof e.is_holiday === 'boolean') return e.is_holiday
+  return matchesHolidayTitle(e.title, e.starts_at)
+}
+
+// Exported for the Review queue, which lights its Holiday button for a title
+// that reads as holiday even before anyone has confirmed it.
+export function matchesHolidayTitle(title: string | null | undefined, startsAt?: string | null): boolean {
+  const t = (title ?? '').trim()
   if (!t) return false
-  return HOLIDAY_RE.test(t) && inHolidaySeason(e.starts_at)
+  return HOLIDAY_RE.test(t) && inHolidaySeason(startsAt)
 }

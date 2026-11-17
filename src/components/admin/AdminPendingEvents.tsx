@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
 import { findDuplicateIds, needsPhoto, type PendingEvent } from '@/components/admin/reviewShared'
+import { matchesHolidayTitle } from '@/lib/holiday'
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
@@ -61,6 +62,20 @@ function intoSeries(group: PendingEvent[]): PendingEvent[][] {
     bucket.sort((a, b) => a.starts_at.localeCompare(b.starts_at))
   }
   return [...byKey.values()]
+}
+
+// Same two-tone treatment as the wall's chip: fir green / ribbon red at rest,
+// snow white / frost blue once it's set.
+const FESTIVE: [string, string] = ['#2fa84f', '#e0403a']
+const ICY: [string, string]     = ['#eaf7ff', '#7dd3fc']
+
+function holidayLetters(label: string, on: boolean) {
+  const pal = on ? ICY : FESTIVE
+  let i = -1
+  return label.split('').map((ch, n) => {
+    if (ch !== ' ') i++
+    return <span key={n} style={{ color: ch === ' ' ? 'inherit' : pal[i % 2] }}>{ch}</span>
+  })
 }
 
 type RejectionReason = 'duplicate' | 'wrong_date' | 'bad_image' | 'not_an_event' | 'other'
@@ -148,6 +163,7 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
   const dupIds = useMemo(() => findDuplicateIds(rows), [rows])
   const isDup = (e: PendingEvent) => dupIds.has(e.id) || e.is_duplicate
   const flaggedDupes = rows.filter(isDup)
+  const allHoliday = rows.length > 0 && rows.every(e => e.is_holiday)
 
   useEffect(() => {
     supabase.from('venues').select('id, name, neighborhood, address').order('name')
@@ -276,6 +292,26 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
     fetchPending()
   }
 
+  // Holiday classification. Seeded from the title on insert (migration 112) and
+  // owned from here on, so un-marking something the title rule over-caught sticks.
+  async function setHoliday(ids: string[], next: boolean) {
+    if (!user || ids.length === 0) return
+    setBusyId(ids[0])
+    const { error } = await supabase.from('events').update({ is_holiday: next }).in('id', ids)
+    setBusyId(null)
+    if (error) console.error('[AdminPendingEvents] set holiday failed', error)
+    fetchPending()
+  }
+
+  async function markAllHoliday(next: boolean) {
+    if (!user || rows.length === 0) return
+    setBusyGroup('*')
+    const { error } = await supabase.from('events').update({ is_holiday: next }).in('id', rows.map(e => e.id))
+    if (error) console.error('[AdminPendingEvents] mark all holiday failed', error)
+    setBusyGroup(null)
+    fetchPending()
+  }
+
   async function passAll(group: PendingEvent[]) {
     if (!user) return
     const key = group[0].uploader ?? group[0].created_by
@@ -378,6 +414,20 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                 {busyGroup === '*' ? '…' : `Reject ${flaggedDupes.length} duplicate${flaggedDupes.length !== 1 ? 's' : ''}`}
               </button>
             )}
+            <button
+              onClick={() => markAllHoliday(!allHoliday)}
+              disabled={busyGroup === '*'}
+              title={allHoliday ? 'Clear the holiday flag on every event listed' : 'Flag every event listed as a holiday event'}
+              style={{
+                padding: '5px 10px', borderRadius: 5,
+                border: `1px solid ${allHoliday ? 'rgba(125,211,252,0.6)' : 'rgba(47,168,79,0.5)'}`,
+                background: allHoliday ? 'rgba(186,230,253,0.14)' : 'rgba(47,168,79,0.07)',
+                fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700,
+                cursor: busyGroup === '*' ? 'wait' : 'pointer', opacity: busyGroup === '*' ? 0.5 : 1,
+              }}
+            >
+              {busyGroup === '*' ? '…' : <>🎄 {holidayLetters(allHoliday ? `Unmark all ${rows.length}` : `Mark all ${rows.length} holiday`, allHoliday)}</>}
+            </button>
             <button
               onClick={() => setRejectAllOpen(o => !o)}
               disabled={busyGroup === '*'}
@@ -568,13 +618,37 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       />
                     )}
 
-                    {/* Edit — text fields + poster re-upload + live info-page preview */}
-                    <button
-                      onClick={() => setEditingId(prev => prev === e.id ? null : e.id)}
-                      style={{ alignSelf: 'flex-start', background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: '#A855F7' }}
-                    >
-                      {editingId === e.id ? '▾ Hide editor' : '▸ Edit & preview info page'}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                      {/* Edit — text fields + poster re-upload + live info-page preview */}
+                      <button
+                        onClick={() => setEditingId(prev => prev === e.id ? null : e.id)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, color: '#A855F7' }}
+                      >
+                        {editingId === e.id ? '▾ Hide editor' : '▸ Edit & preview info page'}
+                      </button>
+                      {/* Holiday flag — drives the wall's Holiday chip. Pre-lit when
+                          the title already reads as holiday (seeded on insert). */}
+                      <button
+                        onClick={() => setHoliday(series.map(d => d.id), !e.is_holiday)}
+                        disabled={isBusy}
+                        title={e.is_holiday
+                          ? `Not a holiday event${multi ? ` (all ${series.length} dates)` : ''}`
+                          : `Mark as a holiday event${multi ? ` (all ${series.length} dates)` : ''}`}
+                        style={{
+                          padding: '3px 9px', borderRadius: 5, flexShrink: 0,
+                          border: `1px solid ${e.is_holiday ? 'rgba(125,211,252,0.65)' : 'var(--fg-18)'}`,
+                          background: e.is_holiday ? 'rgba(186,230,253,0.14)' : 'transparent',
+                          fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700,
+                          cursor: isBusy ? 'wait' : 'pointer', opacity: isBusy ? 0.5 : 1,
+                          transition: 'background 0.25s ease, border-color 0.25s ease',
+                        }}
+                      >
+                        🎄 {holidayLetters('Holiday', !!e.is_holiday)}
+                        {!e.is_holiday && matchesHolidayTitle(e.title, e.starts_at) && (
+                          <span style={{ marginLeft: 5, color: 'var(--fg-40)', fontWeight: 600 }}>?</span>
+                        )}
+                      </button>
+                    </div>
                     {editingId === e.id && (
                       <ReviewRowEditor
                         row={e}

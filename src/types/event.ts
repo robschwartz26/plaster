@@ -24,4 +24,6 @@ export interface WallEvent {
   artist_name?: string | null
   trending_score: number
   recurrence_group_id?: string | null
+  // Set in the Review queue; seeded from the title on insert (migration 112).
+  is_holiday?: boolean | null
 }
