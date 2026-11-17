@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
-import { NEIGHBORHOODS, inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
+import { inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
+import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
 import { callScrapeFn } from '@/components/admin/AdminAutoIngest'
 
 type VenueFormFields = { name: string; neighborhood: string; address: string; website: string; instagram: string; hours: string }
@@ -26,7 +27,7 @@ export function VenueForm({ onVenueAdded, initial, onCreated }: {
     let location_lng: number | null = null
 
     if (form.address) {
-      const coords = await geocodeAddress(form.address)
+      const coords = await geocodeAddress(form.address, form.neighborhood)
       if (coords) { location_lat = coords.lat; location_lng = coords.lng }
     }
 
@@ -46,6 +47,7 @@ export function VenueForm({ onVenueAdded, initial, onCreated }: {
       setErrorMsg(error.message)
     } else {
       setStatus('success')
+      rememberNeighborhood(form.neighborhood)   // a write-in joins the picker right away
       setForm({ name: '', neighborhood: '', address: '', website: '', instagram: '', hours: '' })
       onVenueAdded()
       setTimeout(() => setStatus('idle'), 3000)
@@ -69,12 +71,13 @@ export function VenueForm({ onVenueAdded, initial, onCreated }: {
         <label style={labelStyle}>Venue name *</label>
         <input style={inputStyle} value={form.name} onChange={set('name')} required placeholder="The Goodfoot" />
       </div>
-      <div style={fieldStyle}>
+      <div style={{ ...fieldStyle, gap: 8 }}>
         <label style={labelStyle}>Neighborhood</label>
-        <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.neighborhood} onChange={set('neighborhood')}>
-          <option value="">— select —</option>
-          {NEIGHBORHOODS.map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
+        <NeighborhoodSelect
+          value={form.neighborhood}
+          onChange={(v) => setForm(f => ({ ...f, neighborhood: v }))}
+          style={{ ...inputStyle, cursor: 'pointer' }}
+        />
       </div>
       <div style={fieldStyle}>
         <label style={labelStyle}>Address</label>

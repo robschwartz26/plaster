@@ -4,7 +4,8 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
-import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress, NEIGHBORHOODS } from '@/components/admin/adminShared'
+import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress } from '@/components/admin/adminShared'
+import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -69,6 +70,7 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
   const [nvHood, setNvHood] = useState('')
   const [nvAddress, setNvAddress] = useState('')
   const [nvWebsite, setNvWebsite] = useState('')
+  const [nvInstagram, setNvInstagram] = useState('')
   const [nvBusy, setNvBusy] = useState(false)
   const [nvErr, setNvErr] = useState('')
   const [nvMade, setNvMade] = useState('')
@@ -207,22 +209,24 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
     setNvBusy(true); setNvErr('')
     try {
       const addr = nvAddress.trim()
-      const coords = addr ? await geocodeAddress(addr) : null
+      const coords = addr ? await geocodeAddress(addr, nvHood) : null
       const { data, error } = await supabase.from('venues').insert({
         name,
         neighborhood: nvHood || null,
         address: addr || null,
         website: nvWebsite.trim() || null,
+        instagram: nvInstagram.replace(/^@/, '').trim() || null,
         location_lat: coords?.lat ?? null,
         location_lng: coords?.lng ?? null,
       }).select('id, name, neighborhood, address').single()
       if (error) throw error
       const v = data as VenueLite
+      rememberNeighborhood(v.neighborhood)   // joins the picker for the next venue
       onVenueCreated?.(v)
       setVenueId(v.id)
       setNewVenueOpen(false)
       setNvMade(`${v.name} created — pick it for the other dates, then Save`)
-      setNvName(''); setNvHood(''); setNvAddress(''); setNvWebsite('')
+      setNvName(''); setNvHood(''); setNvAddress(''); setNvWebsite(''); setNvInstagram('')
     } catch (e) {
       setNvErr(e instanceof Error ? e.message : String(e))
     } finally { setNvBusy(false) }
@@ -352,13 +356,15 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
             <input autoFocus value={nvName} onChange={e => setNvName(e.target.value)} placeholder="Venue name *" style={inp}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createVenue() } }} />
             <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-              <select value={nvHood} onChange={e => setNvHood(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120 }}>
-                <option value="">— neighborhood —</option>
-                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <div style={{ flex: 1, minWidth: 130, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <NeighborhoodSelect value={nvHood} onChange={setNvHood} style={inp} />
+              </div>
               <input value={nvAddress} onChange={e => setNvAddress(e.target.value)} placeholder="Address (geocoded)" style={{ ...inp, flex: 2, minWidth: 160 }} />
             </div>
-            <input value={nvWebsite} onChange={e => setNvWebsite(e.target.value)} placeholder="Website (optional)" style={inp} />
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <input value={nvWebsite} onChange={e => setNvWebsite(e.target.value)} placeholder="Website (optional)" style={{ ...inp, flex: 2, minWidth: 160 }} />
+              <input value={nvInstagram} onChange={e => setNvInstagram(e.target.value)} placeholder="@instagram (optional)" style={{ ...inp, flex: 1, minWidth: 130 }} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               <button onClick={createVenue} disabled={nvBusy || !nvName.trim()} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#A855F7', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: nvBusy ? 'wait' : 'pointer', opacity: nvBusy || !nvName.trim() ? 0.5 : 1 }}>
                 {nvBusy ? 'Creating…' : 'Create & select'}

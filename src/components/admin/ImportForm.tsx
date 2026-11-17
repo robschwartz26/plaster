@@ -4,9 +4,10 @@ import { CATEGORIES } from '@/lib/categories'
 import { type CropRect, optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
 import { expandOccurrences } from '@/lib/recurringDates'
 import { checkInDate } from '@/components/admin/adminShared'
+import { NeighborhoodSelect } from '@/components/admin/NeighborhoodSelect'
 import {
   fileFromDrop,
-  IS_DEV, MAPBOX_TOKEN, NEIGHBORHOODS, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
+  IS_DEV, MAPBOX_TOKEN, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
   fileToDataURL, extractEventFromImage, extractScheduleFromImage, friendlyExtractionError,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
@@ -1018,10 +1019,11 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
           {!staffMode && !form.venue_id && form.venue_name_manual && (
             <div style={fieldStyle}>
               <label style={labelStyle}>Neighborhood</label>
-              <select style={{ ...inputStyle, appearance: 'none', cursor: 'pointer' }} value={form.neighborhood} onChange={e => setForm(f => ({ ...f, neighborhood: e.target.value }))}>
-                <option value="">— select —</option>
-                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <NeighborhoodSelect
+                value={form.neighborhood}
+                onChange={v => setForm(f => ({ ...f, neighborhood: v }))}
+                style={{ ...inputStyle, cursor: 'pointer', marginBottom: 6 }}
+              />
             </div>
           )}
 

@@ -10,20 +10,36 @@ export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string
 // dev-only UI into the App Store build.
 export const IS_DEV = import.meta.env.DEV
 
-export const NEIGHBORHOODS = [
+// Inside Portland proper. These are AREAS of one city, so geocoding must not
+// treat them as a city name ("2845 SE Stark St, Northeast" finds nothing).
+export const PORTLAND_AREAS = [
   'Northeast', 'Southeast', 'North', 'Northwest', 'Southwest', 'South',
   'Downtown', 'Pearl', 'Alberta', 'Mississippi', 'Hawthorne',
   'Division', 'Burnside',
-  // Metro cities outside Portland proper — venues live there too (Edgefield,
-  // Reser, the amphitheater…) and an honest city tag beats shoehorning into a
-  // Portland sextant. NOTE: distinct from the onboarding home-neighborhood
-  // picker (lib/neighborhoods.ts), which stays Portland-only by design.
+]
+
+// Cities outside Portland proper — venues live there too (Edgefield, Reser, the
+// amphitheater…) and an honest city tag beats shoehorning into a Portland
+// sextant. These ARE city names, so geocoding uses them. NOTE: distinct from the
+// onboarding home-neighborhood picker (lib/neighborhoods.ts), which stays
+// Portland-only by design.
+export const METRO_CITIES = [
   'Troutdale', 'Gresham', 'Beaverton', 'Hillsboro', 'Milwaukie',
   'Lake Oswego', 'Oregon City', 'Happy Valley', 'Vancouver WA',
   'Forest Grove', // McMenamins Grand Lodge
   'Tualatin',
   'Bend', // not metro — but Hayden Homes Amphitheater headliners are worth the drive
 ]
+
+// The curated picker list. Admin forms widen it with whatever cities have been
+// written in on existing venues (see NeighborhoodSelect), so a one-off like
+// Silverton joins the list for good the moment its venue is saved.
+export const NEIGHBORHOODS = [...PORTLAND_AREAS, ...METRO_CITIES]
+
+export function isPortlandArea(s: string | null | undefined): boolean {
+  const v = (s ?? '').trim().toLowerCase()
+  return !!v && PORTLAND_AREAS.some(a => a.toLowerCase() === v)
+}
 
 // ── Shared input styles ──────────────────────────────────────
 
@@ -124,13 +140,29 @@ export const WEEKDAY_JS     = [1, 2, 3, 4, 5, 6, 0] // Mon=1 … Sat=6, Sun=0
 
 // ── Geocoding ────────────────────────────────────────────────
 
-export async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+// cityHint: the venue's neighborhood field. A Portland AREA ('Southeast') is
+// ignored — it is not a city. A city ('Silverton', 'Bend', 'Vancouver WA') is
+// appended and the Portland proximity bias is dropped, so an out-of-town venue
+// lands on the map where it actually is instead of 45 miles away.
+export async function geocodeAddress(address: string, cityHint?: string | null): Promise<{ lat: number; lng: number } | null> {
   if (!MAPBOX_TOKEN) {
     console.warn('VITE_MAPBOX_TOKEN not set — skipping geocoding')
     return null
   }
-  const query = encodeURIComponent(address + ', Portland, Oregon')
-  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1&proximity=-122.6784,45.5051`
+  const hint = (cityHint ?? '').trim()
+  const cityLike = !!hint && !isPortlandArea(hint)
+  let q = address.trim()
+  if (cityLike && !new RegExp(`\\b${hint.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(q)) {
+    q = `${q}, ${hint}`
+  }
+  if (!/\b(or|ore|oregon|wa|wash|washington)\b/i.test(q)) {
+    // No state and no city of its own → the long-standing Portland default.
+    if (!cityLike && !/portland/i.test(q)) q = `${q}, Portland`
+    q = `${q}, Oregon`
+  }
+  const query = encodeURIComponent(q)
+  const proximity = cityLike ? '' : '&proximity=-122.6784,45.5051'
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${query}.json?access_token=${MAPBOX_TOKEN}&country=US&limit=1${proximity}`
   const res = await fetch(url)
   const data = await res.json()
   const feature = data.features?.[0]

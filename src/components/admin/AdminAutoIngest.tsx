@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
-import { inputStyle, labelStyle, NEIGHBORHOODS, neighborhoodFromAddress, venueSimilarity, type Venue } from '@/components/admin/adminShared'
+import { inputStyle, labelStyle, neighborhoodFromAddress, venueSimilarity, type Venue } from '@/components/admin/adminShared'
+import { NeighborhoodSelect } from '@/components/admin/NeighborhoodSelect'
 
 // ── Auto-Ingest admin section ──────────────────────────────────────────────────
 // Manages venue_sources rows and drives the scrape-sources edge function.
@@ -469,10 +470,13 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
             <input value={draft.name} onChange={e => setDraft(d => d && { ...d, name: e.target.value })} placeholder="Name" style={inputStyle} />
             <input value={draft.address} onChange={e => setDraft(d => d && { ...d, address: e.target.value, neighborhood: e.target.value ? neighborhoodFromAddress(e.target.value) : d.neighborhood })} placeholder="Address" style={inputStyle} />
             <div style={{ display: 'flex', gap: 8 }}>
-              <select value={draft.neighborhood} onChange={e => setDraft(d => d && { ...d, neighborhood: e.target.value })} style={{ ...inputStyle, flex: 1 }}>
-                <option value="">Neighborhood…</option>
-                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <NeighborhoodSelect
+                  value={draft.neighborhood}
+                  onChange={v => setDraft(d => d && { ...d, neighborhood: v })}
+                  style={inputStyle}
+                />
+              </div>
               <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', alignSelf: 'center', whiteSpace: 'nowrap' }}>
                 {draft.lat != null && draft.lng != null ? `${draft.lat.toFixed(4)}, ${draft.lng.toFixed(4)}` : 'no coords'}
               </span>
