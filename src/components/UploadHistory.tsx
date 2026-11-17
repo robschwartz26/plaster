@@ -235,7 +235,7 @@ export function UploadHistory() {
           <button onClick={() => { setEditRow(null); setEditLoading(false) }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--fg-55)', fontSize: 20, lineHeight: 1, cursor: 'pointer', padding: 4 }} title="Close">×</button>
         </div>
         {editLoading ? <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-55)' }}>Loading…</p>
-          : editRow ? <ReviewRowEditor row={editRow} venues={venues} onSaved={() => onEdited(editRow.id)} />
+          : editRow ? <ReviewRowEditor row={editRow} venues={venues} onSaved={() => onEdited(editRow.id)} onVenueCreated={v => setVenues(prev => prev.some(x => x.id === v.id) ? prev : [...prev, v].sort((a, b) => a.name.localeCompare(b.name)))} />
           : null}
       </div>
     </div>, document.body) : null

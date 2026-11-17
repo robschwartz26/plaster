@@ -154,6 +154,14 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
       .then(({ data }) => setVenues((data ?? []) as VenueLite[]))
   }, [])
 
+  // A venue created from inside one Review row joins the list for every other row,
+  // so the rest of a misfiled batch can just be picked from the dropdown.
+  const addVenue = useCallback((v: VenueLite) => {
+    setVenues(prev => prev.some(x => x.id === v.id)
+      ? prev
+      : [...prev, v].sort((a, b) => a.name.localeCompare(b.name)))
+  }, [])
+
   async function rejectAllDuplicates() {
     if (!user || flaggedDupes.length === 0) return
     setBusyGroup('*')
@@ -568,7 +576,13 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                       {editingId === e.id ? '▾ Hide editor' : '▸ Edit & preview info page'}
                     </button>
                     {editingId === e.id && (
-                      <ReviewRowEditor row={e} venues={venues} onSaved={fetchPending} seriesIds={series.map(d => d.id)} />
+                      <ReviewRowEditor
+                        row={e}
+                        venues={venues}
+                        onSaved={fetchPending}
+                        seriesIds={series.map(d => d.id)}
+                        onVenueCreated={addVenue}
+                      />
                     )}
                   </div>
                 )

@@ -4,13 +4,16 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
-import { extractEventFromImage, friendlyExtractionError, fileFromDrop } from '@/components/admin/adminShared'
+import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress, NEIGHBORHOODS } from '@/components/admin/adminShared'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
 // events row (admin RLS permits). Used inside each expanded Review row.
 
 const CATEGORY_OPTIONS = Object.keys(CATEGORY_GRADIENTS)
+
+// Sentinel value for the venue <select> — never a real venue id (those are uuids).
+const NEW_VENUE = '__new_venue__'
 
 function isoToLocalInput(iso: string): string {
   const d = new Date(iso)
@@ -20,7 +23,13 @@ function isoToLocalInput(iso: string): string {
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
-export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row: PendingEvent; venues: VenueLite[]; onSaved: () => void; seriesIds?: string[] }) {
+export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueCreated }: {
+  row: PendingEvent
+  venues: VenueLite[]
+  onSaved: () => void
+  seriesIds?: string[]
+  onVenueCreated?: (v: VenueLite) => void
+}) {
   // A collapsed series shows one card for many dates. Shared fields (title,
   // venue, category, blurb, poster, sold-out) save to every date in the series;
   // starts_at stays per-row, or every date would collapse onto one.
@@ -51,6 +60,18 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row:
   const [schedAdded, setSchedAdded] = useState(0)
   const [schedSkipped, setSchedSkipped] = useState(0)
   const [schedDrops, setSchedDrops] = useState(0)
+  // "New venue" straight from the selector: the ingester guesses a venue it already
+  // knows, so a show at a room Plaster has never seen lands under the wrong name.
+  // Create the venue here, select it, and it appears in every other Review row's
+  // dropdown immediately (the list lives in the parent).
+  const [newVenueOpen, setNewVenueOpen] = useState(false)
+  const [nvName, setNvName] = useState('')
+  const [nvHood, setNvHood] = useState('')
+  const [nvAddress, setNvAddress] = useState('')
+  const [nvWebsite, setNvWebsite] = useState('')
+  const [nvBusy, setNvBusy] = useState(false)
+  const [nvErr, setNvErr] = useState('')
+  const [nvMade, setNvMade] = useState('')
 
   // Accepts local files AND images dragged straight off a webpage (like the
   // Single ingester) — web drags carry a URL, not a File, and were silently
@@ -169,6 +190,44 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row:
     } finally { setSchedBusy(false) }
   }
 
+  // Creates the venue, selects it on this card, and hands it to the parent so the
+  // other Review rows can pick it from their dropdowns. Does NOT write the event —
+  // "Save changes" below still commits the assignment (and the whole series).
+  async function createVenue() {
+    const name = nvName.trim()
+    if (!name) { setNvErr('Name required'); return }
+    const clash = venues.find(v => v.name.trim().toLowerCase() === name.toLowerCase())
+    if (clash) {
+      setVenueId(clash.id)
+      setNewVenueOpen(false)
+      setNvErr('')
+      setNvMade(`${clash.name} already existed — selected it`)
+      return
+    }
+    setNvBusy(true); setNvErr('')
+    try {
+      const addr = nvAddress.trim()
+      const coords = addr ? await geocodeAddress(addr) : null
+      const { data, error } = await supabase.from('venues').insert({
+        name,
+        neighborhood: nvHood || null,
+        address: addr || null,
+        website: nvWebsite.trim() || null,
+        location_lat: coords?.lat ?? null,
+        location_lng: coords?.lng ?? null,
+      }).select('id, name, neighborhood, address').single()
+      if (error) throw error
+      const v = data as VenueLite
+      onVenueCreated?.(v)
+      setVenueId(v.id)
+      setNewVenueOpen(false)
+      setNvMade(`${v.name} created — pick it for the other dates, then Save`)
+      setNvName(''); setNvHood(''); setNvAddress(''); setNvWebsite('')
+    } catch (e) {
+      setNvErr(e instanceof Error ? e.message : String(e))
+    } finally { setNvBusy(false) }
+  }
+
   async function save() {
     setSaving(true); setErr(''); setSaved(false)
     try {
@@ -253,10 +312,25 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row:
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 140 }}>
             <label style={lbl}>Venue</label>
-            <select value={venueId} onChange={e => setVenueId(e.target.value)} style={inp}>
+            <select
+              value={venueId}
+              onChange={e => {
+                if (e.target.value === NEW_VENUE) {
+                  setNvName(''); setNvErr(''); setNvMade('')
+                  setNewVenueOpen(true)
+                  return                      // keep the current selection until it's made
+                }
+                setVenueId(e.target.value)
+              }}
+              style={inp}
+            >
               <option value="">— none —</option>
               {venues.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+              <option value={NEW_VENUE}>＋ New venue…</option>
             </select>
+            {nvMade && !newVenueOpen && (
+              <span style={{ display: 'block', marginTop: 4, fontSize: 11, color: '#4ade80' }}>{nvMade}</span>
+            )}
           </div>
           <div style={{ width: 130 }}>
             <label style={lbl}>Category</label>
@@ -265,6 +339,35 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [] }: { row:
             </select>
           </div>
         </div>
+        {newVenueOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: '10px 11px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.35)', background: 'rgba(168,85,247,0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ ...lbl, marginBottom: 0 }}>New venue</span>
+              <button
+                onClick={() => { setNewVenueOpen(false); setNvErr('') }}
+                disabled={nvBusy}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 11, color: 'var(--fg-40)' }}
+              >Cancel</button>
+            </div>
+            <input autoFocus value={nvName} onChange={e => setNvName(e.target.value)} placeholder="Venue name *" style={inp}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); createVenue() } }} />
+            <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+              <select value={nvHood} onChange={e => setNvHood(e.target.value)} style={{ ...inp, flex: 1, minWidth: 120 }}>
+                <option value="">— neighborhood —</option>
+                {NEIGHBORHOODS.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+              <input value={nvAddress} onChange={e => setNvAddress(e.target.value)} placeholder="Address (geocoded)" style={{ ...inp, flex: 2, minWidth: 160 }} />
+            </div>
+            <input value={nvWebsite} onChange={e => setNvWebsite(e.target.value)} placeholder="Website (optional)" style={inp} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <button onClick={createVenue} disabled={nvBusy || !nvName.trim()} style={{ padding: '7px 14px', borderRadius: 7, border: 'none', background: '#A855F7', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: nvBusy ? 'wait' : 'pointer', opacity: nvBusy || !nvName.trim() ? 0.5 : 1 }}>
+                {nvBusy ? 'Creating…' : 'Create & select'}
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--fg-40)' }}>then hit Save changes below</span>
+              {nvErr && <span style={{ fontSize: 11, color: '#e05555' }}>{nvErr}</span>}
+            </div>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
           <div style={{ flex: 1, minWidth: 180 }}>
             <label style={lbl}>Date &amp; time</label>
