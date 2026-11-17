@@ -1,6 +1,7 @@
-// Holiday events — the stretch from the first Christmas market to New Year's Eve
-// puts enough tree-lighting and Nutcracker on the wall to bury everything else,
-// so the Wall carries a chip that hides them. This decides what counts.
+// Holiday events — the stretch from Thanksgiving to New Year's Eve is a fifth of
+// everything on the wall, so it gets its own filter chip. Not a real category
+// (the DB knows nothing about it): it's a read of the title, so a show stays
+// filed under Live Music or Theater and still answers to Holiday.
 //
 // Detection is by TITLE, deliberately: the wall's event query doesn't fetch
 // descriptions (see EVENT_SELECT in Wall.tsx) and a holiday show says so in its
@@ -47,6 +48,9 @@ function inHolidaySeason(startsAt: string | null | undefined): boolean {
   if (m === 0 && d.getDate() <= 6) return true       // through Twelfth Night
   return false
 }
+
+// The chip's filter value. Deliberately not in CATEGORIES — it cuts across them.
+export const HOLIDAY_FILTER = 'Holiday'
 
 export function isHolidayEvent(e: { title?: string | null; starts_at?: string | null }): boolean {
   const t = (e.title ?? '').trim()

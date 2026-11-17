@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { isHolidayEvent, HOLIDAY_FILTER } from '@/lib/holiday'
 import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import { type WallEvent } from '@/types/event'
@@ -102,6 +103,8 @@ function groupPostsWithReplies(flatPosts: WallPost[]): (WallPost & { replies: Wa
 export function matchesFilter(event: WallEvent, filter: string, isLiked: boolean): boolean {
   if (filter === 'All') return true
   if (filter === '♥') return isLiked
+  // Holiday cuts across categories — it's read off the title, not stored.
+  if (filter === HOLIDAY_FILTER) return isHolidayEvent(event)
   return event.category === filter
 }
 

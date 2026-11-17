@@ -9,16 +9,12 @@ export interface WallPrefs {
   hiddenCats: string[]
   chipSize: 'standard' | 'large'
   maxCols: 3 | 4 | 5
-  // Set by the festive Holiday chip on the wall, not by this panel. Lives here
-  // so it persists and syncs through the same channel as the other wall knobs.
-  hideHoliday: boolean
 }
 
 export const DEFAULT_WALL_PREFS: WallPrefs = {
   hiddenCats: [],
   chipSize: 'standard',
   maxCols: 5,
-  hideHoliday: false,
 }
 
 const KEY = 'wall-prefs-v1'
@@ -34,7 +30,6 @@ export function loadWallPrefs(): WallPrefs {
       hiddenCats: Array.isArray(p.hiddenCats) ? p.hiddenCats.filter((c: unknown) => typeof c === 'string') : [],
       chipSize: p.chipSize === 'large' ? 'large' : 'standard',
       maxCols: [3, 4, 5].includes(p.maxCols) ? p.maxCols : 5,
-      hideHoliday: p.hideHoliday === true,
     }
   } catch {
     return DEFAULT_WALL_PREFS

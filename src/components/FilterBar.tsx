@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { CATEGORIES } from '@/lib/categories'
+import { HOLIDAY_FILTER } from '@/lib/holiday'
 
 const CATS = CATEGORIES
 type Cat = typeof CATS[number]
@@ -7,9 +8,8 @@ type Cat = typeof CATS[number]
 const SAFE = 1
 const GAP = 6
 
-// Holiday chip palettes — alternating per letter. Festive = the wall still has
-// its holiday events; icy = they're hidden. Same font and size as every other
-// chip; only the colors carry the season.
+// Holiday chip palettes — alternating per letter. Festive at rest, icy once
+// picked. Same font and size as every other chip; only the colors carry it.
 const HOLIDAY_LABEL = 'Holiday'.split('')
 const FESTIVE: [string, string] = ['#2fa84f', '#e0403a']   // fir green / ribbon red
 const ICY: [string, string]     = ['#eaf7ff', '#7dd3fc']   // snow white / frost blue
@@ -23,18 +23,16 @@ interface Props {
   hiddenCats?: string[] // user-hidden categories (Settings → Personalize the wall)
   large?: boolean       // bigger chips for legibility
   // Holiday chip — only mounted while the wall actually has holiday events, so
-  // it shows up with the season and leaves with it. Not a category filter: it
-  // hides the holiday pile so December doesn't bury everything else.
+  // it shows up with the season and leaves with it. Filters like any other chip;
+  // Holiday just isn't a stored category (see lib/holiday.ts).
   showHoliday?: boolean
-  holidayOn?: boolean          // true = holiday events are showing (festive)
-  onToggleHoliday?: () => void
 }
 
 // Carousel items: the genres, plus the neighborhood chip appended at the end of
 // each copy (so it scrolls + infinite-loops like an ordinary chip).
 type ChipItem = { kind: 'cat'; cat: Cat } | { kind: 'nbhd' } | { kind: 'holiday' }
 
-export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood, hiddenCats = [], large = false, showHoliday = false, holidayOn = true, onToggleHoliday }: Props) {
+export function FilterBar({ active, onChange, activePosterCategory, neighborhood, onOpenNeighborhood, hiddenCats = [], large = false, showHoliday = false }: Props) {
   const trackRef       = useRef<HTMLDivElement>(null)
   const scrollAreaRef  = useRef<HTMLDivElement>(null)
   const chipElsRef     = useRef<(HTMLButtonElement | null)[]>([])
@@ -78,7 +76,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
     setAnimating(false)
     setOffset(-copyWidth)
     requestAnimationFrame(() => setAnimating(true))
-  }, [copyLen, large, holidayOn])
+  }, [copyLen, large])
 
   // Ref so the []-dep snap callback always sees the current (unhidden) list
   const visibleCatsRef = useRef(visibleCats)
@@ -279,23 +277,24 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
                 </button>
               )
             }
-            // Festive when holiday events are showing: letters alternating green
-            // and red. Tapped off, it goes cold — icy blue and white with a
-            // frost glow — and the holiday pile leaves the wall.
+            // Filters like any other chip — tap for holiday only, tap again for
+            // All. Resting it's festive (fir green / ribbon red letters); picked
+            // it goes cold, icy blue and white with a frost glow.
             if (item.kind === 'holiday') {
-              const pal = holidayOn ? FESTIVE : ICY
+              const on  = active === HOLIDAY_FILTER
+              const pal = on ? ICY : FESTIVE
               return (
                 <button
                   key={`holiday-${i}`}
                   ref={el => { chipElsRef.current[i] = el }}
-                  onClick={() => { if (!draggedRef.current) onToggleHoliday?.() }}
+                  onClick={() => { if (!draggedRef.current) onChange(on ? 'All' : HOLIDAY_FILTER) }}
                   className="font-body font-medium"
-                  aria-pressed={!holidayOn}
-                  aria-label={holidayOn ? 'Hide holiday events' : 'Show holiday events'}
+                  aria-pressed={on}
+                  aria-label="Holiday events"
                   style={{
                     ...chipStyle(false),
-                    border: `1px solid ${holidayOn ? 'rgba(47,168,79,0.55)' : 'rgba(125,211,252,0.6)'}`,
-                    background: holidayOn ? 'rgba(47,168,79,0.07)' : 'rgba(186,230,253,0.12)',
+                    border: `1px solid ${on ? 'rgba(125,211,252,0.65)' : 'rgba(47,168,79,0.55)'}`,
+                    background: on ? 'rgba(186,230,253,0.14)' : 'rgba(47,168,79,0.07)',
                     color: 'inherit',
                     transition: 'background 0.35s ease, border-color 0.35s ease',
                   }}
@@ -305,7 +304,7 @@ export function FilterBar({ active, onChange, activePosterCategory, neighborhood
                       key={n}
                       style={{
                         color: pal[n % 2],
-                        textShadow: holidayOn ? 'none' : '0 0 6px rgba(125,211,252,0.65)',
+                        textShadow: on ? '0 0 6px rgba(125,211,252,0.7)' : 'none',
                         transition: 'color 0.35s ease, text-shadow 0.35s ease',
                       }}
                     >{ch}</span>

@@ -11,7 +11,7 @@ import { PreferencesPanel } from './PreferencesPanel'
 
 import { matchesFilter, matchesSearch } from './PosterCard'
 import { todayLocalDate } from '@/lib/dates'
-import { useWallPrefs, saveWallPrefs } from '@/lib/wallPrefs'
+import { useWallPrefs } from '@/lib/wallPrefs'
 import { supabase } from '@/lib/supabase'
 import { dbEventToWallEvent, type WallEventRow } from '@/lib/adapters'
 import { type WallEvent } from '@/types/event'
@@ -53,16 +53,15 @@ export function Wall() {
   const [searchQuery, setSearchQuery] = useState('')
   const wallPrefs = useWallPrefs()
 
-  // The holiday chip only exists while there is something for it to hide — it
+  // The holiday chip only exists while the wall holds holiday events — it
   // arrives with the season and leaves with it, no calendar logic in the UI.
   const hasHoliday = useMemo(() => events.some(isHolidayEvent), [events])
   const visibleEvents = useMemo(
     () => events.filter(e =>
       !(e.category && wallPrefs.hiddenCats.includes(e.category)) &&
-      !(wallPrefs.hideHoliday && isHolidayEvent(e)) &&
       matchesFilter(e, activeFilter, likedIds.has(e.id)) &&
       matchesSearch(e, searchQuery)),
-    [events, activeFilter, likedIds, searchQuery, wallPrefs.hiddenCats, wallPrefs.hideHoliday],
+    [events, activeFilter, likedIds, searchQuery, wallPrefs.hiddenCats],
   )
   const [searchOpen, setSearchOpen] = useState(false)
   const [communityOpen, setCommunityOpen] = useState(false)
@@ -370,9 +369,6 @@ export function Wall() {
         hiddenCats={wallPrefs.hiddenCats}
         large={wallPrefs.chipSize === 'large'}
         showHoliday={hasHoliday}
-        holidayOn={!wallPrefs.hideHoliday}
-        onToggleHoliday={() => withWallTransition(() =>
-          saveWallPrefs({ ...wallPrefs, hideHoliday: !wallPrefs.hideHoliday }))}
       />
 
       <TrendingStrip events={events} onOpenEvent={id => navigate(location.pathname, { state: { openEventId: id } })} />
