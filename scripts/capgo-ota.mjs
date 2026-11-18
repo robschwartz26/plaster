@@ -80,13 +80,18 @@ function bump(v, level) {
 // ── 1. credentials ───────────────────────────────────────────────────────────
 // Passed to the CLI through the environment, never argv: argv is readable by any
 // other process on this machine via ps.
+//
+// The variable is CAPGO_TOKEN. The CLI resolves the key as --apikey, then
+// process.env.CAPGO_TOKEN, then ~/.capgo, then ./.capgo. CAPGO_API_KEY appears
+// in its 'no key found' hint text but is never actually read — don't trust that
+// message, it cost a failed upload once.
 let key = (process.env.CAPGO_API_KEY || process.env.CAPGO_TOKEN || '').trim()
 let keySource = key ? 'environment' : ''
 if (!key) {
   const f = join(ROOT, '.capgo-key')
   if (existsSync(f)) { key = readFileSync(f, 'utf8').trim(); keySource = '.capgo-key' }
 }
-if (!key) die('No Capgo API key. Put it in ~/plaster/.capgo-key (gitignored) or export CAPGO_API_KEY.')
+if (!key) die('No Capgo API key. Put it in ~/plaster/.capgo-key (gitignored) or export CAPGO_TOKEN.')
 
 // ── 2. preflight ─────────────────────────────────────────────────────────────
 const branch = git('rev-parse', '--abbrev-ref', 'HEAD')
@@ -143,7 +148,7 @@ const args = ['-y', '@capgo/cli@latest', 'bundle', 'upload', APP_ID,
 
 const shown = args.slice(1).map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(' ')
 console.log(`\n── Publish ─────────────────────────────`)
-console.log(`  CAPGO_API_KEY=<from ${keySource}> npx ${shown}`)
+console.log(`  CAPGO_TOKEN=<from ${keySource}> npx ${shown}`)
 
 if (DRY) {
   writeFileSync(PKG, pkgRaw, 'utf8')
@@ -163,7 +168,7 @@ if (!has('yes')) {
 const r = spawnSync('npx', args, {
   cwd: ROOT,
   stdio: 'inherit',
-  env: { ...process.env, CAPGO_API_KEY: key, CAPGO_DISABLE_TELEMETRY: '1' },
+  env: { ...process.env, CAPGO_TOKEN: key, CAPGO_DISABLE_TELEMETRY: '1' },
 })
 if (r.status !== 0) die('Upload failed — nothing was published.')
 restore = null
