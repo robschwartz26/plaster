@@ -15,7 +15,9 @@ interface Props {
   onClose: () => void
 }
 
-const APP_VERSION = '1.0.3'
+// Injected at build time from package.json (vite.config.ts). Do not hand-edit:
+// scripts/capgo-ota.mjs bumps package.json on every OTA release.
+const APP_VERSION = __APP_VERSION__
 
 export function SettingsPanel({ open, onClose }: Props) {
   const navigate = useNavigate()
