@@ -274,6 +274,7 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
 function EventFocusPopup({ eventId, onClose, onDeleted }: { eventId: string; onClose: () => void; onDeleted: () => void }) {
   const [ev, setEv] = useState<WallEvent | null>(null)
   const [desc, setDesc] = useState<string | null>(null)
+  const [descBreaks, setDescBreaks] = useState(false)
   const [addr, setAddr] = useState<string | null>(null)
   const [status, setStatus] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -290,6 +291,7 @@ function EventFocusPopup({ eventId, onClose, onDeleted }: { eventId: string; onC
       const row = data as Record<string, unknown>
       setEv(dbEventToWallEvent(row as Parameters<typeof dbEventToWallEvent>[0]))
       setDesc((row.description as string | null) ?? null)
+      setDescBreaks((row.description_breaks as boolean | null) ?? false)
       setAddr((row.address as string | null) ?? null)
       setStatus((row.status as string) ?? '')
       setLoading(false)
@@ -331,7 +333,7 @@ function EventFocusPopup({ eventId, onClose, onDeleted }: { eventId: string; onC
               </div>
               {/* info-page face */}
               <div style={{ flex: 1, minWidth: 240 }}>
-                <EventInfoFace event={ev} description={desc} address={addr} />
+                <EventInfoFace event={ev} description={desc} address={addr} descriptionBreaks={descBreaks} />
               </div>
             </div>
 

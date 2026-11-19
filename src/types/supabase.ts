@@ -538,6 +538,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           description: string | null
+          description_breaks: boolean
           ends_at: string | null
           fill_frame: boolean | null
           flag_note: string | null
@@ -580,6 +581,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          description_breaks?: boolean
           ends_at?: string | null
           fill_frame?: boolean | null
           flag_note?: string | null
@@ -622,6 +624,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           description?: string | null
+          description_breaks?: boolean
           ends_at?: string | null
           fill_frame?: boolean | null
           flag_note?: string | null
@@ -1723,6 +1726,7 @@ export type Database = {
           created_at: string
           created_by: string
           description: string
+          description_breaks: boolean
           duplicate_of: string
           flag_note: string
           id: string

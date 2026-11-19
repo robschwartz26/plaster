@@ -26,6 +26,7 @@ export interface PendingEvent {
   address: string | null
   sold_out: boolean | null
   is_holiday: boolean
+  description_breaks: boolean
 }
 
 // Flag INTRA-SET duplicates: same venue + Portland date + normalized title appearing

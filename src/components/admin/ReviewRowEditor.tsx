@@ -40,6 +40,9 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
   const [category, setCategory] = useState(row.category ?? 'Other')
   const [startsAt, setStartsAt] = useState(isoToLocalInput(row.starts_at))
   const [description, setDescription] = useState(row.description ?? '')
+  // Opt-in: render this event's blurb with real line breaks. Off by default so
+  // nothing that already reads fine suddenly re-flows (migration 113).
+  const [descBreaks, setDescBreaks] = useState(row.description_breaks ?? false)
   const [soldOut, setSoldOut] = useState(!!row.sold_out)
   const [posterUrl, setPosterUrl] = useState(row.poster_url)
   const [posterFile, setPosterFile] = useState<File | null>(null)
@@ -250,6 +253,7 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         venue_id: venueId || null,
         category,
         description: description.trim() || null,
+        description_breaks: descBreaks,
         sold_out: soldOut,
         starts_at: new Date(startsAt).toISOString(),
         poster_url: newPosterUrl,
@@ -265,6 +269,7 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
           venue_id: venueId || null,
           category,
           description: description.trim() || null,
+          description_breaks: descBreaks,
           sold_out: soldOut,
           poster_url: newPosterUrl,
           neighborhood: venue?.neighborhood ?? null,
@@ -386,6 +391,27 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         <div>
           <label style={lbl}>Description</label>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
+          {/* Line breaks are opt-in per event: without this the info page
+              collapses newlines, which is how every existing blurb reads. */}
+          <button
+            type="button"
+            onClick={() => setDescBreaks(v => !v)}
+            aria-pressed={descBreaks}
+            style={{
+              marginTop: 6, padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
+              fontFamily: '"Space Grotesk", sans-serif', fontSize: 11.5, lineHeight: 1.3,
+              border: descBreaks ? '1px solid #A855F7' : '1px solid var(--fg-18)',
+              background: descBreaks ? 'rgba(168,85,247,0.12)' : 'transparent',
+              color: descBreaks ? '#A855F7' : 'var(--fg-55)',
+            }}
+          >
+            {descBreaks ? '\u00b6 Line breaks on' : '\u00b6 Allow line breaks'}
+          </button>
+          {descBreaks && (
+            <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.4, color: 'var(--fg-40)' }}>
+              Blank lines and single returns you type above will show on the info page. Preview below.
+            </div>
+          )}
           {/* Drop a screenshot → AI writes the blurb */}
           <div
             onDragOver={e => { e.preventDefault(); setInfoDrag(true) }}
@@ -434,7 +460,7 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
       {/* Right: live info-page preview */}
       <div style={{ width: 240, flexShrink: 0 }}>
         <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-30)', marginBottom: 6 }}>Info-page preview</div>
-        <EventInfoFace event={previewEvent} description={description.trim() || null} address={selectedVenue?.address ?? row.address} />
+        <EventInfoFace event={previewEvent} description={description.trim() || null} address={selectedVenue?.address ?? row.address} descriptionBreaks={descBreaks} />
       </div>
     </div>
   )
