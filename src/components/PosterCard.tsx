@@ -25,6 +25,7 @@ import { ClaimShow } from '@/components/ClaimShow'
 import { ArtistRail } from '@/components/ArtistRail'
 import { fetchApprovedTrack } from '@/lib/eventClaims'
 import { reportTourAction, isIntercepted } from '@/lib/tourBus'
+import { DescriptionText } from './DescriptionText'
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -61,6 +62,7 @@ interface Props {
 interface EventDetail {
   description: string | null
   address: string | null
+  description_breaks: boolean | null
 }
 
 interface WallPost {
@@ -298,7 +300,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     // Layer 2: an approved per-show track (if any) → poster "Listen" chip.
     fetchApprovedTrack(event.id).then(setShowTrack)
 
-    supabase.from('events').select('description, address').eq('id', event.id).single()
+    supabase.from('events').select('description, address, description_breaks').eq('id', event.id).single()
       .then(({ data }) => { if (data) setDetail(data as EventDetail) })
 
     supabase.from('attendees').select('user_id', { count: 'exact', head: true })
@@ -1113,9 +1115,11 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               )}
 
               {detail.description && (
-                <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-                  {detail.description}
-                </p>
+                <DescriptionText
+                  text={detail.description}
+                  breaks={detail.description_breaks}
+                  style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}
+                />
               )}
 
               {/* Approved artist tags — the band ON Plaster. Tap → their artist

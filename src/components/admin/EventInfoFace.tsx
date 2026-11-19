@@ -1,5 +1,6 @@
 import { SoldOutChip } from '@/components/SoldOutChip'
 import type { WallEvent } from '@/types/event'
+import { DescriptionText } from '@/components/DescriptionText'
 
 // EventInfoFace — a faithful, STATIC reproduction of the real 1-col info page
 // (PosterCard.renderInfo). Used in admin surfaces to preview exactly what an
@@ -26,10 +27,13 @@ function formatDateTime(iso: string, showTimes?: string[] | null): string {
   return `${dayLabel} · ${fmtTime(iso)}`
 }
 
-export function EventInfoFace({ event, description, address }: {
+export function EventInfoFace({ event, description, address, descriptionBreaks }: {
   event: WallEvent
   description: string | null
   address: string | null
+  // Mirrors events.description_breaks so the preview renders the blurb exactly
+  // as the live info page will — off means newlines collapse, as they always did.
+  descriptionBreaks?: boolean | null
 }) {
   const color2 = event.color2 || '#A855F7'
   return (
@@ -73,9 +77,11 @@ export function EventInfoFace({ event, description, address }: {
         )}
 
         {description ? (
-          <p style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
-            {description}
-          </p>
+          <DescriptionText
+            text={description}
+            breaks={descriptionBreaks}
+            style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}
+          />
         ) : (
           <p style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: '#e0a050', fontStyle: 'italic', lineHeight: 1.5 }}>
             No description — the info page will show only the date line above. Add one before publishing.
