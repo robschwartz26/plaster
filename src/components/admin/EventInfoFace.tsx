@@ -73,7 +73,7 @@ export function EventInfoFace({ event, description, address }: {
         )}
 
         {description ? (
-          <p style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+          <p style={{ margin: '0 0 16px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
             {description}
           </p>
         ) : (

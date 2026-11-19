@@ -1113,7 +1113,7 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
               )}
 
               {detail.description && (
-                <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6 }}>
+                <p style={{ margin: '0 0 20px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>
                   {detail.description}
                 </p>
               )}
