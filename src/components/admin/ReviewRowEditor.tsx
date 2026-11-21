@@ -6,6 +6,7 @@ import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
 import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress } from '@/components/admin/adminShared'
 import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
+import { ensureVenueAccount } from '@/lib/venueAccounts'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -224,6 +225,8 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
       }).select('id, name, neighborhood, address').single()
       if (error) throw error
       const v = data as VenueLite
+      // A venue is only reachable once it has an account (see ensureVenueAccount).
+      await ensureVenueAccount(v.id)
       rememberNeighborhood(v.neighborhood)   // joins the picker for the next venue
       onVenueCreated?.(v)
       setVenueId(v.id)

@@ -3,6 +3,7 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { inputStyle, labelStyle, fieldStyle, geocodeAddress } from '@/components/admin/adminShared'
 import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
 import { callScrapeFn } from '@/components/admin/AdminAutoIngest'
+import { ensureVenueAccount } from '@/lib/venueAccounts'
 
 type VenueFormFields = { name: string; neighborhood: string; address: string; website: string; instagram: string; hours: string }
 
@@ -41,6 +42,9 @@ export function VenueForm({ onVenueAdded, initial, onCreated }: {
       location_lat,
       location_lng,
     }).select('id').single()
+
+    // Every venue gets its page the moment it exists — no separate step.
+    if (!error && data?.id) await ensureVenueAccount(data.id)
 
     if (error) {
       setStatus('error')

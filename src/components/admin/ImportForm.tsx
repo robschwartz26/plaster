@@ -16,6 +16,7 @@ import {
   type ImportPhase, type Category, type RecurrenceFrequency, type OrdinalKey,
 } from '@/components/admin/adminShared'
 import { CropPreviewModal } from '@/components/admin/CropPreviewModal'
+import { ensureVenueAccount } from '@/lib/venueAccounts'
 
 function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
   const name = venueName?.trim().toLowerCase()
@@ -379,6 +380,7 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
             location_lng: extracted?.location_lng ?? null,
           }).select('id').single()
           if (venueError) throw venueError
+          if (newVenue?.id) await ensureVenueAccount(newVenue.id)
           venue_id = newVenue.id
         } else if (venue_id && extracted?.location_lat && extracted?.location_lng) {
           // Backfill coords on existing venue if missing

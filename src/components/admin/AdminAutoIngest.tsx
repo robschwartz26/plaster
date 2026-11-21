@@ -3,6 +3,7 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { inputStyle, labelStyle, neighborhoodFromAddress, venueSimilarity, type Venue } from '@/components/admin/adminShared'
 import { NeighborhoodSelect } from '@/components/admin/NeighborhoodSelect'
+import { ensureVenueAccount } from '@/lib/venueAccounts'
 
 // ── Auto-Ingest admin section ──────────────────────────────────────────────────
 // Manages venue_sources rows and drives the scrape-sources edge function.
@@ -397,6 +398,7 @@ export function AdminAutoIngest({ venues }: { venues: Venue[] }) {
       location_lng: draft.lng,
     }).select('id, name').single()
     if (error) { setDraftError(error.message); setDraftBusy(false); return }
+    await ensureVenueAccount(data.id)
     setCreatedVenues(prev => [...prev, { id: data.id, name: data.name }])
     assignVenueToNeedsRows(data.id)
     setDraft(null)
