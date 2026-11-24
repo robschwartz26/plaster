@@ -132,6 +132,10 @@ function InviteByNumber() {
 
 export function FindFriends({ onDone }: Props) {
   const [screen, setScreen] = useState<ScreenState>('consent')
+  // A rate-limit refusal is not a crash — it deserves its own sentence rather
+  // than the generic "we couldn't read your contacts", which would send the
+  // user back to retry a thing that is going to refuse them again.
+  const [errNote, setErrNote] = useState<string | null>(null)
   const [qrUrl, setQrUrl] = useState<string | null>(null)
   const [qrUrlAndroid, setQrUrlAndroid] = useState<string | null>(null)
   const [qrPage, setQrPage] = useState(0) // 0 = App Store, 1 = Google Play
@@ -206,7 +210,17 @@ export function FindFriends({ onDone }: Props) {
 
       if (allHashes.length > 0) {
         const { data, error } = await supabase.rpc('match_contacts', { hashes: allHashes })
-        if (error) console.error('[FindFriends] match_contacts error:', error)
+        if (error) {
+          console.error('[FindFriends] match_contacts error:', error)
+          // P0001 is the rate limiter (migration 119); its message is written
+          // for the user, so show it rather than a generic failure.
+          setErrNote(error.code === 'P0001'
+            ? error.message
+            : 'We could not check your contacts just now.')
+          setScreen('error')
+          return
+        }
+        setErrNote(null)
         matchedUsers = (data ?? []) as MatchedUser[]
       }
 
@@ -391,7 +405,7 @@ export function FindFriends({ onDone }: Props) {
       <div style={containerStyle}>
         <div style={centeredStyle}>
           <h2 style={headingStyle}>Something went wrong</h2>
-          <p style={bodyStyle}>We couldn't read your contacts. You can try again or skip.</p>
+          <p style={bodyStyle}>{errNote ?? "We couldn't read your contacts. You can try again or skip."}</p>
           <button onClick={() => runMatching()} style={primaryBtn}>Try again</button>
           <button onClick={onDone} style={skipBtn}>Skip</button>
         </div>
