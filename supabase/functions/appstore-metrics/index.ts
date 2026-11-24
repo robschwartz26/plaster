@@ -64,6 +64,33 @@ async function appleJwt(): Promise<string> {
 // 7/7F/7T are updates, 3/IA* are in-app purchases. Updates are counted but kept
 // out of the download number — conflating them is how download charts start
 // lying upward after a popular release.
+// Apple returns a JSON-API error envelope. Dumping it raw at an admin is
+// useless — the actionable part is one sentence, and for the agreement case the
+// fix is a page in App Store Connect rather than anything in this code.
+async function appleError(res: Response, day: string): Promise<string> {
+  const raw = await res.text()
+  let title = '', code = '', detail = ''
+  try {
+    const first = JSON.parse(raw)?.errors?.[0] ?? {}
+    title = first.title ?? ''; code = first.code ?? ''; detail = first.detail ?? ''
+  } catch { /* not JSON — fall through to the raw snippet */ }
+
+  if (code.includes('REQUIRED_AGREEMENTS')) {
+    return 'Apple is withholding reports until an agreement is accepted. '
+      + 'App Store Connect → Business → accept anything marked Pending or Expired, then try again.'
+  }
+  if (res.status === 401) {
+    return 'Apple rejected the API key (401). A newly created key can take a few minutes to activate; '
+      + 'if it persists, check APPSTORE_ISSUER_ID and APPSTORE_KEY_ID match the key.'
+  }
+  if (res.status === 403) {
+    return `Apple refused the request (403)${title ? ': ' + title : ''}. `
+      + 'The key needs the Sales and Reports role, and the vendor number must match the account.'
+  }
+  const msg = [title, detail].filter(Boolean).join(' — ')
+  return `Apple ${res.status} for ${day}${msg ? ': ' + msg : ': ' + raw.slice(0, 160)}`
+}
+
 type DayCounts = { downloads: number; redownloads: number; updates: number } | null
 
 async function fetchDay(jwt: string, vendor: string, day: string, sku: string | null): Promise<DayCounts> {
@@ -82,7 +109,7 @@ async function fetchDay(jwt: string, vendor: string, day: string, sku: string | 
   // 404 = no report for that date. Normal for today, for days before the app
   // shipped, and for anything past Apple's ~365-day retention.
   if (res.status === 404) return null
-  if (!res.ok) throw new Error(`Apple ${res.status} for ${day}: ${(await res.text()).slice(0, 200)}`)
+  if (!res.ok) throw new Error(await appleError(res, day))
 
   const stream = res.body?.pipeThrough(new DecompressionStream('gzip'))
   if (!stream) return null
