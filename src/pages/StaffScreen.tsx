@@ -7,6 +7,7 @@ import { AdminCommunityPosts } from '@/components/admin/AdminCommunityPosts'
 import { AdminEventClaims } from '@/components/admin/AdminEventClaims'
 import { AdminVenueClaims } from '@/components/admin/AdminVenueClaims'
 import { AdminTools } from '@/components/admin/AdminTools'
+import { AdminAnalytics } from '@/components/admin/AdminAnalytics'
 import { AdminBottomNav } from '@/components/admin/AdminBottomNav'
 import { VenueBoard } from '@/components/VenueBoard'
 import { StaffPreview } from '@/components/StaffPreview'
@@ -112,15 +113,15 @@ function ResizeSeam() {
 // Admins get their own bumped key (new panel set — stale saved state from the old
 // admin set must not leak into the new one); workers keep the original key.
 const OPEN_KEY_WORKER = 'staff-panel-open'
-const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v3'
+const OPEN_KEY_ADMIN  = 'staff-panel-open-admin-v4'   // v4: + analytics
 
 interface PanelOpen {
   preview: boolean; ingester: boolean; board: boolean; history: boolean; review: boolean; team: boolean
-  tools: boolean
+  tools: boolean; analytics: boolean
 }
 
-const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, tools: false }
-const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, board: false, tools: true, team: true, history: false }
+const DEFAULT_OPEN_WORKER: PanelOpen = { preview: true, ingester: true, board: true, history: false, review: true, team: true, tools: false, analytics: false }
+const DEFAULT_OPEN_ADMIN:  PanelOpen = { preview: true, review: true, ingester: true, board: false, tools: true, team: true, history: false, analytics: true }
 
 function loadPanelOpen(key: string, defaults: PanelOpen): PanelOpen {
   try {
@@ -150,21 +151,21 @@ function makeSaveLayout(key: string) {
 }
 
 // ── Panel config ─────────────────────────────────────────────
-type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'tools'
+type PanelKey = 'ingester' | 'board' | 'history' | 'review' | 'team' | 'tools' | 'analytics'
 
 // Workers keep their original labels; admins get the unified-dashboard names.
 const PANEL_LABELS_WORKER: Record<PanelKey, string> = {
-  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
+  ingester: 'Add a show', board: 'Venue board', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools', analytics: 'Analytics',
 }
 const PANEL_LABELS_ADMIN: Record<PanelKey, string> = {
-  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools',
+  ingester: 'Ingester', board: 'Venues', history: 'Upload history', review: 'Review', team: 'Team', tools: 'Tools', analytics: 'Analytics',
 }
 
 // Worker: 3 core panels + optional history; Admin: review/ingester/tools/team core
 // + optional board.
-const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, tools: 0 }
-const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, tools: 26 }
-const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, tools: 16 }
+const DEFAULT_SIZES_WORKER: Record<PanelKey, number> = { ingester: 30, board: 48, history: 30, review: 0,  team: 22, tools: 0, analytics: 0 }
+const DEFAULT_SIZES_ADMIN:  Record<PanelKey, number> = { ingester: 26, board: 24, history: 22, review: 28, team: 20, tools: 26, analytics: 34 }
+const MIN_SIZES: Record<PanelKey, number> = { ingester: 15, board: 20, history: 16, review: 18, team: 12, tools: 16, analytics: 20 }
 
 // ── Preview header with minimize ─────────────────────────────
 function PreviewCard({ children, onMinimize, width = 360 }: { children: React.ReactNode; onMinimize: () => void; width?: number }) {
@@ -236,6 +237,7 @@ function StaffDashboard() {
         { key: 'review', label: 'Review' },
         { key: 'ingester', label: 'Ingester' },
         { key: 'board', label: 'Venues' },
+        { key: 'analytics', label: 'Analytics' },
         { key: 'tools', label: 'Tools' },
         { key: 'team', label: 'Team' },
       ]
@@ -366,6 +368,7 @@ function StaffDashboard() {
       case 'history':    return <UploadHistory />
       case 'review':     return <><AdminVenueClaims /><AdminEventClaims /><AdminCommunityPosts /><AdminPendingEvents /></>
       case 'tools':      return <AdminTools />
+      case 'analytics':  return <AdminAnalytics />
       case 'team':       return teamContent
     }
   }

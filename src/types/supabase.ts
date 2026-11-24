@@ -865,6 +865,87 @@ export type Database = {
           },
         ]
       }
+      metrics_daily: {
+        Row: {
+          active_devices_30d: number | null
+          active_devices_7d: number | null
+          active_users_7d: number | null
+          captured_at: string
+          day: string
+          devices_android: number | null
+          devices_ios: number | null
+          devices_total: number | null
+          events_added: number
+          events_pending: number
+          events_published_total: number
+          events_upcoming: number
+          events_with_poster: number
+          follows: number
+          likes: number
+          neighborhoods_covered: number
+          orphans_open: number
+          posts: number
+          profiles_total: number
+          rsvps: number
+          signups: number
+          venues_missing_coords: number
+          venues_total: number
+          venues_with_upcoming: number
+        }
+        Insert: {
+          active_devices_30d?: number | null
+          active_devices_7d?: number | null
+          active_users_7d?: number | null
+          captured_at?: string
+          day: string
+          devices_android?: number | null
+          devices_ios?: number | null
+          devices_total?: number | null
+          events_added?: number
+          events_pending?: number
+          events_published_total?: number
+          events_upcoming?: number
+          events_with_poster?: number
+          follows?: number
+          likes?: number
+          neighborhoods_covered?: number
+          orphans_open?: number
+          posts?: number
+          profiles_total?: number
+          rsvps?: number
+          signups?: number
+          venues_missing_coords?: number
+          venues_total?: number
+          venues_with_upcoming?: number
+        }
+        Update: {
+          active_devices_30d?: number | null
+          active_devices_7d?: number | null
+          active_users_7d?: number | null
+          captured_at?: string
+          day?: string
+          devices_android?: number | null
+          devices_ios?: number | null
+          devices_total?: number | null
+          events_added?: number
+          events_pending?: number
+          events_published_total?: number
+          events_upcoming?: number
+          events_with_poster?: number
+          follows?: number
+          likes?: number
+          neighborhoods_covered?: number
+          orphans_open?: number
+          posts?: number
+          profiles_total?: number
+          rsvps?: number
+          signups?: number
+          venues_missing_coords?: number
+          venues_total?: number
+          venues_with_upcoming?: number
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body_preview: string | null
@@ -1763,6 +1844,11 @@ export type Database = {
       admin_unsuspend_user: { Args: { p_user_id: string }; Returns: undefined }
       are_mutual_follows: { Args: { other_user_id: string }; Returns: boolean }
       can_ingest: { Args: { user_id: string }; Returns: boolean }
+      capture_daily_metrics: {
+        Args: { p_day?: string; p_live?: boolean }
+        Returns: undefined
+      }
+      capture_metrics_cron: { Args: never; Returns: undefined }
       confirm_sold_out: { Args: { p_event_id: string }; Returns: undefined }
       consolidate_events: {
         Args: { p_keep_id: string; p_remove_ids: string[] }
