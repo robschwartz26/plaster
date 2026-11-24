@@ -303,9 +303,12 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     supabase.from('events').select('description, address, description_breaks').eq('id', event.id).single()
       .then(({ data }) => { if (data) setDetail(data as EventDetail) })
 
-    supabase.from('attendees').select('user_id', { count: 'exact', head: true })
-      .eq('event_id', event.id)
-      .then(({ count }) => setAttendeeCount(count ?? 0))
+    // Counting rows directly would now undercount: migration 120 restricts
+    // attendee ROWS to yourself and your mutual follows. The count is an
+    // aggregate that names nobody, so it has its own function — which also
+    // fixes guests, who previously counted rows they couldn't see and got 0.
+    supabase.rpc('event_attendee_count', { p_event_id: event.id })
+      .then(({ data }) => setAttendeeCount(typeof data === 'number' ? data : 0))
 
     if (user) {
       supabase.from('attendees').select('id')

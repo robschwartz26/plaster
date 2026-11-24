@@ -196,6 +196,35 @@ export type Database = {
           },
         ]
       }
+      contact_match_calls: {
+        Row: {
+          called_at: string
+          hash_count: number
+          id: number
+          user_id: string
+        }
+        Insert: {
+          called_at?: string
+          hash_count: number
+          id?: number
+          user_id: string
+        }
+        Update: {
+          called_at?: string
+          hash_count?: number
+          id?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_match_calls_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_reports: {
         Row: {
           admin_notes: string | null
@@ -875,6 +904,9 @@ export type Database = {
           devices_android: number | null
           devices_ios: number | null
           devices_total: number | null
+          downloads_android: number | null
+          downloads_fetched_at: string | null
+          downloads_ios: number | null
           events_added: number
           events_pending: number
           events_published_total: number
@@ -886,11 +918,16 @@ export type Database = {
           orphans_open: number
           posts: number
           profiles_total: number
+          redownloads_ios: number | null
           rsvps: number
           signups: number
+          updates_ios: number | null
           venues_missing_coords: number
           venues_total: number
           venues_with_upcoming: number
+          viewers: number
+          viewers_7d: number
+          views: number
         }
         Insert: {
           active_devices_30d?: number | null
@@ -901,6 +938,9 @@ export type Database = {
           devices_android?: number | null
           devices_ios?: number | null
           devices_total?: number | null
+          downloads_android?: number | null
+          downloads_fetched_at?: string | null
+          downloads_ios?: number | null
           events_added?: number
           events_pending?: number
           events_published_total?: number
@@ -912,11 +952,16 @@ export type Database = {
           orphans_open?: number
           posts?: number
           profiles_total?: number
+          redownloads_ios?: number | null
           rsvps?: number
           signups?: number
+          updates_ios?: number | null
           venues_missing_coords?: number
           venues_total?: number
           venues_with_upcoming?: number
+          viewers?: number
+          viewers_7d?: number
+          views?: number
         }
         Update: {
           active_devices_30d?: number | null
@@ -927,6 +972,9 @@ export type Database = {
           devices_android?: number | null
           devices_ios?: number | null
           devices_total?: number | null
+          downloads_android?: number | null
+          downloads_fetched_at?: string | null
+          downloads_ios?: number | null
           events_added?: number
           events_pending?: number
           events_published_total?: number
@@ -938,11 +986,16 @@ export type Database = {
           orphans_open?: number
           posts?: number
           profiles_total?: number
+          redownloads_ios?: number | null
           rsvps?: number
           signups?: number
+          updates_ios?: number | null
           venues_missing_coords?: number
           venues_total?: number
           venues_with_upcoming?: number
+          viewers?: number
+          viewers_7d?: number
+          views?: number
         }
         Relationships: []
       }
@@ -1879,6 +1932,7 @@ export type Database = {
           username: string
         }[]
       }
+      event_attendee_count: { Args: { p_event_id: string }; Returns: number }
       follow_status: { Args: { other_user_id: string }; Returns: string }
       get_my_conversation_members: {
         Args: never

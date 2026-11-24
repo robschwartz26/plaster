@@ -213,6 +213,11 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
   // Follow list is gated for persons: viewer must be self or mutual follow
   const isMutualFollow    = following.has(resolvedId ?? '') && profileFollowsViewer
   const canSeeFollowList  = !isPerson || isSelf || isMutualFollow
+  // Attended events are mutual-follows-only at the database level (migration
+  // 120). Mirror that here rather than render what the policy returns: a
+  // non-mutual gets an empty list, and "No attended events yet" would be a
+  // lie about someone with fifty.
+  const canSeeAttended    = !isPerson || isSelf || isMutualFollow
 
   function openFollowList(tab: 'followers' | 'following') {
     if (!canSeeFollowList) return
@@ -267,7 +272,11 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           {([
             { label: 'followers', count: followerCount, tab: 'followers' as const },
             { label: 'following', count: followingCount, tab: 'following' as const },
-            { label: 'attended',  count: Math.max(attendedTotal, attendedList.length), tab: null },
+            // Hidden rather than zeroed — the policy returns no rows to a
+            // non-mutual, and "0 attended" would misreport them.
+            ...(canSeeAttended
+              ? [{ label: 'attended', count: Math.max(attendedTotal, attendedList.length), tab: null }]
+              : []),
           ] as const).map(({ label, count, tab }) => {
             const tappable = !!tab && canSeeFollowList
             return (
@@ -301,7 +310,8 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
           </div>
         )}
 
-        {/* Attended events grid */}
+        {/* Attended events grid — mutual follows only (migration 120) */}
+        {canSeeAttended && (
         <div style={{ marginBottom: 24 }}>
           <p style={sectionLabel}>Attended</p>
           {attendedList.length === 0 ? (
@@ -327,6 +337,7 @@ export function AccountProfile({ venueId: venueIdProp, accountProfileId: account
             </div>
           )}
         </div>
+        )}
 
         {/* Superlatives placeholder */}
         <div style={{ paddingBottom: 40 }}>
