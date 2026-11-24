@@ -25,6 +25,44 @@ diverge, which makes `supabase db push` unusable.
 > reconciliation, diverging the history. Reconciled via `migration repair` on
 > 2026-06-11; `db push` reports "up to date" when alignment holds.
 
+## New functions are world-callable by default (standing rule)
+
+Postgres grants `EXECUTE` to `PUBLIC` on every `CREATE FUNCTION`, and `PUBLIC`
+includes `anon`. **A `GRANT EXECUTE ... TO authenticated` does not close
+anything** — it restates a grant that is already implied. The only thing that
+closes it is an explicit revoke:
+
+```sql
+revoke execute on function public.my_fn(arg_types) from public;
+revoke execute on function public.my_fn(arg_types) from anon;
+grant  execute on function public.my_fn(arg_types) to authenticated;  -- if a user needs it
+```
+
+So **every new `SECURITY DEFINER` function is reachable by any stranger holding
+the anon key until you revoke it** — and the anon key ships in the browser
+bundle, by design. Write the revoke in the same migration as the function.
+
+Verify rather than assume, with nothing but the anon key:
+
+```bash
+curl -s -X POST "$VITE_SUPABASE_URL/rest/v1/rpc/<fn>" \
+  -H "apikey: $VITE_SUPABASE_ANON_KEY" -H "Content-Type: application/json" -d '{}'
+```
+
+A `42501` is correct. A result, or a complaint about *arguments*, means anon
+reached the function body.
+
+> History (2026-11-23 audit): `match_contacts` and `capture_daily_metrics` were
+> both anon-callable this way. `match_contacts` mattered most — a phone number
+> is ten digits, so SHA-256 of an E.164 number is brute-forceable on a laptop,
+> and anonymous access made it a scriptable "is this number on Plaster?" oracle
+> against the whole North American numbering plan. Fixed in 118.
+
+**Do not blanket-revoke across all security-definer functions.** Several are
+called inside RLS policy expressions, which evaluate as the *querying* role —
+`is_admin()` appears in policies across eight migrations — so a sweep locks real
+users out of their own rows. Go one function at a time with its policies in view.
+
 ## Collaboration model — Claude chat ↔ Warp (standing rule)
 
 Prompts for this project are written by **Claude (the chat assistant)**, which designs and specs work from periodic code dumps. It does **not** have live database access. **You (Warp/Claude Code) do** — plus the running app, the real RLS, and the actual schema.
