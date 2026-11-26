@@ -545,6 +545,20 @@ export function MapScreen() {
   // compare without re-subscribing on every change.
   const [activeVenueId, setActiveVenueId] = useState<string | null>(null)
   const activeVenueIdRef = useRef<string | null>(null)
+
+  // Cyclical sheet. The last venue in the list could never reach the top edge —
+  // there was nothing below it to scroll — so the map could never be sent to
+  // it, which is the one thing this sheet is for. The list is rendered three
+  // times and the scroll is kept in the middle copy, teleporting back by one
+  // copy-height whenever it drifts out. Every row can reach the top, and a
+  // flick keeps going instead of hitting a wall.
+  //
+  // Only when one copy is taller than the sheet. Below that the whole list is
+  // already on screen, and three copies would just show the same venues twice.
+  const firstCopyRef = useRef<HTMLDivElement>(null)
+  const copyHRef = useRef(0)
+  const [looping, setLooping] = useState(false)
+  const loopCopies = looping ? 3 : 1
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -732,6 +746,18 @@ export function MapScreen() {
       scrollTickRef.current = false
       const sc = scrollRef.current
       if (!sc) return
+
+      // Keep the scroll inside the middle copy. Done before anything is read,
+      // so the row under the top edge is the same one either side of the jump
+      // and the map never twitches at the seam. Thresholds are half a copy from
+      // each boundary, which keeps the teleport far from the ends where iOS
+      // momentum is most likely to notice it.
+      const copyH = copyHRef.current
+      if (looping && copyH > 0) {
+        if (sc.scrollTop < copyH * 0.5) sc.scrollTop += copyH
+        else if (sc.scrollTop > copyH * 1.5) sc.scrollTop -= copyH
+      }
+
       const top = sc.getBoundingClientRect().top
       const rows = sc.querySelectorAll<HTMLElement>('[data-venue-row]')
       for (const row of rows) {
@@ -756,6 +782,32 @@ export function MapScreen() {
     flyToVenue(venue)
     if (scrollRef.current) scrollRef.current.scrollTop = 0
   }
+
+  // Measure one copy against the sheet and arm the loop. The observer carries
+  // every later change — a filter that empties the list, a day with fewer
+  // shows — so the deps only need to cover the sheet appearing at all.
+  useEffect(() => {
+    const measure = () => {
+      const el = firstCopyRef.current
+      const sc = scrollRef.current
+      if (!el || !sc) { copyHRef.current = 0; setLooping(false); return }
+      const h = el.offsetHeight
+      copyHRef.current = h
+      setLooping(h > sc.clientHeight + 40)
+    }
+    const el = firstCopyRef.current
+    if (!el) { measure(); return }
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)          // fires once on observe, which is the first measure
+    return () => ro.disconnect()
+  }, [selectedVenue?.id])
+
+  // Entering the loop: drop into the middle copy so there is a copy's worth of
+  // room to scroll in either direction before the first teleport.
+  useEffect(() => {
+    if (!looping || !scrollRef.current || !copyHRef.current) return
+    scrollRef.current.scrollTop += copyHRef.current
+  }, [looping])
 
   // Scroll panel to top whenever selected venue changes
   useEffect(() => {
@@ -1039,63 +1091,33 @@ export function MapScreen() {
               </>
             ) : selectedVenue ? (
               <>
-                {/* ── Featured venue ── */}
-                <div style={{ padding: '8px 16px 10px' }}>
-                  <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, lineHeight: 1.2, color: 'var(--fg)' }}>
-                    {selectedVenue.name}
-                  </p>
-                  {selectedVenue.neighborhood && (
-                    <p style={{ margin: '4px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
-                      {selectedVenue.neighborhood}
-                    </p>
-                  )}
-                </div>
+                {/* Rendered once, or three times when looping: see loopCopies. */}
+                {Array.from({ length: loopCopies }, (_, copy) => (
+                  <div key={copy} ref={copy === 0 ? firstCopyRef : undefined}>
+                    {/* ── Featured venue ── */}
+                    <div style={{ padding: '8px 16px 10px' }}>
+                      <p style={{ margin: 0, fontFamily: '"Playfair Display", serif', fontWeight: 900, fontSize: 22, lineHeight: 1.2, color: 'var(--fg)' }}>
+                        {selectedVenue.name}
+                      </p>
+                      {selectedVenue.neighborhood && (
+                        <p style={{ margin: '4px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--fg-40)' }}>
+                          {selectedVenue.neighborhood}
+                        </p>
+                      )}
+                    </div>
 
-                {selectedVenueEvents.length === 0 ? (
-                  <p style={{ margin: 0, padding: '8px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
-                    Nothing on {dayIdx === 0 ? 'tonight' : 'this day'}
-                  </p>
-                ) : (
-                  selectedVenueEvents.map((ev, i) => {
-                    const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-                    const bg = catGradient(ev.category)
-                    return (
-                      <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
-                        data-venue-row={selectedVenue.id}
-                        style={rowStyle(i === 0, activeVenueId === selectedVenue.id)}
-                      >
-                        <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
-                          {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
-                          <p style={{ margin: '3px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{timeStr}</p>
-                        </div>
-                      </button>
-                    )
-                  })
-                )}
-
-                {/* ── Adjacent venues ── */}
-                {adjacentVenues.map(venue => {
-                  const vEvents = eventsByVenue[venue.id] ?? []
-                  return (
-                    <div key={venue.id}>
-                      <div style={{ height: 1, background: 'var(--fg-15)', margin: '6px 0' }} />
-                      <button
-                        onClick={() => selectVenue(venue)}
-                        style={{ display: 'block', width: '100%', padding: '4px 16px 4px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
-                      >
-                        <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg-55)' }}>{venue.name}</span>
-                        {venue.neighborhood && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)', marginLeft: 6 }}>{venue.neighborhood}</span>}
-                      </button>
-                      {vEvents.map((ev, i) => {
+                    {selectedVenueEvents.length === 0 ? (
+                      <p style={{ margin: 0, padding: '8px 16px 14px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-30)' }}>
+                        Nothing on {dayIdx === 0 ? 'tonight' : 'this day'}
+                      </p>
+                    ) : (
+                      selectedVenueEvents.map((ev, i) => {
                         const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
                         const bg = catGradient(ev.category)
                         return (
                           <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
-                            data-venue-row={venue.id}
-                            style={rowStyle(i === 0, activeVenueId === venue.id)}
+                            data-venue-row={selectedVenue.id}
+                            style={rowStyle(i === 0, activeVenueId === selectedVenue.id)}
                           >
                             <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
                               {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
@@ -1106,10 +1128,45 @@ export function MapScreen() {
                             </div>
                           </button>
                         )
-                      })}
-                    </div>
-                  )
-                })}
+                      })
+                    )}
+
+                    {/* ── Adjacent venues ── */}
+                    {adjacentVenues.map(venue => {
+                      const vEvents = eventsByVenue[venue.id] ?? []
+                      return (
+                        <div key={venue.id}>
+                          <div style={{ height: 1, background: 'var(--fg-15)', margin: '6px 0' }} />
+                          <button
+                            onClick={() => selectVenue(venue)}
+                            style={{ display: 'block', width: '100%', padding: '4px 16px 4px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer' }}
+                          >
+                            <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 12, color: 'var(--fg-55)' }}>{venue.name}</span>
+                            {venue.neighborhood && <span style={{ fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-30)', marginLeft: 6 }}>{venue.neighborhood}</span>}
+                          </button>
+                          {vEvents.map((ev, i) => {
+                            const timeStr = new Date(ev.starts_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                            const bg = catGradient(ev.category)
+                            return (
+                              <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
+                                data-venue-row={venue.id}
+                                style={rowStyle(i === 0, activeVenueId === venue.id)}
+                              >
+                                <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
+                                  {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600, fontSize: 14, color: 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</p>
+                                  <p style={{ margin: '3px 0 0', fontFamily: '"Barlow Condensed", sans-serif', fontWeight: 700, fontSize: 11, letterSpacing: '0.08em', color: 'var(--fg-40)' }}>{timeStr}</p>
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </>
             ) : null}
           </div>
