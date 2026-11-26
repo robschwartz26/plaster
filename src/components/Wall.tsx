@@ -86,6 +86,9 @@ export function Wall() {
   // boundary timestamp — many shows sit at exactly 20:00:00 the same night.
   const cursorRef = useRef<{ ts: string; id: string } | null>(null)
   const hasMoreRef = useRef(true)
+  // hasMoreRef is a ref, so it cannot drive render. This mirrors it for the
+  // one thing the viewer must be told: a search is not final yet.
+  const [hasMore, setHasMore] = useState(true)
   const isLoadingMoreRef = useRef(false)
   // In-flight like toggles, to reject concurrent double-taps per event.
   const likeInFlightRef = useRef<Set<string>>(new Set())
@@ -109,6 +112,7 @@ export function Wall() {
     const last = batch[batch.length - 1]
     cursorRef.current = last ? { ts: last.starts_at, id: last.id } : null
     hasMoreRef.current = batch.length === WALL_PAGE
+    setHasMore(hasMoreRef.current)
 
     try {
       // Cache only the first window — appended pages are session-only.
@@ -146,6 +150,7 @@ export function Wall() {
         cursorRef.current = { ts: last.starts_at, id: last.id }
       }
       hasMoreRef.current = batch.length === WALL_PAGE
+    setHasMore(hasMoreRef.current)
     } finally {
       isLoadingMoreRef.current = false
     }
@@ -198,11 +203,19 @@ export function Wall() {
   // and matching events beyond page 1 are unreachable (the wall would claim the
   // city has 2 film shows). Re-runs as `events` grows; loadMore self-stops when
   // the DB is exhausted (hasMoreRef=false).
+  //
+  // A search drains every page, not just enough to fill the screen. Search runs
+  // over the events in memory, so with 300 loaded out of ~1,800 it answered from
+  // a sixth of the wall: "ballet" found 2, then more appeared as later pages
+  // arrived, which reads as the search changing its mind. Draining costs about
+  // six fetches once per session — afterwards every event is in memory and all
+  // searching is instant and complete.
   useEffect(() => {
-    if (visibleEvents.length < 24 && hasMoreRef.current && !isLoadingMoreRef.current) {
+    const searching = searchQuery.trim().length > 0
+    if ((searching || visibleEvents.length < 24) && hasMoreRef.current && !isLoadingMoreRef.current) {
       loadMore()
     }
-  }, [visibleEvents.length, activeFilter, searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visibleEvents.length, activeFilter, searchQuery, events.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleLike(eventId: string) {
     // Guest mode: hearts look live but gate on tap (Apple 5.1.1(v))
@@ -349,6 +362,14 @@ export function Wall() {
               outline: 'none',
             }}
           />
+          {searchQuery.trim() && hasMore && (
+            <span style={{
+              fontFamily: 'Space Grotesk, sans-serif', fontSize: 11,
+              color: 'var(--fg-40)', whiteSpace: 'nowrap',
+            }}>
+              still looking…
+            </span>
+          )}
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
