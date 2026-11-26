@@ -21,7 +21,7 @@ interface Props {
 
 const inputSt: React.CSSProperties = {
   width: '100%', background: 'rgba(240,236,227,0.05)', border: '1px solid rgba(255,255,255,0.12)',
-  borderRadius: 6, padding: '10px 12px', color: 'var(--fg)',
+  borderRadius: 6, padding: '10px 12px', color: '#f0ece3',  // fixed, not var(--fg): this panel is always dark
   fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box',
 }
 const labelSt: React.CSSProperties = {
@@ -851,7 +851,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
               {preRewrite !== null && (
                 <button
                   onClick={() => { setForm(f => ({ ...f, description: preRewrite })); setPreRewrite(null) }}
-                  style={{ background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, padding: '3px 9px', cursor: 'pointer', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}
+                  style={{ background: 'transparent', border: '1px solid rgba(240,236,227,0.25)', borderRadius: 6, padding: '3px 9px', cursor: 'pointer', color: 'rgba(240,236,227,0.55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}
                 >
                   Revert
                 </button>
@@ -859,7 +859,7 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
               <button
                 onClick={handleRewrite}
                 disabled={rewriting || !form.title}
-                style={{ background: rewriting ? 'var(--fg-15)' : '#A855F7', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: rewriting ? 'default' : 'pointer', color: rewriting ? 'var(--fg-55)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
+                style={{ background: rewriting ? 'rgba(240,236,227,0.15)' : '#A855F7', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: rewriting ? 'default' : 'pointer', color: rewriting ? 'rgba(240,236,227,0.55)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
               >
                 {rewriting ? 'Writing…' : 'Rewrite with AI'}
               </button>
@@ -878,13 +878,13 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
             <label style={labelSt}>More dates</label>
             <button
               onClick={() => setExtraDates(d => [...d, { date: form.date, time: form.time }])}
-              style={{ background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
+              style={{ background: 'transparent', border: '1px solid rgba(240,236,227,0.25)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: 'rgba(240,236,227,0.65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
             >
               + Add a date
             </button>
           </div>
           {extraDates.length === 0 ? (
-            <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', fontStyle: 'italic' }}>
+            <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.40)', fontStyle: 'italic' }}>
               Same show on other nights — each gets its own card with this poster.
             </p>
           ) : (
@@ -904,13 +904,13 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
                   <button
                     onClick={() => setExtraDates(a => a.filter((_, j) => j !== i))}
                     aria-label="Remove this date"
-                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(240,236,227,0.40)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
                   >
                     ×
                   </button>
                 </div>
               ))}
-              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.40)' }}>
                 Saving adds {extraDates.length} more {extraDates.length === 1 ? 'card' : 'cards'} to the wall.
               </p>
             </div>
