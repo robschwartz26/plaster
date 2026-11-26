@@ -444,19 +444,32 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     ? { position: 'fixed', left: '50%', top: '44%', transform: 'translate(-50%,-50%)' }
     : { position: 'fixed', left: '50%', top: '42%', transform: 'translate(-50%,-50%)' }
 
-  const blocker: React.CSSProperties = { position: 'fixed', background: dim, pointerEvents: 'auto' }
+  // DIMMING and BLOCKING are separate decisions. A step may want the screen fully
+  // visible (noDim, nav-arrive) and still want every control but its own inert —
+  // otherwise the tour talks about a screen while the user taps away underneath it
+  // and the step's state drifts from the app's.
+  const blocker = (visible: boolean): React.CSSProperties => ({
+    position: 'fixed', background: visible ? dim : 'transparent',
+    pointerEvents: 'auto', touchAction: 'none',
+  })
   const isNavCta = step.type === 'nav' && navPhase === 'arrive'
   const showCta = centered || step.advance?.on === 'cta' || isNavCta || !!step.cta
   const showSkip = !showCta && (step.allowSkip || step.type === 'nav')
   const body = isNavCta ? (step.arriveBody ?? step.body) : step.body
 
-  // Scrim: full + clickable for centered; full + NON-blocking for interactive/nav-arrive
-  // explainers; 4 blockers around the hole otherwise.
+  // Scrim: full + clickable for centered; 4 blockers around the hole for a spotlight.
   // Dim the whole screen ONLY for the welcome/finish cards. Explainer steps that talk
   // ABOUT a screen leave it fully visible; spotlight steps dim only around their target
   // (a specific button/icon). Interactive steps show the screen normally too.
   const fullScrim = centered || isReveal
   const fullScrimBlocks = centered || isReveal  // only these capture taps
+
+  // A card with nothing to point at — the arrival half of a nav step, and the demo
+  // explainers — covers the screen with an invisible shield, so the card's own button
+  // is the only live control. NOT used when a step HAS a target that is merely
+  // off-screen: the layer scrolls to it, and shielding there would strand the user on
+  // a step they can no longer reach. Interactive (pinch) steps are never shielded.
+  const shield = !centered && !isReveal && !interactive && (demo || !target)
 
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, zIndex: 4000, pointerEvents: 'none' }}>
@@ -466,9 +479,9 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         <div style={{ position: 'fixed', inset: 0, background: dim, pointerEvents: fullScrimBlocks ? 'auto' : 'none' }} />
       )}
 
-      {/* Demo step: transparent full-screen blocker so the wall shows but can't be pinched. */}
-      {demo && (
-        <div style={{ position: 'fixed', inset: 0, background: 'transparent', pointerEvents: 'auto' }} />
+      {/* The shield: screen visible, nothing underneath reachable. */}
+      {shield && (
+        <div style={{ position: 'fixed', inset: 0, background: 'transparent', pointerEvents: 'auto', touchAction: 'none' }} />
       )}
 
 
@@ -476,14 +489,20 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         const x = rect.left - PAD, y = rect.top - PAD, w = rect.width + PAD * 2, h = rect.height + PAD * 2
         return (
           <>
-            {!step.noDim && (
-              <>
-                <div style={{ ...blocker, left: 0, top: 0, right: 0, height: Math.max(0, y) }} />
-                <div style={{ ...blocker, left: 0, top: y + h, right: 0, bottom: 0 }} />
-                <div style={{ ...blocker, left: 0, top: y, width: Math.max(0, x), height: h }} />
-                <div style={{ ...blocker, left: x + w, top: y, right: 0, height: h }} />
-              </>
-            )}
+            {/* Always four blockers, so only the spotlit control is live. noDim just
+                makes them invisible: it means "don't darken the screen", not "let
+                them wander off". */}
+            {(() => {
+              const b = blocker(!step.noDim)
+              return (
+                <>
+                  <div style={{ ...b, left: 0, top: 0, right: 0, height: Math.max(0, y) }} />
+                  <div style={{ ...b, left: 0, top: y + h, right: 0, bottom: 0 }} />
+                  <div style={{ ...b, left: 0, top: y, width: Math.max(0, x), height: h }} />
+                  <div style={{ ...b, left: x + w, top: y, right: 0, height: h }} />
+                </>
+              )
+            })()}
             {ghost !== 'drag' && (
               <div style={{ position: 'fixed', left: x, top: y, width: w, height: h, borderRadius: 10, border: '2px solid rgba(255,255,255,0.9)', pointerEvents: 'none', animation: 'plaster-tour-pulse 1.4s ease-out infinite' }} />
             )}
