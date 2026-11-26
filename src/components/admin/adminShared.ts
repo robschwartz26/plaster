@@ -448,3 +448,26 @@ export function neighborhoodFromAddress(address: string): string {
   if (/\bN\b/.test(a) && !/\bNE\b|\bNW\b/.test(a)) return 'North'
   return ''
 }
+
+
+// ── Occurrence merge, shared by the importer and the wall's Edit panel ──────
+// Both accumulate dates across repeated schedule drops, so both need the same
+// union rule — otherwise the same screenshot would pile up differently in the
+// two places.
+export type Occ = { date: string; time: string }
+// Union of the dates already held and the ones just read off a screenshot.
+// Same date+time = the same showing, so it collapses; a date carrying no time
+// yields to a timed entry for that day (the time is strictly better info),
+// while two different times on one day are kept as separate showings.
+export function mergeOccurrences(held: Occ[], incoming: Occ[]): Occ[] {
+  const byKey = new Map<string, Occ>()
+  for (const o of [...held, ...incoming]) {
+    if (!o.date) continue
+    byKey.set(`${o.date}T${o.time || ''}`, { date: o.date, time: o.time || '' })
+  }
+  const all = [...byKey.values()]
+  const timedDays = new Set(all.filter(o => o.time).map(o => o.date))
+  return all
+    .filter(o => o.time || !timedDays.has(o.date))
+    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
+}

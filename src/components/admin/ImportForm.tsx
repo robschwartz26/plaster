@@ -9,7 +9,7 @@ import {
   fileFromDrop,
   IS_DEV, MAPBOX_TOKEN, FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS,
   inputStyle, labelStyle, fieldStyle,
-  fileToDataURL, extractEventFromImage, extractScheduleFromImage, friendlyExtractionError,
+  fileToDataURL, extractEventFromImage, extractScheduleFromImage, friendlyExtractionError, mergeOccurrences,
   venueSimilarity, neighborhoodFromAddress, titleSimilarity,
   generateWeekdayOccurrences, generateOccurrenceDates, fmtShortDate,
   type Venue, type ExtractedEvent, type ExtractPayload,
@@ -28,25 +28,6 @@ function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
   })
 }
 
-
-type Occ = { date: string; time: string }
-
-// Union of the dates already held and the ones just read off a screenshot.
-// Same date+time = the same showing, so it collapses; a date carrying no time
-// yields to a timed entry for that day (the time is strictly better info),
-// while two different times on one day are kept as separate showings.
-function mergeOccurrences(held: Occ[], incoming: Occ[]): Occ[] {
-  const byKey = new Map<string, Occ>()
-  for (const o of [...held, ...incoming]) {
-    if (!o.date) continue
-    byKey.set(`${o.date}T${o.time || ''}`, { date: o.date, time: o.time || '' })
-  }
-  const all = [...byKey.values()]
-  const timedDays = new Set(all.filter(o => o.time).map(o => o.date))
-  return all
-    .filter(o => o.time || !timedDays.has(o.date))
-    .sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')))
-}
 
 export function ImportForm({ staffMode = false, landInReview = false, onDone }: { staffMode?: boolean; landInReview?: boolean; onDone?: () => void } = {}) {
   const [venues, setVenues] = useState<Venue[]>([])

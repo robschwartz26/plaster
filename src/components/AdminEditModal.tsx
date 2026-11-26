@@ -4,7 +4,8 @@ import { type WallEvent } from '@/types/event'
 import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '@/lib/cropUtils'
 import { CATEGORIES } from '@/lib/categories'
 import { eventLocalDate, eventLocalTime } from '@/lib/dates'
-import { fileFromDrop } from '@/components/admin/adminShared'
+import { fileFromDrop, extractScheduleFromImage, friendlyExtractionError, mergeOccurrences } from '@/components/admin/adminShared'
+import { resizeForExtraction, blobToBase64 } from '@/lib/cropUtils'
 import { portlandToInstant } from '@/lib/portlandTime'
 
 const IS_DEV = import.meta.env.DEV
@@ -23,6 +24,20 @@ const inputSt: React.CSSProperties = {
   width: '100%', background: 'rgba(240,236,227,0.05)', border: '1px solid rgba(255,255,255,0.12)',
   borderRadius: 6, padding: '10px 12px', color: '#f0ece3',  // fixed, not var(--fg): this panel is always dark
   fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, outline: 'none', boxSizing: 'border-box',
+}
+const dropSt = (active: boolean, busy: boolean): React.CSSProperties => ({
+  border: `1px dashed ${active ? '#A855F7' : 'rgba(240,236,227,0.25)'}`,
+  borderRadius: 10, padding: '14px 12px', textAlign: 'center',
+  background: active ? 'rgba(168,85,247,0.08)' : 'transparent',
+  cursor: busy ? 'wait' : 'pointer', transition: 'border-color .15s, background .15s',
+})
+const dropTitleSt: React.CSSProperties = {
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600,
+  color: 'rgba(240,236,227,0.65)', margin: 0,
+}
+const dropHintSt: React.CSSProperties = {
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 12,
+  color: 'rgba(240,236,227,0.40)', margin: '3px 0 0',
 }
 const labelSt: React.CSSProperties = {
   display: 'block', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 600,
@@ -83,6 +98,15 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [extraDates, setExtraDates] = useState<{ date: string; time: string }[]>([])
   // The AI rewrite is reversible in-panel: nothing is written until Save.
   const [rewriting, setRewriting] = useState(false)
+  // Schedule drops accumulate: each screenshot is merged into what is already
+  // held, so a run posted across several images piles up instead of replacing.
+  const [schedBusy, setSchedBusy] = useState(false)
+  const [schedErr, setSchedErr] = useState('')
+  const [schedDrops, setSchedDrops] = useState(0)
+  const [schedDrag, setSchedDrag] = useState(false)
+  const [infoBusy, setInfoBusy] = useState(false)
+  const [infoErr, setInfoErr] = useState('')
+  const [infoDrag, setInfoDrag] = useState(false)
   const [preRewrite, setPreRewrite] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: event.title,
@@ -346,6 +370,57 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     } finally {
       setSaving(null)
     }
+  }
+
+  // ── Schedule screenshot → more dates ──────────────────────
+  // Same extractor the importer uses. Drops accumulate through
+  // mergeOccurrences: same date+time collapses, a timeless entry yields to a
+  // timed one for that day, two times on one day stay as two showings. The
+  // event's own date is held in the merge so it is never duplicated.
+  async function ingestSchedule(file: File) {
+    setSchedBusy(true); setSchedErr('')
+    try {
+      const occ = await extractScheduleFromImage({
+        base64: await blobToBase64(await resizeForExtraction(file)), mimeType: 'image/jpeg',
+      })
+      const incoming = (occ || []).filter(o => o.date).map(o => ({ date: o.date, time: o.time || '' }))
+      if (!incoming.length) { setSchedErr("Couldn't read any dates from that image."); return }
+      const held = [{ date: form.date, time: form.time || '' }, ...extraDates]
+      const merged = mergeOccurrences(held, incoming)
+      // Whatever matches this event's own slot stays the event; the rest are new.
+      setExtraDates(merged.filter(m => !(m.date === form.date && (m.time || '') === (form.time || ''))))
+      setSchedDrops(n => n + 1)
+    } catch (e) { setSchedErr(friendlyExtractionError(e)) }
+    finally { setSchedBusy(false) }
+  }
+
+  // ── Info screenshot → the blurb ───────────────────────────
+  // Claude Vision reads the screenshot and writes the blurb in Plaster's voice,
+  // grounded in what is visible. Only the description is touched — the date,
+  // time and venue on this card were reviewed already and are not overwritten
+  // by a screenshot.
+  async function ingestInfo(file: File) {
+    setInfoBusy(true); setInfoErr('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Signed out — sign back in and retry.')
+      const base64 = await blobToBase64(await resizeForExtraction(file))
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/firecrawl-ingest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ describeImage: {
+          base64, mimeType: 'image/jpeg', title: form.title,
+          venue: venues.find(v => v.id === form.venue_id)?.name ?? '',
+        } }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((json as { error?: string }).error || `failed: ${res.status}`)
+      const blurb = (json as { blurb?: string | null }).blurb
+      if (!blurb) throw new Error("Couldn't read event info from that image — try a clearer screenshot.")
+      setPreRewrite(form.description)
+      setForm(f => ({ ...f, description: blurb.trim() }))
+    } catch (e) { setInfoErr(friendlyExtractionError(e)) }
+    finally { setInfoBusy(false) }
   }
 
   // ── Rewrite the blurb in Plaster's voice ───────────────────
@@ -872,6 +947,30 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           />
         </div>
 
+        {/* Drop a screenshot of the event page / ticket site / IG caption */}
+        <div
+          onDragOver={e => { e.preventDefault(); setInfoDrag(true) }}
+          onDragLeave={() => setInfoDrag(false)}
+          onDrop={async e => {
+            e.preventDefault(); e.stopPropagation(); setInfoDrag(false)
+            const f = await fileFromDrop(e)
+            if (!f) { setInfoErr('That drop had no image — drag the image itself, or drop a saved file.'); return }
+            await ingestInfo(f)
+          }}
+          onClick={() => document.getElementById('edit-info-file')?.click()}
+          style={dropSt(infoDrag, infoBusy)}
+        >
+          <input
+            id="edit-info-file" type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={async e => { const f = e.target.files?.[0]; if (f) await ingestInfo(f); e.currentTarget.value = '' }}
+          />
+          <p style={dropTitleSt}>
+            {infoBusy ? 'Reading…' : <>Event info image <span style={{ fontWeight: 400, color: 'rgba(240,236,227,0.40)' }}>(optional)</span></>}
+          </p>
+          {!infoBusy && <p style={dropHintSt}>Screenshot of event page, ticket site, or Instagram caption — rewrites the blurb</p>}
+          {infoErr && <p style={{ ...dropHintSt, color: 'rgba(239,68,68,0.85)' }}>{infoErr}</p>}
+        </div>
+
         {/* More dates — each becomes its own event, sharing this poster */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -883,6 +982,33 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
               + Add a date
             </button>
           </div>
+          <div
+            onDragOver={e => { e.preventDefault(); setSchedDrag(true) }}
+            onDragLeave={() => setSchedDrag(false)}
+            onDrop={async e => {
+              e.preventDefault(); e.stopPropagation(); setSchedDrag(false)
+              const f = await fileFromDrop(e)
+              if (!f) { setSchedErr('That drop had no image — drag the image itself, or drop a saved file.'); return }
+              await ingestSchedule(f)
+            }}
+            onClick={() => document.getElementById('edit-sched-file')?.click()}
+            style={{ ...dropSt(schedDrag, schedBusy), marginTop: 6 }}
+          >
+            <input
+              id="edit-sched-file" type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={async e => { const f = e.target.files?.[0]; if (f) await ingestSchedule(f); e.currentTarget.value = '' }}
+            />
+            <p style={dropTitleSt}>{schedBusy ? 'Reading dates…' : 'Drop a run / tour schedule'}</p>
+            {!schedBusy && (
+              <p style={dropHintSt}>
+                {schedDrops > 0
+                  ? `${schedDrops} ${schedDrops === 1 ? 'image' : 'images'} read · drop more to keep adding`
+                  : 'Pulls every date & time — drop as many images as you need'}
+              </p>
+            )}
+            {schedErr && <p style={{ ...dropHintSt, color: 'rgba(239,68,68,0.85)' }}>{schedErr}</p>}
+          </div>
+
           {extraDates.length === 0 ? (
             <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.40)', fontStyle: 'italic' }}>
               Same show on other nights — each gets its own card with this poster.
