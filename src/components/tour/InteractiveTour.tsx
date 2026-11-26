@@ -117,6 +117,12 @@ const GUEST_STEPS: Step[] = [
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', cardOverride: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }, title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
+const devBtn: React.CSSProperties = {
+  padding: '4px 8px', borderRadius: 6,
+  border: '1px dashed var(--fg-30)', background: 'var(--bg)', color: 'var(--fg-40)',
+  fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer',
+}
+
 interface Ctx { start: () => void }
 const TourCtx = createContext<Ctx>({ start: () => {} })
 export function useInteractiveTour() { return useContext(TourCtx) }
@@ -139,6 +145,15 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
     setMode('full')
     if (saved > 0 && saved < STEPS.length) { setResumeAt(saved); setResumePrompt(true) }
     else { setI(0); setResumePrompt(false) }
+    setActive(true)
+  }, [])
+
+  // DEV review: run the full tour from the top, no resume prompt in the way.
+  const startFullFromTop = useCallback(() => {
+    try { localStorage.removeItem(TOUR_STEP_KEY) } catch { /* ignore */ }
+    setMode('full')
+    setResumePrompt(false)
+    setI(0)
     setActive(true)
   }, [])
 
@@ -293,23 +308,31 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
           onClose={stopExit}
         />
       )}
-      {/* DEV: reset guest-tour run count + replay it (dev builds only, guests only) */}
-      {import.meta.env.DEV && !active && !user && (
-        <button
-          onClick={() => {
-            try { localStorage.removeItem(GUEST_RUNS_KEY); sessionStorage.removeItem(GUEST_SESSION_KEY) } catch { /* ignore */ }
-            startGuest()
-          }}
-          style={{
-            position: 'fixed', left: 10,
-            bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px)',
-            zIndex: 2999, padding: '4px 8px', borderRadius: 6,
-            border: '1px dashed var(--fg-30)', background: 'var(--bg)', color: 'var(--fg-40)',
-            fontFamily: '"Space Grotesk", sans-serif', fontSize: 10, cursor: 'pointer',
-          }}
-        >
-          DEV: guest tour
-        </button>
+      {/* DEV replay buttons (dev builds only). Guest tour for signed-out review —
+          it also clears the three-run cap so it can be watched again. Full tour for
+          signed-in review, always from step 1 so the resume prompt can't swallow it.
+          They never both show: the guest tour closes itself the moment a user exists. */}
+      {import.meta.env.DEV && !active && (
+        <div style={{
+          position: 'fixed', left: 10,
+          bottom: 'calc(var(--nav-height) + env(safe-area-inset-bottom) + 10px)',
+          zIndex: 2999, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
+        }}>
+          {user && (
+            <button onClick={startFullFromTop} style={devBtn}>DEV: full tour</button>
+          )}
+          {!user && (
+            <button
+              onClick={() => {
+                try { localStorage.removeItem(GUEST_RUNS_KEY); sessionStorage.removeItem(GUEST_SESSION_KEY) } catch { /* ignore */ }
+                startGuest()
+              }}
+              style={devBtn}
+            >
+              DEV: guest tour
+            </button>
+          )}
+        </div>
       )}
     </TourCtx.Provider>
   )
