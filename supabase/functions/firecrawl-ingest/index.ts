@@ -1039,6 +1039,34 @@ serve(async (req) => {
       return new Response(JSON.stringify({ relinked, failed, found: list.length, event_ids: relinkedIds, ...(errs.length ? { errors: errs.slice(0, 5) } : {}) }), { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
     }
 
+    // ═══ REWRITE DESCRIPTION: an existing blurb → Plaster's voice ═══════════════
+    // Url-less, so handled before the url check. Used by the wall's Edit Event
+    // panel. composeDescription() already does this at ingest time; this just
+    // makes it callable for a blurb an admin is looking at, with the same
+    // grounding rule — it rewrites what is there and never invents a fact.
+    if (body.rewriteDescription && typeof body.rewriteDescription === 'object') {
+      const rd = body.rewriteDescription as {
+        title?: string; venueName?: string; category?: string; description?: string
+      }
+      const title = typeof rd.title === 'string' ? rd.title.trim() : ''
+      if (!title) throw new Error('rewriteDescription: title required')
+      const out = await composeDescription({
+        title,
+        venueName: typeof rd.venueName === 'string' ? rd.venueName : '',
+        category: typeof rd.category === 'string' && rd.category ? rd.category : 'Other',
+        timeDisplay: '',
+        rawDescription: typeof rd.description === 'string' ? rd.description : '',
+        rawNotes: '',
+        soldOut: false,
+      })
+      if (!out) {
+        return new Response(JSON.stringify({ error: 'The rewrite service did not respond — try again.' }),
+          { status: 502, headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+      }
+      return new Response(JSON.stringify({ description: out }),
+        { headers: { 'Content-Type': 'application/json', ...corsHeaders } })
+    }
+
     // ═══ DESCRIBE IMAGE: Claude Vision reads a screenshot → Plaster-voice blurb ══
     // Also url-less, so handled before the url check. Used by the Review editor's
     // "drop a screenshot of the event info" zone: grounded in what's visible only.

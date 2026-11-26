@@ -5,6 +5,7 @@ import { type CropRect, type CropHandle, applyHandleDrag, optimizeImage } from '
 import { CATEGORIES } from '@/lib/categories'
 import { eventLocalDate, eventLocalTime } from '@/lib/dates'
 import { fileFromDrop } from '@/components/admin/adminShared'
+import { portlandToInstant } from '@/lib/portlandTime'
 
 const IS_DEV = import.meta.env.DEV
 
@@ -77,6 +78,12 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
 
   // ── Details form ───────────────────────────────────────────
   const [venues, setVenues] = useState<Venue[]>([])
+  // Extra dates added here become sibling events sharing one
+  // recurrence_group_id, so the wall treats them as one run.
+  const [extraDates, setExtraDates] = useState<{ date: string; time: string }[]>([])
+  // The AI rewrite is reversible in-panel: nothing is written until Save.
+  const [rewriting, setRewriting] = useState(false)
+  const [preRewrite, setPreRewrite] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: event.title,
     venue_id: event.venue_id ?? '',
@@ -341,21 +348,77 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     }
   }
 
+  // ── Rewrite the blurb in Plaster's voice ───────────────────
+  // Calls the same composeDescription() the ingester uses, so an edited blurb
+  // reads like every other one on the wall. It is grounded: it rewrites what
+  // is there and never invents a fact that was not already in the text.
+  const handleRewrite = async () => {
+    setRewriting(true); setSaveError('')
+    try {
+      const { data, error } = await supabase.functions.invoke('firecrawl-ingest', {
+        body: { rewriteDescription: {
+          title: form.title,
+          venueName: venues.find(v => v.id === form.venue_id)?.name ?? '',
+          category: form.category,
+          description: form.description,
+        } },
+      })
+      if (error) throw error
+      const next = (data as { description?: string })?.description
+      if (!next) throw new Error('No rewrite came back')
+      setPreRewrite(form.description)
+      setForm(f => ({ ...f, description: next }))
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : String(e))
+    } finally { setRewriting(false) }
+  }
+
   // ── Save Details ───────────────────────────────────────────
   const handleSaveDetails = async () => {
     if (!form.title) return
     setSaving('details'); setSaveError('')
     try {
+      // Portland wall clock, not the device's — see portlandTime.ts.
       const timeStr = form.time || '20:00'
-      const starts_at = new Date(`${form.date}T${timeStr}:00`).toISOString()
+      const at = portlandToInstant(form.date, timeStr)
+      if (!at) throw new Error('That date and time could not be read')
       const { error } = await supabase.from('events').update({
         title: form.title,
         venue_id: form.venue_id || null,
-        starts_at,
+        starts_at: at.toISOString(),
         category: form.category,
         description: form.description,
+        time_tbd: !form.time,
       }).eq('id', event.id)
       if (error) throw error
+
+      // Extra dates become siblings of this event, sharing one group so the
+      // wall reads them as a single run and a poster replace can cover them all.
+      const rows = extraDates
+        .map(d => ({ d, at: portlandToInstant(d.date, d.time || timeStr) }))
+        .filter((r): r is { d: { date: string; time: string }; at: Date } => !!r.at)
+      if (rows.length) {
+        const groupId = event.recurrence_group_id ?? crypto.randomUUID()
+        if (!event.recurrence_group_id) {
+          await supabase.from('events').update({ recurrence_group_id: groupId }).eq('id', event.id)
+        }
+        const { error: insErr } = await supabase.from('events').insert(rows.map(r => ({
+          venue_id: form.venue_id || null,
+          title: form.title,
+          category: form.category,
+          description: form.description,
+          poster_url: event.poster_url,
+          starts_at: r.at.toISOString(),
+          time_tbd: !(r.d.time || form.time),
+          fill_frame: fillFrame,
+          focal_x: focalX,
+          focal_y: focalY,
+          recurrence_group_id: groupId,
+          view_count: 0,
+          like_count: 0,
+        })))
+        if (insErr) throw insErr
+      }
       onSaved()
     } catch (e) {
       setSaveError(String(e))
@@ -780,14 +843,78 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           </select>
         </div>
 
-        {/* Description */}
+        {/* Description — with the ingester's own rewriter on hand */}
         <div>
-          <label style={labelSt}>Description</label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <label style={labelSt}>Description</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {preRewrite !== null && (
+                <button
+                  onClick={() => { setForm(f => ({ ...f, description: preRewrite })); setPreRewrite(null) }}
+                  style={{ background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, padding: '3px 9px', cursor: 'pointer', color: 'var(--fg-55)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11 }}
+                >
+                  Revert
+                </button>
+              )}
+              <button
+                onClick={handleRewrite}
+                disabled={rewriting || !form.title}
+                style={{ background: rewriting ? 'var(--fg-15)' : '#A855F7', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: rewriting ? 'default' : 'pointer', color: rewriting ? 'var(--fg-55)' : '#fff', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
+              >
+                {rewriting ? 'Writing…' : 'Rewrite with AI'}
+              </button>
+            </div>
+          </div>
           <textarea
             style={{ ...inputSt, minHeight: 72, resize: 'vertical' }}
             value={form.description}
             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
           />
+        </div>
+
+        {/* More dates — each becomes its own event, sharing this poster */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <label style={labelSt}>More dates</label>
+            <button
+              onClick={() => setExtraDates(d => [...d, { date: form.date, time: form.time }])}
+              style={{ background: 'transparent', border: '1px solid var(--fg-25)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: 'var(--fg-65)', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, fontWeight: 700 }}
+            >
+              + Add a date
+            </button>
+          </div>
+          {extraDates.length === 0 ? (
+            <p style={{ margin: '4px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)', fontStyle: 'italic' }}>
+              Same show on other nights — each gets its own card with this poster.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 6 }}>
+              {extraDates.map((d, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input
+                    type="date" value={d.date}
+                    onChange={e => setExtraDates(a => a.map((x, j) => j === i ? { ...x, date: e.target.value } : x))}
+                    style={{ ...inputSt, flex: 1 }}
+                  />
+                  <input
+                    type="time" value={d.time}
+                    onChange={e => setExtraDates(a => a.map((x, j) => j === i ? { ...x, time: e.target.value } : x))}
+                    style={{ ...inputSt, width: 110 }}
+                  />
+                  <button
+                    onClick={() => setExtraDates(a => a.filter((_, j) => j !== i))}
+                    aria-label="Remove this date"
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--fg-40)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'var(--fg-40)' }}>
+                Saving adds {extraDates.length} more {extraDates.length === 1 ? 'card' : 'cards'} to the wall.
+              </p>
+            </div>
+          )}
         </div>
 
         {saveError && (

@@ -125,7 +125,10 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
   useEffect(() => { refreshStageCounts() }, [refreshStageCounts])
 
   const events = tab === 'mine' ? mine : live
-  const isGrid = tab === 'mine' || tab === 'live'
+  // 'live' is no longer a grid: it embeds the real app (see the iframe below),
+  // so the admin gets the filter chips, search, bottom nav and the Edit pill
+  // rather than a flat wall of posters with no chrome.
+  const isGrid = tab === 'mine'
   const showEmpty = !loading && tab === 'mine' && mine.length === 0
 
   // scope='all': uploader attribution strip — counts by username, shown above the
@@ -217,6 +220,17 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 14 }}>
             <UploadHistory />
           </div>
+        )}
+
+        {/* The actual app, same origin so it shares the admin's session —
+            Wall, LINE UP, MAP, MSG, YOU, and the admin Edit pill all work here
+            exactly as they do on the phone. */}
+        {tab === 'live' && (
+          <iframe
+            src="/"
+            title="Plaster, live"
+            style={{ flex: 1, width: '100%', border: 'none', background: 'var(--bg)', minHeight: 0 }}
+          />
         )}
 
         {isGrid && loading ? (
