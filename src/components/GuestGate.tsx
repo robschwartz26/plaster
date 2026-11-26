@@ -14,11 +14,22 @@
  * Signed-in users pass straight through (returns true, no UI). Guests get a
  * bottom sheet with the contextual message and Sign up / Log in / Keep
  * browsing — dismissing returns them exactly where they were. Never a dead end.
+ *
+ * ON THE WEB the sheet leads with the app. The poster QRs point at
+ * plasterthewall.com, so most of these guests are standing somewhere with a
+ * phone, and the app is what we actually want them holding: the store button
+ * for their platform is the primary action, a QR if they're on a desktop where
+ * there's nothing to install. Browser signup stays, demoted to a plain link —
+ * steering is fair, trapping isn't, and an account made on the web is the same
+ * account when they do install (it's one codebase in a Capacitor shell). Inside
+ * the native app none of this renders.
  */
 
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import QRCode from 'qrcode'
 import { useAuth } from '@/contexts/AuthContext'
+import { canOfferApp, detectMobileOS, storeUrl, storeName, APP_STORE_URL, PLAY_STORE_URL, type MobileOS } from '@/lib/appStore'
 
 interface GuestGateContextValue {
   /** True → proceed (signed in). False → sheet shown, abort the action. */
@@ -44,6 +55,9 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
   // instantly dismiss the sheet ("flashes on and off"). Ignore backdrop
   // dismissals for the first 450ms after opening.
   const openedAt = useRef(0)
+  // Decided once: the UA doesn't change, and the native check is a constant.
+  const offerApp = canOfferApp()
+  const mobileOS = detectMobileOS()
 
   const requireAuth = useCallback((msg?: string) => {
     if (user) return true
@@ -97,22 +111,41 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
               color: 'var(--fg)',
             }}>
               {message}
+              {offerApp && (
+                <span style={{ display: 'block', marginTop: 4, fontWeight: 400, color: 'var(--fg-65)' }}>
+                  The wall lives in your pocket — get the app.
+                </span>
+              )}
             </p>
+
+            {offerApp && <GetTheApp os={mobileOS} />}
 
             <button
               onClick={() => { close(); navigate('/auth', { state: { tab: 'signup' } }) }}
-              style={{
+              style={offerApp ? {
+                // Demoted to a plain link when the app is the ask. Still here,
+                // still one tap — just no longer the thing the eye lands on.
+                padding: '4px 0', border: 'none', background: 'none',
+                color: 'var(--fg-65)',
+                fontFamily: '"Space Grotesk", sans-serif',
+                fontSize: 13.5, textDecoration: 'underline', cursor: 'pointer',
+              } : {
                 padding: '14px 0', borderRadius: 14, border: 'none',
                 background: '#A855F7', color: '#fff',
                 fontFamily: '"Space Grotesk", sans-serif',
                 fontSize: 15, fontWeight: 700, cursor: 'pointer',
               }}
             >
-              Sign up free
+              {offerApp ? 'or sign up in the browser' : 'Sign up free'}
             </button>
             <button
               onClick={() => { close(); navigate('/auth', { state: { tab: 'signin' } }) }}
-              style={{
+              style={offerApp ? {
+                padding: '4px 0', border: 'none', background: 'none',
+                color: 'var(--fg-65)',
+                fontFamily: '"Space Grotesk", sans-serif',
+                fontSize: 13.5, textDecoration: 'underline', cursor: 'pointer',
+              } : {
                 padding: '13px 0', borderRadius: 14,
                 border: '1px solid var(--fg-25)', background: 'none',
                 color: 'var(--fg)',
@@ -120,7 +153,7 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
                 fontSize: 14, fontWeight: 600, cursor: 'pointer',
               }}
             >
-              Log in
+              {offerApp ? 'already have an account? log in' : 'Log in'}
             </button>
             <button
               onClick={close}
@@ -137,5 +170,58 @@ export function GuestGateProvider({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </GuestGateContext.Provider>
+  )
+}
+
+/**
+ * The app pitch inside the gate. A phone gets one button straight to its own
+ * store listing; a desktop gets a QR of the same link, because there is nothing
+ * to install on a laptop and "scan this with your phone" is the only move that
+ * works. A visitor we can't place gets both links rather than a guess.
+ */
+function GetTheApp({ os }: { os: MobileOS | null }) {
+  const [qr, setQr] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (os) return   // phones get a button, not a code to scan with themselves
+    // Generated locally — no network call, nothing for a CSP to block.
+    QRCode.toDataURL('https://plasterthewall.com/get', {
+      width: 360, margin: 1, color: { dark: '#0c0b0b', light: '#f0ece3' },
+    }).then(setQr).catch(() => setQr(null))
+  }, [os])
+
+  if (os) {
+    return (
+      <a
+        href={storeUrl(os)}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          padding: '14px 0', borderRadius: 14, border: 'none',
+          background: '#A855F7', color: '#fff', textAlign: 'center',
+          textDecoration: 'none',
+          fontFamily: '"Space Grotesk", sans-serif',
+          fontSize: 15, fontWeight: 700, cursor: 'pointer',
+        }}
+      >
+        Get Plaster on {storeName(os)}
+      </a>
+    )
+  }
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 14,
+      padding: 14, borderRadius: 14, border: '1px solid var(--fg-15)',
+    }}>
+      {qr && <img src={qr} alt="Scan to get the Plaster app" width={92} height={92} style={{ borderRadius: 8, flexShrink: 0 }} />}
+      <div style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13.5, lineHeight: 1.45, color: 'var(--fg-65)' }}>
+        <strong style={{ color: 'var(--fg)' }}>Scan with your phone</strong> to get the app.
+        <div style={{ marginTop: 6, display: 'flex', gap: 12, fontSize: 12.5 }}>
+          <a href={APP_STORE_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7' }}>iPhone</a>
+          <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" style={{ color: '#A855F7' }}>Android</a>
+        </div>
+      </div>
+    </div>
   )
 }

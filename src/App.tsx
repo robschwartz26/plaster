@@ -10,6 +10,7 @@ import { usePushNotifications } from './hooks/usePushNotifications'
 // Heavy pages are code-split — loaded only when their route is visited.
 // Admin includes Mapbox; splitting it out significantly reduces initial bundle.
 const Admin        = lazy(() => import('./pages/Admin').then(m => ({ default: m.Admin })))
+const GetTheApp    = lazy(() => import('./pages/GetTheApp'))
 const AuthScreen   = lazy(() => import('./pages/AuthScreen').then(m => ({ default: m.AuthScreen })))
 const Onboarding   = lazy(() => import('./pages/OnboardingScreen').then(m => ({ default: m.OnboardingScreen })))
 const YouScreen    = lazy(() => import('./pages/YouScreen').then(m => ({ default: m.YouScreen })))
@@ -61,6 +62,9 @@ function AppRoutes() {
         <Route path="/privacy"    element={<PrivacyPolicy />} />
         <Route path="/terms"      element={<TermsOfUse />} />
         <Route path="/delete-account" element={<DeleteAccount />} />
+        {/* The short link the poster QRs and the desktop QR point at — sends each
+            phone to its own store listing, shows both to anything else. */}
+        <Route path="/get"        element={<GetTheApp />} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
 
         {/* App shell with persistent BottomNav.

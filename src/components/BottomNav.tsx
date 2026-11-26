@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useGuestGate } from '@/components/GuestGate'
+import { canOfferApp } from '@/lib/appStore'
 
 const NAV_ITEMS = [
   {
@@ -180,7 +181,15 @@ export function BottomNav() {
             key={path}
             data-tour={`nav-${path}`}
             onClick={() => {
-              if (isSignUp) { navigate('/auth', { state: { tab: 'signup' } }); return }
+              // On the web the SIGN UP tab opens the gate first, which leads
+              // with the app for this visitor's platform and keeps browser
+              // signup as a plain link under it. In the native app there is
+              // nothing to pitch, so it goes straight to the form.
+              if (isSignUp) {
+                if (canOfferApp()) { requireAuth('Make Plaster yours'); return }
+                navigate('/auth', { state: { tab: 'signup' } })
+                return
+              }
               // Guest taps on the social tabs open the gate instead of navigating
               if (!user && GUEST_GATE_COPY[path]) { requireAuth(GUEST_GATE_COPY[path]); return }
               navigate(path)
