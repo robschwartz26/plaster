@@ -390,11 +390,18 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     ? (navPhase === 'nav' ? `nav-${step.to}` : undefined)   // spotlight the tab, then explain (no dest spotlight)
     : step.target
   const ghost = step.type === 'spotlight' ? step.ghost : undefined
+  // The swipe cat stands in the bottom-right corner of its target and throws its
+  // chevrons left. Its card therefore takes the TOP, whatever the measurement says:
+  // at the bottom the card lands squarely on the cat and hides the gesture it is
+  // describing. 'onecol' is nearly the whole screen, so its measured centre falls
+  // either side of the midpoint depending on the device — which is how the same
+  // step read fine in the guest tour and covered the cat in the full one.
+  const cornerGhost = ghost === 'swipe'
 
   // Whether this step's card is placed against its target at all. Step-level and
   // constant for the life of the layer, so the measuring loop can close over it.
   const sidesApply = !!target && step.type !== 'center' && !step.interactive
-    && !step.cardOverride && !step.cardBottom
+    && !step.cardOverride && !step.cardBottom && !cornerGhost
 
   useEffect(() => {
     scrolledFor.current = null
@@ -471,7 +478,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     cardPos = step.cardOverride
   } else if (centered) {
     cardPos = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-  } else if (side === 'top' && !isReveal) {
+  } else if ((side === 'top' || cornerGhost) && !isReveal) {
     // isReveal overrides: the revealed image hangs above the card, so it needs the
     // bottom of the screen whatever the target said.
     cardPos = { top: step.cardTop ?? 'max(64px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)' }
@@ -483,7 +490,6 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
   // The swipe cat sits in the corner and bats left across the poster, so it anchors to
   // the target's bottom-right instead of its centre (where it would cover the art it is
   // asking you to swipe). Every other ghost stays centred on what it points at.
-  const cornerGhost = ghost === 'swipe'
   const ghostPos: React.CSSProperties = cornerGhost && rect && inView
     ? { position: 'fixed', right: Math.max(8, vw - rect.right + 6), bottom: Math.max(8, vh - rect.bottom + 6) }
     : cornerGhost
