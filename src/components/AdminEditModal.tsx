@@ -108,6 +108,15 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
   const [infoErr, setInfoErr] = useState('')
   const [infoDrag, setInfoDrag] = useState(false)
   const [preRewrite, setPreRewrite] = useState<string | null>(null)
+  // ── The rest of this run ───────────────────────────────────
+  // Found once on open, from the title and venue as they were BEFORE any edit:
+  // retitling this row must not cut it loose from its own siblings mid-edit.
+  // Not keyed on recurrence_group_id — only 5% of published events carry one,
+  // while same-venue-same-title runs cover ~59% of the wall, so the group alone
+  // would answer "no siblings" for nearly every real series (all 31 Nutcracker
+  // rows among them). The group still counts when present.
+  const [siblingIds, setSiblingIds] = useState<string[]>([])
+  const [applyToRun, setApplyToRun] = useState(false)
   const [form, setForm] = useState({
     title: event.title,
     venue_id: event.venue_id ?? '',
@@ -116,6 +125,27 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
     category: event.category,
     description: '',
   })
+
+  useEffect(() => {
+    let cancelled = false
+    const title = (event.title ?? '').trim()
+    if (!title) return
+    ;(async () => {
+      const byTitle = supabase.from('events').select('id')
+        .eq('status', 'published').ilike('title', title).neq('id', event.id)
+      const { data: a } = event.venue_id
+        ? await byTitle.eq('venue_id', event.venue_id)
+        : await byTitle
+      const ids = new Set((a ?? []).map(r => r.id))
+      if (event.recurrence_group_id) {
+        const { data: b } = await supabase.from('events').select('id')
+          .eq('recurrence_group_id', event.recurrence_group_id).neq('id', event.id)
+        for (const r of b ?? []) ids.add(r.id)
+      }
+      if (!cancelled) setSiblingIds([...ids])
+    })()
+    return () => { cancelled = true }
+  }, [event.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Save / delete state ────────────────────────────────────
   const [saving, setSaving] = useState<'crop' | 'details' | 'delete' | 'fill_frame' | null>(null)
@@ -280,14 +310,10 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
       setPendingReplace(f)
       setPendingReplacePreview(URL.createObjectURL(f))
       // Count sibling occurrences → offer the all-vs-one choice only when real
-      let siblings = 0
-      if (event.recurrence_group_id) {
-        const { count } = await supabase.from('events')
-          .select('id', { count: 'exact', head: true })
-          .eq('recurrence_group_id', event.recurrence_group_id)
-        siblings = count ?? 0
-      }
-      setGroupCount(siblings)
+      // Same definition of "the run" the details save uses — the group id alone
+      // covers 5% of events, so this offered "all dates" almost never.
+      setGroupCount(siblingIds.length ? siblingIds.length + 1 : 0)
+      const siblings = siblingIds.length ? siblingIds.length + 1 : 0
       if (siblings <= 1) await applyReplace('one', f) // not recurring — replace immediately
     } catch {
       setSaveError("Couldn't fetch that image — save it locally and drop the file.")
@@ -310,8 +336,8 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
       // New art → old focal/offset tuning no longer applies; reset to neutral.
       const patch = { poster_url: urlData.publicUrl, focal_x: 0.5, focal_y: 0.5, poster_offset_x: 0, poster_offset_y: 0 }
       const q = supabase.from('events').update(patch)
-      const { error: updErr } = scope === 'all' && event.recurrence_group_id
-        ? await q.eq('recurrence_group_id', event.recurrence_group_id)
+      const { error: updErr } = scope === 'all' && siblingIds.length
+        ? await q.in('id', [event.id, ...siblingIds])
         : await q.eq('id', event.id)
       if (updErr) throw updErr
       setFocalX(0.5); setFocalY(0.5); setOffsetX(0); setOffsetY(0)
@@ -457,6 +483,9 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
       const timeStr = form.time || '20:00'
       const at = portlandToInstant(form.date, timeStr)
       if (!at) throw new Error('That date and time could not be read')
+      // Date and time are what make an occurrence itself, so they are written
+      // to this row only — "apply to the run" must never stack the whole series
+      // onto one night. Everything else describes the show, so it can travel.
       const { error } = await supabase.from('events').update({
         title: form.title,
         venue_id: form.venue_id || null,
@@ -466,6 +495,16 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
         time_tbd: !form.time,
       }).eq('id', event.id)
       if (error) throw error
+
+      if (applyToRun && siblingIds.length) {
+        const { error: runErr } = await supabase.from('events').update({
+          title: form.title,
+          venue_id: form.venue_id || null,
+          category: form.category,
+          description: form.description,
+        }).in('id', siblingIds)
+        if (runErr) throw runErr
+      }
 
       // Extra dates become siblings of this event, sharing one group so the
       // wall reads them as a single run and a poster replace can cover them all.
@@ -1047,6 +1086,36 @@ export function AdminEditModal({ event, onClose, onSaved, onCropSaved, onUndo }:
           <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'rgba(239,68,68,0.8)' }}>
             {saveError}
           </p>
+        )}
+
+        {/* This show runs more than once — say how far the edit reaches */}
+        {siblingIds.length > 0 && (
+          <div style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.4)', background: 'rgba(168,85,247,0.08)' }}>
+            <p style={{ margin: '0 0 8px', fontFamily: '"Space Grotesk", sans-serif', fontSize: 12.5, color: 'rgba(240,236,227,0.85)' }}>
+              This show runs on {siblingIds.length + 1} dates. Save the title, venue, category and description to…
+            </p>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {([[false, 'Just this date'], [true, `All ${siblingIds.length + 1} dates`]] as const).map(([val, label]) => (
+                <button
+                  key={label}
+                  onClick={() => setApplyToRun(val)}
+                  style={{
+                    flex: 1, padding: '7px 10px', borderRadius: 6, cursor: 'pointer',
+                    background: applyToRun === val ? '#A855F7' : 'transparent',
+                    border: applyToRun === val ? 'none' : '1px solid rgba(240,236,227,0.25)',
+                    color: applyToRun === val ? '#fff' : 'rgba(240,236,227,0.85)',
+                    fontFamily: '"Space Grotesk", sans-serif', fontSize: 12,
+                    fontWeight: applyToRun === val ? 700 : 600,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p style={{ margin: '8px 0 0', fontFamily: '"Space Grotesk", sans-serif', fontSize: 11, color: 'rgba(240,236,227,0.40)' }}>
+              The date and time always stay on this one.
+            </p>
+          </div>
         )}
 
         {/* Save Details */}
