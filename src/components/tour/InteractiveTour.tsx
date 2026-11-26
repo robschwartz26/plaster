@@ -122,6 +122,11 @@ const GUEST_STEPS: Step[] = [
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', cardOverride: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }, title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
+// Clearance a spotlit target needs from the top and bottom of the screen. The wall's
+// header and the nav bar both float over the content, so a target flush with an edge
+// is visually under one of them.
+const SCROLL_PAD = 96
+
 const devBtn: React.CSSProperties = {
   padding: '4px 8px', borderRadius: 6,
   border: '1px dashed var(--fg-30)', background: 'var(--bg)', color: 'var(--fg-40)',
@@ -399,18 +404,30 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
       const el = document.querySelector(`[data-tour="${target}"]`) as HTMLElement | null
       if (el) {
         const r = el.getBoundingClientRect()
-        if (scrolledFor.current !== target && (r.bottom < 8 || r.top > window.innerHeight - 8)) {
+        const vh = window.innerHeight
+        // PARTLY visible is not good enough. The old test only scrolled when the
+        // target was entirely off-screen, so a poster the user had left two thirds
+        // above the fold kept its spotlight — a hole sitting up behind the header,
+        // ringing the wordmark, under a card saying "double-tap the highlighted
+        // poster". Anything that fits on screen is now brought fully into it.
+        // Something taller than the viewport (the single-poster view) can't be, so
+        // it keeps the old all-or-nothing test and is left where it is.
+        const fits = r.height <= vh - SCROLL_PAD * 2
+        const needsScroll = fits
+          ? (r.top < SCROLL_PAD || r.bottom > vh - SCROLL_PAD)
+          : (r.bottom < 8 || r.top > vh - 8)
+        if (scrolledFor.current !== target && needsScroll) {
           scrolledFor.current = target
           try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch { /* ignore */ }
         }
         const real = r.width > 0 && r.height > 0
         setRect(real ? r : null)
-        // First real measurement wins, and only once it is actually on screen —
-        // a rect still scrolling into view would pick the wrong half.
-        if (real && sidesApply && !sideDone.current
-            && r.bottom > 24 && r.top < window.innerHeight - 24) {
+        // First settled measurement wins. Not while a scroll is still carrying the
+        // target across the screen — that rect would pick the wrong half.
+        if (real && sidesApply && !sideDone.current && !needsScroll
+            && r.bottom > 24 && r.top < vh - 24) {
           sideDone.current = true
-          setSide(r.top + r.height / 2 > window.innerHeight / 2 ? 'top' : 'bottom')
+          setSide(r.top + r.height / 2 > vh / 2 ? 'top' : 'bottom')
         }
       } else {
         setRect(null)
