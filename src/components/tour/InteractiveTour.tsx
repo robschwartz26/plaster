@@ -303,6 +303,10 @@ export function InteractiveTourProvider({ children }: { children: React.ReactNod
       )}
       {step && (
         <TourLayer
+          // Remount per step — and per nav phase, which swaps the target out from
+          // under the same step — so the layer's placement state starts clean
+          // instead of being reset by hand.
+          key={`${i}:${navPhase}`}
           step={step}
           index={i}
           total={steps.length}
@@ -365,11 +369,27 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
 }) {
   const [rect, setRect] = useState<DOMRect | null>(null)
   const scrolledFor = useRef<string | null>(null)
+  // Which half of the screen the card sits in, decided ONCE from the first real
+  // measurement of the target. A step that summons its own target — the discovery
+  // rail, which arrives a few frames after rail-pin — has nothing to measure at
+  // first, so the old code fell through to the bottom default and then snapped to
+  // the top the instant the rail mounted. That flinch is what this removes. The
+  // latch also stops a card hopping later if its target shifts mid-step.
+  const [side, setSide] = useState<'top' | 'bottom' | null>(null)
+  const sideDone = useRef(false)
+  // A target that never mounts must not hide the card for good — there would be no
+  // ✕ and no Skip left to get out with.
+  const [lateShow, setLateShow] = useState(false)
 
   const target = step.type === 'nav'
     ? (navPhase === 'nav' ? `nav-${step.to}` : undefined)   // spotlight the tab, then explain (no dest spotlight)
     : step.target
   const ghost = step.type === 'spotlight' ? step.ghost : undefined
+
+  // Whether this step's card is placed against its target at all. Step-level and
+  // constant for the life of the layer, so the measuring loop can close over it.
+  const sidesApply = !!target && step.type !== 'center' && !step.interactive
+    && !step.cardOverride && !step.cardBottom
 
   useEffect(() => {
     scrolledFor.current = null
@@ -383,7 +403,15 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
           scrolledFor.current = target
           try { el.scrollIntoView({ block: 'center', behavior: 'smooth' }) } catch { /* ignore */ }
         }
-        setRect(r.width > 0 && r.height > 0 ? r : null)
+        const real = r.width > 0 && r.height > 0
+        setRect(real ? r : null)
+        // First real measurement wins, and only once it is actually on screen —
+        // a rect still scrolling into view would pick the wrong half.
+        if (real && sidesApply && !sideDone.current
+            && r.bottom > 24 && r.top < window.innerHeight - 24) {
+          sideDone.current = true
+          setSide(r.top + r.height / 2 > window.innerHeight / 2 ? 'top' : 'bottom')
+        }
       } else {
         setRect(null)
       }
@@ -391,7 +419,13 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [target])
+  }, [target, sidesApply])
+
+  // Empty deps: the layer remounts for every step, so this is once per step.
+  useEffect(() => {
+    const t = setTimeout(() => setLateShow(true), 600)
+    return () => clearTimeout(t)
+  }, [])
 
   const vh = typeof window !== 'undefined' ? window.innerHeight : 800
   const vw = typeof window !== 'undefined' ? window.innerWidth : 400
@@ -420,11 +454,10 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     cardPos = step.cardOverride
   } else if (centered) {
     cardPos = { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }
-  } else if (hasHole && rect && !step.cardBottom) {
-    const cy = rect.top + rect.height / 2
-    cardPos = cy > vh / 2
-      ? { top: step.cardTop ?? 'max(64px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)' }
-      : { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
+  } else if (side === 'top' && !isReveal) {
+    // isReveal overrides: the revealed image hangs above the card, so it needs the
+    // bottom of the screen whatever the target said.
+    cardPos = { top: step.cardTop ?? 'max(64px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)' }
   } else {
     // interactive (pinch) or explainer with no on-screen target → bottom, clear of the app
     cardPos = { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
@@ -463,6 +496,8 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
   // (a specific button/icon). Interactive steps show the screen normally too.
   const fullScrim = centered || isReveal
   const fullScrimBlocks = centered || isReveal  // only these capture taps
+
+  const placed = !sidesApply || side !== null || lateShow
 
   // A card with nothing to point at — the arrival half of a nav step, and the demo
   // explainers — covers the screen with an invisible shield, so the card's own button
@@ -521,7 +556,9 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
       )}
 
       {/* Coach-mark card */}
-      <div style={{ position: 'fixed', ...cardPos, width: step.cardWidth ?? 'min(360px, calc(100vw - 40px))', pointerEvents: 'auto', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '6px 8px 0 var(--tour-board)' }}>
+      {/* Held back until it knows where it belongs, then faded in. Steps with a fixed
+          position or nothing to measure against are placed from the first frame. */}
+      <div style={{ position: 'fixed', ...cardPos, width: step.cardWidth ?? 'min(360px, calc(100vw - 40px))', pointerEvents: placed ? 'auto' : 'none', background: 'var(--bg)', border: '1px solid var(--fg-15)', borderRadius: 16, boxShadow: '6px 8px 0 var(--tour-board)', opacity: placed ? 1 : 0, transition: 'opacity 140ms ease' }}>
         {isReveal && step.reveal && (
           <img src={step.reveal} alt="" draggable={false} style={{ position: 'absolute', left: '50%', bottom: '100%', transform: 'translate(-50%, 12%)', width: 300, height: 300, objectFit: 'contain', pointerEvents: 'none', zIndex: 1 }} />
         )}
