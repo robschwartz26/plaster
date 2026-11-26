@@ -72,6 +72,18 @@ export function AdminNotifications() {
     setNotifications(prev => prev.filter(n => n.id !== id))
   }
 
+  // A flagged 8pm is a suspicion, not a verdict — the check cannot tell a
+  // fallback from a real 8pm show. Marking it TBA removes the false time
+  // without inventing a replacement; "Dismiss for now" keeps the 8pm.
+  async function handleMarkTba(n: { id: string; event_id: string | null }) {
+    if (!n.event_id) return
+    setActioning(n.id)
+    await supabaseAdmin.from('events').update({ time_tbd: true }).eq('id', n.event_id)
+    await supabaseAdmin.from('admin_notifications').update({ dismissed: true }).eq('id', n.id)
+    setNotifications(prev => prev.filter(x => x.id !== n.id))
+    setActioning(null)
+  }
+
   return (
     <section style={{ marginBottom: 8 }}>
       <h2 style={{ fontFamily: '"Playfair Display", serif', fontSize: 20, fontWeight: 700, color: 'var(--fg)', margin: '0 0 14px 0' }}>Notifications</h2>
@@ -81,7 +93,15 @@ export function AdminNotifications() {
             <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, fontWeight: 600, color: 'var(--fg)', margin: '0 0 6px 0' }}>{n.title}</p>
             <p style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, color: 'var(--fg-55)', margin: '0 0 12px 0', lineHeight: 1.5 }}>{n.message}</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {n.type === 'sold_out_report' ? (
+              {n.type === 'time_outlier' ? (
+                <button
+                  onClick={() => handleMarkTba(n)}
+                  disabled={actioning === n.id}
+                  style={{ padding: '6px 12px', background: '#c98500', color: '#fff', border: 'none', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, fontWeight: 600, cursor: actioning === n.id ? 'default' : 'pointer', opacity: actioning === n.id ? 0.6 : 1 }}
+                >
+                  {actioning === n.id ? 'Marking…' : '⏰ Mark Time TBA'}
+                </button>
+              ) : n.type === 'sold_out_report' ? (
                 <button
                   onClick={() => handleConfirmSoldOut(n)}
                   disabled={actioning === n.id}
@@ -98,12 +118,14 @@ export function AdminNotifications() {
                   {actioning === n.id ? 'Extending…' : 'Extend 3 months'}
                 </button>
               )}
+              {n.type !== 'time_outlier' && (
               <button
                 onClick={() => handleMarkEnded(n.id)}
                 style={{ padding: '6px 12px', background: 'transparent', color: 'rgba(239,68,68,0.7)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}
               >
                 Mark as ended
               </button>
+              )}
               <button
                 onClick={() => handleSnooze(n.id)}
                 style={{ padding: '6px 12px', background: 'transparent', color: 'var(--fg-40)', border: '1px solid var(--fg-18)', borderRadius: 5, fontFamily: '"Space Grotesk", sans-serif', fontSize: 12, cursor: 'pointer' }}
