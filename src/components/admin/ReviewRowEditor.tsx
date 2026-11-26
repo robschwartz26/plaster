@@ -4,10 +4,14 @@ import { optimizeImage, resizeForExtraction, blobToBase64 } from '@/lib/cropUtil
 import { CATEGORY_GRADIENTS } from '@/lib/categories'
 import { EventInfoFace } from '@/components/admin/EventInfoFace'
 import { pendingToWallEvent, type PendingEvent } from '@/components/admin/reviewShared'
-import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress } from '@/components/admin/adminShared'
+import {
+  extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress,
+  FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS, planRecurrence, fmtShortDate,
+  type RecurrenceFrequency, type OrdinalKey,
+} from '@/components/admin/adminShared'
 import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
 import { ensureVenueAccount } from '@/lib/venueAccounts'
-import { toPortlandInputValue, fromPortlandInputValue } from '@/lib/portlandTime'
+import { toPortlandInputValue, fromPortlandInputValue, portlandDate } from '@/lib/portlandTime'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -17,6 +21,12 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_GRADIENTS)
 
 // Sentinel value for the venue <select> — never a real venue id (those are uuids).
 const NEW_VENUE = '__new_venue__'
+
+// Same shape the Review queue uses to spot a duplicate: venue + Portland date +
+// normalized title. Used to skip run dates the venue already has.
+function normForDupe(t: string): string {
+  return (t || '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim()
+}
 
 // The field shows and accepts PORTLAND wall clock, not the device's. Reading
 // it with getHours() showed an admin abroad the wrong time, then saved that
@@ -65,6 +75,15 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
   const [schedAdded, setSchedAdded] = useState(0)
   const [schedSkipped, setSchedSkipped] = useState(0)
   const [schedDrops, setSchedDrops] = useState(0)
+  // Recurring run, the same interface the Single ingester carries: weekly /
+  // bi-weekly / monthly, or a weekday pattern like "1st & 3rd Thursday". The
+  // event in hand is the anchor — Save expands the run from its date forward.
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurFreq, setRecurFreq] = useState<RecurrenceFrequency>('weekly')
+  const [recurOrdinals, setRecurOrdinals] = useState<Set<OrdinalKey>>(new Set())
+  const [recurDays, setRecurDays] = useState<Set<number>>(new Set())
+  const [recurAdded, setRecurAdded] = useState(0)
+  const [recurSkipped, setRecurSkipped] = useState(0)
   // "New venue" straight from the selector: the ingester guesses a venue it already
   // knows, so a show at a room Plaster has never seen lands under the wrong name.
   // Create the venue here, select it, and it appears in every other Review row's
@@ -283,6 +302,64 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         }).in('id', siblingIds)
         if (sibErr) throw sibErr
       }
+      // Recurring run: clone this event onto every generated date. The clones
+      // carry the fields just saved, and land in Review exactly like the
+      // schedule drop zone's do — a run never reaches the wall unreviewed.
+      if (isRecurring) {
+        const planned = planRecurrence(startsAt, recurFreq, recurOrdinals, recurDays)
+        if (!planned.length) {
+          throw new Error(recurFreq === 'weekdays'
+            ? 'Pick at least one occurrence and one weekday.'
+            : 'No dates in the next 3 months — check the start date.')
+        }
+        // Dates this venue already carries under this title are skipped, so
+        // saving twice, or saving after a schedule drop, never doubles the wall.
+        const taken = new Set<string>()
+        if (venueId) {
+          const { data: existing } = await supabase.from('events')
+            .select('title, starts_at')
+            .eq('venue_id', venueId)
+            .gte('starts_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          for (const ex of (existing ?? []) as { title: string; starts_at: string }[]) {
+            if (normForDupe(ex.title) === normForDupe(title)) taken.add(portlandDate(ex.starts_at))
+          }
+        }
+        const fresh = planned.filter(p => !taken.has(p.date))
+        if (fresh.length) {
+          const groupId = crypto.randomUUID()
+          const { error: recurErr } = await supabase.from('events').insert(fresh.map(p => ({
+            venue_id: venueId || null,
+            title: title.trim(),
+            category,
+            poster_url: newPosterUrl,
+            starts_at: p.starts_at,
+            description: description.trim() || null,
+            description_breaks: descBreaks,
+            neighborhood: venue?.neighborhood ?? null,
+            address: venue?.address ?? null,
+            view_count: 0,
+            like_count: 0,
+            status: 'pending',
+            passed_review: false,
+            // A sold-out night says nothing about next week's.
+            sold_out: false,
+            time_tbd: false,
+            source_url: row.source_url,
+            ai_confidence: row.ai_confidence,
+            recurrence_group_id: groupId,
+            recurrence_frequency: recurFreq,
+          })))
+          if (recurErr) throw recurErr
+          // Stamp the anchor (and its already-collapsed dates) into the same
+          // group, so the series reads as one run everywhere it's keyed on it.
+          await supabase.from('events')
+            .update({ recurrence_group_id: groupId, recurrence_frequency: recurFreq })
+            .in('id', [row.id, ...siblingIds])
+        }
+        setRecurAdded(fresh.length)
+        setRecurSkipped(planned.length - fresh.length)
+        setIsRecurring(false)
+      }
       setPosterUrl(newPosterUrl); setPosterFile(null)
       setSaved(true)
       onSaved()
@@ -290,6 +367,9 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
       setErr(e instanceof Error ? e.message : String(e))
     } finally { setSaving(false) }
   }
+
+  // Live preview of what Save would add. Cheap (pure date math, no network).
+  const plannedRun = isRecurring ? planRecurrence(startsAt, recurFreq, recurOrdinals, recurDays) : []
 
   const selectedVenue = venues.find(v => v.id === venueId)
   const previewEvent = pendingToWallEvent({
@@ -394,6 +474,86 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
             <input type="checkbox" checked={soldOut} onChange={e => setSoldOut(e.target.checked)} /> Sold out
           </label>
         </div>
+
+        {/* Recurring run — the Single ingester's interface, anchored on this date */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <button
+              type="button"
+              onClick={() => setIsRecurring(v => !v)}
+              aria-pressed={isRecurring}
+              style={{ width: 36, height: 20, borderRadius: 10, border: 'none', background: isRecurring ? '#A855F7' : 'var(--fg-18)', position: 'relative', cursor: 'pointer', flexShrink: 0, transition: 'background 0.2s ease' }}
+            >
+              <span style={{ position: 'absolute', top: 3, left: isRecurring ? 19 : 3, width: 14, height: 14, borderRadius: '50%', background: '#fff', transition: 'left 0.2s ease' }} />
+            </button>
+            <span style={{ fontSize: 12.5, color: 'var(--fg-65)' }}>Recurring event</span>
+          </div>
+
+          {isRecurring && (
+            <div style={{ marginTop: 9, display: 'flex', flexDirection: 'column', gap: 9, padding: '10px 11px', borderRadius: 8, border: '1px solid rgba(168,85,247,0.35)', background: 'rgba(168,85,247,0.06)' }}>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {(['weekly', 'biweekly', 'monthly', 'weekdays'] as RecurrenceFrequency[]).map(f => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setRecurFreq(f)}
+                    style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${recurFreq === f ? 'var(--fg)' : 'var(--fg-18)'}`, background: recurFreq === f ? 'var(--fg)' : 'transparent', color: recurFreq === f ? 'var(--bg)' : 'var(--fg-55)', fontWeight: 600, fontSize: 12, cursor: 'pointer', transition: 'all 0.15s ease' }}
+                  >
+                    {FREQ_LABELS[f]}
+                  </button>
+                ))}
+              </div>
+
+              {recurFreq === 'weekdays' && (
+                <>
+                  <div>
+                    <p style={{ ...lbl, margin: '0 0 5px' }}>Which occurrence?</p>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {ORDINAL_LABELS.map(ord => {
+                        const active = recurOrdinals.has(ord)
+                        return (
+                          <button key={ord} type="button"
+                            onClick={() => setRecurOrdinals(prev => { const n = new Set(prev); if (active) n.delete(ord); else n.add(ord); return n })}
+                            style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? '#A855F7' : 'var(--fg-18)'}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', color: active ? '#A855F7' : 'var(--fg-55)', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}
+                          >{ord}</button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <p style={{ ...lbl, margin: '0 0 5px' }}>Which day?</p>
+                    <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                      {WEEKDAY_LABELS.map((label, idx) => {
+                        const active = recurDays.has(idx)
+                        return (
+                          <button key={label} type="button"
+                            onClick={() => setRecurDays(prev => { const n = new Set(prev); if (active) n.delete(idx); else n.add(idx); return n })}
+                            style={{ padding: '4px 10px', borderRadius: 20, border: `1px solid ${active ? '#A855F7' : 'var(--fg-18)'}`, background: active ? 'rgba(168,85,247,0.15)' : 'transparent', color: active ? '#A855F7' : 'var(--fg-55)', fontWeight: 600, fontSize: 11, cursor: 'pointer' }}
+                          >{label}</button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {plannedRun.length > 0 ? (
+                <p style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--fg-40)', margin: 0 }}>
+                  Save adds {plannedRun.length} more date{plannedRun.length === 1 ? '' : 's'} over the next 3 months
+                  {recurFreq !== 'weekdays' && ` (${FREQ_LABELS[recurFreq].toLowerCase()})`}:{' '}
+                  {plannedRun.slice(0, 3).map(d => fmtShortDate(new Date(d.starts_at))).join(', ')}
+                  {plannedRun.length > 3 ? `, and ${plannedRun.length - 3} more` : ''}. They land here in Review, same poster and blurb, each one still editable.
+                </p>
+              ) : (
+                <p style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--fg-30)', margin: 0 }}>
+                  {recurFreq === 'weekdays'
+                    ? 'Pick at least one occurrence and one weekday to see the dates.'
+                    : `No dates in the next 3 months — check the date above. (${FREQ_LABELS[recurFreq]} normally adds about ${FREQ_COUNTS[recurFreq]}.)`}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         <div>
           <label style={lbl}>Description</label>
           <textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
@@ -453,12 +613,20 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={save} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#A855F7', color: '#fff', fontSize: 13, fontWeight: 700, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.6 : 1 }}>
-            {saving ? 'Saving…' : siblingIds.length ? `Save to all ${siblingIds.length + 1} dates` : 'Save changes'}
+            {saving ? 'Saving…'
+              : isRecurring && plannedRun.length ? `Save + add ${plannedRun.length} date${plannedRun.length === 1 ? '' : 's'}`
+              : siblingIds.length ? `Save to all ${siblingIds.length + 1} dates`
+              : 'Save changes'}
           </button>
           {siblingIds.length > 0 && (
             <span style={{ fontSize: 11, color: 'var(--fg-40)' }}>date &amp; time applies to this one only</span>
           )}
-          {saved && <span style={{ fontSize: 12, color: '#4ade80' }}>Saved ✓</span>}
+          {saved && (
+            <span style={{ fontSize: 12, color: '#4ade80' }}>
+              Saved ✓{recurAdded > 0 && ` · +${recurAdded} date${recurAdded === 1 ? '' : 's'}`}
+              {recurAdded > 0 && recurSkipped > 0 && ` · ${recurSkipped} already there`}
+            </span>
+          )}
           {err && <span style={{ fontSize: 12, color: '#e05555' }}>{err}</span>}
         </div>
       </div>

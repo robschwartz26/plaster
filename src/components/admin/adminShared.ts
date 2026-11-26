@@ -127,16 +127,15 @@ export type ExtractPayload =
   | { base64: string; mimeType: string }
   | { images: { base64: string; mimeType: string }[] }
 
-export type RecurrenceFrequency = 'weekly' | 'biweekly' | 'monthly' | 'weekdays'
-export type OrdinalKey = '1st' | '2nd' | '3rd' | '4th' | 'last'
-
-export const FREQ_LABELS: Record<RecurrenceFrequency, string> = { weekly: 'Weekly', biweekly: 'Bi-weekly', monthly: 'Monthly', weekdays: 'Specific days' }
-export const FREQ_COUNTS: Record<RecurrenceFrequency, number> = { weekly: 12, biweekly: 6, monthly: 3, weekdays: 0 }
-
-export const ORDINAL_LABELS: OrdinalKey[] = ['1st', '2nd', '3rd', '4th', 'last']
-// Mon–Sun labels; indices map to JS Date.getDay() via WEEKDAY_JS
-export const WEEKDAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-export const WEEKDAY_JS     = [1, 2, 3, 4, 5, 6, 0] // Mon=1 … Sat=6, Sun=0
+// Recurrence vocabulary and calendar math live in the pure module so they can be
+// unit-tested without this file's Supabase import; re-exported here so every
+// existing caller keeps importing them from adminShared.
+export {
+  FREQ_LABELS, FREQ_COUNTS, ORDINAL_LABELS, WEEKDAY_LABELS, WEEKDAY_JS,
+  getNthWeekdayOfMonth, generateWeekdayOccurrences, generateOccurrenceDates,
+  fmtShortDate, planRecurrence,
+} from '@/lib/recurrence'
+export type { RecurrenceFrequency, OrdinalKey, PlannedDate } from '@/lib/recurrence'
 
 // ── Geocoding ────────────────────────────────────────────────
 
@@ -173,43 +172,6 @@ export async function geocodeAddress(address: string, cityHint?: string | null):
 
 // ── Recurrence helpers ───────────────────────────────────────
 
-export function getNthWeekdayOfMonth(year: number, month: number, jsWeekday: number, n: number): Date | null {
-  if (n === -1) {
-    const lastDay = new Date(year, month + 1, 0)
-    const diff = (lastDay.getDay() - jsWeekday + 7) % 7
-    return new Date(year, month, lastDay.getDate() - diff)
-  }
-  const firstDayOfMonth = new Date(year, month, 1)
-  const diff = (jsWeekday - firstDayOfMonth.getDay() + 7) % 7
-  const nthDay = 1 + diff + (n - 1) * 7
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  if (nthDay > daysInMonth) return null
-  return new Date(year, month, nthDay)
-}
-
-export function generateWeekdayOccurrences(start: Date, ordinals: Set<OrdinalKey>, weekdays: Set<number>, monthsAhead = 3): Date[] {
-  const dates: Date[] = []
-  const end = new Date(start); end.setMonth(end.getMonth() + monthsAhead)
-  for (let m = 0; m <= monthsAhead; m++) {
-    const ref  = new Date(start.getFullYear(), start.getMonth() + m, 1)
-    const year = ref.getFullYear()
-    const mon  = ref.getMonth()
-    for (const wdIdx of weekdays) {
-      const jsWd = WEEKDAY_JS[wdIdx]
-      for (const ord of ordinals) {
-        const n = ord === 'last' ? -1 : parseInt(ord[0])
-        const d = getNthWeekdayOfMonth(year, mon, jsWd, n)
-        if (d && d >= start && d <= end) dates.push(d)
-      }
-    }
-  }
-  return dates.sort((a, b) => a.getTime() - b.getTime())
-}
-
-export function fmtShortDate(d: Date): string {
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-}
-
 // When the "still running?" check-in should surface for a series whose last
 // generated date is `lastDate`. It fires BEFORE the series runs out, not after:
 // the old behaviour (+3 months) meant the wall had already been dark for a full
@@ -223,19 +185,6 @@ export function checkInDate(lastDate: Date): Date {
   const d = new Date(lastDate)
   d.setDate(d.getDate() - CHECK_IN_LEAD_DAYS)
   return d
-}
-
-export function generateOccurrenceDates(start: Date, freq: RecurrenceFrequency): Date[] {
-  const dates: Date[] = []
-  const end = new Date(start); end.setMonth(end.getMonth() + 3)
-  const cur = new Date(start)
-  while (cur <= end) {
-    dates.push(new Date(cur))
-    if (freq === 'weekly')    cur.setDate(cur.getDate() + 7)
-    else if (freq === 'biweekly') cur.setDate(cur.getDate() + 14)
-    else cur.setMonth(cur.getMonth() + 1)
-  }
-  return dates
 }
 
 // ── Venue duplicate detection ────────────────────────────────
