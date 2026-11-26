@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { ReviewRowEditor } from '@/components/admin/ReviewRowEditor'
 import { findDuplicateIds, needsPhoto, type PendingEvent } from '@/components/admin/reviewShared'
 import { matchesHolidayTitle } from '@/lib/holiday'
+import { weekdayConflict } from '@/lib/scheduleCheck'
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
@@ -617,6 +618,31 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         onPick={(reason, note) => multi ? rejectSeries(series, reason, note) : reject(e.id, reason, note)}
                       />
                     )}
+
+                    {/* The description states its own schedule — "every Monday",
+                        "Fridays and Sundays". When the date contradicts that, say so.
+                        A timezone bug once published 64 events a day early and the
+                        blurbs said otherwise the whole time. Silent unless the text
+                        names a weekday AND this date matches none of them. */}
+                    {(() => {
+                      const clash = weekdayConflict(e.description, e.starts_at)
+                      if (!clash) return null
+                      return (
+                        <div style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 7, marginBottom: 10,
+                          padding: '7px 10px', borderRadius: 7,
+                          border: '1px solid rgba(217,89,38,0.45)', background: 'rgba(217,89,38,0.10)',
+                          fontFamily: '"Space Grotesk", sans-serif', fontSize: 11.5, lineHeight: 1.45,
+                          color: 'var(--fg-80)',
+                        }}>
+                          <span aria-hidden="true">⚠</span>
+                          <span>
+                            This date is a <strong>{clash.actual}</strong>, but the description says{' '}
+                            <strong>{clash.claimed.join(' / ')}</strong>. Check the day before approving.
+                          </span>
+                        </div>
+                      )
+                    })()}
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                       {/* Edit — text fields + poster re-upload + live info-page preview */}
