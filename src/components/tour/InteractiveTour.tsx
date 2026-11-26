@@ -96,11 +96,9 @@ const GUEST_STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. A few quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
   // DOUBLE-TAP FIRST. It is the move people don't guess — "tap a poster" is the
   // reflex everywhere else — and it is the one that opens the whole app up, so
-  // it goes before the zoom steps and before any other instruction. Title and
-  // paw only: the animated double-tap says it better than a sentence does.
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Double-tap to open', body: null, advance: { on: 'action', id: 'open-poster' } },
-  // Likewise: the paw swipes, so the card just names the move.
-  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: null, advance: { on: 'action', id: 'swipe' } },
+  // it goes before the zoom steps and before any other instruction.
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Double-tap to open', body: <><strong>Double-tap</strong> the highlighted poster to open the show.</>, advance: { on: 'action', id: 'open-poster' } },
+  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: <><strong>Swipe</strong> sideways to see the show's details — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
   // Beat on the info page: the swipe fires the instant you land on it, so hold
   // here and actually talk about it. demo blocks interaction so they can't swipe
   // off before reading; CTA moves on.
