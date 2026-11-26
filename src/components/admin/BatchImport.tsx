@@ -9,6 +9,7 @@ import {
   venueSimilarity, titleSimilarity,
   type Venue, type ExtractedEvent, type ExtractPayload, type Category,
 } from '@/components/admin/adminShared'
+import { portlandToInstant } from '@/lib/portlandTime'
 
 // Batch handles poster + one optional info image per event. Multi-date run/tour
 // schedules stay in single mode (that's what the schedule dropzone is for).
@@ -222,7 +223,8 @@ export function BatchImport({ staffMode = false }: { staffMode?: boolean } = {})
         const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
         const venue = venues.find(v => v.id === r.venue_id)
         // An empty time column in the CSV is not an 8pm show.
-        const startDate = new Date(`${r.date}T${r.time || '20:00'}:00`)
+        const startDate = portlandToInstant(r.date, r.time || '20:00')
+        if (!startDate) throw new Error(`${r.title}: unreadable date/time`)
         const { error: ee } = await supabaseAdmin.from('events').insert({
           venue_id: r.venue_id, title: r.title, category: r.category, poster_url: urlData.publicUrl,
           neighborhood: venue?.neighborhood ?? '', address: venue?.address ?? '', description: r.description,

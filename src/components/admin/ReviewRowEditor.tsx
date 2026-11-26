@@ -7,6 +7,7 @@ import { pendingToWallEvent, type PendingEvent } from '@/components/admin/review
 import { extractEventFromImage, friendlyExtractionError, fileFromDrop, geocodeAddress } from '@/components/admin/adminShared'
 import { NeighborhoodSelect, rememberNeighborhood } from '@/components/admin/NeighborhoodSelect'
 import { ensureVenueAccount } from '@/lib/venueAccounts'
+import { toPortlandInputValue, fromPortlandInputValue } from '@/lib/portlandTime'
 
 // The editable face of a Review-stage event: text fields + a poster re-upload drop
 // zone, with a live preview of the resulting info page. Save writes straight to the
@@ -17,11 +18,10 @@ const CATEGORY_OPTIONS = Object.keys(CATEGORY_GRADIENTS)
 // Sentinel value for the venue <select> — never a real venue id (those are uuids).
 const NEW_VENUE = '__new_venue__'
 
-function isoToLocalInput(iso: string): string {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+// The field shows and accepts PORTLAND wall clock, not the device's. Reading
+// it with getHours() showed an admin abroad the wrong time, then saved that
+// wrong time back on the next edit.
+const isoToLocalInput = toPortlandInputValue
 
 interface VenueLite { id: string; name: string; neighborhood: string | null; address: string | null }
 
@@ -258,7 +258,7 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         description: description.trim() || null,
         description_breaks: descBreaks,
         sold_out: soldOut,
-        starts_at: new Date(startsAt).toISOString(),
+        starts_at: (fromPortlandInputValue(startsAt) ?? new Date(startsAt)).toISOString(),
         // Saving the editor means a human looked at the date-time field, so the
         // clock is no longer a placeholder even if they left it untouched.
         time_tbd: false,

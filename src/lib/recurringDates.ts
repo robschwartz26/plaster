@@ -1,3 +1,5 @@
+import { portlandToInstant } from '@/lib/portlandTime'
+
 // Recurring / multi-date expansion for the poster importer.
 //
 // This is the highest-stakes pure logic in the app: it turns the admin's primary
@@ -41,9 +43,10 @@ export const DEFAULT_SHOW_TIME = '20:00'
  *    DEFAULT_SHOW_TIME.
  *  - Output is sorted chronologically by date; times within a date are sorted ascending.
  *
- * Timezone note: `new Date(`${date}T${time}:00`)` parses in the RUNNER's local
- * timezone — i.e. the admin's browser, which is Portland. That local interpretation
- * is intentional (a 20:00 entry means 8pm Portland on that calendar date).
+ * Timezone: every entry means Portland wall clock, pinned explicitly via
+ * portlandToInstant(). This used to rely on the RUNNER's timezone being
+ * Portland, which held only while the admin was in Portland — from Tokyo the
+ * same "20:00" resolved to 3am Portland, and from London to noon.
  */
 export function expandOccurrences(
   primaryDate: string,
@@ -53,7 +56,9 @@ export function expandOccurrences(
   // Group all occurrences by calendar date — same date = multiple show times
   const dateMap = new Map<string, string[]>()
   const addToMap = (date: string, time: string) => {
-    const iso = new Date(`${date}T${time}:00`).toISOString()
+    const at = portlandToInstant(date, time)
+    if (!at) return
+    const iso = at.toISOString()
     if (!dateMap.has(date)) dateMap.set(date, [])
     dateMap.get(date)!.push(iso)
   }

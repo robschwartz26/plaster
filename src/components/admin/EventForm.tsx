@@ -3,6 +3,7 @@ import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { CATEGORIES } from '@/lib/categories'
 import { inputStyle, labelStyle, fieldStyle, type Venue } from '@/components/admin/adminShared'
 import { optimizeImage } from '@/lib/cropUtils'
+import { portlandToInstant } from '@/lib/portlandTime'
 
 export function EventForm({ venues }: { venues: Venue[] }) {
   const [form, setForm] = useState({ venue_id: '', title: '', category: '', date: '', start_time: '', description: '', is_recurring: false, recurrence_rule: '' })
@@ -42,9 +43,9 @@ export function EventForm({ venues }: { venues: Venue[] }) {
     // No time entered → keep a placeholder clock but mark it, so the wall
     // shows "Time TBA" rather than asserting an 8pm show nobody scheduled.
     const timeTbd = !form.start_time
-    const starts_at = form.date && form.start_time
-      ? new Date(`${form.date}T${form.start_time}:00`).toISOString()
-      : form.date ? new Date(`${form.date}T20:00:00`).toISOString() : null
+    const starts_at = form.date
+      ? (portlandToInstant(form.date, form.start_time || '20:00')?.toISOString() ?? null)
+      : null
 
     if (!starts_at) { setStatus('error'); setErrorMsg('Date is required.'); return }
 

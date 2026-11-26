@@ -17,6 +17,7 @@ import {
 } from '@/components/admin/adminShared'
 import { CropPreviewModal } from '@/components/admin/CropPreviewModal'
 import { ensureVenueAccount } from '@/lib/venueAccounts'
+import { portlandToInstant } from '@/lib/portlandTime'
 
 function findVenueMatch(venues: Venue[], venueName: string): Venue | undefined {
   const name = venueName?.trim().toLowerCase()
@@ -398,7 +399,8 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
         // for a real one — the wall shows "Time TBA" when time_tbd is set.
         const timeStr = form.time || '20:00'
         const timeTbd = !form.time
-        const startDate = new Date(`${form.date}T${timeStr}:00`)
+        const startDate = portlandToInstant(form.date, timeStr)
+        if (!startDate) throw new Error('Could not read that date and time')
         const nbhd = form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || ''
         const confidenceMap: Record<string, number> = { high: 95, medium: 65, low: 35 }
         const aiConfidence = extracted?.confidence ? (confidenceMap[extracted.confidence] ?? null) : null

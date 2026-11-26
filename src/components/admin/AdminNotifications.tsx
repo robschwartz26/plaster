@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase as supabaseAdmin } from '@/lib/supabase'
 import { generateOccurrenceDates, checkInDate, type AdminNotification, type RecurrenceFrequency } from '@/components/admin/adminShared'
+import { addPortlandDays } from '@/lib/portlandTime'
 
 export function AdminNotifications() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([])
@@ -34,10 +35,12 @@ export function AdminNotifications() {
       if (!events?.length) return
       const last = events[0]
       const freq = (last.recurrence_frequency ?? 'weekly') as RecurrenceFrequency
-      const nextStart = new Date(last.starts_at)
-      if (freq === 'weekly')        nextStart.setDate(nextStart.getDate() + 7)
-      else if (freq === 'biweekly') nextStart.setDate(nextStart.getDate() + 14)
-      else                          nextStart.setMonth(nextStart.getMonth() + 1)
+      // setDate() keeps the DEVICE's wall clock, so extending a series from
+      // abroad shifted every new date, and even in Portland it moved the show
+      // an hour across a DST boundary. addPortlandDays keeps 8pm at 8pm.
+      const nextStart = freq === 'monthly'
+        ? (() => { const d = new Date(last.starts_at); d.setMonth(d.getMonth() + 1); return d })()
+        : addPortlandDays(last.starts_at, freq === 'biweekly' ? 14 : 7) ?? new Date(last.starts_at)
       const newDates = generateOccurrenceDates(nextStart, freq)
       await supabaseAdmin.from('events').insert(newDates.map(d => ({
         venue_id: last.venue_id, title: last.title, category: last.category,

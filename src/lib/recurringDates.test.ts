@@ -1,8 +1,10 @@
-// NOTE: run via `npm test`, which sets TZ=America/Los_Angeles. The local-timezone
-// date parsing in expandOccurrences (and the timezone-sanity assertion below) is
-// deterministic only with TZ pinned to Portland — a bare `vitest` on another TZ may
-// fail the timezone test. (TZ isn't set in this file because the production build's
-// browser tsconfig has no Node `process` global.)
+// expandOccurrences pins every conversion to America/Los_Angeles explicitly
+// (see portlandTime.ts), so these pass from any device timezone — verified
+// against Tokyo, London, Sydney and UTC. They did not used to: before that
+// change, five of these failed under TZ=Asia/Tokyo with a 7pm show reading as
+// 3am, which is what an admin posting from abroad would have written to the
+// wall. npm test still pins TZ=America/Los_Angeles so a failure means a real
+// regression rather than a machine difference.
 
 import { describe, it, expect } from 'vitest'
 import { expandOccurrences, DEFAULT_SHOW_TIME } from './recurringDates'
