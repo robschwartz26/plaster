@@ -69,6 +69,38 @@ function addDays(dateStr: string, n: number): string {
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
 }
+// ── Where you left the map ───────────────────────────────────────────────────
+//
+// Tapping a poster out of a venue's sheet jumps to the Wall, which unmounts this
+// screen and takes Mapbox with it. Coming back dropped you at the default
+// Portland-wide view — the wrong place for someone who was working four blocks
+// of inner Southeast. The camera and the three filters are remembered here, in
+// module scope: this JS context only, nothing written to disk, gone when the app
+// is killed.
+//
+// It expires on purpose. Two things would be confusing otherwise — opening the
+// app tomorrow still parked on Saturday, and opening it next week parked on a
+// Saturday that has already happened. So the snapshot is ignored after
+// RECALL_MS, and the day is kept as a DATE rather than a wheel index, which
+// makes a stale one recognisable: it simply isn't in the next seven days any
+// more, and the wheel goes back to tonight.
+const RECALL_MS = 30 * 60 * 1000
+
+interface MapRecall {
+  at: number
+  view: { longitude: number; latitude: number; zoom: number }
+  date: string          // the day the wheel was on, absolute
+  filter: string
+  sliderPos: number
+}
+let mapRecall: MapRecall | null = null
+
+/** The wheel slot for a date, or 0 (tonight) if it has fallen out of the window. */
+function dayIndexFor(date: string, today: string): number {
+  for (let i = 0; i <= 6; i++) if (addDays(today, i) === date) return i
+  return 0
+}
+
 // ── Knurl wheel constants & renderer ─────────────────────────────────────────
 const WHEEL_H         = 12   // canvas surface height (CSS px)
 const WHEEL_HOUSING_H = 18   // housing height inside control bar (CSS px)
@@ -442,16 +474,20 @@ export function MapScreen() {
     : 'mapbox://styles/mapbox/dark-v11'
 
   const today = todayStr()
-  const [dayIdx, setDayIdx] = useState(0)
+  // Read once, at mount. A snapshot older than RECALL_MS is treated as absent:
+  // that is someone coming back to the app, not coming back to the map.
+  const [recall] = useState(() => (mapRecall && Date.now() - mapRecall.at < RECALL_MS ? mapRecall : null))
+
+  const [dayIdx, setDayIdx] = useState(() => (recall ? dayIndexFor(recall.date, todayStr()) : 0))
   const selectedDate = addDays(today, dayIdx)
   const [isDragging, setIsDragging] = useState(false)
   const [liveDayIdx, setLiveDayIdx] = useState(0)
 
-  const [activeFilter, setActiveFilter] = useState('All')
+  const [activeFilter, setActiveFilter] = useState(recall?.filter ?? 'All')
 
   // Radius
   const RADIUS_PRESETS = [1, 2, 5, 10, 25, 100]
-  const [sliderPos, setSliderPos] = useState(() => milesToSlider(100)) // default "Any" — few venues for now, show them all
+  const [sliderPos, setSliderPos] = useState(() => recall?.sliderPos ?? milesToSlider(100)) // default "Any" — few venues for now, show them all
   const radiusMi = sliderToMiles(sliderPos)
   function cycleRadius() {
     const next = RADIUS_PRESETS.find((p) => p > radiusMi + 0.1) ?? RADIUS_PRESETS[0]
@@ -464,7 +500,14 @@ export function MapScreen() {
   const centerLng = userLoc?.lng ?? PORTLAND.longitude
 
   // Map view
-  const [viewState, setViewState] = useState({ longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 9.5 })
+  const [viewState, setViewState] = useState(recall?.view ?? { longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 9.5 })
+
+  // Kept current while the map is open rather than written on the way out, so
+  // there is no unmount ordering to get wrong. `at` therefore counts from the
+  // last moment they were actually looking at it, which is what should expire.
+  useEffect(() => {
+    mapRecall = { at: Date.now(), view: viewState, date: selectedDate, filter: activeFilter, sliderPos }
+  }, [viewState, selectedDate, activeFilter, sliderPos])
 
   // Data
   const [venues, setVenues] = useState<DbVenue[]>([])
