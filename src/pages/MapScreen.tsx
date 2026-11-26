@@ -113,8 +113,16 @@ interface MapRecall {
   date: string          // the day the wheel was on, absolute
   filter: string
   sliderPos: number
+  venueId: string | null       // the venue whose sheet was open
+  rowVenueId: string | null    // the row that was at the sheet's top edge
 }
 let mapRecall: MapRecall | null = null
+
+/** Stamp and store the snapshot. A plain function so the write to module state
+ *  and the clock read stay out of the component's render analysis. */
+function rememberMap(r: Omit<MapRecall, 'at'>) {
+  mapRecall = { ...r, at: Date.now() }
+}
 
 /** The wheel slot for a date, or 0 (tonight) if it has fallen out of the window. */
 function dayIndexFor(date: string, today: string): number {
@@ -523,12 +531,6 @@ export function MapScreen() {
   // Map view
   const [viewState, setViewState] = useState(recall?.view ?? { longitude: PORTLAND.longitude, latitude: PORTLAND.latitude, zoom: 9.5 })
 
-  // Kept current while the map is open rather than written on the way out, so
-  // there is no unmount ordering to get wrong. `at` therefore counts from the
-  // last moment they were actually looking at it, which is what should expire.
-  useEffect(() => {
-    mapRecall = { at: Date.now(), view: viewState, date: selectedDate, filter: activeFilter, sliderPos }
-  }, [viewState, selectedDate, activeFilter, sliderPos])
 
   // Data
   const [venues, setVenues] = useState<DbVenue[]>([])
@@ -559,6 +561,18 @@ export function MapScreen() {
   const copyHRef = useRef(0)
   const [looping, setLooping] = useState(false)
   const loopCopies = looping ? 3 : 1
+
+  // Kept current while the map is open rather than written on the way out, so
+  // there is no unmount ordering to get wrong. `at` therefore counts from the
+  // last moment they were actually looking at it, which is what should expire.
+  useEffect(() => {
+    if (pendingRowRef.current) return   // a restore is in flight; don't clobber it
+    rememberMap({
+      view: viewState, date: selectedDate, filter: activeFilter, sliderPos,
+      venueId: selectedVenue?.id ?? null,
+      rowVenueId: activeVenueId ?? selectedVenue?.id ?? null,
+    })
+  }, [viewState, selectedDate, activeFilter, sliderPos, selectedVenue?.id, activeVenueId])
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -644,11 +658,42 @@ export function MapScreen() {
     return () => navigator.geolocation.clearWatch(wid)
   }, [user?.id])
 
+  // Restoring the camera alone drops you on a map with no sense of what you were
+  // reading. The sheet is the reference point — "we're back here, at this event" —
+  // so it comes back with it, scrolled to the same row and still ringed.
+  //
+  // Only when the day survived. If the recalled date has passed, the wheel has
+  // already fallen back to tonight and the list underneath is a different list;
+  // reopening a sheet onto it would restore a venue the user never chose for
+  // this day.
+  const dayKept = !!recall && addDays(today, dayIndexFor(recall.date, today)) === recall.date
+  // Armed AT MOUNT, not when the venues land. The snapshot-keeping effect below
+  // fires on the first render — before the fetch resolves and before there is a
+  // selectedVenue to report — and would otherwise overwrite the very venue it
+  // is about to restore with null. While this holds a value, nothing is saved.
+  const pendingRowRef = useRef<string | null>(
+    recall && dayKept ? (recall.rowVenueId ?? recall.venueId) : null,
+  )
+  const lastEventsDateRef = useRef<string | null>(null)
+  // Safety valve: while a restore is pending nothing is saved, so a request
+  // that can never land (the venue lost its events, the row never rendered)
+  // would freeze the snapshot. Give up after a few seconds.
+  useEffect(() => {
+    const t = setTimeout(() => { pendingRowRef.current = null }, 4000)
+    return () => clearTimeout(t)
+  }, [])
+
   // ── Load venues (once) ────────────────────────────────────────────────────
   useEffect(() => {
     supabase.from('venues').select('*').not('location_lat', 'is', null).not('location_lng', 'is', null)
-      .then(({ data }) => setVenues((data ?? []) as DbVenue[]))
-  }, [])
+      .then(({ data }) => {
+        const rows = (data ?? []) as DbVenue[]
+        setVenues(rows)
+        const v = recall?.venueId && dayKept ? rows.find(x => x.id === recall.venueId) : undefined
+        if (!v) { pendingRowRef.current = null; return }   // nothing to restore — start saving
+        setSelectedVenue(v)
+      })
+  }, [recall, dayKept])
 
   // ── Load liked events ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -678,7 +723,15 @@ export function MapScreen() {
           byVenue[ev.venue_id].push(ev)
         }
         setEventsByVenue(byVenue)
-        setSelectedVenue(null)
+        // Changing the day closes the sheet, since it is showing a list that no
+        // longer exists. Keyed on the date ACTUALLY changing rather than on a
+        // "first load" flag: this fetch also runs on mount, landing after the
+        // venues one, where it was closing a sheet that had just been restored —
+        // and StrictMode runs the whole effect twice, which a one-shot flag
+        // cannot survive.
+        const prevDate = lastEventsDateRef.current
+        lastEventsDateRef.current = selectedDate
+        if (prevDate !== null && prevDate !== selectedDate) setSelectedVenue(null)
       })
   }, [selectedDate])
 
@@ -802,15 +855,51 @@ export function MapScreen() {
     return () => ro.disconnect()
   }, [selectedVenue?.id])
 
+  // Put the restored sheet back on the row it was showing. Waits a frame so the
+  // list is in the DOM, and re-runs when the loop arms, because arming it shifts
+  // every offset by a copy. Measured from rects rather than offsetTop, which is
+  // relative to whichever ancestor happens to be positioned.
+  useEffect(() => {
+    const want = pendingRowRef.current
+    if (!want || !selectedVenue?.id) return
+    const raf = requestAnimationFrame(() => {
+      const sc = scrollRef.current
+      if (!sc) return
+      const scTop = sc.getBoundingClientRect().top
+      const rows = [...sc.querySelectorAll<HTMLElement>('[data-venue-row]')]
+      // When looping, take the copy in the middle so there is room either way.
+      const matches = rows.filter(r => r.dataset.venueRow === want)
+      // Nothing yet: the events load lands after the venues one, so the first
+      // pass can find an empty sheet. Leave the request standing — this effect
+      // re-runs when the events arrive and again when the loop arms.
+      if (!matches.length) return
+      const row = looping && matches.length === 3 ? matches[1] : matches[0]
+      // Leave the venue's heading peeking above the row, which is where it sits
+      // when you scroll to it by hand — the ring still picks this row, and the
+      // sheet reads as "this event, at this venue" rather than a bare row.
+      const HEADER_PEEK = 30
+      sc.scrollTop += row.getBoundingClientRect().top - scTop - HEADER_PEEK
+      // Pre-set the ref so the scroll this causes sees no change and doesn't
+      // re-fly a camera that was already restored to this exact spot.
+      activeVenueIdRef.current = want
+      setActiveVenueId(want)
+      pendingRowRef.current = null
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [selectedVenue?.id, looping, eventsByVenue])
+
   // Entering the loop: drop into the middle copy so there is a copy's worth of
   // room to scroll in either direction before the first teleport.
   useEffect(() => {
+    if (pendingRowRef.current) return   // the restore picks its own copy
     if (!looping || !scrollRef.current || !copyHRef.current) return
     scrollRef.current.scrollTop += copyHRef.current
   }, [looping])
 
-  // Scroll panel to top whenever selected venue changes
+  // Scroll panel to top whenever selected venue changes — unless a restore is
+  // pending, which is about to scroll it somewhere specific.
   useEffect(() => {
+    if (pendingRowRef.current) return
     if (scrollRef.current) scrollRef.current.scrollTop = 0
     activeVenueIdRef.current = selectedVenue?.id ?? null
     setActiveVenueId(selectedVenue?.id ?? null)
