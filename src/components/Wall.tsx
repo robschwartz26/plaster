@@ -263,6 +263,14 @@ export function Wall() {
     setPrevUrlMap(prev => { const next = { ...prev }; delete next[eventId]; return next })
   }
 
+  // Mouse/trackpad navigation, for the Staff preview only. The Live app tab
+  // embeds this same Wall in an iframe at /?desktopnav=1; on a phone, and on
+  // plasterthewall.com, the param is absent and nothing here changes. Scoped
+  // this way deliberately — a desktop gesture layer on by default would be a
+  // change to the real app, and the wall's gestures are touch-shaped on purpose.
+  const desktopNav = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).has('desktopnav')
+
   return (
     <>
     <div
@@ -389,6 +397,7 @@ export function Wall() {
         </div>
       ) : (
       <PosterGrid
+        enableDesktopNav={desktopNav}
         events={visibleEvents}
         activeFilter={activeFilter}
         searchQuery={searchQuery}

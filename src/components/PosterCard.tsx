@@ -545,6 +545,65 @@ export function PosterCard({ event, cols, activeFilter, searchQuery = '', isLike
     }
   }, [cols, isLiked]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Desktop click-drag nav (opt-in, 1-col only) ───────────────────────
+  // Mirrors the touch swipe above — same 60° angle test, same 50px commit
+  // threshold, same live strip transform — but driven by the mouse, since a
+  // desktop pointer fires no touch events at all. Gated on enableDesktopNav so
+  // it exists only where a mouse is the input: the Staff preview. Phones never
+  // reach it, and nothing about the touch path changes.
+  useEffect(() => {
+    if (!enableDesktopNav || cols !== 1) return
+    const el = cardRef.current
+    if (!el) return
+    let startX = 0, startY = 0, dragging = false, horizontal: boolean | null = null
+
+    const onDown = (e: MouseEvent) => {
+      if (e.button !== 0) return
+      // Let the real controls keep their clicks.
+      if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return
+      startX = e.clientX; startY = e.clientY; dragging = true; horizontal = null
+    }
+    const onMove = (e: MouseEvent) => {
+      if (!dragging || loopingRef.current) return
+      const dx = e.clientX - startX, dy = e.clientY - startY
+      if (horizontal === null) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return
+        horizontal = Math.abs(dy) <= Math.abs(dx) * TAN60
+        if (!horizontal) { dragging = false; return }
+      }
+      e.preventDefault() // stop the browser starting a text/image drag
+      const strip = stripRef.current
+      if (!strip) return
+      strip.style.transition = 'none'
+      const dragPct = (dx / (5 * el.clientWidth)) * 100
+      strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current] + dragPct}%)`
+    }
+    const onUp = (e: MouseEvent) => {
+      if (!dragging) return
+      dragging = false
+      if (horizontal !== true) return
+      const dx = e.clientX - startX
+      if (Math.abs(dx) > 50) {
+        shiftPanel(dx < 0 ? 1 : -1)
+      } else {
+        const strip = stripRef.current
+        if (strip) {
+          strip.style.transition = 'transform 0.2s ease'
+          strip.style.transform = `translateX(${PANEL_PCT[panelIdxRef.current]}%)`
+        }
+      }
+    }
+    el.addEventListener('mousedown', onDown)
+    // move/up on window so a drag that leaves the card still finishes cleanly
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      el.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [enableDesktopNav, cols]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Desktop wheel nav (opt-in, 1-col only) ────────────────────────────
   useEffect(() => {
     if (!enableDesktopNav || cols !== 1) return

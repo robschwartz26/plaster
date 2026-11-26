@@ -227,7 +227,7 @@ export function StaffPreview({ scope = 'mine' }: { scope?: 'mine' | 'all' }) {
             exactly as they do on the phone. */}
         {tab === 'live' && (
           <iframe
-            src="/"
+            src="/?desktopnav=1"
             title="Plaster, live"
             style={{ flex: 1, width: '100%', border: 'none', background: 'var(--bg)', minHeight: 0 }}
           />
