@@ -77,9 +77,10 @@ interface Step {
 // (grid → single → info → slap), each one leaving the app where the next one needs
 // it, so nothing has to be reset mid-run.
 //
-// The theme pull used to be steps 2 AND 3, two cards on one cosmetic gesture before
-// a single poster had been opened. It is now one step, placed after the poster
-// sequence, where reset-grid brings you back out to the wall on the way to the tabs.
+// The theme pull used to be steps 2 AND 3 — two cards on one cosmetic gesture before
+// a single poster had been opened. It is still the pair (the second pull is what
+// returns you to the look you started in), just moved to after the poster sequence,
+// where reset-grid brings you back out to the wall on the way to the tabs.
 const STEPS: Step[] = [
   { type: 'center', title: 'Welcome to Plaster', body: "Let's take a quick, hands-on tour — you'll try each thing yourself as we go.", cta: 'Start', gotoRoute: '/' },
   { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Open a poster', body: <><strong>Double-tap</strong> the highlighted poster to open it in single view.</>, advance: { on: 'action', id: 'open-poster' }, allowSkip: true },
@@ -93,10 +94,11 @@ const STEPS: Step[] = [
   { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'See the details', body: <><strong>Swipe</strong> sideways to move through the poster, its details, and its wall.</>, advance: { on: 'action', id: 'swipe' }, allowSkip: true },
   { type: 'spotlight', target: 'rsvp', ghost: 'tap', ghostSize: 110, noDim: true, cardWidth: 240, cardOverride: { top: 'max(80px, env(safe-area-inset-top))', right: 12 }, intercept: 'rsvp', lockScroll: true, title: 'The info page', body: <>The event’s info page. <strong>Tap</strong> “I’ll be there” if you wanna go — it’ll add this show to your Set List.</>, advance: { on: 'action', id: 'rsvp' }, allowSkip: true },
   { type: 'spotlight', target: 'slap', ghost: 'tap', ghostSize: 140, lockScroll: true, title: 'Slap your friends', body: <>Excited about a show? <strong>Slap</strong> your friends and get them to come with — it opens a group chat so you can plan ahead.</>, advance: { on: 'action', id: 'slap' }, intercept: 'slap', reveal: '/tour/slap-friends.png', allowSkip: true },
-  // One step, not two. The old pair left you where you started by making you pull
-  // twice; this one says so instead, and the gesture they just performed is the way
-  // back whenever they want it.
-  { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Day & night', body: <>Plaster has a day look and a night look. <strong>Pull</strong> the “plaster” logo to the right to switch — and pull it again whenever you want the other one back.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
+  // Two pulls, deliberately. The second is not repetition — it is what leaves the
+  // user in the look they started in. Teaching the gesture once and walking away
+  // strands anyone who pulled into day mode on a night-mode app.
+  { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Day & night', body: <>Plaster has a day look and a night look. <strong>Pull</strong> the “plaster” logo to the right to switch.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
+  { type: 'spotlight', target: 'wordmark', ghost: 'drag', ghostSize: 120, gotoRoute: '/', title: 'Switch it back', body: <>Nice! <strong>Pull</strong> it again to flip back to where you started.</>, advance: { on: 'action', id: 'theme-toggle' }, allowSkip: true },
   { type: 'nav', to: '/lineup', navLabel: 'Line Up', title: 'Your Line Up', body: <>Now <strong>tap</strong> Line Up.</>, arriveBody: 'This is where you see what your friends and your favorite bands and venues are up to.' },
   { type: 'spotlight', target: 'setlist', ghost: 'tap', ghostSize: 120, gotoRoute: '/lineup', title: 'Set List', body: <><strong>Tap</strong> SET LIST — it tracks every show you’re going to.</>, advance: { on: 'action', id: 'open-setlist' }, allowSkip: true },
   { type: 'spotlight', demo: true, gotoRoute: '/lineup', title: 'Your set list', body: 'Here’s your calendar — every show you’ve said you’ll be there for, laid out to make planning easy.', advance: { on: 'cta' }, cta: 'Next' },
