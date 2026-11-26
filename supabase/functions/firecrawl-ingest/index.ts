@@ -91,6 +91,14 @@ function ptTimestamp(date: string, time: string | null): Date | null {
   const d = new Date(`${date}T${t}:00${portlandOffset(date)}`)
   return isNaN(d.getTime()) ? null : d
 }
+// Wall-clock HH:MM in Portland. Not the UTC hour: a 9pm Portland show is
+// 05:00 UTC the NEXT day, so reusing getUTCHours() moves the show to the
+// previous evening and every Monday becomes a Sunday.
+function portlandHHMM(d: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d)
+}
 function portlandDate(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(d)
 }
@@ -1143,7 +1151,7 @@ serve(async (req) => {
       const nowMs = Date.now()
       const clipMax = nowMs + 365 * 24 * 60 * 60 * 1000
       const srcTime = new Date(src.starts_at)
-      const srcHHMM = `${String(srcTime.getUTCHours()).padStart(2, '0')}:${String(srcTime.getUTCMinutes()).padStart(2, '0')}`
+      const srcHHMM = portlandHHMM(srcTime)   // e.g. '21:00' for a 9pm Portland show
       let added = 0, skippedN = 0, updatedSrc = 0
       const newIds: string[] = []
       const addedDates: string[] = []
@@ -1158,9 +1166,15 @@ serve(async (req) => {
         const t = typeof oc.time === 'string' && oc.time ? parseShowTime(oc.time) : null
         let start = ptTimestamp(d, t)
         if (!start) continue
-        if (!t) { // no time printed → reuse the source event's time of day (UTC-preserved)
-          const dd = new Date(`${d}T00:00:00Z`)
-          start = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), dd.getUTCDate(), srcTime.getUTCHours(), srcTime.getUTCMinutes()))
+        if (!t) {
+          // No time printed → reuse the source event's time of day, as PORTLAND
+          // wall clock. The previous version rebuilt the instant from the
+          // source's UTC hour, so a 9pm Portland show (05:00 UTC next day)
+          // produced `date @ 05:00 UTC` = the evening BEFORE. Every captured
+          // date landed one day early — a Monday residency published as Sundays.
+          const shifted = ptTimestamp(d, srcHHMM)
+          if (!shifted) continue
+          start = shifted
         }
         // phantom +1-year guard: a schedule item ~a year+ out whose previous-
         // year date is still upcoming is a model year slip — snap it back
