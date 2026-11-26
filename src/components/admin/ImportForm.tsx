@@ -394,13 +394,17 @@ export function ImportForm({ staffMode = false, landInReview = false, onDone }: 
           }
         }
         if (!venue_id) throw new Error('A venue is required')
+        // A blank time still needs a placeholder clock, but it must not pass
+        // for a real one — the wall shows "Time TBA" when time_tbd is set.
         const timeStr = form.time || '20:00'
+        const timeTbd = !form.time
         const startDate = new Date(`${form.date}T${timeStr}:00`)
         const nbhd = form.neighborhood || venues.find(v => v.id === venue_id)?.neighborhood || ''
         const confidenceMap: Record<string, number> = { high: 95, medium: 65, low: 35 }
         const aiConfidence = extracted?.confidence ? (confidenceMap[extracted.confidence] ?? null) : null
         const baseRow = {
           venue_id, title: form.title, category: form.category, poster_url, neighborhood: nbhd, address: form.address, description: form.description, view_count: 0, like_count: 0, fill_frame: fillFrame, focal_x: focalX, focal_y: focalY, sold_out: soldOut,
+          time_tbd: timeTbd,
           source_url: sourceUrl.trim() || null,
           ai_confidence: aiConfidence,
           flag_note: flagNote.trim() || null,

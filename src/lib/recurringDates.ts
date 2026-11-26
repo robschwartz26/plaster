@@ -19,7 +19,14 @@ export interface ExpandedOccurrence {
   show_times: string[] | null
 }
 
-/** Default show time when a date carries no time of its own — 8pm. */
+/**
+ * Placeholder clock for a date that carries no time of its own.
+ *
+ * It is a placeholder, NOT a default: callers that use it must also set
+ * events.time_tbd, or the wall prints 8pm as though the venue announced it.
+ * That silent fallback put a museum tour, an outdoor market and a theatre
+ * performance on the wall at hours they do not run.
+ */
 export const DEFAULT_SHOW_TIME = '20:00'
 
 /**

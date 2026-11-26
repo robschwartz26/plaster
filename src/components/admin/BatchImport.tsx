@@ -221,11 +221,13 @@ export function BatchImport({ staffMode = false }: { staffMode?: boolean } = {})
         if (se) throw se
         const { data: urlData } = supabaseAdmin.storage.from('posters').getPublicUrl(filename)
         const venue = venues.find(v => v.id === r.venue_id)
+        // An empty time column in the CSV is not an 8pm show.
         const startDate = new Date(`${r.date}T${r.time || '20:00'}:00`)
         const { error: ee } = await supabaseAdmin.from('events').insert({
           venue_id: r.venue_id, title: r.title, category: r.category, poster_url: urlData.publicUrl,
           neighborhood: venue?.neighborhood ?? '', address: venue?.address ?? '', description: r.description,
           view_count: 0, like_count: 0, fill_frame: false, focal_x: 0.5, focal_y: 0.5, sold_out: r.sold_out,
+          time_tbd: !r.time,
           source_url: null, ai_confidence: r.confidence ? (confidenceMap[r.confidence] ?? null) : null, flag_note: null,
           starts_at: startDate.toISOString(),
           status: 'pending', created_by: user?.id ?? null,

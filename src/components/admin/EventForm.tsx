@@ -39,6 +39,9 @@ export function EventForm({ venues }: { venues: Venue[] }) {
       poster_url = urlData.publicUrl
     }
 
+    // No time entered → keep a placeholder clock but mark it, so the wall
+    // shows "Time TBA" rather than asserting an 8pm show nobody scheduled.
+    const timeTbd = !form.start_time
     const starts_at = form.date && form.start_time
       ? new Date(`${form.date}T${form.start_time}:00`).toISOString()
       : form.date ? new Date(`${form.date}T20:00:00`).toISOString() : null
@@ -52,6 +55,7 @@ export function EventForm({ venues }: { venues: Venue[] }) {
       description: form.description.trim() || null,
       poster_url,
       starts_at,
+      time_tbd: timeTbd,
       is_recurring: form.is_recurring,
       recurrence_rule: form.is_recurring && form.recurrence_rule ? form.recurrence_rule : null,
     })
