@@ -69,6 +69,27 @@ function addDays(dateStr: string, n: number): string {
   d.setDate(d.getDate() + n)
   return d.toISOString().slice(0, 10)
 }
+// A venue's event row in the bottom sheet. `ringed` marks the row the map has
+// flown to: the sheet walks across several venues as you scroll, and without it
+// there is nothing tying the pin on the map to the poster you are reading.
+function rowStyle(first: boolean, ringed: boolean): React.CSSProperties {
+  const ring = '1px solid rgba(240,236,227,0.85)'
+  return {
+    display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+    padding: '8px 16px', background: 'none', textAlign: 'left', cursor: 'pointer',
+    // The ring REPLACES the hairline rules rather than stacking with them, or
+    // the row would grow by a pixel as it goes active and nudge the list under
+    // the reader's thumb.
+    border: 'none',
+    borderTop: ringed ? ring : first ? '1px solid var(--fg-08)' : 'none',
+    borderBottom: ringed ? ring : '1px solid var(--fg-08)',
+    borderLeft: ringed ? ring : 'none',
+    borderRight: ringed ? ring : 'none',
+    borderRadius: ringed ? 8 : 0,
+    transition: 'border-color 0.18s ease, border-radius 0.18s ease',
+  }
+}
+
 // ── Where you left the map ───────────────────────────────────────────────────
 //
 // Tapping a poster out of a venue's sheet jumps to the Wall, which unmounts this
@@ -514,6 +535,16 @@ export function MapScreen() {
   const [eventsByVenue, setEventsByVenue] = useState<Record<string, VenueEvent[]>>({})
   const [likedEventIds, setLikedEventIds] = useState<Set<string>>(new Set())
   const [selectedVenue, setSelectedVenue] = useState<DbVenue | null>(null)
+  // The venue the sheet is CURRENTLY showing at its top edge, which is not the
+  // same thing as the one you tapped. The sheet lists the tapped venue and then
+  // its neighbours, so scrolling walks you across the city while the map sits
+  // where you started — the heading says Shanghai Tunnel Bar and the pin still
+  // says Cinema 21, which reads as "all of these are at Cinema 21". The map
+  // follows the top row instead, and that row is ringed so it's clear which
+  // poster the pin belongs to. Mirrored in a ref so the scroll handler can
+  // compare without re-subscribing on every change.
+  const [activeVenueId, setActiveVenueId] = useState<string | null>(null)
+  const activeVenueIdRef = useRef<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [prefsOpen, setPrefsOpen] = useState(false)
@@ -690,6 +721,35 @@ export function MapScreen() {
     map.easeTo({ center: newCenter, zoom: map.getZoom(), duration: 600 })
   }
 
+  // Whichever event row is sitting at the top of the sheet owns the map. Called
+  // from the sheet's scroll, rAF-throttled — a scroll fires far faster than a
+  // camera move is worth recomputing, and getBoundingClientRect forces layout.
+  const scrollTickRef = useRef(false)
+  function onSheetScroll() {
+    if (scrollTickRef.current) return
+    scrollTickRef.current = true
+    requestAnimationFrame(() => {
+      scrollTickRef.current = false
+      const sc = scrollRef.current
+      if (!sc) return
+      const top = sc.getBoundingClientRect().top
+      const rows = sc.querySelectorAll<HTMLElement>('[data-venue-row]')
+      for (const row of rows) {
+        // First row still showing any of itself below the sheet's top edge.
+        if (row.getBoundingClientRect().bottom > top + 12) {
+          const id = row.dataset.venueRow
+          if (!id || id === activeVenueIdRef.current) return
+          activeVenueIdRef.current = id
+          setActiveVenueId(id)
+          const v = venues.find(x => x.id === id)
+          // Only move for a venue we can actually point at.
+          if (v?.location_lat != null && v?.location_lng != null) flyToVenue(v)
+          return
+        }
+      }
+    })
+  }
+
   function selectVenue(venue: DbVenue) {
     debugLog('[selectVenue]', venue.name)
     setSelectedVenue(venue)
@@ -700,6 +760,8 @@ export function MapScreen() {
   // Scroll panel to top whenever selected venue changes
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0
+    activeVenueIdRef.current = selectedVenue?.id ?? null
+    setActiveVenueId(selectedVenue?.id ?? null)
   }, [selectedVenue?.id])
 
   const selectedVenueEvents = selectedVenue ? (eventsByVenue[selectedVenue.id] ?? []) : []
@@ -875,7 +937,10 @@ export function MapScreen() {
             const matchesFilter = venueMatchesFilter(venue.id)
             if (!matchesFilter) return null
             const events = eventsByVenue[venue.id] ?? []
-            const isSelected = selectedVenue?.id === venue.id
+            // The enlarged pin follows the sheet's top row, not the tap that
+            // opened it — otherwise scrolling flies the map to a venue whose pin
+            // stays small while the one you left behind is still the big one.
+            const isSelected = (activeVenueId ?? selectedVenue?.id) === venue.id
             const pinColor = catPinColor(events[0]?.category)
             const pinSize = isSelected ? 36 : 28
             return (
@@ -937,7 +1002,7 @@ export function MapScreen() {
           </div>
 
           {/* Scrollable content */}
-          <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto' }}>
+          <div ref={scrollRef} onScroll={onSheetScroll} style={{ flex: 1, overflowY: 'auto' }}>
             {searchOpen && searchQuery.trim() !== '' ? (
               <>
                 <div style={{ padding: '8px 16px 10px' }}>
@@ -996,7 +1061,8 @@ export function MapScreen() {
                     const bg = catGradient(ev.category)
                     return (
                       <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
-                        style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
+                        data-venue-row={selectedVenue.id}
+                        style={rowStyle(i === 0, activeVenueId === selectedVenue.id)}
                       >
                         <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
                           {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
@@ -1028,7 +1094,8 @@ export function MapScreen() {
                         const bg = catGradient(ev.category)
                         return (
                           <button key={ev.id} onClick={() => navigate('/', { state: { openEventId: ev.id } })}
-                            style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '8px 16px', background: 'none', border: 'none', borderTop: i === 0 ? '1px solid var(--fg-08)' : 'none', borderBottom: '1px solid var(--fg-08)', cursor: 'pointer', textAlign: 'left' }}
+                            data-venue-row={venue.id}
+                            style={rowStyle(i === 0, activeVenueId === venue.id)}
                           >
                             <div style={{ width: 40, height: 60, borderRadius: 4, flexShrink: 0, background: bg, overflow: 'hidden', position: 'relative' }}>
                               {ev.poster_url && <img src={ev.poster_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }} />}
