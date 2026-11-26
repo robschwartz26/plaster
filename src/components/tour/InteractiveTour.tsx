@@ -92,23 +92,29 @@ const STEPS: Step[] = [
 // real gesture advances; the dim blockers keep everything else untouchable),
 // then a signup pitch spotlighting the SIGN UP tab. ✕ exits any time; no Skip.
 const GUEST_STEPS: Step[] = [
-  { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. Three quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
-  // Starts on the FULL wall. Zoom steps advance on DESTINATION signals
-  // (pinch-1col / pinch-grid) — plain 'pinch' fires on any mid-gesture column
-  // change and would blow through the step before the zoom finishes.
-  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Using two fingers</strong> — zoom in all the way until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
+  { type: 'center', title: 'Welcome to Plaster', body: "Portland's living poster wall. A few quick moves and you'll have it down.", cta: 'Show me', gotoRoute: '/' },
+  // DOUBLE-TAP FIRST. It is the move people don't guess — "tap a poster" is the
+  // reflex everywhere else — and it is the one that opens the whole app up, so
+  // it goes before the zoom steps and before any other instruction. Title and
+  // paw only: the animated double-tap says it better than a sentence does.
+  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, enterCmd: 'reset-grid', gotoRoute: '/', title: 'Double-tap to open', body: null, advance: { on: 'action', id: 'open-poster' } },
+  // Likewise: the paw swipes, so the card just names the move.
+  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: null, advance: { on: 'action', id: 'swipe' } },
+  // Beat on the info page: the swipe fires the instant you land on it, so hold
+  // here and actually talk about it. demo blocks interaction so they can't swipe
+  // off before reading; CTA moves on.
+  { type: 'spotlight', demo: true, lockScroll: true, title: 'Info page!', body: "Voila! Everything you need to know about the event in one place! :)", advance: { on: 'cta' }, cta: 'Got it' },
+  // Zoom steps advance on DESTINATION signals (pinch-1col / pinch-grid) — plain
+  // 'pinch' fires on any mid-gesture column change and would blow through the
+  // step before the zoom finishes. reset-grid puts the wall back to the full
+  // grid first, since we're arriving from the info page.
+  { type: 'spotlight', interactive: true, ghost: 'pinch', enterCmd: 'reset-grid', gotoRoute: '/', title: 'Zoom in', body: <><strong>Two fingers</strong> — zoom in until one poster fills the wall.</>, advance: { on: 'action', id: 'pinch-1col' } },
   // CTA buffer between the zooms: releasing a finished zoom-in makes the fingers
   // drift back together, which reads as zoom-out and fires pinch-grid instantly —
   // skipping the zoom-out step. While this card is up nothing listens for pinch
   // signals, so the release can be as messy as it likes.
   { type: 'spotlight', demo: true, title: 'Well would ya look at that!', body: "One poster, full bleed. The art gets the whole stage on Plaster.", advance: { on: 'cta' }, cta: "Let's zoom out" },
-  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Zoom back out', body: <>Now <strong>pinch</strong> back out all the way until the full wall returns.</>, advance: { on: 'action', id: 'pinch-grid' } },
-  { type: 'spotlight', target: 'poster', ghost: 'doubletap', ghostSize: 150, title: 'Try a double-tap', body: <><strong>Double-tap</strong> the highlighted poster to open the show.</>, advance: { on: 'action', id: 'open-poster' } },
-  { type: 'spotlight', target: 'onecol', ghost: 'swipe', lockScroll: true, title: 'Swipe for info', body: <><strong>Swipe</strong> sideways to see the show's details — time, venue, tickets, and its wall.</>, advance: { on: 'action', id: 'swipe' } },
-  // Beat on the info page: the swipe fires the instant you land on it, so hold
-  // here and actually talk about it. demo blocks interaction so they can't swipe
-  // off before reading; CTA moves on to the finale.
-  { type: 'spotlight', demo: true, lockScroll: true, title: 'Info page!', body: "Voila! Everything you need to know about the event in one place! :)", advance: { on: 'cta' }, cta: 'Got it' },
+  { type: 'spotlight', interactive: true, ghost: 'pinch', title: 'Zoom back out', body: <>Now <strong>pinch</strong> back out to the full wall.</>, advance: { on: 'action', id: 'pinch-grid' } },
   { type: 'spotlight', target: 'nav-/auth', ghost: 'tap', ghostSize: 110, enterCmd: 'reset-grid', cardOverride: { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }, title: 'Unlock the rest', body: <><strong>Sign up</strong> to unlock the advanced features — and the full tutorial!</>, cta: 'Done' },
 ]
 
@@ -477,7 +483,7 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
           ) : (
             <>
               <h3 style={{ margin: '0 0 6px', fontFamily: '"Playfair Display", serif', fontSize: 21, fontWeight: 900, color: 'var(--fg)', lineHeight: 1.15 }}>{step.title}</h3>
-              <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>
+              {body && <p style={{ margin: 0, fontFamily: '"Space Grotesk", sans-serif', fontSize: 14, color: 'var(--fg-65)', lineHeight: 1.55 }}>{body}</p>}
 
               {showCta ? (
                 <>
