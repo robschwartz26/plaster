@@ -5,6 +5,7 @@ import { setTourActive, setInterceptedAction } from '@/lib/tourBus'
 import { useAuth } from '@/contexts/AuthContext'
 import { HandGhost } from './HandGhost'
 import { PinchFlip } from './PinchFlip'
+import { CatSwipe } from './CatSwipe'
 import { Heart } from '@/components/Heart'
 
 // Interactive, coach-mark tour overlaid on the real app. It spotlights a live element,
@@ -403,7 +404,15 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     cardPos = { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
   }
 
-  const ghostPos: React.CSSProperties = hasHole && rect
+  // The swipe cat sits in the corner and bats left across the poster, so it anchors to
+  // the target's bottom-right instead of its centre (where it would cover the art it is
+  // asking you to swipe). Every other ghost stays centred on what it points at.
+  const cornerGhost = ghost === 'swipe'
+  const ghostPos: React.CSSProperties = cornerGhost && rect && inView
+    ? { position: 'fixed', right: Math.max(8, vw - rect.right + 6), bottom: Math.max(8, vh - rect.bottom + 6) }
+    : cornerGhost
+    ? { position: 'fixed', right: 14, bottom: 'calc(var(--nav-height, 64px) + env(safe-area-inset-bottom) + 14px)' }
+    : hasHole && rect
     ? { position: 'fixed', left: rect.left + rect.width / 2, top: rect.top + rect.height / 2, transform: 'translate(-50%,-50%)' }
     : demo
     ? { position: 'fixed', left: '50%', top: '44%', transform: 'translate(-50%,-50%)' }
@@ -460,7 +469,9 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
         <div style={{ ...ghostPos, pointerEvents: 'none' }}>
           {ghost === 'pinch'
             ? <PinchFlip size={340} />
-            : <HandGhost variant={ghost} size={step.ghostSize ?? (ghost === 'swipe' ? 250 : ghost === 'tap' ? 120 : 190)} />}
+            : ghost === 'swipe'
+            ? <CatSwipe size={step.ghostSize ?? 230} />
+            : <HandGhost variant={ghost} size={step.ghostSize ?? (ghost === 'tap' ? 120 : 190)} />}
         </div>
       )}
 
