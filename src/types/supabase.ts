@@ -597,6 +597,7 @@ export type Database = {
           source_url: string | null
           starts_at: string
           status: string
+          time_tbd: boolean
           title: string
           trending_score: number
           venue_id: string | null
@@ -640,6 +641,7 @@ export type Database = {
           source_url?: string | null
           starts_at: string
           status?: string
+          time_tbd?: boolean
           title: string
           trending_score?: number
           venue_id?: string | null
@@ -683,6 +685,7 @@ export type Database = {
           source_url?: string | null
           starts_at?: string
           status?: string
+          time_tbd?: boolean
           title?: string
           trending_score?: number
           venue_id?: string | null
@@ -1871,6 +1874,7 @@ export type Database = {
           sold_out: boolean
           source_url: string
           starts_at: string
+          time_tbd: boolean
           title: string
           uploader: string
           venue_id: string

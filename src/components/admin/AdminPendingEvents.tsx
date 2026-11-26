@@ -624,6 +624,25 @@ export function AdminPendingEvents({ onCountChange }: Props = {}) {
                         A timezone bug once published 64 events a day early and the
                         blurbs said otherwise the whole time. Silent unless the text
                         names a weekday AND this date matches none of them. */}
+                    {/* No time was printed at the source, so starts_at's clock is a
+                        placeholder. Say so loudly: an invented 8pm reads as fact,
+                        and four of these reached the wall before anyone noticed. */}
+                    {e.time_tbd && (
+                      <div style={{
+                        display: 'flex', alignItems: 'flex-start', gap: 7, marginBottom: 10,
+                        padding: '7px 10px', borderRadius: 7,
+                        border: '1px solid rgba(201,133,0,0.5)', background: 'rgba(201,133,0,0.12)',
+                        fontFamily: '"Space Grotesk", sans-serif', fontSize: 11.5, lineHeight: 1.45,
+                        color: 'var(--fg-80)',
+                      }}>
+                        <span aria-hidden="true">⏰</span>
+                        <span>
+                          <strong>No start time found</strong> at the source. The wall shows
+                          “Time TBA” until you set one — open the editor and give it a real time.
+                        </span>
+                      </div>
+                    )}
+
                     {(() => {
                       const clash = weekdayConflict(e.description, e.starts_at)
                       if (!clash) return null

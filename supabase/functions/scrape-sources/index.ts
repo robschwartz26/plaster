@@ -52,6 +52,7 @@ interface ScrapedEvent {
   image: string | null
   description: string | null
   soldOut?: boolean
+  timeTbd?: boolean        // source printed no clock; starts_at's time is a placeholder
   _venue_name?: string
 }
 
@@ -204,6 +205,11 @@ function parseStartDate(raw: unknown): Date | null {
   return isNaN(d.getTime()) ? null : d
 }
 
+// ptTimestamp falls back to 20:00 when a source prints no time. Persisted as
+// events.time_tbd so an invented hour never passes for a real one.
+function timeUnknown(time: string | null): boolean {
+  return !(time && /^\d{2}:\d{2}$/.test(time))
+}
 function portlandDate(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' }).format(d)
 }
@@ -513,6 +519,7 @@ Rules:
     mapped.push({
       title,
       soldOut: titleSold || ev.sold_out === true,
+      timeTbd: timeUnknown(time),
       starts_at: start.toISOString(),
       portland_date: portlandDate(start),
       event_url: pageUrl,
@@ -931,6 +938,7 @@ serve(async (req) => {
               source_url: adhocUrl,
               event_url: ev.event_url ?? null,
               sold_out: ev.soldOut ?? false,
+          time_tbd: ev.timeTbd ?? false,
               confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
               created_by: user.id,
             })
@@ -969,6 +977,7 @@ serve(async (req) => {
             like_count: 0,
             status: 'pending', // explicit — service role bypasses the 063 trigger
             sold_out: ev.soldOut ?? false,
+          time_tbd: ev.timeTbd ?? false,
             created_by: user.id,
             source_url: ev.event_url || adhocUrl,
             ai_confidence: typeof ev.confidence === 'number' ? ev.confidence : CONFIDENCE_AI,
@@ -1138,6 +1147,7 @@ serve(async (req) => {
           like_count: 0,
           status: 'pending',
           sold_out: ev.soldOut ?? false,
+          time_tbd: ev.timeTbd ?? false,
           created_by: user.id,
           source_url: ev.event_url || sourcePage,
           ai_confidence: ev.confidence,
@@ -1252,6 +1262,7 @@ serve(async (req) => {
             // Service-role inserts BYPASS the 063 staging trigger — set explicitly:
             status: 'pending',
             sold_out: ev.soldOut ?? false,
+          time_tbd: ev.timeTbd ?? false,
             created_by: user.id, // the calling admin, so review groups under them
             source_url: ev.event_url,
             ai_confidence: CONFIDENCE_STRUCTURED,

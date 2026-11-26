@@ -26,4 +26,5 @@ export interface WallEvent {
   recurrence_group_id?: string | null
   // Set in the Review queue; seeded from the title on insert (migration 112).
   is_holiday?: boolean | null
+  time_tbd?: boolean | null
 }

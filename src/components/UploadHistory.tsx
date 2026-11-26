@@ -188,6 +188,7 @@ export function UploadHistory() {
       ai_confidence: (d.ai_confidence as number | null) ?? null, flag_note: null, passed_review: false,
       is_holiday: (d.is_holiday as boolean | null) ?? false,
       description_breaks: (d.description_breaks as boolean | null) ?? false,
+      time_tbd: (d.time_tbd as boolean | null) ?? false,
     })
   }
 

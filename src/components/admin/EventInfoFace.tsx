@@ -9,7 +9,7 @@ import { DescriptionText } from '@/components/DescriptionText'
 // wiring, just the visual truth of the info face.
 
 // Mirrors formatDateTime() in PosterCard.tsx so the date/time line reads identically.
-function formatDateTime(iso: string, showTimes?: string[] | null): string {
+function formatDateTime(iso: string, showTimes?: string[] | null, timeTbd?: boolean | null): string {
   const d = new Date(iso)
   const today = new Date()
   const tomorrow = new Date(today)
@@ -24,6 +24,7 @@ function formatDateTime(iso: string, showTimes?: string[] | null): string {
     const timesStr = times.length === 2 ? `${times[0]} & ${times[1]}` : `${times.slice(0, -1).join(', ')} & ${times[times.length - 1]}`
     return `${dayLabel} · ${timesStr}`
   }
+  if (timeTbd) return `${dayLabel} · Time TBA`
   return `${dayLabel} · ${fmtTime(iso)}`
 }
 
@@ -63,7 +64,7 @@ export function EventInfoFace({ event, description, address, descriptionBreaks }
             <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
           </svg>
           <span style={{ fontFamily: '"Space Grotesk", sans-serif', fontSize: 13, color: 'var(--fg-65)' }}>
-            {formatDateTime(event.starts_at, event.show_times)}
+            {formatDateTime(event.starts_at, event.show_times, event.time_tbd)}
           </span>
         </div>
 

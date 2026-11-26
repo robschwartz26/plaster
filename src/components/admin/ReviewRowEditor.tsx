@@ -259,6 +259,9 @@ export function ReviewRowEditor({ row, venues, onSaved, seriesIds = [], onVenueC
         description_breaks: descBreaks,
         sold_out: soldOut,
         starts_at: new Date(startsAt).toISOString(),
+        // Saving the editor means a human looked at the date-time field, so the
+        // clock is no longer a placeholder even if they left it untouched.
+        time_tbd: false,
         poster_url: newPosterUrl,
         // keep address/neighborhood in step with the chosen venue; clearing the
         // venue clears them too (no stale address from the previous venue)

@@ -94,6 +94,14 @@ function ptTimestamp(date: string, time: string | null): Date | null {
 // Wall-clock HH:MM in Portland. Not the UTC hour: a 9pm Portland show is
 // 05:00 UTC the NEXT day, so reusing getUTCHours() moves the show to the
 // previous evening and every Monday becomes a Sunday.
+// ptTimestamp falls back to 20:00 when no usable time is given. That default
+// is indistinguishable from a real 8pm show once saved — it reached the wall
+// as a museum opening at 8pm and a theatre performance that does not exist.
+// Payloads carry this beside time_display so it persists as events.time_tbd
+// rather than being guessed at later.
+function timeUnknown(time: string | null): boolean {
+  return !(time && /^\d{2}:\d{2}$/.test(time))
+}
 function portlandHHMM(d: Date): string {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: 'America/Los_Angeles', hour: '2-digit', minute: '2-digit', hour12: false,
@@ -302,6 +310,7 @@ interface RawEvent {
   portland_date: string
   starts_at: string
   time_display: string
+  time_tbd: boolean          // source printed no time; starts_at's clock is a placeholder
   category: string
   poster_image_url: string | null
   ticket_url: string | null
@@ -343,7 +352,8 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
     const date = typeof ev.date === 'string' ? ev.date.trim() : ''
     if (!rawTitle || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
     const timeStr = typeof ev.time === 'string' ? ev.time.trim() : ''
-    const start = ptTimestamp(date, parseShowTime(timeStr))
+    const showTime = parseShowTime(timeStr)
+    const start = ptTimestamp(date, showTime)
     if (!start) continue
     if (start.getTime() < now) { past++; continue }
     if (start.getTime() > maxOut) { beyondHorizon++; continue }
@@ -355,6 +365,7 @@ async function firecrawlExtract(url: string, now: number, maxOut: number): Promi
       portland_date: portlandDate(start),
       starts_at: start.toISOString(),
       time_display: timeStr,
+      time_tbd: timeUnknown(showTime),
       category,
       poster_image_url: typeof ev.poster_image_url === 'string' && ev.poster_image_url.trim() ? ev.poster_image_url.trim() : null,
       ticket_url: typeof ev.ticket_url === 'string' && ev.ticket_url.trim() ? ev.ticket_url.trim() : null,
@@ -501,6 +512,7 @@ function jsonLdFromHtml(html: string, url: string, now: number, maxOut: number):
       portland_date: portlandDate(start),
       starts_at: start.toISOString(),
       time_display: timePart,
+      time_tbd: timeUnknown(timePart || null),
       category,
       poster_image_url: ldImageUrl(n.image, url),
       ticket_url: ticketUrl,
@@ -602,6 +614,7 @@ async function extractBandsintown(url: string, now: number, maxOut: number): Pro
       portland_date: portlandDate(start),
       starts_at: start.toISOString(),
       time_display: timeDisplay,
+      time_tbd: timeUnknown(time),
       category: 'Live Music', // Bandsintown is music-only
       poster_image_url: typeof image === 'string' && image.trim() ? image.trim() : null,
       ticket_url: typeof ev.url === 'string' && ev.url.trim() ? ev.url.trim() : null,
@@ -711,6 +724,7 @@ async function extractEverout(url: string, floor: number, maxOut: number): Promi
         portland_date: portlandDate(start),
         starts_at: start.toISOString(),
         time_display: '',
+        time_tbd: true,
         category,
         poster_image_url: null,        // community events NEVER use scraped images
         ticket_url: detailUrl,         // everout link → source_url + the needs-photo signal
@@ -989,9 +1003,10 @@ serve(async (req) => {
           const rows = extra
             .map(d => {
               const iso = ptTimestamp(d.date, d.time ?? null)
-              return iso ? { ...baseRow, starts_at: iso.toISOString(), source_url: sourceUrlForOccurrence(baseRow.source_url, iso.toISOString()) } : null
+              // A captured date with no time keeps the placeholder clock, flagged.
+              return iso ? { ...baseRow, starts_at: iso.toISOString(), time_tbd: timeUnknown(d.time ?? null), source_url: sourceUrlForOccurrence(baseRow.source_url, iso.toISOString()) } : null
             })
-            .filter((r): r is typeof baseRow & { starts_at: string } => r !== null)
+            .filter((r): r is typeof baseRow & { starts_at: string; time_tbd: boolean } => r !== null)
             .filter(r => r.starts_at !== basePT)
           if (rows.length) {
             const { error: exErr } = await supabaseService.from('events').insert(rows)
@@ -1466,11 +1481,15 @@ serve(async (req) => {
           start = next
         }
         if (start.getTime() < floor) return { error: `event date ${date} is in the past` }
-        if (start.getTime() > clipMaxOut) return { error: `dated ${rolledDate} — more than a year out`, needsConfirm: true, farTitle: title, farDate: rolledDate }
+        if (start.getTime() > clipMaxOut) {
+          // A distinct shape from RawEvent and from a plain error: the caller
+          // turns needsConfirm into a confirm prompt rather than a failure.
+          return { error: `dated ${rolledDate} — more than a year out`, needsConfirm: true, farTitle: title, farDate: rolledDate } as { error: string; needsConfirm: boolean; farTitle: string; farDate: string }
+        }
         const { title: cleanTitle, soldOut: titleSold } = detectSoldOut(title)
         return {
           title: cleanTitle, date: rolledDate, portland_date: portlandDate(start), starts_at: start.toISOString(),
-          time_display: timeStr, category: typeof j.category === 'string' && CATEGORIES.includes(j.category) ? j.category : 'Live Music',
+          time_display: timeStr, time_tbd: timeUnknown(parseShowTime(timeStr)), category: typeof j.category === 'string' && CATEGORIES.includes(j.category) ? j.category : 'Live Music',
           poster_image_url: posterUrl, ticket_url: null,
           venue_name: typeof j.venue_name === 'string' ? decodeEntities(j.venue_name).trim() : '',
           raw_description: typeof j.description === 'string' ? j.description.trim() : '',
