@@ -636,7 +636,12 @@ export function MapScreen() {
   useEffect(() => {
     if (!navigator.geolocation || !user) return
     let lastSaved = { lat: 0, lng: 0 }
-    let hasCenteredOnce = false
+    // Centre on the user's first fix only when arriving fresh. With a restored
+    // camera there is already a view the user chose, and the fix lands a beat
+    // after mount — long enough to look like the restore worked and then yank
+    // the map to wherever the phone is. That is what put the sheet on Cinema 21
+    // while the map sat in Hillsboro.
+    let hasCenteredOnce = !!recall
     const onSuccess = (pos: GeolocationPosition) => {
       const { latitude: lat, longitude: lng } = pos.coords
       debugLog('[geolocation] update', lat, lng)
@@ -656,7 +661,7 @@ export function MapScreen() {
     navigator.geolocation.getCurrentPosition(onSuccess, onError, { enableHighAccuracy: true, maximumAge: 0 })
     const wid = navigator.geolocation.watchPosition(onSuccess, onError, { enableHighAccuracy: true, maximumAge: 30000 })
     return () => navigator.geolocation.clearWatch(wid)
-  }, [user?.id])
+  }, [user?.id, recall])
 
   // Restoring the camera alone drops you on a map with no sense of what you were
   // reading. The sheet is the reference point — "we're back here, at this event" —
