@@ -73,20 +73,23 @@ function addDays(dateStr: string, n: number): string {
 // flown to: the sheet walks across several venues as you scroll, and without it
 // there is nothing tying the pin on the map to the poster you are reading.
 function rowStyle(first: boolean, ringed: boolean): React.CSSProperties {
-  const ring = '1px solid rgba(240,236,227,0.85)'
+  // The hairline colour is theme-aware: a literal off-white vanished against the
+  // day-mode sheet, which is that same colour. --fg vars invert with the theme.
+  const hair = 'var(--fg-08)'
   return {
     display: 'flex', alignItems: 'center', gap: 12, width: '100%',
     padding: '8px 16px', background: 'none', textAlign: 'left', cursor: 'pointer',
-    // The ring REPLACES the hairline rules rather than stacking with them, or
-    // the row would grow by a pixel as it goes active and nudge the list under
-    // the reader's thumb.
-    border: 'none',
-    borderTop: ringed ? ring : first ? '1px solid var(--fg-08)' : 'none',
-    borderBottom: ringed ? ring : '1px solid var(--fg-08)',
-    borderLeft: ringed ? ring : 'none',
-    borderRight: ringed ? ring : 'none',
+    // Every row carries a 1px box on all four sides — transparent wherever no
+    // rule is wanted — so its metrics never change with state. The ring itself
+    // is painted INSIDE as an inset shadow, which costs no layout at all: a
+    // thicker border would grow the row, and because the ringed row changes as
+    // the sheet scrolls, the list would jitter under the reader's thumb.
+    border: '1px solid transparent',
+    borderTopColor: !ringed && first ? hair : 'transparent',
+    borderBottomColor: !ringed ? hair : 'transparent',
     borderRadius: ringed ? 8 : 0,
-    transition: 'border-color 0.18s ease, border-radius 0.18s ease',
+    boxShadow: ringed ? 'inset 0 0 0 2px var(--fg-80)' : 'none',
+    transition: 'box-shadow 0.18s ease, border-color 0.18s ease, border-radius 0.18s ease',
   }
 }
 
