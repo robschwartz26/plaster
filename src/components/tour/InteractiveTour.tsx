@@ -501,12 +501,15 @@ function TourLayer({ step, index, total, navPhase, revealed, onCta, onSkip, onCl
     cardPos = { bottom: 'calc(104px + env(safe-area-inset-bottom))', left: '50%', transform: 'translateX(-50%)' }
   }
 
-  // The swipe cat sits in the corner and bats left across the poster, so it anchors to
-  // the target's bottom-right instead of its centre (where it would cover the art it is
-  // asking you to swipe). Every other ghost stays centred on what it points at.
-  const ghostPos: React.CSSProperties = cornerGhost && rect && inView
-    ? { position: 'fixed', right: Math.max(8, vw - rect.right + 6), bottom: Math.max(8, vh - rect.bottom + 6) }
-    : cornerGhost
+  // The swipe cat sits in the bottom-right corner of the SCREEN, stationary, batting
+  // left across the poster. It used to anchor to its target's bottom-right, to stay
+  // off the art it was asking you to swipe — but its only target is 'onecol', which
+  // the measuring loop above notes is taller than the viewport. That element's bottom
+  // edge therefore lands wherever the scroll leaves it, including near the top of the
+  // screen, which threw the cat up behind the status bar and straight back under the
+  // card b8a4cbb had moved to the top precisely to keep clear of it. The screen corner
+  // is both what the step wants and the one place the card can never be.
+  const ghostPos: React.CSSProperties = cornerGhost
     ? { position: 'fixed', right: 14, bottom: 'calc(var(--nav-height, 64px) + env(safe-area-inset-bottom) + 14px)' }
     : hasHole && rect
     ? { position: 'fixed', left: rect.left + rect.width / 2, top: rect.top + rect.height / 2, transform: 'translate(-50%,-50%)' }
